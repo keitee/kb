@@ -1,21 +1,21 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
 #include "qfsmqt.h"
 
-#include <QList>
-#include <QString>
-#include <QDebug>
-#include <QLoggingCategory>
 #include <QCoreApplication>
+#include <QDebug>
+#include <QList>
+#include <QLoggingCategory>
 #include <QSignalSpy>
+#include <QString>
 #include <QTimer>
 
 using namespace testing;
@@ -24,12 +24,14 @@ using namespace testing;
 // (gdb) b StateMachineTest_handleSuperStateNotSameParent_Test::TestBody()
 // void StateMachineTest_handleSuperStateSameParent_Test::TestBody();
 
-
 /*
  
 class UseFsm 
 {
   private:
+
+    // define state
+
     enum State {
       ServiceUnavailableState,
       ServiceAvailableSuperState,
@@ -44,17 +46,27 @@ class UseFsm
 
     initStateManince()
     {
-      // add all the states
+      // build all the states
+
       m_stateMachine.addState(ServiceUnavailableState, QStringLiteral("ServiceUnavailableState"));
 
-      // add the transitions       From State	              ->    Event                  ->  To State
+      // build the transitions       From State	              ->    Event                  ->  To State
+
       m_stateMachine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
 
       // connect to the state entry and exit signals
+
       QObject::connect(&m_stateMachine, &StateMachine::entered,
         this, &BleRcuManagerImpl::onStateEntry);
+
       QObject::connect(&m_stateMachine, &StateMachine::exited,
         this, &BleRcuManagerImpl::onStateExit);
+
+      // set the initial state
+      m_stateMachine.setInitialState(ServiceUnavailableState);
+
+      m_stateMachine.start();
+
     };
 
     void BleRcuManagerImpl::onStateEntry(int state)
@@ -77,6 +89,23 @@ class UseFsm
       }
     }
 };
+
+
+To run fsm:
+
+// define custom Qt events
+
+static const QEvent::Type e1  = static_cast<QEvent::Type>(QEvent::User + 100);
+
+// post this custom event
+
+m_stateMachine.postEvent() or;
+m_stateMachine.postDelayed();
+
+
+NOTE:
+1. do not use `finished` signal of fsm but m_finalState which is set by
+setFinalState() is used to make running false and call cleanUpEvents()
 
 
 (from) state has
@@ -120,6 +149,9 @@ class StateMachine
 
   int StateMachine::shouldMoveState(QEvent::Type event) const;
 
+
+  // custom event handler
+
   void customEvent(QEvent *event)
   {
     // get the event type, that's the only bit we check for the transitions
@@ -159,18 +191,17 @@ class StateMachine
 
 */
 
-
 // ={=========================================================================
 
-static const QEvent::Type e1 = static_cast<QEvent::Type>(QEvent::User + 100);
-static const QEvent::Type e2 = static_cast<QEvent::Type>(QEvent::User + 101);
-static const QEvent::Type e3 = static_cast<QEvent::Type>(QEvent::User + 102);
-static const QEvent::Type e4 = static_cast<QEvent::Type>(QEvent::User + 103);
-static const QEvent::Type e5 = static_cast<QEvent::Type>(QEvent::User + 104);
-static const QEvent::Type e6 = static_cast<QEvent::Type>(QEvent::User + 105);
-static const QEvent::Type e7 = static_cast<QEvent::Type>(QEvent::User + 106);
-static const QEvent::Type e8 = static_cast<QEvent::Type>(QEvent::User + 107);
-static const QEvent::Type e9 = static_cast<QEvent::Type>(QEvent::User + 108);
+static const QEvent::Type e1  = static_cast<QEvent::Type>(QEvent::User + 100);
+static const QEvent::Type e2  = static_cast<QEvent::Type>(QEvent::User + 101);
+static const QEvent::Type e3  = static_cast<QEvent::Type>(QEvent::User + 102);
+static const QEvent::Type e4  = static_cast<QEvent::Type>(QEvent::User + 103);
+static const QEvent::Type e5  = static_cast<QEvent::Type>(QEvent::User + 104);
+static const QEvent::Type e6  = static_cast<QEvent::Type>(QEvent::User + 105);
+static const QEvent::Type e7  = static_cast<QEvent::Type>(QEvent::User + 106);
+static const QEvent::Type e8  = static_cast<QEvent::Type>(QEvent::User + 107);
+static const QEvent::Type e9  = static_cast<QEvent::Type>(QEvent::User + 108);
 static const QEvent::Type e10 = static_cast<QEvent::Type>(QEvent::User + 109);
 
 // Q: why error?
@@ -186,55 +217,62 @@ static const QEvent::Type e10 = static_cast<QEvent::Type>(QEvent::User + 109);
 // using AdapterPoweredOffEvent    = e9;
 // using ShutdownEvent             = e10;
 
-static const QEvent::Type ServiceRetryEvent         = static_cast<QEvent::Type>(QEvent::User + 100);
-static const QEvent::Type ServiceAvailableEvent     = static_cast<QEvent::Type>(QEvent::User + 101);
-static const QEvent::Type ServiceUnavailableEvent   = static_cast<QEvent::Type>(QEvent::User + 102);
-static const QEvent::Type AdapterRetryAttachEvent   = static_cast<QEvent::Type>(QEvent::User + 103);
-static const QEvent::Type AdapterAvailableEvent     = static_cast<QEvent::Type>(QEvent::User + 104);
-static const QEvent::Type AdapterUnavailableEvent   = static_cast<QEvent::Type>(QEvent::User + 105);
-static const QEvent::Type AdapterRetryPowerOnEvent  = static_cast<QEvent::Type>(QEvent::User + 106);
-static const QEvent::Type AdapterPoweredOnEvent     = static_cast<QEvent::Type>(QEvent::User + 107);
-static const QEvent::Type AdapterPoweredOffEvent    = static_cast<QEvent::Type>(QEvent::User + 108);
-static const QEvent::Type ShutdownEvent             = static_cast<QEvent::Type>(QEvent::User + 109);
-
+static const QEvent::Type ServiceRetryEvent =
+  static_cast<QEvent::Type>(QEvent::User + 100);
+static const QEvent::Type ServiceAvailableEvent =
+  static_cast<QEvent::Type>(QEvent::User + 101);
+static const QEvent::Type ServiceUnavailableEvent =
+  static_cast<QEvent::Type>(QEvent::User + 102);
+static const QEvent::Type AdapterRetryAttachEvent =
+  static_cast<QEvent::Type>(QEvent::User + 103);
+static const QEvent::Type AdapterAvailableEvent =
+  static_cast<QEvent::Type>(QEvent::User + 104);
+static const QEvent::Type AdapterUnavailableEvent =
+  static_cast<QEvent::Type>(QEvent::User + 105);
+static const QEvent::Type AdapterRetryPowerOnEvent =
+  static_cast<QEvent::Type>(QEvent::User + 106);
+static const QEvent::Type AdapterPoweredOnEvent =
+  static_cast<QEvent::Type>(QEvent::User + 107);
+static const QEvent::Type AdapterPoweredOffEvent =
+  static_cast<QEvent::Type>(QEvent::User + 108);
+static const QEvent::Type ShutdownEvent =
+  static_cast<QEvent::Type>(QEvent::User + 109);
 
 class StateMachineTest : public ::testing::Test
 {
-  public:
-    void SetUp()
-    {
-    }
+public:
+  void SetUp() {}
 
-    void TearDown()
-    {
-    }
+  void TearDown() {}
 
-  protected:
-    void processEvents(int mintime = 0)
+protected:
+  void processEvents(int mintime = 0)
+  {
+    if (mintime <= 0)
     {
-      if (mintime <= 0) {
+      QCoreApplication::processEvents();
+    }
+    else
+    {
+      volatile bool done = false;
+
+      std::function<void()> lambda = [&] { done = true; };
+
+      QTimer::singleShot(mintime, lambda);
+      while (!done)
+      {
         QCoreApplication::processEvents();
-
-      } else {
-        volatile bool done = false;
-
-        std::function<void()> lambda = [&] {
-          done = true;
-        };
-
-        QTimer::singleShot(mintime, lambda);
-        while (!done) {
-          QCoreApplication::processEvents();
-        }
       }
     }
+  }
 
-  protected:
+protected:
 };
 
 TEST_F(StateMachineTest, transitionToInitialState)
 {
-  enum {
+  enum
+  {
     initialState
   };
 
@@ -264,7 +302,8 @@ TEST_F(StateMachineTest, transitionToInitialState)
 
 TEST_F(StateMachineTest, startWithNoInitialState)
 {
-  enum {
+  enum
+  {
     initialState
   };
 
@@ -275,7 +314,7 @@ TEST_F(StateMachineTest, startWithNoInitialState)
 
   // misses out machine.setInitialState(initialState);
   // so `init state` is not set
-  
+
   QSignalSpy enteredSpy(&machine, &StateMachine::entered);
 
   EXPECT_FALSE(machine.start());
@@ -284,10 +323,10 @@ TEST_F(StateMachineTest, startWithNoInitialState)
   EXPECT_FALSE(machine.isRunning());
 }
 
-
 TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
 {
-  enum {
+  enum
+  {
     s1,
     s2,
     s3,
@@ -303,7 +342,7 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
   EXPECT_TRUE(machine.addState(s3));
   EXPECT_TRUE(machine.setInitialState(s1));
 
-  // add an already existing state 
+  // add an already existing state
   EXPECT_FALSE(machine.addState(s1));
 
   // bool addState(int parentState, int state, const QString &name = QString());
@@ -326,7 +365,8 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
 
 TEST_F(StateMachineTest, stopWithinSlot)
 {
-  enum {
+  enum
+  {
     initialState,
   };
 
@@ -342,7 +382,7 @@ TEST_F(StateMachineTest, stopWithinSlot)
   // void entered(int state);
   // void exited(int state);
 
-  std::function<void(int)> lambda = [&](int state){
+  std::function<void(int)> lambda = [&](int state) {
     Q_UNUSED(state);
     machine.stop();
   };
@@ -361,12 +401,12 @@ TEST_F(StateMachineTest, stopWithinSlot)
   EXPECT_FALSE(machine.isRunning());
 }
 
-
 // ???
 
 TEST_F(StateMachineTest, stopWithinDelayedSlot)
 {
-  enum {
+  enum
+  {
     s1,
     s2,
   };
@@ -380,7 +420,7 @@ TEST_F(StateMachineTest, stopWithinDelayedSlot)
   EXPECT_TRUE(machine.addTransition(s1, e1, s2));
 
   // create a lambda that calls stop on entry to state 's2'
-  std::function<void(int)> lambda = [&](int state){
+  std::function<void(int)> lambda = [&](int state) {
     if (state == s2)
       machine.stop();
   };
@@ -405,10 +445,10 @@ TEST_F(StateMachineTest, stopWithinDelayedSlot)
   EXPECT_FALSE(machine.isRunning());
 }
 
-
 TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
 {
-  enum {
+  enum
+  {
     s1,
     s2
   };
@@ -422,7 +462,6 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
   EXPECT_TRUE(machine.addTransition(s1, e1, s2));
   EXPECT_TRUE(machine.addTransition(s2, e2, s2));
 
-
   std::map<int, unsigned> entries;
   std::function<void(int)> entryLamda = [&](int state) { entries[state]++; };
   QObject::connect(&machine, &StateMachine::entered, entryLamda);
@@ -431,10 +470,9 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
   std::function<void(int)> exitLamda = [&](int state) { exits[state]++; };
   QObject::connect(&machine, &StateMachine::exited, exitLamda);
 
-
-  machine.start();          // s1 enter
-  machine.postEvent(e1);    // s2 enter, s1 exit
-  machine.postEvent(e2);    // s2 enter, s2 exit
+  machine.start();       // s1 enter
+  machine.postEvent(e1); // s2 enter, s1 exit
+  machine.postEvent(e2); // s2 enter, s2 exit
   machine.stop();
 
   EXPECT_FALSE(machine.isRunning());
@@ -446,13 +484,13 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
   EXPECT_EQ(exits[s2], 1U);
 }
 
-
 TEST_F(StateMachineTest, enterNestedStateOrder)
 {
   // tests that when entering a nested state that we receive state entry
   // notifications for the super states before the final state
 
-  enum {
+  enum
+  {
     initialState,
     s1,
     s1_1,
@@ -485,10 +523,8 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
 
   EXPECT_TRUE(machine.setInitialState(initialState));
 
-
   EXPECT_TRUE(machine.addTransition(initialState, e1, s1_2_2));
   EXPECT_TRUE(machine.addTransition(s1_2_2, e2, s1_2_1));
-
 
   QSignalSpy enteredSpy(&machine, &StateMachine::entered);
 
@@ -507,18 +543,18 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   EXPECT_EQ(enteredSpy.count(), 3);
 
   // check the order of `entered` signals
-  EXPECT_EQ(enteredSpy[0].first().toInt(), int(s1));      // 1
-  EXPECT_EQ(enteredSpy[1].first().toInt(), int(s1_2));    // 3
-  EXPECT_EQ(enteredSpy[2].first().toInt(), int(s1_2_2));  // 5
+  EXPECT_EQ(enteredSpy[0].first().toInt(), int(s1));     // 1
+  EXPECT_EQ(enteredSpy[1].first().toInt(), int(s1_2));   // 3
+  EXPECT_EQ(enteredSpy[2].first().toInt(), int(s1_2_2)); // 5
 }
-
 
 TEST_F(StateMachineTest, exitNestedStateOrder)
 {
   // tests that when exiting a nested state that we receive state exit
   // notifications for the state back up through the super states
 
-  enum {
+  enum
+  {
     s1,
     s1_1,
     s1_2,
@@ -557,7 +593,6 @@ TEST_F(StateMachineTest, exitNestedStateOrder)
   EXPECT_EQ(exitedSpy[1].first().toInt(), int(s1_2));
   EXPECT_EQ(exitedSpy[2].first().toInt(), int(s1));
 }
-
 
 /*
 
@@ -673,49 +708,77 @@ void StateMachine::moveToState(int newState)
 
 */
 
-
 TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 {
-  enum State {
-    ServiceUnavailableState,        // 0
-    ServiceAvailableSuperState,     // 1
-    AdapterUnavailableState,        // 2
-    AdapterAvailableSuperState,     // 3
-    AdapterPoweredOffState,         // 4
-    AdapterPoweredOnState,          // 5
-    ShutdownState                   // 6
+  enum State
+  {
+    ServiceUnavailableState,    // 0
+    ServiceAvailableSuperState, // 1
+    AdapterUnavailableState,    // 2
+    AdapterAvailableSuperState, // 3
+    AdapterPoweredOffState,     // 4
+    AdapterPoweredOnState,      // 5
+    ShutdownState               // 6
   };
 
   StateMachine machine;
   machine.setObjectName("machine");
 
   // add all the states
-  machine.addState(ServiceUnavailableState, QStringLiteral("ServiceUnavailableState"));
-  machine.addState(ServiceAvailableSuperState, QStringLiteral("ServiceAvailableSuperState"));
+  machine.addState(ServiceUnavailableState,
+                   QStringLiteral("ServiceUnavailableState"));
+  machine.addState(ServiceAvailableSuperState,
+                   QStringLiteral("ServiceAvailableSuperState"));
 
-  machine.addState(ServiceAvailableSuperState, AdapterUnavailableState, QStringLiteral("AdapterUnavailableState"));
-  machine.addState(ServiceAvailableSuperState, AdapterAvailableSuperState, QStringLiteral("AdapterAvailableSuperState"));
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterUnavailableState,
+                   QStringLiteral("AdapterUnavailableState"));
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterAvailableSuperState,
+                   QStringLiteral("AdapterAvailableSuperState"));
 
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOffState, QStringLiteral("AdapterPoweredOffState"));
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOnState, QStringLiteral("AdapterPoweredOnState"));
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOffState,
+                   QStringLiteral("AdapterPoweredOffState"));
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOnState,
+                   QStringLiteral("AdapterPoweredOnState"));
 
   machine.addState(ShutdownState, QStringLiteral("ShutdownState"));
 
-
   // add the transitions       From State	              ->    Event                  ->  To State
-  machine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
-  machine.addTransition(ServiceUnavailableState,       ServiceRetryEvent,          ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ServiceUnavailableEvent,    ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ShutdownEvent,              ShutdownState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceAvailableEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceRetryEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ServiceUnavailableEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ShutdownEvent,
+                        ShutdownState);
 
-  machine.addTransition(AdapterUnavailableState,       AdapterAvailableEvent,      AdapterPoweredOffState);
-  machine.addTransition(AdapterUnavailableState,       AdapterRetryAttachEvent,    AdapterUnavailableState);
-  machine.addTransition(AdapterAvailableSuperState,    AdapterUnavailableEvent,    AdapterUnavailableState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterAvailableEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterRetryAttachEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(AdapterAvailableSuperState,
+                        AdapterUnavailableEvent,
+                        AdapterUnavailableState);
 
-  machine.addTransition(AdapterPoweredOffState,        AdapterPoweredOnEvent,      AdapterPoweredOnState);
-  machine.addTransition(AdapterPoweredOffState,        AdapterRetryPowerOnEvent,   AdapterPoweredOffState);
-  machine.addTransition(AdapterPoweredOnState,         AdapterPoweredOffEvent,     AdapterPoweredOffState);
-
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterPoweredOnEvent,
+                        AdapterPoweredOnState);
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterRetryPowerOnEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterPoweredOnState,
+                        AdapterPoweredOffEvent,
+                        AdapterPoweredOffState);
 
   // to print out
   // // connect to the state entry and exit signals
@@ -743,7 +806,7 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 
   // Removes all items from the list.
   enteredSpy.clear();
-  
+
   // post a event to state which don't have same parent and output is:
   //
   // exited state 4
@@ -761,16 +824,16 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
   EXPECT_EQ(exitedSpy[2].first().toInt(), 1);
 }
 
-
 TEST_F(StateMachineTest, handleSuperStateSameParent)
 {
-  enum State {
-    S1,     // 0
-    S2,     // 1
-    S3,     // 2
-    S4,     // 3
-    S5,     // 4
-    S6      // 5
+  enum State
+  {
+    S1, // 0
+    S2, // 1
+    S3, // 2
+    S4, // 3
+    S5, // 4
+    S6  // 5
   };
 
   StateMachine machine;
@@ -784,20 +847,18 @@ TEST_F(StateMachineTest, handleSuperStateSameParent)
   machine.addState(S4, S5, QStringLiteral("S5"));
   machine.addState(S5, S6, QStringLiteral("S6"));
 
-
   // add the transitions       From State->Event->To State
-  EXPECT_FALSE(machine.addTransition(S1,       e1,      S2));
-  EXPECT_FALSE(machine.addTransition(S2,       e2,      S3));
-  EXPECT_FALSE(machine.addTransition(S3,       e3,      S4));
-  EXPECT_FALSE(machine.addTransition(S4,       e4,      S5));
-  EXPECT_TRUE(machine.addTransition(S5,       e5,      S6));
-  EXPECT_FALSE(machine.addTransition(S6,       e6,      S2));
+  EXPECT_FALSE(machine.addTransition(S1, e1, S2));
+  EXPECT_FALSE(machine.addTransition(S2, e2, S3));
+  EXPECT_FALSE(machine.addTransition(S3, e3, S4));
+  EXPECT_FALSE(machine.addTransition(S4, e4, S5));
+  EXPECT_TRUE(machine.addTransition(S5, e5, S6));
+  EXPECT_FALSE(machine.addTransition(S6, e6, S2));
 }
-
 
 // ={=========================================================================
 
-static void GoogleTestRunner(int argc, char** argv)
+static void GoogleTestRunner(int argc, char **argv)
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's

@@ -79,31 +79,31 @@
 /* 
  * F O R N O N P C E N V 
  * =================================================================================
- */  
+ */
 #if !defined(__cplusplus)
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #else
 #include <iostream>
 #endif
 
 #include "sfsm.h"
-     
+
 // if it is a valid state defined in this fsm
 
-bool is_valid_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
+bool is_valid_state(fsm_instance_t *fsm, fsm_state_hdl state_enum)
 {
   // loop in the state list
-  for (uint32_t i = 0; fsm->state_list[i] != FSM_INVALID_STATE; ++i) 
+  for (uint32_t i = 0; fsm->state_list[i] != FSM_INVALID_STATE; ++i)
   {
-    if(i == state_enum) 
+    if (i == state_enum)
       return TRUE;
   }
 
-  std::cout << "FSM: " << fsm->name 
-    << ": is_valid_state: unsupported state handle(" << state_enum << ")" 
-    << std::endl;
+  std::cout << "FSM: " << fsm->name
+            << ": is_valid_state: unsupported state handle(" << state_enum
+            << ")" << std::endl;
 
   // WATCH(WATCH_ALL|WATCH_LEVEL_ALWAYS, "FSM: %s: is_valid_state: unsupported state handle(%d) in this fsm.\n",
   //     fsm->name, state );
@@ -111,7 +111,6 @@ bool is_valid_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
   return FALSE;
 }
 
-      
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = get_vaild_state
  *
@@ -141,15 +140,15 @@ bool is_valid_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-fsm_state_t* get_vaild_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
+ */
+fsm_state_t *get_vaild_state(fsm_instance_t *fsm, fsm_state_hdl state_enum)
 {
   // note: not use this since assume that enums *do not* have any gaps when
   // defined.
   //
   // uint16 idx=0;
   //
-  // while( fsm->state_list[idx] != FSM_INVALID_STATE ) 
+  // while( fsm->state_list[idx] != FSM_INVALID_STATE )
   // {
   // 	if( fsm->state_list[idx]->hdl == state_hdl )
   // 		return fsm->state_list[idx];
@@ -158,22 +157,21 @@ fsm_state_t* get_vaild_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
   // }
 
   // loop in the state list
-  for (uint32_t i = 0; fsm->state_list[i] != FSM_INVALID_STATE; ++i) 
+  for (uint32_t i = 0; fsm->state_list[i] != FSM_INVALID_STATE; ++i)
   {
-    if(i == state_enum) 
+    if (i == state_enum)
       return fsm->state_list[i];
   }
 
-  std::cout << "FSM: " << fsm->name 
-    << ": is_valid_state: unsupported state handle(" << state_enum << ")" 
-    << std::endl;
+  std::cout << "FSM: " << fsm->name
+            << ": is_valid_state: unsupported state handle(" << state_enum
+            << ")" << std::endl;
 
-  // WATCH(WATCH_ALL|WATCH_LEVEL_ALWAYS, "FSM: %s: get state: unsupported state handle(%d).\n", 
+  // WATCH(WATCH_ALL|WATCH_LEVEL_ALWAYS, "FSM: %s: get state: unsupported state handle(%d).\n",
   // 	fsm->name, state_hdl );
 
   return FSM_INVALID_STATE;
 }
-
 
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = call_state_actions
@@ -203,21 +201,22 @@ fsm_state_t* get_vaild_state(fsm_instance_t* fsm, fsm_state_hdl state_enum)
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-void call_state_actions( fsm_instance_t* fsm, fsm_event_hdl event, void* event_data )
+ */
+void call_state_actions(fsm_instance_t *fsm,
+                        fsm_event_hdl event,
+                        void *event_data)
 {
   /* in case there is enter function */
-  if( fsm->current_state->enter_action ) 
+  if (fsm->current_state->enter_action)
   {
     // save `event_data` to event and get it back from event list in the eaf
-    
-    fsm->event_list[event].data = (void*) event_data;
 
-    fsm->current_state->enter_action((fsm_instance_t*)fsm, 
-        (fsm_event_t*)&(fsm->event_list[event]) );
+    fsm->event_list[event].data = (void *)event_data;
+
+    fsm->current_state->enter_action((fsm_instance_t *)fsm,
+                                     (fsm_event_t *)&(fsm->event_list[event]));
   }
 }
-
 
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = fsm_create
@@ -250,24 +249,26 @@ void call_state_actions( fsm_instance_t* fsm, fsm_event_hdl event, void* event_d
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-fsm_status_t fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_event_hdl init_event, void* init_data )
+ */
+fsm_status_t fsm_create(fsm_instance_t *fsm,
+                        fsm_state_hdl init_state,
+                        fsm_event_hdl init_event,
+                        void *init_data)
 {
   fsm_status_t stat = FALSE;
 
-  if(is_valid_state(fsm, init_state))
-  {  
+  if (is_valid_state(fsm, init_state))
+  {
     fsm->previous_state = fsm->current_state = fsm->state_list[init_state];
 
-    // call eaf and do not change state of fsm 
-    call_state_actions( fsm, init_event, init_data );
+    // call eaf and do not change state of fsm
+    call_state_actions(fsm, init_event, init_data);
 
     stat = TRUE;
   }
 
   return stat;
 }
-
 
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = fsm_post_event
@@ -297,42 +298,44 @@ fsm_status_t fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_even
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void* event_data )
+ */
+fsm_status_t
+fsm_post_event(fsm_instance_t *fsm, fsm_event_hdl post_event, void *event_data)
 // fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event )
 {
-  uint32_t i = 0;
-  fsm_state_t* next_state = nullptr;
+  uint32_t i              = 0;
+  fsm_state_t *next_state = nullptr;
 
   // loop through a transition table of a *current* state to see if there is a
   // match to the input event
   //
   // if found a match, then get state handle and get state entry
-  
-  while ( fsm->current_state->transition_tbl[i].event_hdl != FSM_INVALID_EVENT_HDL ) 
+
+  while (fsm->current_state->transition_tbl[i].event_hdl !=
+         FSM_INVALID_EVENT_HDL)
   {
     // found match event
-    if( fsm->current_state->transition_tbl[i].event_hdl == post_event ) 
+    if (fsm->current_state->transition_tbl[i].event_hdl == post_event)
     {
       // find valid state
-      next_state = get_vaild_state( fsm, fsm->current_state->transition_tbl[i].state_hdl );
+      next_state =
+        get_vaild_state(fsm, fsm->current_state->transition_tbl[i].state_hdl);
 
       // save state and make state transition
       fsm->previous_state = fsm->current_state;
-      fsm->current_state = next_state;
+      fsm->current_state  = next_state;
 
       // enter current state with input event
-      call_state_actions( fsm, post_event, event_data );
+      call_state_actions(fsm, post_event, event_data);
       return TRUE; // FSM_OK;
     }
 
     ++i;
   }
 
-  std::cout << "FSM: " << fsm->name 
-    << ": post_event: unsupportred event(" <<  fsm->event_list[post_event].name
-    << ") in state(" << fsm->current_state->name << ")"
-    << std::endl;
+  std::cout << "FSM: " << fsm->name << ": post_event: unsupportred event("
+            << fsm->event_list[post_event].name << ") in state("
+            << fsm->current_state->name << ")" << std::endl;
 
   // WATCH(WATCH_ALL|WATCH_LEVEL_ALWAYS, "FSM: %s: post: unsupported event(%s) in state(%s).",
   //  fsm->name, fsm->event_list[post_event].name, fsm->current_state->name );
@@ -340,7 +343,6 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
   return FALSE; // FSM_ERR_UNSUPPORTED_EVENT;
 }
 
-
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = fsm_get_current_state_hdl
  *
@@ -366,10 +368,10 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-fsm_state_hdl fsm_get_current_state_hdl( fsm_instance_t* fsm )
+ */
+fsm_state_hdl fsm_get_current_state_hdl(fsm_instance_t *fsm)
 {
-   return fsm->current_state->hdl;
+  return fsm->current_state->hdl;
 }
 
 /* ----------------------------------------------------------------------------------
@@ -397,12 +399,11 @@ fsm_state_hdl fsm_get_current_state_hdl( fsm_instance_t* fsm )
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-fsm_state_hdl fsm_get_previous_state_hdl( fsm_instance_t* fsm )
+ */
+fsm_state_hdl fsm_get_previous_state_hdl(fsm_instance_t *fsm)
 {
-   return fsm->previous_state->hdl;
+  return fsm->previous_state->hdl;
 }
-
 
 /* ----------------------------------------------------------------------------------
  ** FUNCTION = fsm_get_current_state_name
@@ -429,17 +430,16 @@ fsm_state_hdl fsm_get_previous_state_hdl( fsm_instance_t* fsm )
  ** SEE ALSO
  *
  * ----------------------------------------------------------------------------------
- */      
-char *fsm_get_current_state_name(fsm_instance_t* fsm)
+ */
+char *fsm_get_current_state_name(fsm_instance_t *fsm)
 {
-   return fsm->current_state->name;
+  return fsm->current_state->name;
 }
 
-char *fsm_get_event_name(fsm_instance_t* fsm, fsm_event_hdl event_enum)
+char *fsm_get_event_name(fsm_instance_t *fsm, fsm_event_hdl event_enum)
 {
-   return fsm->event_list[event_enum].name;
+  return fsm->event_list[event_enum].name;
 }
-
 
 #if 0
 
@@ -472,4 +472,3 @@ bool fsm_is_valid_incoming_event( fsm_instance_t* fsm, fsm_event_hdl event )
   return FALSE;
 }
 #endif
-

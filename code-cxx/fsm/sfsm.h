@@ -172,38 +172,35 @@ o other considerations
 
 */
 
-
 #ifndef __FSM_H__
 #define __FSM_H__
-
 
 /* =================================================================================
  * C O N S T A N T S - M A C R O S
  * =================================================================================
- */  
- 
+ */
+
 #ifndef NULL
 #define NULL 0
 #endif
 
 // to mark the end of list
-#define FSM_INVALID_STATE   nullptr
-#define FSM_INVALID_EVENT   nullptr
+#define FSM_INVALID_STATE nullptr
+#define FSM_INVALID_EVENT nullptr
 
 // to mark the end of enums
 // #define FSM_INVALID_STATE_HDL ((fsm_state_hdl)0)
 #define FSM_INVALID_STATE_HDL ((fsm_state_hdl)-1)
 #define FSM_INVALID_EVENT_HDL ((fsm_event_hdl)-1)
 
-
 /* =================================================================================
  * D A T A T Y P E S
  * =================================================================================
  * enums and typdefs
- */  
+ */
 
 #ifndef TRUE
-#define TRUE  1
+#define TRUE 1
 #define FALSE 0
 #endif
 
@@ -218,7 +215,6 @@ typedef unsigned short uint16;
 #ifndef sint16
 typedef signed short sint16;
 #endif
-
 
 /* ----------------------------------------------------------------------------------
  * fsm_status_t
@@ -236,13 +232,11 @@ typedef enum
 
 typedef bool fsm_status_t;
 
-
 /* ----------------------------------------------------------------------------------
  * fsm_state_hdl
  * ----------------------------------------------------------------------------------
  */
 typedef uint16 fsm_state_hdl;
-
 
 /* ----------------------------------------------------------------------------------
  * fsm_event_hdl
@@ -251,7 +245,6 @@ typedef uint16 fsm_state_hdl;
  */
 typedef sint16 fsm_event_hdl;
 
-
 /* ----------------------------------------------------------------------------------
  * forward reference 
  * ----------------------------------------------------------------------------------
@@ -259,13 +252,12 @@ typedef sint16 fsm_event_hdl;
 typedef struct _fsm_instance_t fsm_instance_t;
 typedef struct _fsm_event_t fsm_event_t;
 
-
 /* ----------------------------------------------------------------------------------
  * fsm_action_func_t
  * ----------------------------------------------------------------------------------
  */
-typedef void (*fsm_action_func_t)(struct _fsm_instance_t*, struct _fsm_event_t*);
-
+typedef void (*fsm_action_func_t)(struct _fsm_instance_t *,
+                                  struct _fsm_event_t *);
 
 /* ----------------------------------------------------------------------------------
  * fsm_event_t
@@ -273,12 +265,12 @@ typedef void (*fsm_action_func_t)(struct _fsm_instance_t*, struct _fsm_event_t*)
  * hdl          : handle
  * name         : name
  */
-typedef struct _fsm_event_t {
-  fsm_event_hdl   hdl;
-  char*           name;
-  void*           data;
+typedef struct _fsm_event_t
+{
+  fsm_event_hdl hdl;
+  char *name;
+  void *data;
 } fsm_event_t;
-
 
 /* ----------------------------------------------------------------------------------
  * fsm_transition_tbl_t
@@ -286,11 +278,11 @@ typedef struct _fsm_event_t {
  * event_hdl      : event handle
  * state_hdl      : state handle
  */
-typedef struct {
-  fsm_event_hdl   event_hdl;
-  fsm_state_hdl   state_hdl;
+typedef struct
+{
+  fsm_event_hdl event_hdl;
+  fsm_state_hdl state_hdl;
 } fsm_transition_tbl_t;
-
 
 /* ----------------------------------------------------------------------------------
  * fsm_state_t
@@ -300,13 +292,13 @@ typedef struct {
  * action_func    : enter function of the state
  * transiton_tbl  : transition table of the state
  */
-typedef struct {  
-  fsm_state_hdl         hdl;
-  char*                 name;
-  fsm_action_func_t     enter_action;
-  fsm_transition_tbl_t* transition_tbl;
+typedef struct
+{
+  fsm_state_hdl hdl;
+  char *name;
+  fsm_action_func_t enter_action;
+  fsm_transition_tbl_t *transition_tbl;
 } fsm_state_t;
-
 
 /* ----------------------------------------------------------------------------------
  * fsm_instatnce_t
@@ -315,26 +307,31 @@ typedef struct {
  * state_list     : list of all the states
  * event_list     : list of all the events
  * current_state  : fsm's current state
- */  
-typedef struct _fsm_instance_t {
-   const char*              name;
-   fsm_state_t**      state_list;
-   fsm_event_t*       event_list;
-   fsm_state_t*       current_state;
-   fsm_state_t*       previous_state;
+ */
+typedef struct _fsm_instance_t
+{
+  const char *name;
+  fsm_state_t **state_list;
+  fsm_event_t *event_list;
+  fsm_state_t *current_state;
+  fsm_state_t *previous_state;
 } fsm_instance_t;
-
 
 /* =================================================================================
  * I N T E R F A C E S
  * =================================================================================
- */  
-extern fsm_status_t  fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_event_hdl init_event, void* data );
-extern fsm_status_t  fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void* data );
-extern fsm_state_hdl fsm_get_current_state_hdl( fsm_instance_t* fsm );
-extern fsm_state_hdl fsm_get_previous_state_hdl( fsm_instance_t* fsm );
-extern char*         fsm_get_current_state_name( fsm_instance_t* fsm );
-extern char*         fsm_get_event_name( fsm_instance_t* fsm, fsm_event_hdl event );
-extern bool          fsm_is_valid_incoming_event( fsm_instance_t* fsm, fsm_event_hdl event );
+ */
+extern fsm_status_t fsm_create(fsm_instance_t *fsm,
+                               fsm_state_hdl init_state,
+                               fsm_event_hdl init_event,
+                               void *data);
+extern fsm_status_t
+fsm_post_event(fsm_instance_t *fsm, fsm_event_hdl post_event, void *data);
+extern fsm_state_hdl fsm_get_current_state_hdl(fsm_instance_t *fsm);
+extern fsm_state_hdl fsm_get_previous_state_hdl(fsm_instance_t *fsm);
+extern char *fsm_get_current_state_name(fsm_instance_t *fsm);
+extern char *fsm_get_event_name(fsm_instance_t *fsm, fsm_event_hdl event);
+extern bool fsm_is_valid_incoming_event(fsm_instance_t *fsm,
+                                        fsm_event_hdl event);
 
 #endif /* __FSM_H__ */

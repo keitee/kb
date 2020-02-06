@@ -1,17 +1,16 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
 // to exercise cxx fsm code
 
 using namespace testing;
-
 
 // ={=========================================================================
 /*
@@ -79,42 +78,41 @@ namespace cxx_fsm
 
   namespace simple
   {
-    template<typename T>
-      class queue
+    template <typename T>
+    class queue
+    {
+    public:
+      void push(T const &message)
       {
-        public:
-          void push(T const &message)
-          {
-            std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_);
 
-            q_.emplace_back(message);
-            cv_.notify_all();
-          }
+        q_.emplace_back(message);
+        cv_.notify_all();
+      }
 
-          T wait_and_pop()
-          {
-            std::unique_lock<std::mutex> lock(m_);
+      T wait_and_pop()
+      {
+        std::unique_lock<std::mutex> lock(m_);
 
-            // wait until q it not empty
-            cv_.wait(lock, [&]{return !q_.empty();});
+        // wait until q it not empty
+        cv_.wait(lock, [&] { return !q_.empty(); });
 
-            auto message = std::move(q_.front());
-            q_.pop_front();
-            lock.unlock();
+        auto message = std::move(q_.front());
+        q_.pop_front();
+        lock.unlock();
 
-            return message;
-          }
+        return message;
+      }
 
-        private:
-          std::condition_variable cv_;
-          std::mutex m_;
-          std::deque<T> q_;
-      };
-  } // namespace
-
+    private:
+      std::condition_variable cv_;
+      std::mutex m_;
+      std::deque<T> q_;
+    };
+  } // namespace simple
 
   // this is a generic queue which supports any T type.
-  
+
   namespace multiple
   {
     // like polymorphic base
@@ -123,82 +121,80 @@ namespace cxx_fsm
       virtual ~message_base() {}
     };
 
-    template<typename T>
-      struct wrapped_message : public message_base
+    template <typename T>
+    struct wrapped_message : public message_base
     {
       explicit wrapped_message(T const &message)
-        : message_(message) {}
+          : message_(message)
+      {}
 
       T message_;
     };
 
     class queue
     {
-      public:
-        template<typename T>
-          void push(T const &message)
-          {
-            std::lock_guard<std::mutex> lock(m_);
+    public:
+      template <typename T>
+      void push(T const &message)
+      {
+        std::lock_guard<std::mutex> lock(m_);
 
-            // create new type of wrapped_message<T> whenever push()
-            q_.push(std::make_shared<wrapped_message<T>>(message));
-            cv_.notify_all();
-          }
+        // create new type of wrapped_message<T> whenever push()
+        q_.push(std::make_shared<wrapped_message<T>>(message));
+        cv_.notify_all();
+      }
 
-        std::shared_ptr<message_base> wait_and_pop()
-        {
-          std::unique_lock<std::mutex> lock(m_);
+      std::shared_ptr<message_base> wait_and_pop()
+      {
+        std::unique_lock<std::mutex> lock(m_);
 
-          cv_.wait(lock, [&]{ return !q_.empty();});
-          auto message = q_.front();
+        cv_.wait(lock, [&] { return !q_.empty(); });
+        auto message = q_.front();
 
-          // *cxx-error* cuase infinite loop on the user when omits this
-          q_.pop();
-          lock.unlock();
-          return message;
-        }
+        // *cxx-error* cuase infinite loop on the user when omits this
+        q_.pop();
+        lock.unlock();
+        return message;
+      }
 
-      private:
-        std::condition_variable cv_;
-        std::mutex m_;
-        // std::queue<T> q_;
-        std::queue<std::shared_ptr<message_base>> q_;
+    private:
+      std::condition_variable cv_;
+      std::mutex m_;
+      // std::queue<T> q_;
+      std::queue<std::shared_ptr<message_base>> q_;
     };
-  } // namespace
+  } // namespace multiple
 
-  void push_items_to_queue(multiple::queue& q)
-  {
-    q.push(100);
-  }
-
+  void push_items_to_queue(multiple::queue &q) { q.push(100); }
 
   // say, message is class and has member functions
 
   class message_1
   {
-    public:
-      explicit message_1():
-        name_("message_1") {}
+  public:
+    explicit message_1()
+        : name_("message_1")
+    {}
 
-      std::string getName() { return name_; }
+    std::string getName() { return name_; }
 
-    private:
-        std::string name_;
+  private:
+    std::string name_;
   };
 
   class message_2
   {
-    public:
-      explicit message_2():
-        name_("message_2") {}
+  public:
+    explicit message_2()
+        : name_("message_2")
+    {}
 
-      std::string getName() { return name_; }
+    std::string getName() { return name_; }
 
-    private:
-        std::string name_;
+  private:
+    std::string name_;
   };
-} // namespce
-
+} // namespace cxx_fsm
 
 // ={=========================================================================
 // cxx-fsm-cxx
@@ -216,8 +212,8 @@ TEST(Fsm, CxxUseMessage)
   auto message = mq.wait_and_pop();
 
   EXPECT_THAT(
-      dynamic_cast<multiple::wrapped_message<int>*>(message.get())->message_,
-      100);
+    dynamic_cast<multiple::wrapped_message<int> *>(message.get())->message_,
+    100);
 }
 
 // send and get various type of messages
@@ -226,23 +222,23 @@ TEST(Fsm, CxxUseMessageVariousType)
   using namespace cxx_fsm;
 
   multiple::queue mq;
-  
+
   {
     mq.push(100);
     auto message = mq.wait_and_pop();
 
     EXPECT_THAT(
-        dynamic_cast<multiple::wrapped_message<int>*>(message.get())->message_, 
-        100);
+      dynamic_cast<multiple::wrapped_message<int> *>(message.get())->message_,
+      100);
   }
 
   {
     mq.push((double)100.0);
     auto message = mq.wait_and_pop();
 
-    EXPECT_THAT(
-        dynamic_cast<multiple::wrapped_message<double>*>(message.get())->message_, 
-        100.0);
+    EXPECT_THAT(dynamic_cast<multiple::wrapped_message<double> *>(message.get())
+                  ->message_,
+                100.0);
   }
 
   {
@@ -251,8 +247,9 @@ TEST(Fsm, CxxUseMessageVariousType)
     auto message = mq.wait_and_pop();
 
     EXPECT_THAT(
-        dynamic_cast<multiple::wrapped_message<std::string>*>(message.get())->message_, 
-        text);
+      dynamic_cast<multiple::wrapped_message<std::string> *>(message.get())
+        ->message_,
+      text);
   }
 
   {
@@ -260,8 +257,9 @@ TEST(Fsm, CxxUseMessageVariousType)
     auto message = mq.wait_and_pop();
 
     EXPECT_THAT(
-        dynamic_cast<multiple::wrapped_message<message_1>*>(message.get())->message_.getName(),
-       "message_1");
+      dynamic_cast<multiple::wrapped_message<message_1> *>(message.get())
+        ->message_.getName(),
+      "message_1");
   }
 
   {
@@ -272,15 +270,15 @@ TEST(Fsm, CxxUseMessageVariousType)
     // ex. wrapped_message<message_1>
 
     EXPECT_THAT(
-        dynamic_cast<multiple::wrapped_message<message_2>*>(message.get())->message_.getName(),
-       "message_2");
+      dynamic_cast<multiple::wrapped_message<message_2> *>(message.get())
+        ->message_.getName(),
+      "message_2");
   }
 }
 
-
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

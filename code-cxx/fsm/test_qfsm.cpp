@@ -1,10 +1,10 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
@@ -18,7 +18,7 @@ using namespace testing;
 
 // ={=========================================================================
 
-enum 
+enum
 {
   e1,
   e2,
@@ -28,24 +28,20 @@ enum
   e6
 };
 
-
 class StateMachineTest : public ::testing::Test
 {
-  public:
-    void SetUp()
-    {
-    }
+public:
+  void SetUp() {}
 
-    void TearDown()
-    {
-    }
+  void TearDown() {}
 
-  protected:
+protected:
 };
 
 TEST_F(StateMachineTest, transitionToInitialState)
 {
-  enum {
+  enum
+  {
     initialState
   };
 
@@ -58,14 +54,12 @@ TEST_F(StateMachineTest, transitionToInitialState)
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state)
-  { 
+  auto entered = [&](int state) {
     enters[state]++;
     // std::cout << "entered state: " << state << std::endl;
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     exits[state]++;
     // std::cout << "exited state: " << state << std::endl;
   };
@@ -90,7 +84,8 @@ TEST_F(StateMachineTest, transitionToInitialState)
 
 TEST_F(StateMachineTest, startWithNoInitialState)
 {
-  enum {
+  enum
+  {
     initialState
   };
 
@@ -101,18 +96,16 @@ TEST_F(StateMachineTest, startWithNoInitialState)
 
   // misses out machine.setInitialState(initialState);
   // so `init state` is not set
-  
+
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state)
-  { 
+  auto entered = [&](int state) {
     enters[state]++;
     // std::cout << "entered state: " << state << std::endl;
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     exits[state]++;
     // std::cout << "exited state: " << state << std::endl;
   };
@@ -130,7 +123,8 @@ TEST_F(StateMachineTest, startWithNoInitialState)
 
 TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
 {
-  enum {
+  enum
+  {
     s1,
     s2,
     s3,
@@ -169,7 +163,8 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
 
 TEST_F(StateMachineTest, stopWithinSlot)
 {
-  enum {
+  enum
+  {
     initialState,
   };
 
@@ -182,13 +177,12 @@ TEST_F(StateMachineTest, stopWithinSlot)
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  std::function<void(int)> lambda = [&](int state){
+  std::function<void(int)> lambda = [&](int state) {
     enters[state]++;
     machine.stop();
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     exits[state]++;
     // std::cout << "exited state: " << state << std::endl;
   };
@@ -205,14 +199,13 @@ TEST_F(StateMachineTest, stopWithinSlot)
   EXPECT_THAT(exits.size(), 0);
 }
 
-
 // N/A since do not support the deplayed post
 // TEST_F(StateMachineTest, stopWithinDelayedSlot)
 
-
 TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
 {
-  enum {
+  enum
+  {
     s1,
     s2
   };
@@ -226,40 +219,35 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
   EXPECT_TRUE(machine.addTransition(s1, e1, s2));
   EXPECT_TRUE(machine.addTransition(s2, e2, s2));
 
-
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state)
-  { 
+  auto entered = [&](int state) {
     enters[state]++;
     // std::cout << "entered state: " << state << std::endl;
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     exits[state]++;
     // std::cout << "exited state: " << state << std::endl;
   };
 
   EXPECT_TRUE(machine.connect(entered, exited));
 
-
-  machine.start();          // s1 enter
-  machine.postEvent(e1);    // s2 enter, s1 exit
-  machine.postEvent(e2);    // s2 enter, s2 exit
+  machine.start();       // s1 enter
+  machine.postEvent(e1); // s2 enter, s1 exit
+  machine.postEvent(e2); // s2 enter, s2 exit
   machine.stop();
 
   EXPECT_FALSE(machine.isRunning());
 
-  EXPECT_EQ(enters[s1], 1U);  // when enters
-  EXPECT_EQ(exits[s1], 1U);   // when transit to s2, exit s1
+  EXPECT_EQ(enters[s1], 1U); // when enters
+  EXPECT_EQ(exits[s1], 1U);  // when transit to s2, exit s1
 
   // even transiiton to self calls enter/exit calls.
-  EXPECT_EQ(enters[s2], 2U);  // when transit to s2, enter s2
-  EXPECT_EQ(exits[s2], 1U);   // when trsnsit to s2(self), enter s2 and exit s2
+  EXPECT_EQ(enters[s2], 2U); // when transit to s2, enter s2
+  EXPECT_EQ(exits[s2], 1U);  // when trsnsit to s2(self), enter s2 and exit s2
 }
-
 
 // note: this is interesting feature
 // when transit from (outer) state to (inner) state, entered gets called for all
@@ -268,13 +256,14 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
 
 TEST_F(StateMachineTest, enterNestedStateOrder)
 {
-  enum {
-    initialState,   // 0
-    s1,             // 1
-    s1_1,           // 2
-    s1_2,           // 3
-    s1_2_1,         // 4
-    s1_2_2,         // 5
+  enum
+  {
+    initialState, // 0
+    s1,           // 1
+    s1_1,         // 2
+    s1_2,         // 3
+    s1_2_1,       // 4
+    s1_2_2,       // 5
     s2
   };
 
@@ -308,15 +297,9 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   std::vector<int> enters;
   std::vector<int> exits;
 
-  auto entered = [&](int state)
-  { 
-    enters.push_back(state);
-  };
+  auto entered = [&](int state) { enters.push_back(state); };
 
-  auto exited = [&](int state)
-  {
-    exits.push_back(state);
-  };
+  auto exited = [&](int state) { exits.push_back(state); };
 
   EXPECT_TRUE(machine.connect(entered, exited));
   // }
@@ -330,28 +313,30 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   enters.clear();
 
   // since e1 pass through 3 states from init state which is not in (old) state
-  // set. from init (no super) to s1_2_2 (no super) 
+  // set. from init (no super) to s1_2_2 (no super)
 
   machine.postEvent(e1);
   EXPECT_EQ(enters.size(), 3);
 
   // check the order of `entered` signals
-  EXPECT_THAT(enters, ElementsAre(1,3,5)); 
+  EXPECT_THAT(enters, ElementsAre(1, 3, 5));
 }
 
 TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 {
-  enum State {
-    ServiceUnavailableState,        // 0
-    ServiceAvailableSuperState,     // 1
-    AdapterUnavailableState,        // 2
-    AdapterAvailableSuperState,     // 3
-    AdapterPoweredOffState,         // 4
-    AdapterPoweredOnState,          // 5
-    ShutdownState                   // 6
+  enum State
+  {
+    ServiceUnavailableState,    // 0
+    ServiceAvailableSuperState, // 1
+    AdapterUnavailableState,    // 2
+    AdapterAvailableSuperState, // 3
+    AdapterPoweredOffState,     // 4
+    AdapterPoweredOnState,      // 5
+    ShutdownState               // 6
   };
 
-  enum Event {
+  enum Event
+  {
     ServiceRetryEvent,
     ServiceAvailableEvent,
     ServiceUnavailableEvent,
@@ -364,7 +349,6 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
     ShutdownEvent
   };
 
-
   StateMachine machine;
   machine.setObjectName("machine");
 
@@ -372,49 +356,72 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
   machine.addState(ServiceUnavailableState, "ServiceUnavailableState");
   machine.addState(ServiceAvailableSuperState, "ServiceAvailableSuperState");
 
-  machine.addState(ServiceAvailableSuperState, AdapterUnavailableState, "AdapterUnavailableState");
-  machine.addState(ServiceAvailableSuperState, AdapterAvailableSuperState, "AdapterAvailableSuperState");
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterUnavailableState,
+                   "AdapterUnavailableState");
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterAvailableSuperState,
+                   "AdapterAvailableSuperState");
 
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOffState, "AdapterPoweredOffState");
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOnState, "AdapterPoweredOnState");
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOffState,
+                   "AdapterPoweredOffState");
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOnState,
+                   "AdapterPoweredOnState");
 
   machine.addState(ShutdownState, "ShutdownState");
 
-
   // add the transitions       From State	              ->    Event                  ->  To State
-  machine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
-  machine.addTransition(ServiceUnavailableState,       ServiceRetryEvent,          ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ServiceUnavailableEvent,    ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ShutdownEvent,              ShutdownState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceAvailableEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceRetryEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ServiceUnavailableEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ShutdownEvent,
+                        ShutdownState);
 
-  machine.addTransition(AdapterUnavailableState,       AdapterAvailableEvent,      AdapterPoweredOffState);
-  machine.addTransition(AdapterUnavailableState,       AdapterRetryAttachEvent,    AdapterUnavailableState);
-  machine.addTransition(AdapterAvailableSuperState,    AdapterUnavailableEvent,    AdapterUnavailableState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterAvailableEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterRetryAttachEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(AdapterAvailableSuperState,
+                        AdapterUnavailableEvent,
+                        AdapterUnavailableState);
 
-  machine.addTransition(AdapterPoweredOffState,        AdapterPoweredOnEvent,      AdapterPoweredOnState);
-  machine.addTransition(AdapterPoweredOffState,        AdapterRetryPowerOnEvent,   AdapterPoweredOffState);
-  machine.addTransition(AdapterPoweredOnState,         AdapterPoweredOffEvent,     AdapterPoweredOffState);
-
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterPoweredOnEvent,
+                        AdapterPoweredOnState);
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterRetryPowerOnEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterPoweredOnState,
+                        AdapterPoweredOffEvent,
+                        AdapterPoweredOffState);
 
   // {
   std::vector<int> enters;
   std::vector<int> exits;
 
-  auto entered = [&](int state)
-  { 
+  auto entered = [&](int state) {
     // std::cout << "entered state: " << state << std::endl;
     enters.push_back(state);
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     // std::cout << "exited state: " << state << std::endl;
     exits.push_back(state);
   };
 
   EXPECT_TRUE(machine.connect(entered, exited));
   // }
-
 
   // set the initial state
   machine.setInitialState(AdapterPoweredOffState);
@@ -449,22 +456,22 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
   EXPECT_EQ(exits.size(), 3);
 
   // check the order of `entered` signals
-  EXPECT_THAT(exits, ElementsAre(4, 3, 1)); 
+  EXPECT_THAT(exits, ElementsAre(4, 3, 1));
 }
-
 
 // that is, do not allow transition from super state to super state which do
 // have initial state.
 
 TEST_F(StateMachineTest, NoAddTransitionToSuper_0)
 {
-  enum State {
-    S1,     // 0
-    S2,     // 1
-    S3,     // 2
-    S4,     // 3
-    S5,     // 4
-    S6      // 5
+  enum State
+  {
+    S1, // 0
+    S2, // 1
+    S3, // 2
+    S4, // 3
+    S5, // 4
+    S6  // 5
   };
 
   StateMachine machine;
@@ -486,28 +493,29 @@ TEST_F(StateMachineTest, NoAddTransitionToSuper_0)
   // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S5(4) is a super state with no initial state set
   // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S2(1) is a super state with no initial state set
 
-  EXPECT_FALSE(machine.addTransition(S1,       e1,      S2));
-  EXPECT_FALSE(machine.addTransition(S2,       e2,      S3));
-  EXPECT_FALSE(machine.addTransition(S3,       e3,      S4));
-  EXPECT_FALSE(machine.addTransition(S4,       e4,      S5));
+  EXPECT_FALSE(machine.addTransition(S1, e1, S2));
+  EXPECT_FALSE(machine.addTransition(S2, e2, S3));
+  EXPECT_FALSE(machine.addTransition(S3, e3, S4));
+  EXPECT_FALSE(machine.addTransition(S4, e4, S5));
 
   // true since s6 is not super state
-  EXPECT_TRUE(machine.addTransition(S5,       e5,      S6));
+  EXPECT_TRUE(machine.addTransition(S5, e5, S6));
 
-  EXPECT_FALSE(machine.addTransition(S6,       e6,      S2));
+  EXPECT_FALSE(machine.addTransition(S6, e6, S2));
 }
 
 // Do not allow to add transion to super state.
 
 TEST_F(StateMachineTest, NoAddTransitionToSuper_1)
 {
-  enum {
-    initialState,   // 0
-    s1,             // 1
-    s1_1,           // 2
-    s1_2,           // 3
-    s1_2_1,         // 4
-    s1_2_2,         // 5
+  enum
+  {
+    initialState, // 0
+    s1,           // 1
+    s1_1,         // 2
+    s1_2,         // 3
+    s1_2_1,       // 4
+    s1_2_2,       // 5
     s2
   };
 
@@ -526,27 +534,28 @@ TEST_F(StateMachineTest, NoAddTransitionToSuper_1)
 
   // EXPECT_TRUE(machine.addTransition(initialState, e1, s1_2_2));
 
-  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00428 : 
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00428 :
   //  'toState' (3) is a super state with no initial state set
   EXPECT_FALSE(machine.addTransition(initialState, e1, s1_2));
 }
-
 
 // since not able to add transition to super, no transition to super can happen.
 
 TEST_F(StateMachineTest, TransitionToSuper)
 {
-  enum State {
-    ServiceUnavailableState,        // 0
-    ServiceAvailableSuperState,     // 1
-    AdapterUnavailableState,        // 2
-    AdapterAvailableSuperState,     // 3
-    AdapterPoweredOffState,         // 4
-    AdapterPoweredOnState,          // 5
-    ShutdownState                   // 6
+  enum State
+  {
+    ServiceUnavailableState,    // 0
+    ServiceAvailableSuperState, // 1
+    AdapterUnavailableState,    // 2
+    AdapterAvailableSuperState, // 3
+    AdapterPoweredOffState,     // 4
+    AdapterPoweredOnState,      // 5
+    ShutdownState               // 6
   };
 
-  enum Event {
+  enum Event
+  {
     ServiceRetryEvent,
     ServiceAvailableEvent,
     ServiceUnavailableEvent,
@@ -559,7 +568,6 @@ TEST_F(StateMachineTest, TransitionToSuper)
     ShutdownEvent
   };
 
-
   StateMachine machine;
   machine.setObjectName("machine");
 
@@ -567,42 +575,66 @@ TEST_F(StateMachineTest, TransitionToSuper)
   machine.addState(ServiceUnavailableState, "ServiceUnavailableState");
   machine.addState(ServiceAvailableSuperState, "ServiceAvailableSuperState");
 
-  machine.addState(ServiceAvailableSuperState, AdapterUnavailableState, "AdapterUnavailableState");
-  machine.addState(ServiceAvailableSuperState, AdapterAvailableSuperState, "AdapterAvailableSuperState");
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterUnavailableState,
+                   "AdapterUnavailableState");
+  machine.addState(ServiceAvailableSuperState,
+                   AdapterAvailableSuperState,
+                   "AdapterAvailableSuperState");
 
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOffState, "AdapterPoweredOffState");
-  machine.addState(AdapterAvailableSuperState, AdapterPoweredOnState, "AdapterPoweredOnState");
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOffState,
+                   "AdapterPoweredOffState");
+  machine.addState(AdapterAvailableSuperState,
+                   AdapterPoweredOnState,
+                   "AdapterPoweredOnState");
 
   machine.addState(ShutdownState, "ShutdownState");
 
-
   // add the transitions       From State	              ->    Event                  ->  To State
-  machine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
-  machine.addTransition(ServiceUnavailableState,       ServiceRetryEvent,          ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ServiceUnavailableEvent,    ServiceUnavailableState);
-  machine.addTransition(ServiceAvailableSuperState,    ShutdownEvent,              ShutdownState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceAvailableEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(ServiceUnavailableState,
+                        ServiceRetryEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ServiceUnavailableEvent,
+                        ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,
+                        ShutdownEvent,
+                        ShutdownState);
 
-  machine.addTransition(AdapterUnavailableState,       AdapterAvailableEvent,      AdapterPoweredOffState);
-  machine.addTransition(AdapterUnavailableState,       AdapterRetryAttachEvent,    AdapterUnavailableState);
-  machine.addTransition(AdapterAvailableSuperState,    AdapterUnavailableEvent,    AdapterUnavailableState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterAvailableEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterUnavailableState,
+                        AdapterRetryAttachEvent,
+                        AdapterUnavailableState);
+  machine.addTransition(AdapterAvailableSuperState,
+                        AdapterUnavailableEvent,
+                        AdapterUnavailableState);
 
-  machine.addTransition(AdapterPoweredOffState,        AdapterPoweredOnEvent,      AdapterPoweredOnState);
-  machine.addTransition(AdapterPoweredOffState,        AdapterRetryPowerOnEvent,   AdapterPoweredOffState);
-  machine.addTransition(AdapterPoweredOnState,         AdapterPoweredOffEvent,     AdapterPoweredOffState);
-
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterPoweredOnEvent,
+                        AdapterPoweredOnState);
+  machine.addTransition(AdapterPoweredOffState,
+                        AdapterRetryPowerOnEvent,
+                        AdapterPoweredOffState);
+  machine.addTransition(AdapterPoweredOnState,
+                        AdapterPoweredOffEvent,
+                        AdapterPoweredOffState);
 
   // {
   std::vector<int> enters;
   std::vector<int> exits;
 
-  auto entered = [&](int state)
-  { 
+  auto entered = [&](int state) {
     std::cout << "entered state: " << state << std::endl;
     enters.push_back(state);
   };
 
-  auto exited = [&](int state)
-  {
+  auto exited = [&](int state) {
     std::cout << "exited state: " << state << std::endl;
     exits.push_back(state);
   };
@@ -610,16 +642,15 @@ TEST_F(StateMachineTest, TransitionToSuper)
   EXPECT_TRUE(machine.connect(entered, exited));
   // }
 
-
   // set the initial state
   machine.setInitialState(AdapterPoweredOffState);
   machine.start();
 
   // Removes all items from the list.
   enters.clear();
-  
+
   // TODO: postEvent() do not return error. may be necessary to add?
-  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00279 : 
+  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00279 :
   //  not found target state from current state -1
   machine.postEvent(ServiceAvailableSuperState);
 

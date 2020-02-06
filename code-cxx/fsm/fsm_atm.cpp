@@ -1,57 +1,56 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
-#include "sfsm.h"
 #include "dfsm.h"
+#include "sfsm.h"
 
 using namespace testing;
 
 // (gdb) b AlgoList_Divide_Test::TestBody()
 
-
 // ={=========================================================================
 // cxx-fsm-queue
 // - make it simple, set T as int.
 
-namespace fsm 
+namespace fsm
 {
   // simple message q
   template <typename T>
   class queue
   {
-    public:
-      void push(const T &message)
-      {
-        std::lock_guard<std::mutex> lock(m);
+  public:
+    void push(const T &message)
+    {
+      std::lock_guard<std::mutex> lock(m);
 
-        mq.push(message);
-        cv.notify_all();
-      }
+      mq.push(message);
+      cv.notify_all();
+    }
 
-      T wait_and_pop()
-      {
-        std::unique_lock<std::mutex> lock(m);
+    T wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m);
 
-        cv.wait(lock, [this]{return !mq.empty();});
-        auto message = mq.front();
-        mq.pop();
-        return message;
-      }
+      cv.wait(lock, [this] { return !mq.empty(); });
+      auto message = mq.front();
+      mq.pop();
+      return message;
+    }
 
-    private:
-      std::mutex m;
-      std::condition_variable cv;
-      std::queue<T> mq;
+  private:
+    std::mutex m;
+    std::condition_variable cv;
+    std::queue<T> mq;
   };
 
-} // namespace
+} // namespace fsm
 
 static fsm::queue<uint32_t> q;
 
@@ -70,7 +69,7 @@ static void send_message(uint32_t message)
 
 // forward message to fsm
 static void fsm_static_runner(fsm_instance_t *fsm)
-{ 
+{
   // std::cout << "fsm_thread: wait for a message" << std::endl;
   // auto msg = q.wait_and_pop();
   // std::cout << "fsm_thread: got a message" << std::endl;
@@ -82,7 +81,7 @@ static void fsm_static_runner(fsm_instance_t *fsm)
     auto msg = q.wait_and_pop();
     std::cout << "fsm_thread: got a <" << msg << ">" << std::endl;
 
-    if(msg == CONST_EXCEPTION_TO_END)
+    if (msg == CONST_EXCEPTION_TO_END)
       break;
 
     fsm_post_event(fsm, msg, nullptr);
@@ -92,7 +91,7 @@ static void fsm_static_runner(fsm_instance_t *fsm)
 }
 
 static void fsm_dynamic_runner(VRM_FSM_INSTANCE_HANDLE fsm)
-{ 
+{
   // std::cout << "fsm_thread: wait for a message" << std::endl;
   // auto msg = q.wait_and_pop();
   // std::cout << "fsm_thread: got a message" << std::endl;
@@ -106,7 +105,7 @@ static void fsm_dynamic_runner(VRM_FSM_INSTANCE_HANDLE fsm)
     auto msg = q.wait_and_pop();
     std::cout << "fsm_thread: got a <" << msg << ">" << std::endl;
 
-    if(msg == CONST_EXCEPTION_TO_END)
+    if (msg == CONST_EXCEPTION_TO_END)
       break;
 
     VRM_FSM_Input(fsm, (uint16_t)msg);
@@ -114,7 +113,6 @@ static void fsm_dynamic_runner(VRM_FSM_INSTANCE_HANDLE fsm)
 
   std::cout << "fsm_thread: end" << std::endl;
 }
-
 
 // ={=========================================================================
 // cxx-fsm-static
@@ -124,7 +122,7 @@ namespace fsm_static
   // ={=========================================================================
   // fsm event and state enums
 
-  typedef enum 
+  typedef enum
   {
     E_ATM_INPUT_WAIT_FOR_CARD,
     E_ATM_INPUT_CARD_INSERTED,
@@ -138,7 +136,7 @@ namespace fsm_static
 
   typedef enum
   {
-    E_ATM_STATE_WAITING_FOR_CARD,   // current state
+    E_ATM_STATE_WAITING_FOR_CARD, // current state
     E_ATM_STATE_CARD_INSERTED,
     E_ATM_STATE_GETTING_PIN,
     E_ATM_STATE_VERIFY_PIN,
@@ -147,129 +145,101 @@ namespace fsm_static
     E_ATM_STATE_DONE_PROCESSING
   } E_ATM_STATE;
 
-
   // ={=========================================================================
   // fsm state transition table, <event, new state> pair
 
   static fsm_transition_tbl_t wait_for_card_tbl[] = {
-    { E_ATM_INPUT_CARD_INSERTED, E_ATM_STATE_CARD_INSERTED },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_CARD_INSERTED, E_ATM_STATE_CARD_INSERTED},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t card_inserted_tbl[] = {
-    { E_ATM_INPUT_DIGIT_PRESSED, E_ATM_STATE_GETTING_PIN },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_DIGIT_PRESSED, E_ATM_STATE_GETTING_PIN},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t getting_pin_tbl[] = {
-    { E_ATM_INPUT_DIGIT_PRESSED, E_ATM_STATE_GETTING_PIN },
-    { E_ATM_INPUT_DIGIT_DONE, E_ATM_STATE_VERIFY_PIN },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_DIGIT_PRESSED, E_ATM_STATE_GETTING_PIN},
+    {E_ATM_INPUT_DIGIT_DONE, E_ATM_STATE_VERIFY_PIN},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t verify_pin_tbl[] = {
-    { E_ATM_INPUT_PIN_VERIFIED, E_ATM_STATE_WAIT_FOR_ACTION },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_PIN_VERIFIED, E_ATM_STATE_WAIT_FOR_ACTION},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t wait_for_action_tbl[] = {
-    { E_ATM_INPUT_WITHDRAW_PRESSED, E_ATM_STATE_PROCESS_WITHDRAW },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_WITHDRAW_PRESSED, E_ATM_STATE_PROCESS_WITHDRAW},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t process_withdraw_tbl[] = {
-    { E_ATM_INPUT_WITHDRAW_OKAY, E_ATM_STATE_DONE_PROCESSING },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
+    {E_ATM_INPUT_WITHDRAW_OKAY, E_ATM_STATE_DONE_PROCESSING},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   static fsm_transition_tbl_t done_processing_tbl[] = {
-    { E_ATM_INPUT_END, E_ATM_STATE_GETTING_PIN },
-    { FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL }
-  };
-
+    {E_ATM_INPUT_END, E_ATM_STATE_GETTING_PIN},
+    {FSM_INVALID_EVENT_HDL, FSM_INVALID_STATE_HDL}};
 
   // ={=========================================================================
   // fsm state and event list
 
-  static fsm_state_t wait_for_card_state = {
-    E_ATM_STATE_WAITING_FOR_CARD,
-    (char *)"atm wait for card state",
-    (fsm_action_func_t)NULL,
-    wait_for_card_tbl
-  };
+  static fsm_state_t wait_for_card_state = {E_ATM_STATE_WAITING_FOR_CARD,
+                                            (char *)"atm wait for card state",
+                                            (fsm_action_func_t)NULL,
+                                            wait_for_card_tbl};
 
-  static fsm_state_t card_inserted_state = {
-    E_ATM_STATE_CARD_INSERTED,
-    (char *)"atm card inserted state",
-    (fsm_action_func_t)NULL,
-    card_inserted_tbl
-  };
+  static fsm_state_t card_inserted_state = {E_ATM_STATE_CARD_INSERTED,
+                                            (char *)"atm card inserted state",
+                                            (fsm_action_func_t)NULL,
+                                            card_inserted_tbl};
 
-  static fsm_state_t getting_pin_state = {
-    E_ATM_STATE_GETTING_PIN,
-    (char *)"atm getting pin state",
-    (fsm_action_func_t)NULL,
-    getting_pin_tbl
-  };
+  static fsm_state_t getting_pin_state = {E_ATM_STATE_GETTING_PIN,
+                                          (char *)"atm getting pin state",
+                                          (fsm_action_func_t)NULL,
+                                          getting_pin_tbl};
 
-  static fsm_state_t verify_pin_state = {
-    E_ATM_STATE_VERIFY_PIN,
-    (char *)"atm verify pin state",
-    (fsm_action_func_t)NULL,
-    verify_pin_tbl
-  };
+  static fsm_state_t verify_pin_state = {E_ATM_STATE_VERIFY_PIN,
+                                         (char *)"atm verify pin state",
+                                         (fsm_action_func_t)NULL,
+                                         verify_pin_tbl};
 
   static fsm_state_t wait_for_action_state = {
     E_ATM_STATE_WAIT_FOR_ACTION,
     (char *)"atm wait for action state",
     (fsm_action_func_t)NULL,
-    wait_for_action_tbl
-  };
+    wait_for_action_tbl};
 
   static fsm_state_t process_withdraw_state = {
     E_ATM_STATE_PROCESS_WITHDRAW,
     (char *)"atm process withdraw state",
     (fsm_action_func_t)NULL,
-    process_withdraw_tbl
-  };
+    process_withdraw_tbl};
 
-  static fsm_state_t done_processing_state = {
-    E_ATM_STATE_DONE_PROCESSING,
-    (char *)"atm done process state",
-    (fsm_action_func_t)NULL,
-    done_processing_tbl
-  };
+  static fsm_state_t done_processing_state = {E_ATM_STATE_DONE_PROCESSING,
+                                              (char *)"atm done process state",
+                                              (fsm_action_func_t)NULL,
+                                              done_processing_tbl};
 
-
-  static fsm_state_t* atm_state_list[] = {
-    &wait_for_card_state,
-    &card_inserted_state,
-    &getting_pin_state,
-    &verify_pin_state,
-    &wait_for_action_state,
-    &process_withdraw_state,
-    &done_processing_state
-  };
+  static fsm_state_t *atm_state_list[] = {&wait_for_card_state,
+                                          &card_inserted_state,
+                                          &getting_pin_state,
+                                          &verify_pin_state,
+                                          &wait_for_action_state,
+                                          &process_withdraw_state,
+                                          &done_processing_state};
 
   static fsm_event_t atm_event_list[] = {
-    { E_ATM_INPUT_WAIT_FOR_CARD, (char *)"want for card event", nullptr},
-    { E_ATM_INPUT_CARD_INSERTED, (char *)"card inserted event", nullptr},
-    { E_ATM_INPUT_DIGIT_PRESSED, (char *)"digit pressed event", nullptr},
-    { E_ATM_INPUT_DIGIT_DONE, (char *)"digit done event", nullptr},
-    { E_ATM_INPUT_PIN_VERIFIED, (char *)"pin verified event", nullptr},
-    { E_ATM_INPUT_WITHDRAW_PRESSED, (char *)"withdraw pressed event", nullptr},
-    { E_ATM_INPUT_WITHDRAW_OKAY, (char *)"withdraw okay event", nullptr},
-    { E_ATM_INPUT_END, (char *)"input endevent", nullptr}
-  };
-
+    {E_ATM_INPUT_WAIT_FOR_CARD, (char *)"want for card event", nullptr},
+    {E_ATM_INPUT_CARD_INSERTED, (char *)"card inserted event", nullptr},
+    {E_ATM_INPUT_DIGIT_PRESSED, (char *)"digit pressed event", nullptr},
+    {E_ATM_INPUT_DIGIT_DONE, (char *)"digit done event", nullptr},
+    {E_ATM_INPUT_PIN_VERIFIED, (char *)"pin verified event", nullptr},
+    {E_ATM_INPUT_WITHDRAW_PRESSED, (char *)"withdraw pressed event", nullptr},
+    {E_ATM_INPUT_WITHDRAW_OKAY, (char *)"withdraw okay event", nullptr},
+    {E_ATM_INPUT_END, (char *)"input endevent", nullptr}};
 
   // ={=========================================================================
   // fsm instance
 
   static fsm_instance_t atm_fsm = {
-    "atm", atm_state_list, atm_event_list, NULL, NULL
-  };
-
+    "atm", atm_state_list, atm_event_list, NULL, NULL};
 
   // ={=========================================================================
   // (state) action functions, eafs
@@ -278,20 +248,21 @@ namespace fsm_static
   static std::string pin;
 
   // start -> wait for a card
-  static void WaitForCard(fsm_instance_t* fsm, fsm_event_t* event)
+  static void WaitForCard(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
 
     std::cout << "--------------------------" << std::endl;
     std::cout << "event: <" << fsm_get_event_name(fsm, event->hdl) << ">"
-      << ", current state: <" << fsm_get_current_state_name(fsm) << ">" << std::endl;
+              << ", current state: <" << fsm_get_current_state_name(fsm) << ">"
+              << std::endl;
 
     std::cout << "atm::WaitForCard:" << std::endl;
   }
 
   // external -> card_inserted
-  static void CardInserted(fsm_instance_t* fsm, fsm_event_t* event)
+  static void CardInserted(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -299,20 +270,21 @@ namespace fsm_static
     // state check
     // if( !fsm_is_valid_incoming_event( fsm, event->hdl ) )
     // {
-    //   std::cout << "invalid event <" 
+    //   std::cout << "invalid event <"
     //     << event->name << "in " << fsm->current_state->name << std::endl;
     //   return;
     // }
 
     std::cout << "--------------------------" << std::endl;
     std::cout << "event: <" << fsm_get_event_name(fsm, event->hdl) << ">"
-      << ", current state: <" << fsm_get_current_state_name(fsm) << ">" << std::endl;
+              << ", current state: <" << fsm_get_current_state_name(fsm) << ">"
+              << std::endl;
 
     std::cout << "atm::CardInserted:" << std::endl;
     std::cout << "atm::CardInserted:init account and pin" << std::endl;
   }
 
-  static void DigitPressed(fsm_instance_t* fsm, fsm_event_t* event)
+  static void DigitPressed(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -337,7 +309,7 @@ namespace fsm_static
     }
   }
 
-  static void VerifyPin(fsm_instance_t* fsm, fsm_event_t* event)
+  static void VerifyPin(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -347,7 +319,7 @@ namespace fsm_static
   }
 
   // external -> pin_verified
-  static void WaitForAction(fsm_instance_t* fsm, fsm_event_t* event)
+  static void WaitForAction(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -356,7 +328,7 @@ namespace fsm_static
   }
 
   // external -> withdraw_pressed
-  static void WithdrawPressed(fsm_instance_t* fsm, fsm_event_t* event)
+  static void WithdrawPressed(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -366,7 +338,7 @@ namespace fsm_static
   }
 
   // external -> withdraw_ok
-  static void DoneProcessing(fsm_instance_t* fsm, fsm_event_t* event)
+  static void DoneProcessing(fsm_instance_t *fsm, fsm_event_t *event)
   {
     (void)fsm;
     (void)event;
@@ -375,8 +347,7 @@ namespace fsm_static
     send_message((uint16_t)E_ATM_INPUT_END);
   }
 
-} // namesapce
-
+} // namespace fsm_static
 
 /*
 fsm diagram:
@@ -455,17 +426,19 @@ TEST(Fsm, AtmStatic)
   std::cout << "fsm atm:: static" << std::endl;
 
   // set AFs
-  wait_for_card_state.enter_action = WaitForCard;
-  card_inserted_state.enter_action = CardInserted;
-  getting_pin_state.enter_action = DigitPressed;
-  verify_pin_state.enter_action = VerifyPin;
-  wait_for_action_state.enter_action = WaitForAction;
+  wait_for_card_state.enter_action    = WaitForCard;
+  card_inserted_state.enter_action    = CardInserted;
+  getting_pin_state.enter_action      = DigitPressed;
+  verify_pin_state.enter_action       = VerifyPin;
+  wait_for_action_state.enter_action  = WaitForAction;
   process_withdraw_state.enter_action = WithdrawPressed;
-  done_processing_state.enter_action = DoneProcessing;
+  done_processing_state.enter_action  = DoneProcessing;
 
   // careful care for init state and event
-  fsm_create(&atm_fsm, 
-      E_ATM_STATE_WAITING_FOR_CARD, E_ATM_INPUT_WAIT_FOR_CARD,  nullptr); 
+  fsm_create(&atm_fsm,
+             E_ATM_STATE_WAITING_FOR_CARD,
+             E_ATM_INPUT_WAIT_FOR_CARD,
+             nullptr);
 
   std::thread fsm_thread(fsm_static_runner, &atm_fsm);
 
@@ -488,7 +461,6 @@ TEST(Fsm, AtmStatic)
   fsm_thread.join();
 }
 
-
 // ={=========================================================================
 // cxx-fsm-dynamic
 
@@ -509,157 +481,139 @@ namespace fsm_dynamic
   // same as sfsm
   typedef enum
   {
-    E_ATM_STATE_WAITING_FOR_CARD,   // current state
+    E_ATM_STATE_WAITING_FOR_CARD, // current state
     E_ATM_STATE_CARD_INSERTED,
-    E_ATM_STATE_GETTING_PIN,        // digit pressed
+    E_ATM_STATE_GETTING_PIN, // digit pressed
     E_ATM_STATE_VERIFY_PIN,
     E_ATM_STATE_WAIT_FOR_ACTION,
     E_ATM_STATE_PROCESS_WITHDRAW,
     E_ATM_STATE_DONE_PROCESSING
   } E_ATM_STATE;
 
+  // eafs
 
-// eafs
+  static std::string account;
+  static std::string pin;
 
-static std::string account;
-static std::string pin;
+  // external -> card_inserted
 
-// external -> card_inserted
-
-static void CardInserted(void* data)
-{
-  (void)data;
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::CardInserted:" << std::endl;
-  std::cout << "atm::CardInserted:init account and pin" << std::endl;
-}
-
-static void DigitPressed(void *data)
-{
-  (void)data;
-
-  unsigned const pin_length = 4;
-  pin += "1";
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::DigitPressed: " << pin << std::endl;
-
-  if (pin.length() == pin_length)
+  static void CardInserted(void *data)
   {
-    send_message((uint16_t)E_ATM_INPUT_DIGIT_DONE);
+    (void)data;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::CardInserted:" << std::endl;
+    std::cout << "atm::CardInserted:init account and pin" << std::endl;
   }
-}
 
-static void VerifyPin(void *data)
-{
-  (void)data;
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::VerifyPin:" << std::endl;
-  send_message((uint16_t)E_ATM_INPUT_PIN_VERIFIED);
-}
+  static void DigitPressed(void *data)
+  {
+    (void)data;
 
-// external -> pin_verified
-static void WaitForAction(void *data)
-{
-  (void)data;
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::WaitForAction:" << std::endl;
-}
+    unsigned const pin_length = 4;
+    pin += "1";
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::DigitPressed: " << pin << std::endl;
 
-// external -> withdraw_pressed
-static void WithdrawPressed(void *data)
-{
-  (void)data;
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::WithdrawPressed:" << std::endl;
-  send_message((uint16_t)E_ATM_INPUT_WITHDRAW_OKAY);
-}
+    if (pin.length() == pin_length)
+    {
+      send_message((uint16_t)E_ATM_INPUT_DIGIT_DONE);
+    }
+  }
 
-// external -> withdraw_ok
-static void DoneProcessing(void *data)
-{
-  (void)data;
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "atm::DoneProcessing:" << std::endl;
-  send_message((uint16_t)E_ATM_INPUT_END);
-}
+  static void VerifyPin(void *data)
+  {
+    (void)data;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::VerifyPin:" << std::endl;
+    send_message((uint16_t)E_ATM_INPUT_PIN_VERIFIED);
+  }
 
-static void FsmOnTransition(void *data, const VRM_FSM_ENTRY *entry)
-{
-  std::cout << "--------------------------" << std::endl;
-  std::cout << "FsmOnTransition: " 
-    << " current state: " << (uint16_t) entry->state
-    << " input event  : " << (uint16_t) entry->input
-    << " -> new state    : " << (uint16_t) entry->new_state
-    << std::endl;
-}
+  // external -> pin_verified
+  static void WaitForAction(void *data)
+  {
+    (void)data;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::WaitForAction:" << std::endl;
+  }
 
+  // external -> withdraw_pressed
+  static void WithdrawPressed(void *data)
+  {
+    (void)data;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::WithdrawPressed:" << std::endl;
+    send_message((uint16_t)E_ATM_INPUT_WITHDRAW_OKAY);
+  }
 
-// transition table
+  // external -> withdraw_ok
+  static void DoneProcessing(void *data)
+  {
+    (void)data;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "atm::DoneProcessing:" << std::endl;
+    send_message((uint16_t)E_ATM_INPUT_END);
+  }
 
-static VRM_FSM_ENTRY AtmFsm[] = {
+  static void FsmOnTransition(void *data, const VRM_FSM_ENTRY *entry)
+  {
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "FsmOnTransition: "
+              << " current state: " << (uint16_t)entry->state
+              << " input event  : " << (uint16_t)entry->input
+              << " -> new state    : " << (uint16_t)entry->new_state
+              << std::endl;
+  }
 
-  VRM_FSM_E(
-      E_ATM_STATE_WAITING_FOR_CARD,   // current state
-      E_ATM_INPUT_CARD_INSERTED,      // input event
-      E_ATM_STATE_CARD_INSERTED,      // new state
-      (VRM_FSM_ACTION)CardInserted    // action for new state
-      ),
+  // transition table
 
-  VRM_FSM_E(
-      E_ATM_STATE_CARD_INSERTED,
-      E_ATM_INPUT_DIGIT_PRESSED,
-      E_ATM_STATE_GETTING_PIN,
-      (VRM_FSM_ACTION)DigitPressed
-      ),
+  static VRM_FSM_ENTRY AtmFsm[] = {
 
-  // need to define two entry here for differnt event from same state. For sfsm,
-  // two entry in the transition table.
+    VRM_FSM_E(E_ATM_STATE_WAITING_FOR_CARD, // current state
+              E_ATM_INPUT_CARD_INSERTED,    // input event
+              E_ATM_STATE_CARD_INSERTED,    // new state
+              (VRM_FSM_ACTION)CardInserted  // action for new state
+              ),
 
-  VRM_FSM_E(
-      E_ATM_STATE_GETTING_PIN,
-      E_ATM_INPUT_DIGIT_PRESSED,
-      E_ATM_STATE_GETTING_PIN,
-      (VRM_FSM_ACTION)DigitPressed
-      ),
+    VRM_FSM_E(E_ATM_STATE_CARD_INSERTED,
+              E_ATM_INPUT_DIGIT_PRESSED,
+              E_ATM_STATE_GETTING_PIN,
+              (VRM_FSM_ACTION)DigitPressed),
 
-  VRM_FSM_E(
-      E_ATM_STATE_GETTING_PIN,
-      E_ATM_INPUT_DIGIT_DONE,
-      E_ATM_STATE_VERIFY_PIN,
-      (VRM_FSM_ACTION)VerifyPin
-      ),
+    // need to define two entry here for differnt event from same state. For sfsm,
+    // two entry in the transition table.
 
-  VRM_FSM_E(
-      E_ATM_STATE_VERIFY_PIN,
-      E_ATM_INPUT_PIN_VERIFIED,
-      E_ATM_STATE_WAIT_FOR_ACTION,
-      (VRM_FSM_ACTION)WaitForAction
-      ),
+    VRM_FSM_E(E_ATM_STATE_GETTING_PIN,
+              E_ATM_INPUT_DIGIT_PRESSED,
+              E_ATM_STATE_GETTING_PIN,
+              (VRM_FSM_ACTION)DigitPressed),
 
-  VRM_FSM_E(
-      E_ATM_STATE_WAIT_FOR_ACTION,
-      E_ATM_INPUT_WITHDRAW_PRESSED,
-      E_ATM_STATE_PROCESS_WITHDRAW,
-      (VRM_FSM_ACTION)WithdrawPressed
-      ),
+    VRM_FSM_E(E_ATM_STATE_GETTING_PIN,
+              E_ATM_INPUT_DIGIT_DONE,
+              E_ATM_STATE_VERIFY_PIN,
+              (VRM_FSM_ACTION)VerifyPin),
 
-  VRM_FSM_E(
-      E_ATM_STATE_PROCESS_WITHDRAW,
-      E_ATM_INPUT_WITHDRAW_OKAY,
-      E_ATM_STATE_DONE_PROCESSING,
-      (VRM_FSM_ACTION)DoneProcessing
-      ),
+    VRM_FSM_E(E_ATM_STATE_VERIFY_PIN,
+              E_ATM_INPUT_PIN_VERIFIED,
+              E_ATM_STATE_WAIT_FOR_ACTION,
+              (VRM_FSM_ACTION)WaitForAction),
 
-  VRM_FSM_E(
-      E_ATM_STATE_DONE_PROCESSING,
-      E_ATM_INPUT_END,
-      E_ATM_STATE_GETTING_PIN,
-      (VRM_FSM_ACTION)DigitPressed
-      ),
-};
+    VRM_FSM_E(E_ATM_STATE_WAIT_FOR_ACTION,
+              E_ATM_INPUT_WITHDRAW_PRESSED,
+              E_ATM_STATE_PROCESS_WITHDRAW,
+              (VRM_FSM_ACTION)WithdrawPressed),
 
-} // namespace
+    VRM_FSM_E(E_ATM_STATE_PROCESS_WITHDRAW,
+              E_ATM_INPUT_WITHDRAW_OKAY,
+              E_ATM_STATE_DONE_PROCESSING,
+              (VRM_FSM_ACTION)DoneProcessing),
 
+    VRM_FSM_E(E_ATM_STATE_DONE_PROCESSING,
+              E_ATM_INPUT_END,
+              E_ATM_STATE_GETTING_PIN,
+              (VRM_FSM_ACTION)DigitPressed),
+  };
+
+} // namespace fsm_dynamic
 
 /*
  same fsm diagram as sfsm.
@@ -752,26 +706,26 @@ TEST(Fsm, AtmDynamic)
 {
   using namespace fsm_dynamic;
 
-  SYSTEM_STATUS             stat = VRM_FSM_OK;
+  SYSTEM_STATUS stat = VRM_FSM_OK;
 
   // builds definition from definition info
-  VRM_FSM_DEFINITION_INFO   fsm_definition_info;
+  VRM_FSM_DEFINITION_INFO fsm_definition_info;
   VRM_FSM_DEFINITION_HANDLE fsm_definition_handle{};
 
-  fsm_definition_info.entries      = AtmFsm;
-  fsm_definition_info.num_entries  = (uint16_t)NELEMENTS(AtmFsm);
+  fsm_definition_info.entries     = AtmFsm;
+  fsm_definition_info.num_entries = (uint16_t)NELEMENTS(AtmFsm);
 
   stat = VRM_FSM_CreateDefinition(&fsm_definition_info, &fsm_definition_handle);
 
-  // build instance from init 
-  VRM_FSM_INSTANCE_HANDLE   fsm_instance_handle{};
-  VRM_FSM_INIT              fsm_init;
+  // build instance from init
+  VRM_FSM_INSTANCE_HANDLE fsm_instance_handle{};
+  VRM_FSM_INIT fsm_init;
 
-  // initialize fsm init data 
-  fsm_init.fsm_definition_handle  = fsm_definition_handle;
-  fsm_init.callback               = (VRM_FSM_TRANS_CB)FsmOnTransition;
-  fsm_init.init_state             = (uint16_t)E_ATM_STATE_WAITING_FOR_CARD;
-  fsm_init.data                   = (void*) nullptr;
+  // initialize fsm init data
+  fsm_init.fsm_definition_handle = fsm_definition_handle;
+  fsm_init.callback              = (VRM_FSM_TRANS_CB)FsmOnTransition;
+  fsm_init.init_state            = (uint16_t)E_ATM_STATE_WAITING_FOR_CARD;
+  fsm_init.data                  = (void *)nullptr;
 
   stat = VRM_FSM_CreateInstance(&fsm_init, &fsm_instance_handle);
 
@@ -800,9 +754,8 @@ TEST(Fsm, AtmDynamic)
     VRM_FSM_DestroyInstance(fsm_instance_handle);
 
   if (fsm_definition_handle != VRM_FSM_ILLEGAL_DEFINITION)
-    VRM_FSM_DestroyDefinition(fsm_definition_handle); 
+    VRM_FSM_DestroyDefinition(fsm_definition_handle);
 }
-
 
 // ={=========================================================================
 // cxx-fsm-cxx
@@ -948,52 +901,52 @@ namespace messaging
     virtual ~message_base() {}
   };
 
-  template<typename T>
-    struct wrapped_message : public message_base
+  template <typename T>
+  struct wrapped_message : public message_base
   {
     explicit wrapped_message(T const &message)
-      : message_(message) {}
+        : message_(message)
+    {}
 
     T message_;
   };
 
   class queue
   {
-    public:
-      template<typename T>
-        void push(T const &message)
-        {
-          std::lock_guard<std::mutex> lock(m_);
+  public:
+    template <typename T>
+    void push(T const &message)
+    {
+      std::lock_guard<std::mutex> lock(m_);
 
-          // create new type of wrapped_message<T> whenever push()
-          q_.emplace_back(std::make_shared<wrapped_message<T>>(message));
-          cv_.notify_all();
-        }
+      // create new type of wrapped_message<T> whenever push()
+      q_.emplace_back(std::make_shared<wrapped_message<T>>(message));
+      cv_.notify_all();
+    }
 
-      std::shared_ptr<message_base> wait_and_pop()
-      {
-        std::unique_lock<std::mutex> lock(m_);
+    std::shared_ptr<message_base> wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m_);
 
-        cv_.wait(lock, [&]{ return !q_.empty();});
-        auto message = std::move(q_.front());
+      cv_.wait(lock, [&] { return !q_.empty(); });
+      auto message = std::move(q_.front());
 
-        // *cxx-error* cuase infinite loop on the user when omits this
-        q_.pop_front();
-        lock.unlock();
-        return message;
-      }
+      // *cxx-error* cuase infinite loop on the user when omits this
+      q_.pop_front();
+      lock.unlock();
+      return message;
+    }
 
-    private:
-      std::condition_variable cv_;
-      std::mutex m_;
-      // std::queue<T> q_;
-      std::deque<std::shared_ptr<message_base>> q_;
+  private:
+    std::condition_variable cv_;
+    std::mutex m_;
+    // std::queue<T> q_;
+    std::deque<std::shared_ptr<message_base>> q_;
   };
 
-  // message to end 
+  // message to end
   class close_queue
   {};
-
 
   // #define DISPATCH_DEBUG
 
@@ -1001,263 +954,270 @@ namespace messaging
   // type name can be the same as dispatcher
   // template<typename PreviousDispatcher, typename Message, typename Function>
 
-  template<typename Dispatcher, typename Message, typename Function>
-    class TemplateDispatcher
+  template <typename Dispatcher, typename Message, typename Function>
+  class TemplateDispatcher
+  {
+  public:
+    // *cxx-no-copy*
+    TemplateDispatcher(TemplateDispatcher const &) = delete;
+    TemplateDispatcher &operator=(TemplateDispatcher const &) = delete;
+
+    // note: cxx-move which is not used
+    TemplateDispatcher(TemplateDispatcher &&other)
+        : pq_(other.pq_)
+        , prev_(other.prev_)
+        , f_(std::move(other.f_))
+        , chained_(other.chained_)
     {
-      public:
-
-        // *cxx-no-copy*
-        TemplateDispatcher(TemplateDispatcher const&) = delete;
-        TemplateDispatcher &operator=(TemplateDispatcher const &) = delete;
-
-        // note: cxx-move which is not used
-        TemplateDispatcher(TemplateDispatcher &&other):
-          pq_(other.pq_), prev_(other.prev_), f_(std::move(other.f_)),
-          chained_(other.chained_)
-      { 
 #ifdef DISPATCH_DEBUG
-        std::cout << "TD: move: set chained_ true: " << m_.name_ << std::endl;
+      std::cout << "TD: move: set chained_ true: " << m_.name_ << std::endl;
 #endif // DISPATCH_DEBUG
 
-        other.chained_ = true; 
+      other.chained_ = true;
+    }
+
+    // note: add "explicit" which is different from the text
+
+    explicit TemplateDispatcher(queue *pq, Dispatcher *prev, Function &&f)
+        : pq_(pq)
+        , prev_(prev)
+        , f_(std::forward<Function>(f))
+        , chained_(false)
+    {
+      // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
+      prev_->chained_ = true;
+    }
+
+    // note:
+    // 1. have to use "TemplateDispatcher"
+    // 2. have to use other type names like OtherMessage other than Message
+    // since arguments for template function are independant from arguments
+    // for template class
+
+    template <typename OtherMessage, typename OtherFunction>
+    TemplateDispatcher<TemplateDispatcher, OtherMessage, OtherFunction>
+    handle(OtherFunction &&f)
+    {
+      return TemplateDispatcher<TemplateDispatcher,
+                                OtherMessage,
+                                OtherFunction>(pq_,
+                                               this,
+                                               std::forward<OtherFunction>(f));
+    }
+
+    // note:
+    // 1. one to many(all) friend
+    // 2. required to call dispatch_() of object in the chain
+    // 3. have to use the same type name as handle() returns? No and turns
+    // out it doesn't matter.
+
+    template <typename D, typename M, typename F>
+    friend class TemplateDispatcher;
+
+    // *cxx-except-in-dtor*
+    // note:
+    // "noexcept(false) is necessary. Although close_queue() is only handled
+    // in dispatcher::dispatch_(), it runs in this dtor.
+
+    ~TemplateDispatcher() noexcept(false)
+    {
+      if (!chained_)
+      {
+        // std::cout << "TD: ~TD: chined_ false: " << m_.name_ << std::endl;
+        wait_and_dispatch();
       }
 
-        // note: add "explicit" which is different from the text
+      // std::cout << "TD: ~TD: " << m_.name_ << std::endl;
+    }
 
-        explicit TemplateDispatcher(queue *pq, Dispatcher *prev, Function &&f):
-          pq_(pq), prev_(prev), f_(std::forward<Function>(f)), chained_(false)
-      { 
-        // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
-        prev_->chained_ = true; 
-      }
-
-        // note:
-        // 1. have to use "TemplateDispatcher"
-        // 2. have to use other type names like OtherMessage other than Message
-        // since arguments for template function are independant from arguments
-        // for template class
-
-        template<typename OtherMessage, typename OtherFunction>
-          TemplateDispatcher<TemplateDispatcher, OtherMessage, OtherFunction>
-          handle(OtherFunction &&f)
-          {
-            return
-              TemplateDispatcher<TemplateDispatcher, OtherMessage, OtherFunction>
-              (pq_, this, std::forward<OtherFunction>(f));
-          }
-
-        // note:
-        // 1. one to many(all) friend
-        // 2. required to call dispatch_() of object in the chain
-        // 3. have to use the same type name as handle() returns? No and turns
-        // out it doesn't matter.
-
-        template<typename D, typename M, typename F>
-          friend class TemplateDispatcher;
-
-        // *cxx-except-in-dtor*
-        // note:
-        // "noexcept(false) is necessary. Although close_queue() is only handled
-        // in dispatcher::dispatch_(), it runs in this dtor.
-
-        ~TemplateDispatcher() noexcept(false)
-        {
-          if (!chained_)
-          {
-            // std::cout << "TD: ~TD: chined_ false: " << m_.name_ << std::endl;
-            wait_and_dispatch();
-          }
-
-          // std::cout << "TD: ~TD: " << m_.name_ << std::endl;
-        }
-
-      private:
-        queue *pq_;
-        Dispatcher *prev_;
-        Function f_;
-        bool chained_;
+  private:
+    queue *pq_;
+    Dispatcher *prev_;
+    Function f_;
+    bool chained_;
 
 #ifdef DISPATCH_DEBUG
-        Message m_;
+    Message m_;
 #endif
 
-        bool dispatch_(std::shared_ptr<message_base> const &message)
-        {
-          if (wrapped_message<Message> *wrapper = 
-              dynamic_cast<wrapped_message<Message>*>(message.get()))
-          {
-            // std::cout << "TD: dispatch_: " << m_.name_ << ": call f: " 
-            //   << wrapper->contents_.name_ << std::endl;
+    bool dispatch_(std::shared_ptr<message_base> const &message)
+    {
+      if (wrapped_message<Message> *wrapper =
+            dynamic_cast<wrapped_message<Message> *>(message.get()))
+      {
+        // std::cout << "TD: dispatch_: " << m_.name_ << ": call f: "
+        //   << wrapper->contents_.name_ << std::endl;
 
-            f_(wrapper->message_);
-            return true;
-          }
-          else
-          {
-            // std::cout << "TD: dispatch_: " << m_.name_ << 
-            //   ": pass to prev: " << std::endl;
+        f_(wrapper->message_);
+        return true;
+      }
+      else
+      {
+        // std::cout << "TD: dispatch_: " << m_.name_ <<
+        //   ": pass to prev: " << std::endl;
 
-            return prev_->dispatch_(message);
-          }
-        }
+        return prev_->dispatch_(message);
+      }
+    }
 
-        // not really used since "dispatcher" is always chained and do not
-        // process message.
+    // not really used since "dispatcher" is always chained and do not
+    // process message.
 
-        void wait_and_dispatch()
-        {
-          // std::cout << "TD: wait_dispatch_: " << m_.name_ << " { " << std::endl;
+    void wait_and_dispatch()
+    {
+      // std::cout << "TD: wait_dispatch_: " << m_.name_ << " { " << std::endl;
 
-          for (;;)
-          {
-            auto message = pq_->wait_and_pop();
-            if (dispatch_(message))
-              break;
-          }
+      for (;;)
+      {
+        auto message = pq_->wait_and_pop();
+        if (dispatch_(message))
+          break;
+      }
 
-          // std::cout << "TD: wait_dispatch_: " << m_.name_ << " } " << std::endl;
-        }
-    };
+      // std::cout << "TD: wait_dispatch_: " << m_.name_ << " } " << std::endl;
+    }
+  };
 
   class dispatcher
   {
-    public:
+  public:
+    // *cxx-move* is used for this?
+    //
+    // class receiver
+    // {
+    //    dispatcher wait()
+    //    { return dispatcher(&q_); }
+    // };
+    //
+    // no since *cxx-rvo* removes the need of using move.
 
-      // *cxx-move* is used for this?
-      // 
-      // class receiver
-      // {
-      //    dispatcher wait()
-      //    { return dispatcher(&q_); }
-      // };
-      //
-      // no since *cxx-rvo* removes the need of using move.
-
-      dispatcher(dispatcher &&other):
-        pq_(other.pq_), chained_(other.chained_)
-    { 
+    dispatcher(dispatcher &&other)
+        : pq_(other.pq_)
+        , chained_(other.chained_)
+    {
       std::cout << "disp: move: " << std::endl;
-      other.chained_ = true; 
+      other.chained_ = true;
     }
 
-      // *cxx-copy-prevent-copies*
-      dispatcher(dispatcher const &) = delete;
-      dispatcher &operator=(dispatcher const &) = delete;
+    // *cxx-copy-prevent-copies*
+    dispatcher(dispatcher const &) = delete;
+    dispatcher &operator=(dispatcher const &) = delete;
 
-      explicit dispatcher(queue *pq):
-        pq_(pq), chained_(false)
+    explicit dispatcher(queue *pq)
+        : pq_(pq)
+        , chained_(false)
     {
       // std::cout << "disp: ctor: " << std::endl;
     }
 
-      ~dispatcher() noexcept(false)
+    ~dispatcher() noexcept(false)
+    {
+      if (!chained_)
       {
-        if (!chained_)
-        {
-          // std::cout << "disp: ~disp: chined_: " << std::endl;
-          wait_and_dispatch_();
-        }
-
-        // std::cout << "disp: ~disp: end: " << std::endl;
+        // std::cout << "disp: ~disp: chined_: " << std::endl;
+        wait_and_dispatch_();
       }
 
-      // note:
-      // 1. must use "dispatcher" which is type
-      // 2. "Message" is not used in this but used in TD.
+      // std::cout << "disp: ~disp: end: " << std::endl;
+    }
 
-      template<typename Message, typename Function>
-        TemplateDispatcher<dispatcher, Message, Function>
-        handle(Function &&f)
-        { 
-          return TemplateDispatcher<dispatcher, Message, Function>
-            (pq_, this, std::forward<Function>(f));
-        }
+    // note:
+    // 1. must use "dispatcher" which is type
+    // 2. "Message" is not used in this but used in TD.
 
-      // *cxx-template-friend*
-      template<typename Dispatcher, typename Message, typename Function>
-        friend class TemplateDispatcher;
+    template <typename Message, typename Function>
+    TemplateDispatcher<dispatcher, Message, Function> handle(Function &&f)
+    {
+      return TemplateDispatcher<dispatcher, Message, Function>(
+        pq_,
+        this,
+        std::forward<Function>(f));
+    }
 
-    private:
-      queue *pq_;
-      bool chained_;
+    // *cxx-template-friend*
+    template <typename Dispatcher, typename Message, typename Function>
+    friend class TemplateDispatcher;
 
-      void wait_and_dispatch_()
+  private:
+    queue *pq_;
+    bool chained_;
+
+    void wait_and_dispatch_()
+    {
+      // std::cout << "disp: wait_dispatch_: { " << std::endl;
+
+      for (;;)
       {
-        // std::cout << "disp: wait_dispatch_: { " << std::endl;
-
-        for (;;)
-        {
-          auto message = pq_->wait_and_pop();
-          dispatch_(message);
-        }
-
-        // std::cout << "disp: wait_dispatch_: } " << std::endl;
+        auto message = pq_->wait_and_pop();
+        dispatch_(message);
       }
 
-      bool dispatch_(std::shared_ptr<message_base> const &message)
-      {
-        if (dynamic_cast<wrapped_message<close_queue>*>(message.get()))
-        {
-          // std::cout << "disp: dispatch_: throw" << std::endl;
-          throw close_queue();
-        }
+      // std::cout << "disp: wait_dispatch_: } " << std::endl;
+    }
 
-        // std::cout << "disp: dispatch_: false" << std::endl;
-        return false;
+    bool dispatch_(std::shared_ptr<message_base> const &message)
+    {
+      if (dynamic_cast<wrapped_message<close_queue> *>(message.get()))
+      {
+        // std::cout << "disp: dispatch_: throw" << std::endl;
+        throw close_queue();
       }
+
+      // std::cout << "disp: dispatch_: false" << std::endl;
+      return false;
+    }
   };
-
 
   class sender
   {
-    public:
-      sender() : pq_(nullptr) {}
-      explicit sender(queue *pq) : pq_(pq) {}
+  public:
+    sender()
+        : pq_(nullptr)
+    {}
+    explicit sender(queue *pq)
+        : pq_(pq)
+    {}
 
-      template<typename T>
-        void send(T const &message)
-        {
-          if (pq_)
-            pq_->push(message);
-        }
+    template <typename T>
+    void send(T const &message)
+    {
+      if (pq_)
+        pq_->push(message);
+    }
 
-    private:
-      queue *pq_;
+  private:
+    queue *pq_;
   };
 
-
   // Receiving messages is a bit more complicated. Not only do you have to wait
-  // for a message from the queue, but 
+  // for a message from the queue, but
   //
   // also have to check to see if the type matches any of the message types
-  // being waited on and call the appropriate handler function. 
+  // being waited on and call the appropriate handler function.
   //
   // Whereas a sender just references a message queue, a receiver owns it.
 
   class receiver
   {
-    public:
+  public:
+    // *cxx-conversion-op* which convert receiver to sender
+    operator sender() { return sender(&q_); }
 
-      // *cxx-conversion-op* which convert receiver to sender
-      operator sender()
-      { return sender(&q_); }
+    dispatcher wait() { return dispatcher(&q_); }
 
-      dispatcher wait()
-      { return dispatcher(&q_); }
-
-    private:
-      queue q_;
+  private:
+    queue q_;
   };
 
   struct simple_message
   {
     std::string name_;
-    explicit simple_message():
-      name_("simple_message") {}
+    explicit simple_message()
+        : name_("simple_message")
+    {}
   };
 
-} // namespace
-
+} // namespace messaging
 
 namespace messaging
 {
@@ -1266,32 +1226,36 @@ namespace messaging
     struct cancel_pressed
     {
       std::string name_;
-      explicit cancel_pressed():
-        name_("cancel_pressed") {}
+      explicit cancel_pressed()
+          : name_("cancel_pressed")
+      {}
     };
 
     struct pin_verified
     {
       std::string name_;
-      explicit pin_verified():
-        name_("pin_verified") {}
+      explicit pin_verified()
+          : name_("pin_verified")
+      {}
     };
 
     struct pin_incorrect
     {
       std::string name_;
-      explicit pin_incorrect():
-        name_("pin_incorrect") {}
+      explicit pin_incorrect()
+          : name_("pin_incorrect")
+      {}
     };
 
     struct withdraw_ok
     {
       std::string name_;
-      explicit withdraw_ok():
-        name_("withdraw_ok") {}
+      explicit withdraw_ok()
+          : name_("withdraw_ok")
+      {}
     };
 
-  } // namespace
+  } // namespace client
 
   void sender_thread_func(messaging::sender &sender)
   {
@@ -1304,8 +1268,7 @@ namespace messaging
     // sender.send(close_queue());
   }
 
-} // namespace
-
+} // namespace messaging
 
 // when send a message which is handled in event chain:
 //
@@ -1330,7 +1293,7 @@ namespace messaging
 // TD: ~TD: chined_ false: pin_verified
 // TD: wait_dispatch_: pin_verified {
 // ^C
-// 
+//
 // when send a message which is not handled in event chain:
 //
 // [ RUN      ] Message.SingleChain
@@ -1356,8 +1319,7 @@ TEST(Fsm, MessageSingleChain)
   // as with atm::get_sender(), convert it to sender
   sender sender_ = incoming_;
 
-  std::thread sender(sender_thread_func, 
-      std::ref(sender_));
+  std::thread sender(sender_thread_func, std::ref(sender_));
 
   try
   {
@@ -1367,32 +1329,21 @@ TEST(Fsm, MessageSingleChain)
     // void verifying_pin()
     {
       incoming_.wait()
-        .handle<pin_verified>
-        (
-         [&](const pin_verified &msg)
-         {
-         (void)msg;
-         std::cout << "atm::verify_pin::pin_verified" << std::endl;
-         std::cout << "state = &atm::wait_for_action" << std::endl;;
-         }
-        )
-        .handle<pin_incorrect>
-        (
-         [&](const pin_incorrect &msg)
-         {
+        .handle<pin_verified>([&](const pin_verified &msg) {
+          (void)msg;
+          std::cout << "atm::verify_pin::pin_verified" << std::endl;
+          std::cout << "state = &atm::wait_for_action" << std::endl;
+          ;
+        })
+        .handle<pin_incorrect>([&](const pin_incorrect &msg) {
           std::cout << "atm::do pin_incorrect" << std::endl;
           EXPECT_THAT(msg.name_, "pin_incorrect");
-         }
-        )
-        .handle<cancel_pressed>
-        (
-         [&](const cancel_pressed &msg)
-         {
-         (void)msg;
-         std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
-         std::cout << "state = &atm::done_processing" << std::endl;
-         }
-        );
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
+          std::cout << "state = &atm::done_processing" << std::endl;
+        });
 
       // note:
       // build next chain and if not, ends here since there is no further event
@@ -1400,7 +1351,7 @@ TEST(Fsm, MessageSingleChain)
       //
       // std::cout << "press.." << std::endl;
       // std::this_thread::sleep_for(std::chrono::seconds(1));
-      // 
+      //
       // incoming_.wait()
       //   .handle<pin_verified>
       //   (
@@ -1412,8 +1363,7 @@ TEST(Fsm, MessageSingleChain)
       //    }
       //   );
     }
-  }
-  catch(close_queue const &)
+  } catch (close_queue const &)
   {
     std::cout << "got close_queue message" << std::endl;
   }
@@ -1430,8 +1380,9 @@ namespace cxx_fsm
   struct money_inserted
   {
     unsigned amount_;
-    explicit money_inserted(unsigned const& amount)
-      : amount_(amount) {}
+    explicit money_inserted(unsigned const &amount)
+        : amount_(amount)
+    {}
     std::string get_name() { return "money_inserted"; }
   };
 
@@ -1439,7 +1390,8 @@ namespace cxx_fsm
   {
     unsigned price_;
     explicit item_1_purchased()
-      : price_(10) {}
+        : price_(10)
+    {}
     std::string get_name() { return "item_1_purchased"; }
   };
 
@@ -1447,7 +1399,8 @@ namespace cxx_fsm
   {
     unsigned price_;
     explicit item_2_purchased()
-      : price_(20) {}
+        : price_(20)
+    {}
     std::string get_name() { return "item_2_purchased"; }
   };
 
@@ -1455,7 +1408,8 @@ namespace cxx_fsm
   {
     unsigned price_;
     explicit item_3_purchased()
-      : price_(30) {}
+        : price_(30)
+    {}
     std::string get_name() { return "item_3_purchased"; }
   };
 
@@ -1463,136 +1417,114 @@ namespace cxx_fsm
 
   class simple
   {
-    public:
-      simple() {}
-      simple(simple const&) = delete;
-      simple& operator=(simple const&) = delete;
+  public:
+    simple() {}
+    simple(simple const &) = delete;
+    simple &operator=(simple const &) = delete;
 
-      // a sender is a wrapper to a message queue, a receiver owns it. You
-      // can obtain a sender that references the queue by using the implicit
-      // conversion.
-      //
-      // this is an interface to expose q to other class and used to set up
-      // connection each other
-      //
-      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
-      //
-      // atm machine keeps this sender copies to send messages to them.
+    // a sender is a wrapper to a message queue, a receiver owns it. You
+    // can obtain a sender that references the queue by using the implicit
+    // conversion.
+    //
+    // this is an interface to expose q to other class and used to set up
+    // connection each other
+    //
+    // atm machine(bank.get_sender(), intarface_hardware.get_sender());
+    //
+    // atm machine keeps this sender copies to send messages to them.
 
-      messaging::sender get_sender()
-      { return incoming_; }
+    messaging::sender get_sender() { return incoming_; }
 
-      // send a message to self
-      void done()
+    // send a message to self
+    void done()
+    {
+      std::cout << "simple fsm: send done" << endl;
+      get_sender().send(messaging::close_queue());
+    }
+
+    void run()
+    {
+      // init state
+      state = &simple::wait_for_money;
+
+      cout << "starts simple fsm" << endl;
+
+      try
       {
-        std::cout << "simple fsm: send done" << endl;
-        get_sender().send(messaging::close_queue());
-      }
-
-      void run()
-      {
-        // init state
-        state = &simple::wait_for_money;
-
-        cout << "starts simple fsm" << endl;
-
-        try
+        for (;;)
         {
-          for (;;)
-          {
-            (this->*state)();
-          }
+          (this->*state)();
         }
-        catch (messaging::close_queue const&)
-        {
-          cout << "ends simple fsm" << endl;
-        }
-      }
-
-      // fsm states
-
-      void wait_for_money()
+      } catch (messaging::close_queue const &)
       {
-        std::cout << "simple fsm: wait_for_money and waits..." 
-          << std::endl; 
-
-        incoming_.wait()
-          .handle<money_inserted>
-          (
-           [&](money_inserted const& message)
-           {
-              amount_ = message.amount_;
-              std::cout << "simple fsm: money_inserted: amount left: " 
-              << amount_ << std::endl;
-
-              // set next state
-              state = &simple::wait_for_action;
-           }
-          );
+        cout << "ends simple fsm" << endl;
       }
+    }
 
-      void wait_for_action()
-      {
-        std::cout << "simple fsm: wait_for_action and waits..." 
-          << std::endl; 
+    // fsm states
 
-        incoming_.wait()
-          .handle<item_1_purchased>
-          (
-           [&](item_1_purchased const& message)
-           {
-              amount_ -= message.price_;
+    void wait_for_money()
+    {
+      std::cout << "simple fsm: wait_for_money and waits..." << std::endl;
 
-              std::cout << "fsm: wait_for_action: item 1 purchased:"
-              << " amounts left: " << amount_ << std::endl;
+      incoming_.wait().handle<money_inserted>(
+        [&](money_inserted const &message) {
+          amount_ = message.amount_;
+          std::cout << "simple fsm: money_inserted: amount left: " << amount_
+                    << std::endl;
 
-              state = &simple::done_processing;   
-           }
-          )
-          .handle<item_2_purchased>
-          (
-           [&](item_2_purchased const& message)
-           {
-              amount_ -= message.price_;
+          // set next state
+          state = &simple::wait_for_action;
+        });
+    }
 
-              std::cout << "fsm: wait_for_action: item 2 purchased:"
-              << " amounts left: " << amount_ << std::endl;
+    void wait_for_action()
+    {
+      std::cout << "simple fsm: wait_for_action and waits..." << std::endl;
 
-              state = &simple::done_processing;   
-           }
-          )
-          .handle<item_3_purchased>
-          (
-           [&](item_3_purchased const& message)
-           {
-              amount_ -= message.price_;
+      incoming_.wait()
+        .handle<item_1_purchased>([&](item_1_purchased const &message) {
+          amount_ -= message.price_;
 
-              std::cout << "fsm: wait_for_action: item 3 purchased:"
-              << " amounts left: " << amount_ << std::endl;
+          std::cout << "fsm: wait_for_action: item 1 purchased:"
+                    << " amounts left: " << amount_ << std::endl;
 
-              state = &simple::done_processing;   
-           }
-          );
-      }
+          state = &simple::done_processing;
+        })
+        .handle<item_2_purchased>([&](item_2_purchased const &message) {
+          amount_ -= message.price_;
 
-      void done_processing()
-      {
-        std::cout << "simple fsm: done_processing and no waits..." 
-          << std::endl; 
+          std::cout << "fsm: wait_for_action: item 2 purchased:"
+                    << " amounts left: " << amount_ << std::endl;
 
-        state = &simple::wait_for_money;
-      }
+          state = &simple::done_processing;
+        })
+        .handle<item_3_purchased>([&](item_3_purchased const &message) {
+          amount_ -= message.price_;
 
-    private:
-      messaging::receiver incoming_;
+          std::cout << "fsm: wait_for_action: item 3 purchased:"
+                    << " amounts left: " << amount_ << std::endl;
 
-      // state function pointer
-      void (simple::*state)();
-      unsigned amount_;
+          state = &simple::done_processing;
+        });
+    }
+
+    void done_processing()
+    {
+      std::cout << "simple fsm: done_processing and no waits..." << std::endl;
+
+      state = &simple::wait_for_money;
+    }
+
+  private:
+    messaging::receiver incoming_;
+
+    // state function pointer
+    void (simple::*state)();
+    unsigned amount_;
   };
 
-} // namespace
-
+} // namespace cxx_fsm
 
 TEST(Fsm, SimpleFsm1)
 {
@@ -1638,7 +1570,6 @@ TEST(Fsm, SimpleFsm2)
   fsm_thread.join();
 }
 
-
 // only for debugging purpose since other messages do not have `name` member and
 // without this, it will cause compile errors.
 
@@ -1653,11 +1584,12 @@ namespace messaging
     std::string account;
     unsigned amount;
     mutable messaging::sender atm_queue;
-    withdraw(std::string const& account_,
-        unsigned amount_,
-        messaging::sender atm_queue_):
-      account(account_),amount(amount_),
-      atm_queue(atm_queue_)
+    withdraw(std::string const &account_,
+             unsigned amount_,
+             messaging::sender atm_queue_)
+        : account(account_)
+        , amount(amount_)
+        , atm_queue(atm_queue_)
     {}
   };
   struct withdraw_ok
@@ -1668,32 +1600,32 @@ namespace messaging
   {
     std::string account;
     unsigned amount;
-    cancel_withdrawal(std::string const& account_,
-        unsigned amount_):
-      account(account_),amount(amount_)
+    cancel_withdrawal(std::string const &account_, unsigned amount_)
+        : account(account_)
+        , amount(amount_)
     {}
   };
   struct withdrawal_processed
   {
     std::string account;
     unsigned amount;
-    withdrawal_processed(std::string const& account_,
-        unsigned amount_):
-      account(account_),amount(amount_)
+    withdrawal_processed(std::string const &account_, unsigned amount_)
+        : account(account_)
+        , amount(amount_)
     {}
   };
   struct card_inserted
   {
     std::string account;
-    explicit card_inserted(std::string const& account_):
-      account(account_)
+    explicit card_inserted(std::string const &account_)
+        : account(account_)
     {}
   };
   struct digit_pressed
   {
     char digit;
-    explicit digit_pressed(char digit_):
-      digit(digit_)
+    explicit digit_pressed(char digit_)
+        : digit(digit_)
     {}
   };
   struct clear_last_pressed
@@ -1703,8 +1635,8 @@ namespace messaging
   struct withdraw_pressed
   {
     unsigned amount;
-    explicit withdraw_pressed(unsigned amount_):
-      amount(amount_)
+    explicit withdraw_pressed(unsigned amount_)
+        : amount(amount_)
     {}
   };
   struct cancel_pressed
@@ -1712,8 +1644,8 @@ namespace messaging
   struct issue_money
   {
     unsigned amount;
-    issue_money(unsigned amount_):
-      amount(amount_)
+    issue_money(unsigned amount_)
+        : amount(amount_)
     {}
   };
   struct verify_pin
@@ -1721,9 +1653,12 @@ namespace messaging
     std::string account;
     std::string pin;
     mutable messaging::sender atm_queue;
-    verify_pin(std::string const& account_,std::string const& pin_,
-        messaging::sender atm_queue_):
-      account(account_),pin(pin_),atm_queue(atm_queue_)
+    verify_pin(std::string const &account_,
+               std::string const &pin_,
+               messaging::sender atm_queue_)
+        : account(account_)
+        , pin(pin_)
+        , atm_queue(atm_queue_)
     {}
   };
   struct pin_verified
@@ -1746,22 +1681,23 @@ namespace messaging
   {
     std::string account;
     mutable messaging::sender atm_queue;
-    get_balance(std::string const& account_,messaging::sender atm_queue_):
-      account(account_),atm_queue(atm_queue_)
+    get_balance(std::string const &account_, messaging::sender atm_queue_)
+        : account(account_)
+        , atm_queue(atm_queue_)
     {}
   };
   struct balance
   {
     unsigned amount;
-    explicit balance(unsigned amount_):
-      amount(amount_)
+    explicit balance(unsigned amount_)
+        : amount(amount_)
     {}
   };
   struct display_balance
   {
     unsigned amount;
-    explicit display_balance(unsigned amount_):
-      amount(amount_)
+    explicit display_balance(unsigned amount_)
+        : amount(amount_)
     {}
   };
   struct balance_pressed
@@ -1771,480 +1707,348 @@ namespace messaging
   {
     messaging::receiver incoming;
     std::mutex iom;
-    public:
-    void done()
-    {
-      get_sender().send(messaging::close_queue());
-    }
+
+  public:
+    void done() { get_sender().send(messaging::close_queue()); }
     void run()
     {
       try
       {
-        for(;;)
+        for (;;)
         {
           incoming.wait()
-            .handle<issue_money>(
-                [&](issue_money const& msg)
-                {
-                (void)msg;
-                {
+            .handle<issue_money>([&](issue_money const &msg) {
+              (void)msg;
+              {
                 std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Issuing "
-                <<msg.amount<<std::endl;
-                }
-                }
-                )
+                std::cout << "Issuing " << msg.amount << std::endl;
+              }
+            })
             .handle<display_insufficient_funds>(
-                [&](display_insufficient_funds const& msg)
-                {
+              [&](display_insufficient_funds const &msg) {
                 (void)msg;
                 {
+                  std::lock_guard<std::mutex> lk(iom);
+                  std::cout << "Insufficient funds" << std::endl;
+                }
+              })
+            .handle<display_enter_pin>([&](display_enter_pin const &msg) {
+              (void)msg;
+              {
                 std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Insufficient funds"<<std::endl;
-                }
-                }
-                )
-            .handle<display_enter_pin>(
-                [&](display_enter_pin const& msg)
-                {
-                (void)msg;
-                {
+                std::cout << "Please enter your PIN (0-9)" << std::endl;
+              }
+            })
+            .handle<display_enter_card>([&](display_enter_card const &msg) {
+              (void)msg;
+              {
                 std::lock_guard<std::mutex> lk(iom);
-                std::cout
-                <<"Please enter your PIN (0-9)"
-                <<std::endl;
-                }
-                }
-                )
-            .handle<display_enter_card>(
-                [&](display_enter_card const& msg)
-                {
-                (void)msg;
-                {
+                std::cout << "Please enter your card (I)" << std::endl;
+              }
+            })
+            .handle<display_balance>([&](display_balance const &msg) {
+              (void)msg;
+              {
                 std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Please enter your card (I)"
-                <<std::endl;
-                }
-                }
-                )
-            .handle<display_balance>(
-                [&](display_balance const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout
-                <<"The balance of your account is "
-                <<msg.amount<<std::endl;
-                }
-                }
-                )
+                std::cout << "The balance of your account is " << msg.amount
+                          << std::endl;
+              }
+            })
             .handle<display_withdrawal_options>(
-                [&](display_withdrawal_options const& msg)
-                {
+              [&](display_withdrawal_options const &msg) {
                 (void)msg;
                 {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Withdraw 50? (w)"<<std::endl;
-                std::cout<<"Display Balance? (b)"
-                <<std::endl;
-                std::cout<<"Cancel? (c)"<<std::endl;
+                  std::lock_guard<std::mutex> lk(iom);
+                  std::cout << "Withdraw 50? (w)" << std::endl;
+                  std::cout << "Display Balance? (b)" << std::endl;
+                  std::cout << "Cancel? (c)" << std::endl;
                 }
-                }
-                )
+              })
             .handle<display_withdrawal_cancelled>(
-                [&](display_withdrawal_cancelled const& msg)
-                {
+              [&](display_withdrawal_cancelled const &msg) {
                 (void)msg;
                 {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Withdrawal cancelled"
-                <<std::endl;
+                  std::lock_guard<std::mutex> lk(iom);
+                  std::cout << "Withdrawal cancelled" << std::endl;
                 }
-                }
-                )
+              })
             .handle<display_pin_incorrect_message>(
-                [&](display_pin_incorrect_message const& msg)
-                {
+              [&](display_pin_incorrect_message const &msg) {
                 (void)msg;
                 {
+                  std::lock_guard<std::mutex> lk(iom);
+                  std::cout << "PIN incorrect" << std::endl;
+                }
+              })
+            .handle<eject_card>([&](eject_card const &msg) {
+              (void)msg;
+              {
                 std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"PIN incorrect"<<std::endl;
-                }
-                }
-                )
-            .handle<eject_card>(
-                [&](eject_card const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Ejecting card"<<std::endl;
-                }
-                }
-                );
+                std::cout << "Ejecting card" << std::endl;
+              }
+            });
         }
-      }
-      catch(messaging::close_queue&)
-      {
-      }
+      } catch (messaging::close_queue &)
+      {}
     }
-    messaging::sender get_sender()
-    {
-      return incoming;
-    }
+    messaging::sender get_sender() { return incoming; }
   };
 
   class bank_machine
   {
     messaging::receiver incoming;
     unsigned balance_;
-    public:
-    bank_machine():
-      balance_(199)
+
+  public:
+    bank_machine()
+        : balance_(199)
     {}
-    void done()
-    {
-      get_sender().send(messaging::close_queue());
-    }
+    void done() { get_sender().send(messaging::close_queue()); }
     void run()
     {
       try
       {
-        for(;;)
+        for (;;)
         {
           incoming.wait()
-            .handle<verify_pin>
-            (
-             [&](verify_pin const& msg)
-             {
-             if(msg.pin=="1937")
-             {
-             msg.atm_queue.send(pin_verified());
-             }
-             else
-             {
-             msg.atm_queue.send(pin_incorrect());
-             }
-             }
-            )
-            .handle<withdraw>
-            (
-             [&](withdraw const& msg)
-             {
-             if(balance_ >=msg.amount)
-             {
-             msg.atm_queue.send(withdraw_ok());
-             balance_ -=msg.amount;
-             }
-             else
-             {
-             msg.atm_queue.send(withdraw_denied());
-             }
-             }
-            )
-            .handle<get_balance>
-            (
-             [&](get_balance const& msg)
-             {
-             msg.atm_queue.send(balance(balance_));
-             }
-            )
-            .handle<withdrawal_processed>
-            (
-             [&](withdrawal_processed const& msg)
-             {
-             (void)msg;
-             }
-            )
-            .handle<cancel_withdrawal>
-            (
-             [&](cancel_withdrawal const& msg)
-             {
-             (void)msg;
-             }
-            );
+            .handle<verify_pin>([&](verify_pin const &msg) {
+              if (msg.pin == "1937")
+              {
+                msg.atm_queue.send(pin_verified());
+              }
+              else
+              {
+                msg.atm_queue.send(pin_incorrect());
+              }
+            })
+            .handle<withdraw>([&](withdraw const &msg) {
+              if (balance_ >= msg.amount)
+              {
+                msg.atm_queue.send(withdraw_ok());
+                balance_ -= msg.amount;
+              }
+              else
+              {
+                msg.atm_queue.send(withdraw_denied());
+              }
+            })
+            .handle<get_balance>([&](get_balance const &msg) {
+              msg.atm_queue.send(balance(balance_));
+            })
+            .handle<withdrawal_processed>(
+              [&](withdrawal_processed const &msg) { (void)msg; })
+            .handle<cancel_withdrawal>(
+              [&](cancel_withdrawal const &msg) { (void)msg; });
         }
-      }
-      catch(messaging::close_queue const&)
-      {
-      }
+      } catch (messaging::close_queue const &)
+      {}
     }
-    messaging::sender get_sender()
-    {
-      return incoming;
-    }
+    messaging::sender get_sender() { return incoming; }
   };
 
   class atm
   {
-    private:
-      messaging::receiver incoming_;
-      messaging::sender bank_;
-      messaging::sender interface_hardware_;
+  private:
+    messaging::receiver incoming_;
+    messaging::sender bank_;
+    messaging::sender interface_hardware_;
 
-      // *cxx-member-function-pointer*
-      void (atm::*state)();
+    // *cxx-member-function-pointer*
+    void (atm::*state)();
 
-      std::string account_;
-      std::string pin_;
-      unsigned withdraw_amount_;
+    std::string account_;
+    std::string pin_;
+    unsigned withdraw_amount_;
 
-      // function name is *state*
-      void waiting_for_card()
-      {
-        // interface_hardware.send(display_enter_card());
-        //
-        // state waitinf_for_card -> event card_inserted -> state getting_pin
-        //                              -> eaf, lambda
+    // function name is *state*
+    void waiting_for_card()
+    {
+      // interface_hardware.send(display_enter_card());
+      //
+      // state waitinf_for_card -> event card_inserted -> state getting_pin
+      //                              -> eaf, lambda
 
-        incoming_.wait()
-          .handle<card_inserted>
-          (
-           [&](const card_inserted &msg) 
-           {
-           std::cout << "atm::waiting_for_card::card_inserted" << std::endl;
-           account_ = msg.account;
-           pin_ = "";
-           // interface_hardware_.send(display_enter_pin());
-           
-           // note: set next state
-           state = &atm::getting_pin;
-           }
-          );
-      }
+      incoming_.wait().handle<card_inserted>([&](const card_inserted &msg) {
+        std::cout << "atm::waiting_for_card::card_inserted" << std::endl;
+        account_ = msg.account;
+        pin_     = "";
+        // interface_hardware_.send(display_enter_pin());
 
-      void getting_pin()
-      {
-        incoming_.wait()
-          .handle<digit_pressed>
-          (
-           [&](const digit_pressed &msg)
-           {
-           (void)msg;
-           unsigned const pin_length = 4;
-           pin_ += msg.digit;
-           std::cout << "atm::getting_pin::digit_pressed: " << pin_ << std::endl;
-           if (pin_.length() == pin_length)
-           {
-           // bank.send(verify_pin(account, pin, incoming));
-           state = &atm::verifying_pin;
-           }
-           }
-          )
-          .handle<clear_last_pressed>
-          (
-           [&](const clear_last_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::getting_pin::clear_last_pressed" << std::endl;
-           if (!pin_.empty())
-           {
-           pin_.pop_back();
-           }
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::getting_pin::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      // expect pin_* message from back fsm.
-      void verifying_pin()
-      {
-        incoming_.wait()
-          .handle<pin_verified>
-          (
-           [&](const pin_verified &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::pin_verified" << std::endl;
-           state = &atm::wait_for_action;
-           }
-          )
-          .handle<pin_incorrect>
-          (
-           [&](const pin_incorrect &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::pin_incorrect" << std::endl;
-           // interface_hardware_.send(display_pin_incorrect_message());
-           state = &atm::done_processing;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void wait_for_action()
-      {
-        // interface_hardware_.send(display_withdrawal_options());
-        incoming_.wait()
-          .handle<withdraw_pressed>
-          (
-           [&](const withdraw_pressed &msg)
-           {
-           withdraw_amount_ = msg.amount;
-           std::cout << "atm::wait_for_action::withdraw_pressed: " << withdraw_amount_ << std::endl;
-           // bank_.send(withdraw(account_, msg.account, incoming_));
-           state = &atm::process_withdrawal;
-           }
-          )
-          .handle<balance_pressed>
-          (
-           [&](const balance_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::wait_for_action::balance_pressed" << std::endl;
-           // bank_.send(get_balance(account_, incoming_));
-           state = &atm::process_balance;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::wait_for_action::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void process_balance()
-      {
-        incoming_.wait()
-          .handle<balance>
-          (
-           [&](const balance &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_balance::balance" << std::endl;
-           interface_hardware_.send(display_balance(msg.amount));
-           state = &atm::wait_for_action;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_balance::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void process_withdrawal()
-      {
-        incoming_.wait()
-          .handle<withdraw_ok>
-          (
-           [&](const withdraw_ok &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::withdraw_ok" << std::endl;
-           // interface_hardware_.send(issue_money(withdrawal_amount));
-           // bank_.send(withdrawal_processed(account,withdrawal_amount));
-           state = &atm::done_processing;
-           }
-          )
-          .handle<withdraw_denied>
-          (
-           [&](const withdraw_denied &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::withdraw_denied" << std::endl;
-           // interface_hardware_.send(display_insufficient_funds());
-           state = &atm::done_processing;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::cancel_pressed" << std::endl;
-           // bank_.send(cancel_withdrawal(account,withdrawal_amount));
-           // interface_hardware_.send(display_withdrawal_cancelled());
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void done_processing()
-      {
-        // interface_hardware_.send(eject_card());
+        // note: set next state
         state = &atm::getting_pin;
-      }
+      });
+    }
 
-    public:
-      atm(messaging::sender bank, messaging::sender interface_hardware):
-        bank_(bank), interface_hardware_(interface_hardware) {}
-
-      atm(const atm &) = delete;
-      atm &operator=(const atm &) = delete;
-
-      // send a message to self
-      void done()
-      {
-        get_sender().send(messaging::close_queue());
-      }
-
-      void run()
-      {
-        // note: 
-        // set init state
-        state = &atm::waiting_for_card;
-
-        std::cout << "atm::run::for" << std::endl;
-
-        try
-        {
-          for (;;)
+    void getting_pin()
+    {
+      incoming_.wait()
+        .handle<digit_pressed>([&](const digit_pressed &msg) {
+          (void)msg;
+          unsigned const pin_length = 4;
+          pin_ += msg.digit;
+          std::cout << "atm::getting_pin::digit_pressed: " << pin_ << std::endl;
+          if (pin_.length() == pin_length)
           {
-            (this->*state)();
+            // bank.send(verify_pin(account, pin, incoming));
+            state = &atm::verifying_pin;
           }
-        }
-        catch(messaging::close_queue const &)
-        {
-          std::cout << "atm::run::end" << std::endl;
-          // note: what would happen when catch exception but do nothing?
-        }
-      }
+        })
+        .handle<clear_last_pressed>([&](const clear_last_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::getting_pin::clear_last_pressed" << std::endl;
+          if (!pin_.empty())
+          {
+            pin_.pop_back();
+          }
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::getting_pin::cancel_pressed" << std::endl;
+          state = &atm::done_processing;
+        });
+    }
 
-      // Whereas a sender just references a message queue, a receiver owns it. You
-      // can obtain a sender that references the queue by using the implicit
-      // conversion.
-      //
-      // note: this is an interface to expose q to other class and used to set up
-      // connection each other
-      //
-      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
-      //
-      // atm machine keeps this sender copies to send messages to them.
+    // expect pin_* message from back fsm.
+    void verifying_pin()
+    {
+      incoming_.wait()
+        .handle<pin_verified>([&](const pin_verified &msg) {
+          (void)msg;
+          std::cout << "atm::verify_pin::pin_verified" << std::endl;
+          state = &atm::wait_for_action;
+        })
+        .handle<pin_incorrect>([&](const pin_incorrect &msg) {
+          (void)msg;
+          std::cout << "atm::verify_pin::pin_incorrect" << std::endl;
+          // interface_hardware_.send(display_pin_incorrect_message());
+          state = &atm::done_processing;
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
+          state = &atm::done_processing;
+        });
+    }
 
-      // note: cxx-conversion-op which convert receiver to sender
-      messaging::sender get_sender()
+    void wait_for_action()
+    {
+      // interface_hardware_.send(display_withdrawal_options());
+      incoming_.wait()
+        .handle<withdraw_pressed>([&](const withdraw_pressed &msg) {
+          withdraw_amount_ = msg.amount;
+          std::cout << "atm::wait_for_action::withdraw_pressed: "
+                    << withdraw_amount_ << std::endl;
+          // bank_.send(withdraw(account_, msg.account, incoming_));
+          state = &atm::process_withdrawal;
+        })
+        .handle<balance_pressed>([&](const balance_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::wait_for_action::balance_pressed" << std::endl;
+          // bank_.send(get_balance(account_, incoming_));
+          state = &atm::process_balance;
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::wait_for_action::cancel_pressed" << std::endl;
+          state = &atm::done_processing;
+        });
+    }
+
+    void process_balance()
+    {
+      incoming_.wait()
+        .handle<balance>([&](const balance &msg) {
+          (void)msg;
+          std::cout << "atm::process_balance::balance" << std::endl;
+          interface_hardware_.send(display_balance(msg.amount));
+          state = &atm::wait_for_action;
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::process_balance::cancel_pressed" << std::endl;
+          state = &atm::done_processing;
+        });
+    }
+
+    void process_withdrawal()
+    {
+      incoming_.wait()
+        .handle<withdraw_ok>([&](const withdraw_ok &msg) {
+          (void)msg;
+          std::cout << "atm::process_withdrawal::withdraw_ok" << std::endl;
+          // interface_hardware_.send(issue_money(withdrawal_amount));
+          // bank_.send(withdrawal_processed(account,withdrawal_amount));
+          state = &atm::done_processing;
+        })
+        .handle<withdraw_denied>([&](const withdraw_denied &msg) {
+          (void)msg;
+          std::cout << "atm::process_withdrawal::withdraw_denied" << std::endl;
+          // interface_hardware_.send(display_insufficient_funds());
+          state = &atm::done_processing;
+        })
+        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
+          (void)msg;
+          std::cout << "atm::process_withdrawal::cancel_pressed" << std::endl;
+          // bank_.send(cancel_withdrawal(account,withdrawal_amount));
+          // interface_hardware_.send(display_withdrawal_cancelled());
+          state = &atm::done_processing;
+        });
+    }
+
+    void done_processing()
+    {
+      // interface_hardware_.send(eject_card());
+      state = &atm::getting_pin;
+    }
+
+  public:
+    atm(messaging::sender bank, messaging::sender interface_hardware)
+        : bank_(bank)
+        , interface_hardware_(interface_hardware)
+    {}
+
+    atm(const atm &) = delete;
+    atm &operator=(const atm &) = delete;
+
+    // send a message to self
+    void done() { get_sender().send(messaging::close_queue()); }
+
+    void run()
+    {
+      // note:
+      // set init state
+      state = &atm::waiting_for_card;
+
+      std::cout << "atm::run::for" << std::endl;
+
+      try
       {
-        return incoming_;
+        for (;;)
+        {
+          (this->*state)();
+        }
+      } catch (messaging::close_queue const &)
+      {
+        std::cout << "atm::run::end" << std::endl;
+        // note: what would happen when catch exception but do nothing?
       }
-  };
-}
+    }
 
+    // Whereas a sender just references a message queue, a receiver owns it. You
+    // can obtain a sender that references the queue by using the implicit
+    // conversion.
+    //
+    // note: this is an interface to expose q to other class and used to set up
+    // connection each other
+    //
+    // atm machine(bank.get_sender(), intarface_hardware.get_sender());
+    //
+    // atm machine keeps this sender copies to send messages to them.
+
+    // note: cxx-conversion-op which convert receiver to sender
+    messaging::sender get_sender() { return incoming_; }
+  };
+} // namespace messaging
 
 // note:
 // the example in the text uses three threads and three queue:
@@ -2252,7 +2056,6 @@ namespace messaging
 // std::thread bank_thread(&bank_machine::run,&bank);
 // std::thread if_thread(&interface_machine::run,&interface_hardware);
 // std::thread atm_thread(&atm::run,&machine);
-
 
 // [ RUN      ] Message.AtmFsmCancelPin
 // atm::run::for
@@ -2282,7 +2085,7 @@ TEST(Fsm, AtmFsmCancelPin)
 
   bank_machine bank;
   interface_machine interface_hardware;
-  atm machine(bank.get_sender(),interface_hardware.get_sender());
+  atm machine(bank.get_sender(), interface_hardware.get_sender());
 
   std::thread atm_thread(&atm::run, &machine);
 
@@ -2299,14 +2102,13 @@ TEST(Fsm, AtmFsmCancelPin)
   atm_thread.join();
 }
 
-
 TEST(Fsm, AtmFsmDoWithdraw)
 {
   using namespace messaging;
 
   bank_machine bank;
   interface_machine interface_hardware;
-  atm machine(bank.get_sender(),interface_hardware.get_sender());
+  atm machine(bank.get_sender(), interface_hardware.get_sender());
 
   std::thread atm_thread(&atm::run, &machine);
 
@@ -2331,10 +2133,9 @@ TEST(Fsm, AtmFsmDoWithdraw)
 
 #endif // #if !(defined DISPATCH_DEBUG)
 
-
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
