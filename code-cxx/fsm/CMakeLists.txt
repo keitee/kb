@@ -16,6 +16,8 @@ enable_testing()
 #
 # $ENV{FOO}
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 # to gnerate signal/slot codes
 set(CMAKE_AUTOMOC ON)
 
@@ -98,7 +100,13 @@ target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
 
 # qtfsm
-find_package(Qt5Core)
+find_package(Qt5 COMPONENTS Core REQUIRED)
+if(Qt5Core_FOUND)
+  message(STATUS "Qt5Core found")
+else()
+  message(STATUS "Qt5Core not found, not building moc")
+endif()
+
 find_package(Qt5Test)
 add_executable(qtfsm test_qtfsm.cpp qtfsm.cpp)
 target_link_libraries(qtfsm gmock_main Qt5::Core Qt5::Test ${LIBS})

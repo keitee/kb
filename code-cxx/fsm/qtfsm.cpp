@@ -244,10 +244,12 @@ void StateMachine::moveToState(int newState)
     }
   }
 
+  // TODO: new state? uses current state
   // check if the new state is a final state of a super state, in which case
   // post a FinishedEvent to the message loop
   if (m_states[newState].isFinal)
   {
+    qWarning("KT: isFinal is set and postEvent(FinishedEvent)");
     postEvent(FinishedEvent);
   }
 
@@ -255,6 +257,7 @@ void StateMachine::moveToState(int newState)
   // stop the state machine
   if ((m_currentState == m_finalState) || m_stopPending)
   {
+    qWarning("KT: m_finishedState and cleanUps");
 
     m_running = false;
     cleanUpEvents();

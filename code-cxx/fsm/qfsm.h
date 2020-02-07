@@ -21,7 +21,7 @@ public:
   virtual ~StateMachine();
 
 public:
-  void setObjectName(std::string const &name);
+  void setName(std::string const &name);
   bool addState(int state, std::string const &name = std::string());
   bool
   addState(int parentState, int state, std::string const &name = std::string());
@@ -55,7 +55,7 @@ public:
   void transition(int fromState, int toState);
 
 private:
-  std::string objectName() const;
+  std::string name() const;
   int shouldMoveState(int event) const;
   void triggerStateMove(int newState);
   void moveToState(int newState);
@@ -73,12 +73,15 @@ private:
   struct Transition
   {
     int targetState;
+
     enum
     {
       EventTransition,
       SignalTransition
     } type;
+
     int event;
+
     Transition()
         : targetState(-1)
         , type(EventTransition)
@@ -106,7 +109,10 @@ private:
 
   bool m_stopPending;
   bool m_withinStateMover;
+
+  // to queue up event from postEvent()
   std::queue<int> m_localEvents;
+
   std::string m_name;
 
   std::function<void(int)> m_entered;

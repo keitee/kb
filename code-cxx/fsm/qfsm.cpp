@@ -43,19 +43,19 @@ void StateMachine::logTransition(int oldState, int newState) const
 
   if (oldState == newState)
   {
-    message << "[" << objectName() << "] re-entering state "
+    message << "[" << name() << "] re-entering state "
             << m_states.at(newState).name << "(" << newState << ")";
   }
   else if (oldState == -1)
   {
 
-    message << "[" << objectName() << "] moving to state "
+    message << "[" << name() << "] moving to state "
             << m_states.at(newState).name << "(" << newState << ")";
   }
   else
   {
 
-    message << "[" << objectName() << "] moving from state "
+    message << "[" << name() << "] moving from state "
             << m_states.at(oldState).name << "(" << oldState << ")"
             << " to " << m_states.at(newState).name << "(" << newState << ")";
   }
@@ -343,12 +343,14 @@ void StateMachine::timerEvent(QTimerEvent *event)
 
 */
 
-std::string StateMachine::objectName() const
+// added to set fsm name and which is not supported in qtfsm
+
+std::string StateMachine::name() const
 {
   return m_name;
 }
 
-void StateMachine::setObjectName(std::string const &name)
+void StateMachine::setName(std::string const &name)
 {
   m_name = name;
 }
@@ -419,6 +421,8 @@ bool StateMachine::addState(int parentState, int state, std::string const &name)
   return true;
 }
 
+// add a transition entry to `fromState` if it is not super state
+
 bool StateMachine::addTransition(int fromState, int event, int toState)
 {
   // can't add transitions while running (really - we're single threaded, why not?)
@@ -453,6 +457,10 @@ bool StateMachine::addTransition(int fromState, int event, int toState)
 
   // also check if the to state is a super state that has children and has in
   // initial state -1
+  //
+  // NOTE:
+  // 1. initialState is really used?
+  // 2. this is how super(parent) state do not have transition list
 
   if (G_UNLIKELY((to->second.hasChildren == true) &&
                  (to->second.initialState == -1)))
@@ -475,11 +483,12 @@ bool StateMachine::addTransition(int fromState, int event, int toState)
   return true;
 }
 
-// -----------------------------------------------------------------------------
-/*!
+/* ={--------------------------------------------------------------------------
+ @brief :
   Sets the initial \a state of the state machine, this must be called before
   starting the state machine.
- */
+*/
+
 bool StateMachine::setInitialState(int state)
 {
   // can't set initial state while running (really - we're single threaded, why not?)
@@ -862,7 +871,6 @@ void StateMachine::stop()
   }
   else
   {
-
     m_currentState = -1;
     m_running      = false;
 
