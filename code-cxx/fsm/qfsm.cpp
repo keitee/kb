@@ -544,12 +544,12 @@ bool StateMachine::setFinalState(int state)
 /*!
  * \threadsafe
  */
-void StateMachine::postEvent(int event)
+bool StateMachine::postEvent(int event)
 {
   if (G_UNLIKELY(!m_running))
   {
     LOG_ERROR("cannot post event when the state machine is not running");
-    return;
+    return false;
   }
 
   if (G_UNLIKELY(event < (-1)))
@@ -559,7 +559,7 @@ void StateMachine::postEvent(int event)
 
     // LOG_ERROR("event type must be in user event range (%d <= %d <= %d)",
     //     QEvent::User, event, QEvent::MaxUser);
-    return;
+    return false;
   }
 
   // QThread *QObject::thread() const
@@ -596,6 +596,8 @@ void StateMachine::postEvent(int event)
         triggerStateMove(newState);
     }
   }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------

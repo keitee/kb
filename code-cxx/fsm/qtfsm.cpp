@@ -170,7 +170,9 @@ void StateMachine::moveToState(int newState)
   // and just means we have to issue the exited, transistion and entered
   // signals for the state
 
+#ifdef DEBUG
   qWarning("KT: moveToState: {");
+#endif
 
   if (newState == m_currentState)
   {
@@ -212,6 +214,9 @@ void StateMachine::moveToState(int newState)
 
     // *call eafs*
     int oldState   = m_currentState;
+
+
+    // NOTE: set current state with new state to move
     m_currentState = newState;
 
     logTransition(oldState, newState);
@@ -244,20 +249,24 @@ void StateMachine::moveToState(int newState)
     }
   }
 
-  // TODO: new state? uses current state
   // check if the new state is a final state of a super state, in which case
   // post a FinishedEvent to the message loop
   if (m_states[newState].isFinal)
   {
+//#ifdef DEBUG
     qWarning("KT: isFinal is set and postEvent(FinishedEvent)");
+//#endif
     postEvent(FinishedEvent);
   }
 
+  // NOTE: since current state is now new state, runs this code
   // check if the new state is a final state for the state machine and if so
   // stop the state machine
   if ((m_currentState == m_finalState) || m_stopPending)
   {
+#ifdef DEBUG
     qWarning("KT: m_finishedState and cleanUps");
+#endif
 
     m_running = false;
     cleanUpEvents();
@@ -267,7 +276,9 @@ void StateMachine::moveToState(int newState)
     m_currentState = -1;
   }
 
+#ifdef DEBUG
   qWarning("KT: moveToState: }");
+#endif
 }
 
 void StateMachine::triggerStateMove(int newState)
@@ -798,16 +809,15 @@ bool StateMachine::setFinalState(int parentState, int finalState)
 
 // -----------------------------------------------------------------------------
 /*!
-	\threadsafe
-
-
+	threadsafe
+  changed to return bool
  */
-void StateMachine::postEvent(QEvent::Type eventType)
+bool StateMachine::postEvent(QEvent::Type eventType)
 {
   if (Q_UNLIKELY(!m_running))
   {
     qWarning("cannot post event when the state machine is not running");
-    return;
+    return false;
   }
 
   if (Q_UNLIKELY((eventType != FinishedEvent) &&
@@ -817,7 +827,7 @@ void StateMachine::postEvent(QEvent::Type eventType)
              QEvent::User,
              eventType,
              QEvent::MaxUser);
-    return;
+    return false;
   }
 
   // QThread *QObject::thread() const
@@ -867,6 +877,8 @@ void StateMachine::postEvent(QEvent::Type eventType)
     // us through the main application event loop
     QCoreApplication::postEvent(this, new QEvent(eventType));
   }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------

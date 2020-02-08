@@ -31,7 +31,7 @@ public:
   bool setInitialState(int state);
   bool setFinalState(int state);
 
-  void postEvent(int event);
+  bool postEvent(int event);
 
   int state() const;
   bool inState(int state) const;
@@ -48,11 +48,6 @@ public:
 public:
   bool start();
   void stop();
-
-  void finished();
-  void entered(int state);
-  void exited(int state);
-  void transition(int fromState, int toState);
 
 private:
   std::string name() const;

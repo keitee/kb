@@ -552,7 +552,7 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
 // states along that transition path. In this example, transit from 0 to 5 and
 // entered gets called for 0,1,3,5.
 
-TEST_F(StateMachineTest, enterNestedStateOrder)
+TEST_F(StateMachineTest, super_enterNestedStateOrder)
 {
   enum
   {
@@ -619,7 +619,7 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   EXPECT_THAT(enters, ElementsAre(1, 3, 5));
 }
 
-TEST_F(StateMachineTest, exitNestedStateOrder)
+TEST_F(StateMachineTest, super_exitNestedStateOrder)
 {
   enum
   {
@@ -684,6 +684,198 @@ TEST_F(StateMachineTest, exitNestedStateOrder)
 
   // check the order of `entered` signals
   EXPECT_THAT(exits, ElementsAre(4, 3, 1));
+}
+
+TEST_F(StateMachineTest, super_noTransitionToSuper)
+{
+  enum
+  {
+    s1,
+    s1_1,
+    s1_2,
+    s1_2_1,
+    s1_2_2,
+    s2
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s1, s1_1));
+  EXPECT_TRUE(fsm.addState(s1, s1_2));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_1));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_2));
+  EXPECT_TRUE(fsm.addState(s2));
+
+  EXPECT_TRUE(fsm.setInitialState(s1_2_1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, e2, s1_2_1));
+
+  // not allowed to move to super state
+  EXPECT_FALSE(fsm.addTransition(s1_2_1, e2, s1));
+}
+
+TEST_F(StateMachineTest, handleFinishedState1)
+{
+  enum
+  {
+    s1,
+    s1_1,
+    s1_2,
+    s1_2_1,
+    s1_2_2,
+    s2
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  // {
+  //   s1,
+  //    s1_1,
+  //    s1_2,
+  //      s1_2_1,
+  //      s1_2_2,
+  //   s2
+  // };
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s1, s1_1));
+  EXPECT_TRUE(fsm.addState(s1, s1_2));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_1));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_2));
+  EXPECT_TRUE(fsm.addState(s2));
+
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.setFinalState(s1_2_2));
+
+  EXPECT_TRUE(fsm.addTransition(s1, e1, s1_2_2));
+  EXPECT_TRUE(fsm.addTransition(s1_2_2, e2, s2));
+
+  // { common code
+  std::vector<int> enters;
+  std::vector<int> exits;
+
+  // since not use QSignalSpy from Qt
+  auto entered = [&](int state) { enters.push_back(state); };
+  auto exited  = [&](int state) { exits.push_back(state); };
+
+  EXPECT_TRUE(fsm.connect(entered, exited));
+  // }
+
+  fsm.start();
+
+  EXPECT_THAT(true, fsm.isRunning());
+  EXPECT_THAT(enters.size(), 1);
+
+  // Removes all items from the list.
+  enters.clear();
+
+  fsm.postEvent(e1);
+
+  // 2 states along the path
+  EXPECT_THAT(enters.size(), 2);
+
+  // reached the final state and get `finished` and isRunning() is false
+  // NOTE: since qfsm do not support `finished` callback 
+  // EXPECT_EQ(finisheddSpy.count(), 1);
+  EXPECT_THAT(false, fsm.isRunning());
+
+  // current state is -1 since it reached to the finished
+  EXPECT_THAT(fsm.state(), -1);
+
+  // NOTE:
+  // start() makes fsm running again and set current state with init state.
+  fsm.start();
+
+  // so now true.
+  EXPECT_THAT(true, fsm.postEvent(e2));
+
+  // current state is s2
+  EXPECT_THAT(fsm.state(), s1);
+}
+
+TEST_F(StateMachineTest, handleFinishedState2)
+{
+  enum
+  {
+    s1,
+    s1_1,
+    s1_2,
+    s1_2_1,
+    s1_2_2,
+    s2
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  // {
+  //   s1,
+  //    s1_1,
+  //    s1_2,
+  //      s1_2_1,
+  //      s1_2_2,
+  //   s2
+  // };
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s1, s1_1));
+  EXPECT_TRUE(fsm.addState(s1, s1_2));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_1));
+  EXPECT_TRUE(fsm.addState(s1_2, s1_2_2));
+  EXPECT_TRUE(fsm.addState(s2));
+
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.setFinalState(s1_2_2));
+
+  EXPECT_TRUE(fsm.addTransition(s1, e1, s1_2_2));
+  EXPECT_TRUE(fsm.addTransition(s1_2_2, e2, s2));
+
+  // { common code
+  std::vector<int> enters;
+  std::vector<int> exits;
+
+  // since not use QSignalSpy from Qt
+  auto entered = [&](int state) { enters.push_back(state); };
+  auto exited  = [&](int state) { exits.push_back(state); };
+
+  EXPECT_TRUE(fsm.connect(entered, exited));
+  // }
+
+  fsm.start();
+
+  EXPECT_THAT(true, fsm.isRunning());
+  EXPECT_THAT(enters.size(), 1);
+
+  // Removes all items from the list.
+  enters.clear();
+
+  fsm.postEvent(e1);
+
+  // 2 states along the path
+  EXPECT_THAT(enters.size(), 2);
+
+  // reached the final state and get `finished` and isRunning() is false
+  // NOTE: since qfsm do not support `finished` callback 
+  // EXPECT_EQ(finisheddSpy.count(), 1);
+  EXPECT_THAT(false, fsm.isRunning());
+
+  // current state is -1 since it reached to the finished
+  EXPECT_THAT(fsm.state(), -1);
+
+  // NOTE:
+  // start() makes fsm running again and set current state with init state.
+  fsm.start();
+
+  // so now true.
+  EXPECT_THAT(true, fsm.postEvent(e2));
+
+  // current state is s2
+  EXPECT_THAT(fsm.state(), s1);
 }
 
 // use blercumanager fsm for an example using super state

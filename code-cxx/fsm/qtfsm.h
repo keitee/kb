@@ -73,7 +73,7 @@ public:
   bool setFinalState(int state);
   bool setFinalState(int parentState, int state);
 
-  void postEvent(QEvent::Type eventType);
+  bool postEvent(QEvent::Type eventType);
   qint64 postDelayedEvent(QEvent::Type eventType, int delay);
   bool cancelDelayedEvent(qint64 id);
   bool cancelDelayedEvents(QEvent::Type eventType);
