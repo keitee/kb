@@ -13,6 +13,8 @@
 using namespace testing;
 
 /*
+To build:
+-------------------------------------------------------------------------------
 class UseFsm 
 {
   private:
@@ -80,7 +82,8 @@ class UseFsm
 };
 
 
-To run fsm:
+To run:
+-------------------------------------------------------------------------------
 
 // define custom Qt events
 
@@ -92,9 +95,26 @@ m_stateMachine.postEvent() or;
 m_stateMachine.postDelayed();
 
 
-NOTE:
-1. do not use `finished` signal of fsm but m_finalState which is set by
-setFinalState() is used to make running false and call cleanUpEvents()
+To use the final state:
+-------------------------------------------------------------------------------
+
+1. setFinalState() is used to set m_finalState and when transition happens, it's
+checked if new state is the final state. If so run codes that stop() do; make
+running false, call cleanUpEvents(), and make currentState -1
+
+2. when reaches to the final state, state machine emits `finished` so could use
+that if uses Qt fsm 
+
+3. or use enter/exit signal of the final state
+
+
+To start the state machine again:
+-------------------------------------------------------------------------------
+
+1. use start() of a state macnine since it resets state machine's state.
+
+2. use transition of a state machine which can go from the final and to the init
+state and then starts again.
 
 
 Each state has a list of transitions and addTransition() add a transition entry
@@ -182,9 +202,16 @@ class StateMachine
 
 
 Super(Nested) state:
+-------------------------------------------------------------------------------
 
 1. all exit and enter gets called along the tree path for both direction; exit
 or enter gets called for super or state on the path.
+
+2. cannot move into super and cannot add transition to super. However, can set
+the init state to super and this can be fixed for future?
+
+NOTE super state is for logical state and for handling enter/exit but not state
+to move into.
 
 
 shouldMoveState() search for possible new state from transition tables of states
