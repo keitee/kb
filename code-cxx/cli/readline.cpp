@@ -19,6 +19,74 @@
 #define STDIN_FILENO 0
 #endif
 
+/*
+https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html
+g_main_context_iteration()
+
+/Qt/5.12.3/Src/qtbase/src/corelib/kernel/qeventdispatcher_glib.cpp
+bool QEventDispatcherGlib::processEvents(QEventLoop::ProcessEventsFlags flags)
+
+/Qt/5.12.3/Src/qtbase/src/corelib/kernel/qeventloop.cpp
+int QEventLoop::exec(ProcessEventsFlags flags)
+
+(gdb) bt
+#0  0x00007ffff66968a0 in __poll_nocancel () at ../sysdeps/unix/syscall-template.S:84
+#1  0x00007ffff3a809f6 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+#2  0x00007ffff3a80b0c in g_main_context_iteration () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+#3  0x00007ffff74bd54f in QEventDispatcherGlib::processEvents (this=0x55555578c610, flags=...) at kernel/qeventdispatcher_glib.cpp:422
+#4  0x00007ffff7464b3a in QEventLoop::exec (this=this@entry=0x7fffffffdc20, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
+#5  0x00007ffff746d4e0 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1363
+#6  0x00005555555653eb in main (argc=1, argv=0x7fffffffdda8) at /home/keitee/git/kb/code-cxx/cli/test_console.cpp:18
+
+
+when enter is pressed:
+
+(gdb) bt
+#0  ReadLinePrivate::commandLineHandler_ (this=0x55555578e060, line="") at /home/keitee/git/kb/code-cxx/cli/readline.cpp:408
+#1  0x0000555555567dfe in ReadLinePrivate::commandLineHandler (line=0x5555557a6710 "") at /home/keitee/git/kb/code-cxx/cli/readline.cpp:400
+#2  0x00007ffff35a5ac3 in rl_callback_read_char () from /usr/lib/x86_64-linux-gnu/libreadline.so
+#3  0x00005555555688cc in ReadLinePrivate::onStdinActivated (this=0x55555578e060, fd=0) at /home/keitee/git/kb/code-cxx/cli/readline.cpp:536
+#4  0x000055555556c52b in QtPrivate::FunctorCall<QtPrivate::IndexesList<0>, QtPrivate::List<int>, void, void (ReadLinePrivate::*)(int)>::call (f=
+    (void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x5555555688a6 <ReadLinePrivate::onStdinActivated(int)>, o=0x55555578e060, arg=0x7fffffffd950) at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:152
+#5  0x000055555556c1f0 in QtPrivate::FunctionPointer<void (ReadLinePrivate::*)(int)>::call<QtPrivate::List<int>, void> (f=(void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x5555555688a6 <ReadLinePrivate::onStdinActivated(int)>,
+    o=0x55555578e060, arg=0x7fffffffd950) at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:185
+#6  0x000055555556bbba in QtPrivate::QSlotObject<void (ReadLinePrivate::*)(int), QtPrivate::List<int>, void>::impl (which=1, this_=0x55555578f580, r=0x55555578e060, a=0x7fffffffd950, ret=0x0)
+    at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:414
+#7  0x00007ffff7491f26 in QtPrivate::QSlotObjectBase::call (a=0x7fffffffd950, r=0x55555578e060, this=<optimized out>) at ../../include/QtCore/../../src/corelib/kernel/qobjectdefs_impl.h:394
+#8  QMetaObject::activate (sender=sender@entry=0x55555578f450, signalOffset=<optimized out>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd950) at kernel/qobject.cpp:3776
+#9  0x00007ffff7492507 in QMetaObject::activate (sender=sender@entry=0x55555578f450, m=m@entry=0x7ffff797dbc0 <QSocketNotifier::staticMetaObject>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd950)
+    at kernel/qobject.cpp:3648
+#10 0x00007ffff749e358 in QSocketNotifier::activated (this=this@entry=0x55555578f450, _t1=0, _t2=...) at .moc/moc_qsocketnotifier.cpp:140
+#11 0x00007ffff749e6ab in QSocketNotifier::event (this=0x55555578f450, e=<optimized out>) at kernel/qsocketnotifier.cpp:266
+#12 0x00007ffff74661c3 in doNotify (event=0x7fffffffda10, receiver=0x55555578f450) at kernel/qcoreapplication.cpp:1150
+#13 QCoreApplication::notify (event=<optimized out>, receiver=<optimized out>, this=<optimized out>) at kernel/qcoreapplication.cpp:1136
+#14 QCoreApplication::notifyInternal2 (receiver=0x55555578f450, event=0x7fffffffda10) at kernel/qcoreapplication.cpp:1060
+#15 0x00007ffff746638e in QCoreApplication::sendEvent (receiver=<optimized out>, event=event@entry=0x7fffffffda10) at kernel/qcoreapplication.cpp:1450
+#16 0x00007ffff74be188 in socketNotifierSourceDispatch (source=0x55555578cd30) at kernel/qeventdispatcher_glib.cpp:106
+#17 0x00007ffff3a807f7 in g_main_context_dispatch () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+#18 0x00007ffff3a80a60 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+#19 0x00007ffff3a80b0c in g_main_context_iteration () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
+#20 0x00007ffff74bd54f in QEventDispatcherGlib::processEvents (this=0x55555578c610, flags=...) at kernel/qeventdispatcher_glib.cpp:422
+#21 0x00007ffff7464b3a in QEventLoop::exec (this=this@entry=0x7fffffffdc20, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
+#22 0x00007ffff746d4e0 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1363
+#23 0x00005555555653eb in main (argc=1, argv=0x7fffffffdda8) at /home/keitee/git/kb/code-cxx/cli/test_console.cpp:18
+(
+
+*/
+
+/* ={--------------------------------------------------------------------------
+
+https://tiswww.case.edu/php/chet/readline/readline.html
+
+2. Programming with GNU Readline
+
+This chapter describes the interface between the GNU Readline Library and other
+programs. If you are a programmer, and you wish to include the features found in
+GNU Readline such as completion, line editing, and interactive history
+manipulation in your own programs, this section is for you.
+
+*/
+
 /* ={--------------------------------------------------------------------------
  @brief :
   helper TODO
@@ -107,10 +175,8 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
     return;
   }
 
-  /*
-  assume that for `rl_on_new_line` symbol, there is symbol_t typedef and
-  m_symbol member variable to set.
-  */
+  // note that for `rl_on_new_line` symbol, there is function pointer
+  // rl_on_new_line_t typedef and m_rl_on_new member variable to set.
 
 #define GET_RL_FUNC(f)                                                         \
   do                                                                           \
@@ -293,8 +359,8 @@ void ReadLinePrivate::start(const QString &prompt)
   // typedef void rl_vcpfunc_t (char *);
   //
   // Function:
-  // void rl_callback_handler_install (const char *prompt, rl_vcpfunc_t
-  // *lhandler)
+  // void rl_callback_handler_install (const char *prompt, 
+  //  rl_vcpfunc_t *lhandler)
   //
   // Set up the terminal for readline I/O and display the initial expanded value
   // of prompt.
@@ -374,12 +440,52 @@ bool ReadLinePrivate::isRunning() const
 /* ={--------------------------------------------------------------------------
  @brief :
   callback from libreadline
+
+2.4.12 Alternate Interface
+
+An alternate interface is available to plain readline(). Some applications need
+to interleave keyboard I/O with file, device, or window system I/O, typically by
+using a main loop to select() on various file descriptors. To accommodate this
+need, readline can also be invoked as a `callback' function from an event loop.
+There are functions available to make this easy.
+
+
+Function: 
+void rl_callback_handler_install (const char *prompt, 
+  rl_vcpfunc_t *lhandler) 
+
+Set up the terminal for readline I/O and display the initial expanded value of
+prompt. Save the value of lhandler to use as a handler function to call when a
+complete line of input has been entered. The handler function receives the text
+of the line as an argument. As with readline(), the handler function should free
+the line when it it finished with it.
+
+Function: 
+void rl_callback_read_char (void)
+
+Whenever an application determines that keyboard input is available, it should
+call rl_callback_read_char(), which will read the next character from the
+current input source. 
+
+If that character completes the line, rl_callback_read_char will invoke `the
+lhandler function` installed by rl_callback_handler_install to process the line. 
+
+Before calling the lhandler function, the terminal settings are reset to the
+values they had before calling rl_callback_handler_install. If the lhandler
+function returns, and the line handler remains installed, the terminal settings
+are modified for Readline's use again. EOF is indicated by calling lhandler with
+a NULL line.
+
+NOTE:
+rl_callback_read_char gets called for every single char and lhandler gets called
+when line is made.
+
 */
 
 void ReadLinePrivate::commandLineHandler(char *line)
 {
-  // necessary since this is member function? yes because it's called back
-  // without `this` pointer.
+  // instance() is necessary since this is member function? yes because it's
+  // static function and called back without `this` pointer.
 
   ReadLinePrivate *self = instance();
 

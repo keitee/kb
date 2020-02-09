@@ -3524,7 +3524,7 @@ TEST(Time, Snapper)
 namespace cxx_static
 {
   // shows static member shall be defined outside of class
-  class FooStatic
+  class FooStatic1
   {
   private:
     static const size_t MAX_CODE_LENGTH{4}; // *TN* no define
@@ -3533,17 +3533,17 @@ namespace cxx_static
     // cause an error
     // static const std::string DIGIT_NOT_FOUND{"*"};
   public:
-    FooStatic() {}
+    FooStatic1() {}
   };
 
-  const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+  const std::string FooStatic1::DIGIT_NOT_FOUND{"*"};
 } // namespace cxx_static
 
 TEST(CxxStatic, static_class_member)
 {
   using namespace cxx_static;
 
-  FooStatic foo;
+  FooStatic1 foo;
 }
 
 namespace cxx_static
@@ -3671,6 +3671,38 @@ TEST(CxxStatic, static_in_inheritance)
   Foo *p = new Bar;
   p->createInstance();
   delete p;
+}
+
+namespace cxx_static
+{
+  class FooStatic2
+  {
+  public:
+    FooStatic2() {}
+
+    static int createInstance()
+    {
+      static int m_count = 0;
+
+      m_count++;
+
+      // std::cout << "FooStatic2::createInstance(): count: " << m_count
+      //           << std::endl;
+
+      return m_count;
+    }
+  };
+} // namespace cxx_static
+
+// see that static variable is initialised once when it is created.
+
+TEST(CxxStatic, static_initialised_once)
+{
+  using namespace cxx_static;
+
+  EXPECT_THAT(1, FooStatic2::createInstance());
+  EXPECT_THAT(2, FooStatic2::createInstance());
+  EXPECT_THAT(3, FooStatic2::createInstance());
 }
 
 namespace cxx_static
@@ -5204,7 +5236,7 @@ TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
 
 */
 
-TEST(CxxSmartPointerUnique, construct)
+TEST(CxxSmartPointer, unique_Construct)
 {
   {
     std::unique_ptr<std::string> up(new std::string);
@@ -5256,7 +5288,7 @@ namespace cxx_sp_shared
   };
 } // namespace cxx_sp_shared
 
-TEST(CxxSmartPointerUnique, moveAssign)
+TEST(CxxSmartPointer, unique_moveAssign)
 {
   // Foo ctor(1)
   // Foo ctor(2)
@@ -5345,7 +5377,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SmartPointer, UniqueSinkSource)
+TEST(CxxSmartPointer, unique_SinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -5434,7 +5466,7 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
-TEST(CxxSmartPointer, Deleter)
+TEST(CxxSmartPointer, all_Deleter)
 {
   using namespace cxx_sp_delete;
 
@@ -5526,7 +5558,7 @@ TEST(CxxSmartPointer, Deleter)
 // deleting Nicolai
 // deleting Jutta
 
-TEST(SmartPointer, DeleteTime)
+TEST(CxxSmartPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
@@ -5592,7 +5624,7 @@ TEST(SmartPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SmartPointer, UniqueDeleteReleaseReset)
+TEST(CxxSmartPointer, unique_DeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -5650,7 +5682,7 @@ namespace cxx_sp_use_count
 
 // Is use_count() reliable?
 
-TEST(SmartPointer, UseCount)
+TEST(CxxSmartPointer, all_UseCount)
 {
   using namespace cxx_sp_use_count;
 
@@ -5695,13 +5727,17 @@ TEST(SmartPointer, UseCount)
 // cxx-smart-ptr-weak
 // 5.2.2 Class weak_ptr
 
-TEST(SmartPointer, WeakNotInReferenceCount)
+TEST(CxxSmartPointer, weak_GuardedAccess)
 {
+  // Can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a `bad_weak_ptr exception`
+
   {
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
 
     // wp is created out of sp
-    weak_ptr<int> wp(sp);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp. since it's weak, creating wp
     // doesn't change the reference count of p
@@ -5728,22 +5764,19 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     //  std::cout << "wp is not null" << std::endl;
   }
 
-  // Can explicitly convert a weak_ptr into a shared_ptr by using a
-  // corresponding shared_ptr constructor. If there is no valid referenced
-  // object, this constructor will throw a `bad_weak_ptr exception`
-
+  // to show cxx-sp supports bool conversion
   {
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
 
     // wp is created out of sp
-    weak_ptr<int> wp(sp);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
     EXPECT_THAT(wp.use_count(), 1);
 
     // sp is created out of wp and cxx-sp supports bool conversion.
-    shared_ptr<int> p(wp);
+    std::shared_ptr<int> p(wp);
     if (p)
     {
       EXPECT_THAT(sp.use_count(), 2);
@@ -5759,39 +5792,39 @@ TEST(SmartPointer, WeakNotInReferenceCount)
   // equal to 0 but might be 'faster'.
 
   {
-    auto sp = make_shared<int>(42);
-    weak_ptr<int> wp(sp);
+    auto sp = std::make_shared<int>(42);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
     EXPECT_THAT(wp.use_count(), 1);
 
+    // release sp
     sp = nullptr;
 
     EXPECT_FALSE(sp);
     EXPECT_THAT(wp.use_count(), 0);
 
-    // sp is gone and wp.lock() returns nullptr
+    // since sp is gone, wp.lock() returns null shared pointer
     // because the last owner of the object released the object in the meantime
     // — lock() yields an empty shared_ptr.
 
     auto rp = wp.lock();
 
-    // note: cxx-sp-weak use_count() retuns 0 !!!
-    EXPECT_THAT(wp.use_count(), 0);
-    EXPECT_THAT(wp.expired(), true);
-
     // rp is shared_ptr
     EXPECT_FALSE(rp);
     EXPECT_THAT(rp, nullptr);
+
+    // expired() uses use_count() as well
+    EXPECT_THAT(wp.expired(), true);
   }
 
   // so can use use_count() to see if sp's object is still around
   {
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
 
     // wp is created out of sp
-    weak_ptr<int> wp(sp);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp. since it's weak, creating wp
     // doesn't change the reference count of p
@@ -5812,12 +5845,13 @@ TEST(SmartPointer, WeakNotInReferenceCount)
   // object, this constructor will throw a bad_weak_ptr exception.
 
   {
-    auto sp = make_shared<int>(42);
-    weak_ptr<int> wp(sp);
+    auto sp = std::make_shared<int>(42);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
+    // release sp
     sp = nullptr;
 
     // EXPECT_THROW(coll.pop(), ReadEmptyStack);
@@ -5834,8 +5868,9 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(wp.expired(), true);
   }
 
+  // how to set wp with sp?
   {
-    weak_ptr<int> wp;
+    std::weak_ptr<int> wp;
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.lock(), nullptr);
@@ -5845,14 +5880,12 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     // EXPECT_THAT(wp, nullptr);
 
     // assign wp from make_shared() directly and do not work
-    wp = make_shared<int>(42);
+    wp = std::make_shared<int>(42);
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.use_count(), 0);
 
     auto sp = wp.lock();
-
-    // because the referenced object is already gone
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.use_count(), 0);
@@ -5860,14 +5893,17 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(sp, nullptr);
   }
 
+  // use copy assign
   {
-    weak_ptr<int> wp;
+    std::weak_ptr<int> wp;
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
 
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
+
+    // copy assign
     wp      = sp;
 
     EXPECT_THAT(wp.expired(), false);
@@ -5888,7 +5924,9 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(*spwp, 42);
     EXPECT_THAT(sp.use_count(), 2);
 
+    // reset wp but do not affect sp
     wp.reset();
+
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
