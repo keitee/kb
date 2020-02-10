@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <fcntl.h>
+#include <fnmatch.h>
 #include <sys/prctl.h>
 #include <sys/uio.h> // readv()
 
@@ -273,7 +274,7 @@ RETURN VALUE
 
 */
 
-TEST(Glibc, memchar)
+TEST(OsGlibc, glibc_memchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
@@ -301,7 +302,7 @@ TEST(Glibc, memchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(Glibc, strchar)
+TEST(OsGlibc, glibc_strchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
@@ -331,7 +332,7 @@ TEST(Glibc, strchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(Glibc, strrchar)
+TEST(OsGlibc, glibc_strrchar)
 {
   char *start{};
   char fname[] = "/home/keitee/git/kb/code-cxx/libc/libc.cpp";
@@ -358,7 +359,7 @@ namespace use_internal_strchr_01
 
 } // namespace use_internal_strchr_01
 
-TEST(Glibc, strrcharOwn)
+TEST(OsGlibc, glibc_strrcharOwn)
 {
   using namespace use_internal_strchr_01;
 
@@ -406,7 +407,7 @@ namespace use_internal_strchr_02
 
 } // namespace use_internal_strchr_02
 
-TEST(Glibc, strrcharAsanVersion)
+TEST(OsGlibc, glibc_strrcharAsanVersion)
 {
   using namespace use_internal_strchr_02;
 
@@ -480,7 +481,7 @@ RETURN VALUE
 
 */
 
-TEST(Glibc, readlink)
+TEST(OsGlibc, glibc_readlink)
 {
   char buffer[100];
 
@@ -828,13 +829,13 @@ NOTES
 
 */
 
-TEST(Glibc, gettid)
+TEST(OsGlibc, glic_gettid)
 {
   // cout << "tid : " << syscall(SYS_gettid) << endl;
   syscall(SYS_gettid);
 }
 
-TEST(Glibc, getpid)
+TEST(OsGlibc, glibc_getpid)
 {
   {
     // int pid{};
@@ -1014,7 +1015,7 @@ namespace sanitizer_syscall
 
 } // namespace sanitizer_syscall
 
-TEST(Glibc, SanitizerSyscallInternal)
+TEST(OsGlibc, glibc_SanitizerSyscallInternal)
 {
   using namespace sanitizer_syscall;
 
@@ -1024,7 +1025,7 @@ TEST(Glibc, SanitizerSyscallInternal)
   }
 }
 
-TEST(Glibc, SanitizerSyscallExternal)
+TEST(OsGlibc, glibc_SanitizerSyscallExternal)
 {
   using namespace sanitizer_syscall;
 
@@ -1035,7 +1036,7 @@ TEST(Glibc, SanitizerSyscallExternal)
 }
 
 // to see how template are instanciated
-TEST(Glibc, SingleArgSanitizerSyscall)
+TEST(OsGlibc, glibc_SingleArgSanitizerSyscall)
 {
   using namespace sanitizer_syscall;
 
@@ -1070,7 +1071,7 @@ DESCRIPTION
 
 */
 
-TEST(Glibc, env)
+TEST(OsGlibc, glibc_env)
 {
   // when there is no such env var
   {
@@ -1095,6 +1096,53 @@ TEST(Glibc, env)
     ret = getenv("TEST_LPI");
     EXPECT_THAT(std::string(ret), std::string("1"));
   }
+}
+
+/*
+={=============================================================================
+glibc-fnmatch
+
+FNMATCH(3)
+
+NAME
+       fnmatch - match filename or pathname
+
+SYNOPSIS
+       #include <fnmatch.h>
+
+       int fnmatch(const char *pattern, const char *string, int flags);
+
+DESCRIPTION
+       The fnmatch() function checks whether the string argument matches the
+       pattern argument, which is a shell wildcard pattern.
+
+
+       FNM_PERIOD
+              If  this  flag  is  set, a leading period in string has to be
+              matched exactly by a period in pattern.  A period is considered to
+              be leading if it is the first character in string, or if both
+              FNM_PATHNAME is set and the period immediately follows a slash.
+
+RETURN VALUE
+       Zero if string matches pattern, FNM_NOMATCH if there is no match or
+       another nonzero value if there is an error.
+
+*/
+
+TEST(OsGlibc, glibc_fnmatch)
+{
+  std::string filter("com.sky.as.*");
+
+  EXPECT_THAT(fnmatch(filter.c_str(), "com.sky.as.player", FNM_PERIOD), 0);
+
+  // FNM_PERIOD has no effect
+  EXPECT_THAT(fnmatch(filter.c_str(), "com.sky.as.player", 0), 0);
+
+  // still match
+  EXPECT_THAT(fnmatch(filter.c_str(), "com.sky.as.pplayer", 0), 0);
+
+  // but not match
+  EXPECT_THAT(fnmatch(filter.c_str(), "com.sky.ax.player", 0), Not(0));
 }
 
 /*
