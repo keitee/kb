@@ -7,20 +7,19 @@ class Console : public QObject
 {
   Q_OBJECT
 
-  public:
-    Console(QObject *parent = nullptr);
-    ~Console();
+public:
+  Console(QObject *parent = nullptr);
+  ~Console();
 
-  public:
-    void start();
+public:
+  void start();
 
-  private slots:
-    void onSampleCommand(const QStringList &args);
+private slots:
+  void onSampleCommand(const QStringList &args);
 
-  private:
-    void initReadLine();
-    ReadLine m_readLine;
+private:
+  void initReadLine();
+  ReadLine m_readLine;
 };
 
 #endif // CONSOLE_H
-

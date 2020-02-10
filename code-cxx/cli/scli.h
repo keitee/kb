@@ -1,78 +1,79 @@
-/*=============================================================================
+#ifndef SCLI_H
+#define SCLI_H
 
-*/
-
-
-#ifndef __SCLI_H__
-#define __SCLI_H__
-
-#include <iostream>
-#include <string>
 #include <functional>
+#include <string>
 #include <vector>
 
 class CommandHandler
 {
-  public:
-    CommandHandler() {}
+public:
+  using handler = std::function<bool(const std::string &, void *)>;
 
-    using handler = std::function<bool(std::string const&, void*)>;
-
-    void addCommand(char const *name, char const *description, handler f, void *data);
-    void showCommands();
-    bool handle(std::string const &command);
-
+private:
+  class HandlerContext
+  {
   private:
+    std::string m_name;
+    std::string m_description;
+    void *m_data;
+    handler m_handler;
 
-    class HandlerContext
+  public:
+    HandlerContext(const std::string &name,
+                   const std::string &description,
+                   handler handler,
+                   void *data)
+        : m_name(name)
+        , m_description(description)
+        , m_handler(handler)
+        , m_data(data)
+    {}
+
+    // the input `command` is what user has typed and m_name is the added entry.
+    bool isMatch(const std::string &command) const
     {
-      public:
-        HandlerContext(std::string const &name, std::string const &description, handler f, void *data)
-          : name_(name), description_(description), f_(f), data_(data)
-        {}
+      // if the command is single word and has no space in it, pos will be
+      // npos.
+      auto pos = command.find_first_of(" ");
 
-        bool isMatch(std::string const &command) const
-        {
-          auto index = command.find_first_of(" ");
+      // command has a space in it and found a word. is it going to be a match?
+      if (pos != std::string::npos)
+      {
+        return (command.substr(0, pos) == m_name);
+      }
+      else
+      {
+        // whether command is longer than m_name or m_name is longer, only
+        // supports the exect match.
 
-          // if command is single word which has no space in it, index is npos
+        return (0 == command.compare(0,
+                                     (m_name.size() > command.size()
+                                        ? m_name.size()
+                                        : command.size()),
+                                     m_name));
+      }
+    }
 
-          if (std::string::npos != index)
-          {
-            return command.substr(0, index) == name_;
-          }
-          else
-          {
-            // each HandlerContext has its name in `name_` and compare it to
-            // input command in range of [0, size].
-            //
-            // where size is less<>(name_.size(), command.size()) and this
-            // supports that "h" matches to "help".
+    bool fire(const std::string &command) const
+    {
+      return m_handler(command, m_data);
+    }
 
-            return (0 == command.compare(0,
-                  (name_.size() > command.size() ? name_.size() : command.size()),
-                   name_));
-          }
-        }
+    const std::string &name() const { return m_name; }
+    const std::string &description() const { return m_description; }
+  };
 
-        bool fire(std::string const &command) const
-        {
-          return f_(command, data_);
-        }
+private:
+  std::vector<HandlerContext> m_commands;
 
-        std::string const &getName() const { return name_; }
-        std::string const &getDescription() const { return description_; }
+public:
+  CommandHandler() {}
 
-
-      private:
-        std::string name_;
-        std::string description_;
-        handler f_;
-        void *data_;
-    };
-
-    std::vector<HandlerContext> commands_;
+  void
+  addCommand(const char *name, const char *description, handler f, void *data);
+  void showCommands();
+  bool handle(const std::string &command);
 };
 
-
-#endif /* __SCLI_H__ */
+#endif // SCLI_H

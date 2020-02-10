@@ -1,37 +1,32 @@
-/*=============================================================================
-
-*/
-
+#include <iostream>
 #include "scli.h"
 
-void CommandHandler::addCommand(char const *name,
-                                char const *description,
+void CommandHandler::addCommand(const char *name,
+                                const char *description,
                                 handler f,
                                 void *data)
 {
-  commands_.push_back(HandlerContext(name, description, f, data));
+  m_commands.emplace_back(HandlerContext(name, description, f, data));
 }
 
 void CommandHandler::showCommands()
 {
-  std::cout << "Commands : " << std::endl;
+  std::cout << "commands : " << std::endl;
 
-  for (auto const &e : commands_)
+  for (const auto &e : m_commands)
   {
-    std::cout << " " << e.getName() << " : " << e.getDescription() << std::endl;
+    std::cout << " " << e.name() << " : " << e.description() << std::endl;
   }
 }
 
-/*
- * return false to mean "not handled" when cannot find the input command or
- * input is empty
- */
+// return false if input command is empty or cannot find input command in
+// commands vector.
 
-bool CommandHandler::handle(std::string const &command)
+bool CommandHandler::handle(const std::string &command)
 {
   if (!command.empty())
   {
-    for (auto const &e : commands_)
+    for (const auto &e : m_commands)
     {
       if (e.isMatch(command))
         return e.fire(command);

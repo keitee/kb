@@ -95,19 +95,22 @@ set(LIBS libcxx.a)
 link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
+# CMAKE_DL_LIBS
+# The name of the library that has dlopen and dlclose in it, usually -ldl on
+# most UNIX machines.
 
-# cli
-add_executable(${PROJECT_NAME} scli.cpp test_cli.cpp console.cpp readline.cpp)
-target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})
+# simple cli
+add_executable(test_scli scli.cpp test_cli.cpp)
+target_link_libraries(test_scli gmock_main ${LIBS} ${CMAKE_DL_LIBS})
 
-# console
+# scli standalone
+# add_executable(test_scli scli.cpp test_scli.cpp)
+# target_link_libraries(test_scli Qt5::Core Qt5::Test ${LIBS})
+
+# readline standalone
+add_executable(readline_app readline_app.cpp)
+target_link_libraries(readline_app ${LIBS} ${CMAKE_DL_LIBS} readline)
+
+# console abd use readline.so
 add_executable(test_console scli.cpp test_console.cpp console.cpp readline.cpp)
 target_link_libraries(test_console Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})
-
-# scli
-add_executable(test_scli scli.cpp test_scli.cpp)
-target_link_libraries(test_scli Qt5::Core Qt5::Test ${LIBS})
-
-# add_test(Gtest.MatcherForPair ${PROJECT_NAME})
-add_test(${PROJECT_NAME} ${PROJECT_NAME})
-

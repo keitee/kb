@@ -7976,7 +7976,7 @@ wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 '../../../../../../../generic/wayland-egl-bnxs/'`refsw17.3/vc5/common/display_framework.c
 
 
-<rdk-ssh>
+<rdk-ssh> *rdk-xi6*
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
 // Enable SSH Access (every time when boots)
 
@@ -7984,9 +7984,12 @@ By default the image provides an ssh service (dropbear) that is locked down.
 The following can be used to spin up a new instance of dropbear that allow
 root login.
 
-dropbearkey -t rsa -f /tmp/sky-ssh-hostkey
+dropbearkey -t rsa -f /opt/sky-ssh-hostkey
+dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
+
 
 // have to run this when reboots
+dropbearkey -t rsa -f /tmp/sky-ssh-hostkey
 dropbear -p :10022 -P /var/run/dropbear2.pid -r /tmp/sky-ssh-hostkey -B
 
 You then need to open the 10022 port:
@@ -8067,7 +8070,8 @@ https://nexus.teamccp.com/nexus/#nexus-search;quick~refsw
 https://gerrit.teamccp.com/login/%23%2F
 
 bp-kpark257
-myLd8pCt5
+# myLd8pCt5
+t!!
 
 ssh -i ~/.ssh/id_rsa_comcast -p 29418 bp-bgray640@gerrit.teamccp.com
 ssh -p 29418 bp-bgray640@gerrit.teamccp.com
@@ -11073,8 +11077,123 @@ WatchdogSec=10
 Restart=on-failure
 
 
+*rdk-as-proxy*
+
+[Service]
+Type=dbus
+BusName=com.sky.as.proxy
+ExecStart=/usr/sbin/asproxy --journald
+Restart=on-failure
+LimitNPROC=1
+ProtectHome=true
+ProtectSystem=full
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
+
+class IServicesController
+{
+  public:
+    static std::shared_ptr<IServicesController>
+      create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
+          const std::shared_ptr<ISecurityContext> &securityCtx);
+
+    virtual ~IServicesController() = default;
+
+  public:
+    virtual bool start() = 0;
+    virtual void stop() = 0;
+};
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.h
+
+class RdkServicesController : public IServicesController
+
+// IXX interface class has static create and the derived class has its
+// implementation. kind of factory?
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.cpp
+
+std::shared_ptr<IServicesController> IServicesController::create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
+                                                                 const std::shared_ptr<ISecurityContext> &securityCtx)
+{
+  return std::make_shared<RdkServicesController>(urlMap, securityCtx);
+}
+
+RdkServicesController::RdkServicesController()
+    , mOurServiceName("com.sky.as.proxy")
+{}
+
+
+void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  mEventQueue.emplace_back(std::move(event));
+}
+
+
+// asproxyservice
+
+SD_BUS_METHOD("DBusProxyMethodCall",       "s",         "us",         &ASProxyService::proxyMethodCall,                SD_BUS_VTABLE_UNPRIVILEGED),
+
+ASProxyService::ASProxyService(const std::shared_ptr<SDBusConnection> &connection)
+{}
+
+
+// Called by the sd-bus library when a 'com.sky.as.Service1.DBusProxyMethodCall'
+// method call arrives.
+
+int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus_error *retError )
+{
+  sd_bus_message_read( msg, "s", &msgArgs );
+  std::string dbusMessage( msgArgs );
+  self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
+}
+
+void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  std::shared_ptr<ASProxyMethodCall> proxyMsg = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
+
+  std::string domain;
+  std::string method;
+
+  proxyMsg->GetDomainAndMethod( domain, method );
+}
+
+ASProxyMethodCall::ASProxyMethodCall( const std::string dBusMessage, sd_bus_message *reply )
+        : SDBusMethodCall( "/com/sky/as/service", ASSERVICE1_INTERFACE )
+{
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    mReplyCode = 500;
+    mReply = reply;
+    mSentReply = false;
+
+    SetDomainAndMethod( dBusMessage );
+
+    AS_LOG_EXIT( "%s", __func__ );
+}
+
+void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
+{
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    if ( dBusMessage.empty() == false )
+    {
+        mDbusMessage = dBusMessage;
+
+        AS_LOG_INFO( "mDbusMessage: %s", mDbusMessage.c_str() );
+
+        Json::Reader reader;
+        Json::Value root;
+        if ( reader.parse( mDbusMessage, root ) )
+    }
+}
+
+
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-dtt
+
+wget --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-01-31/Release_RDK_Readme.txt
+wget -r --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-02-10
 
 dropbear -p :10022 -P /var/run/dropbear2.pid -r /home/root/sky-ssh-hostkey -B
 

@@ -359,7 +359,7 @@ void ReadLinePrivate::start(const QString &prompt)
   // typedef void rl_vcpfunc_t (char *);
   //
   // Function:
-  // void rl_callback_handler_install (const char *prompt, 
+  // void rl_callback_handler_install (const char *prompt,
   //  rl_vcpfunc_t *lhandler)
   //
   // Set up the terminal for readline I/O and display the initial expanded value

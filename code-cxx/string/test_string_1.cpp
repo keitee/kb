@@ -472,15 +472,18 @@ TEST(CxxString, Swap)
 // int compare( const basic_string& str ) const noexcept; (since C++11)
 //
 // Return value
-// negative value if *this appears before the character sequence specified by
+// negative value if `*this` appears before the character sequence specified by
 // the arguments, in lexicographical order
 //
 // zero if both character sequences compare equivalent
 //
 // positive value if *this appears after the character sequence specified by the
 // arguments, in lexicographical order
+//
+//
+// int compare(size_type pos1, size_type count1, const basic_string& str ) const;
 
-TEST(StringOperation, Compare)
+TEST(StringOperation, operation_Compare)
 {
   {
     std::string coll1{"string compare"};
@@ -512,6 +515,30 @@ TEST(StringOperation, Compare)
 
     // equal
     EXPECT_THAT(false, (coll1 == coll2));
+  }
+
+  // no simple positive/negative value in lexicographical order but difference?
+  {
+    std::string coll1{"help"};
+    std::string coll2{"helphelp"};
+    std::string coll3{"h"};
+
+    // help and h
+    EXPECT_THAT(coll1.compare("h"), 3);
+
+    // helphelp and h
+    EXPECT_THAT(coll2.compare("h"), 7);
+
+    // h and help
+    EXPECT_THAT(coll3.compare("help"), -3);
+  }
+
+  {
+    std::string coll1{"help"};
+    EXPECT_THAT(coll1.compare(0, 1, "h"), 0);
+    EXPECT_THAT(coll1.compare(0, 2, "h"), 1);
+    EXPECT_THAT(coll1.compare(0, 3, "h"), 2);
+    EXPECT_THAT(coll1.compare(0, 4, "h"), 3);
   }
 }
 
