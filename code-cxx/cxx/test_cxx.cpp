@@ -9586,6 +9586,149 @@ TEST(Const, ForMemberFunction)
 }
 
 // ={=========================================================================
+// cxx-auto
+
+TEST(CxxAuto, auto_const)
+{
+  // reference type and can change
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5};
+
+    for (auto &e : coll1)
+      e += 10;
+
+    EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  }
+
+  // error: assignment of read-only reference ‘e’
+  //
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //
+  //   for (const auto &e : coll1)
+  //     e += 10;
+  //
+  //   EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  // }
+
+  // same
+  // error: assignment of read-only reference ‘e’
+  //
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //
+  //   for (auto const &e : coll1)
+  //     e += 10;
+  //
+  //   EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  // }
+
+  // NOTE: same as "const int" and note that there is no "const reference" but
+  // there is only "reference to const". see *cxx-declarator*
+  //
+  // error: assignment of read-only reference ‘e’
+  //
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //
+  //   for (const int &e : coll1)
+  //     e += 10;
+  //
+  //   EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  // }
+
+  // okay
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5};
+    std::vector<int> coll2;
+
+    for (auto it = coll1.begin(); it != coll1.end(); ++it)
+    {
+      coll2.push_back(*it);
+    }
+
+    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5));
+  }
+
+  // error: passing ‘const __gnu_cxx::__normal_iterator<const int*, std::vector<int> >’ 
+  //  as ‘this’ argument discards qualifiers [-fpermissive]
+  //
+  //      for (const auto it = coll1.cbegin(); it != coll1.cend(); ++it)
+  //                                                                 ^~
+  //
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //   std::vector<int> coll2;
+  //
+  //   for (const auto it = coll1.cbegin(); it != coll1.cend(); ++it)
+  //   {
+  //     coll2.push_back(*it);
+  //   }
+  //
+  //   EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5));
+  // }
+
+  // okay
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5};
+    std::vector<int> coll2;
+
+    for (std::vector<int>::const_iterator it = coll1.cbegin(); it != coll1.cend(); ++it)
+    {
+      coll2.push_back(*it);
+    }
+
+    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5));
+  }
+
+  // same error
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //   std::vector<int> coll2;
+  //
+  //   for (const std::vector<int>::const_iterator it = coll1.cbegin();
+  //        it != coll1.cend();
+  //        ++it)
+  //   {
+  //     coll2.push_back(*it);
+  //   }
+  //
+  //   EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5));
+  // }
+
+  // okay, can change
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5};
+
+    for (auto it = coll1.begin(); it != coll1.end(); ++it)
+    {
+      *it += 10;
+    }
+
+    EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  }
+
+  // const_iterator is like "const T *", so *it is const and cannot change.
+  //
+  // see *cxx-const-on-iterator*
+  //
+  // error: assignment of read-only location ‘it.__gnu_cxx::__normal_iterator<_Iterator, _Container>::operator*<const int*, std::vector<int> >()’
+  //       *it += 10;
+  //              ^~
+  //
+  // {
+  //   std::vector<int> coll1{1, 2, 3, 4, 5};
+  //
+  //   for (auto it = coll1.cbegin(); it != coll1.cend(); ++it)
+  //   {
+  //     *it += 10;
+  //   }
+  //
+  //   EXPECT_THAT(coll1, ElementsAre(11, 12, 13, 14, 15));
+  // }
+}
+
+// ={=========================================================================
 // cxx-except
 
 namespace cxx_except

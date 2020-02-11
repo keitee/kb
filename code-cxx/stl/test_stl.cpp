@@ -320,7 +320,7 @@ TEST(Iterator, OperationOnTemporary)
   }
 }
 
-TEST(Iterator, Next)
+TEST(CxxIterator, iterator_next)
 {
   {
     vector<int> coll{1, 2, 3, 4, 5};
