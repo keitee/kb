@@ -16,6 +16,7 @@ private:
 
 private:
   DBusConnection();
+  // used by static members, systemBus(), for example.
   DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
 public:
@@ -40,6 +41,9 @@ public:
   bool registerName(const std::string &name);
 
   DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
+  bool callWithCallback(DBusMessage &&message,
+                        const std::function<void(DBusMessage &&)> &callback,
+                        int msTimeout = -1) const;
 };
 
 #endif // DBUSCONNECTION_H

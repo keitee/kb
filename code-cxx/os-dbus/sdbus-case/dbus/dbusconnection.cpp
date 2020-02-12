@@ -237,7 +237,7 @@ bool DBusConnection::registerName(const std::string &name)
   return true;
 }
 
-// sends the message over this connection and blocks, waiting for a reply, for
+// sends the message over this connection and `blocks`, waiting for a reply, for
 // at most msTimeout ms or default value.
 //
 // this function is suitable for method calls only. it returns the reply message
@@ -258,7 +258,7 @@ bool DBusConnection::registerName(const std::string &name)
 DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 {
   // sanity check
-  if (message.type() !- DBusMessage::MethodCallMessage)
+  if (DBusMessage::MethodCallMessage != message.type())
   {
     logWarning("trying to call with non-method call message");
 
@@ -278,7 +278,9 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   // called from the eventloop thread
   if (priv->m_eventloop.onEventLoopThread())
   {
-    // construct sd_bus_message from the given message and returns unique_ptr
+    // construct `request` sd_bus_message from the given message and returns
+    // unique_ptr
+
     auto msg = message.m_private->toMessage_(priv->m_bus);
     if (!msg)
     {
@@ -340,4 +342,14 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
     return replyMessage;
   }
+
+  // otherwise, not called from the dbus/eventloop thread so use async version
+  // and block on the callback.
+  //
+  // else on "if (priv->m_eventloop.onEventLoopThread())"
+
+  DBusMessage replyMsg;
+
+  sem_t sem;
+  sem_init(&sem, 0, 0);
 }
