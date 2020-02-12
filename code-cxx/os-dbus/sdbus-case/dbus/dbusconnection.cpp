@@ -104,6 +104,33 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
   }
 }
 
+// 1. used from call() when it's called from other thread
+//
+bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
+                                             const std::function<void(DBusMessage&&)> &callback,
+                                             int msTimeout)
+{
+  // TODO:
+  std::function<void(DBusMessage&&)> errorCallback;
+
+  if (!m_eventloop.onEventLoopThread())
+    errorCallback = callback;
+
+  // take the message data
+  // TODO: why need reset()?
+  std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
+  message.m_private.reset();
+
+  auto call = 
+    [this, messageData, callback, errorCallback, timeout]()
+    {
+      // must be false
+      assert(m_eventloop.onEventLoopThread());
+
+      auto msg = messageData->toMessage(m_bus);
+    }
+}
+
 /* ={--------------------------------------------------------------------------
  @brief :
   DBusConnection
@@ -278,6 +305,8 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   // called from the eventloop thread
   if (priv->m_eventloop.onEventLoopThread())
   {
+    logWarning("DBusConnection::call() is called on the eventloop thread");
+
     // construct `request` sd_bus_message from the given message and returns
     // unique_ptr
 
@@ -348,8 +377,40 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   //
   // else on "if (priv->m_eventloop.onEventLoopThread())"
 
-  DBusMessage replyMsg;
+  logWarning("DBusConnection::call() is called on the other thread");
+
+  DBusMessage replyMessage;
 
   sem_t sem;
+
+  // NOTE: shared between threads
   sem_init(&sem, 0, 0);
+
+  std::function<void(DBusMessage)> f = 
+    [&](DBusMessage &&reply)
+    {
+      // must be false since expects it runs on other thread
+      assert(priv->m_eventloop.onEventLoopThread());
+
+      replyMessage = std::move(reply);
+
+      if (0 != sem_post(&sem))
+        logSysFatal(errno, "failed to post semaphore");
+    };
+
+  // make the dbus call
+  if (!m_private->callWithCallback(std::move(message), f, msTimeout))
+  {
+    replyMessage = DBusMessage(DBusMessage::ErrorType::Failed);
+  }
+  // wait for 'f' to be called
+  else if (0 != sem_wait(&sem))
+  {
+    logSysFatal(errno, "failed to wait on semaphore");
+    replyMessage = DBusMessage(DBusMessage::ErrorType::Failed);
+  }
+
+  sem_destroy(&sem);
+
+  return replyMessage;
 }

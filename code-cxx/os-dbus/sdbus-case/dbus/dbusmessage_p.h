@@ -10,6 +10,11 @@
 #include <memory>
 #include <string>
 
+// this class is to encapsulate sd_bus_error or sd_bus_message which are all
+// dbus message after all. 
+//
+// it provides conversion from or to them.
+
 class DBusMessagePrivate
 {
 private:
@@ -26,7 +31,7 @@ private:
   const DBusMessage::MessageType m_type;
   const std::string m_service;
 
-  // TODO: is map necessary than vector?
+  // is map necessary than vector?
   static const std::map<DBusMessage::ErrorType, std::string> m_errorNames;
 
 private:
@@ -57,7 +62,7 @@ private:
 
     union BasicType
     {
-      // *cxx-error*
+      // *cxx-error* since it's union
       // bool bool_{};
       // int i_{};
       // unsigned ui_{};
