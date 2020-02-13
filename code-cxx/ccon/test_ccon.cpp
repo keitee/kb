@@ -60,7 +60,6 @@ Hello world, sleeps for 10s, getpid=3942, gettid=3945
 
 namespace cxx_thread
 {
-
   void hello(ostringstream &os) { os << "Hello Concurrent World"; }
 
   void hello_and_thread_id(ostringstream &os)
@@ -86,19 +85,9 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, Hello)
-{
-  using namespace cxx_thread;
-
-  ostringstream os;
-  std::thread t([&] { hello(os); });
-  t.join();
-  EXPECT_THAT(os.str(), "Hello Concurrent World");
-}
-
 // thread id: 139805217429248
 
-TEST(CConThread, thread_id)
+TEST(CCon, thread_id)
 {
   using namespace cxx_thread;
 
@@ -141,21 +130,35 @@ TEST(CConThread, thread_id)
   }
 }
 
-// +..+..+...+..+.+++++
-// done
-
-TEST(CConThread, Lambda)
+TEST(CCon, thread_run)
 {
-  std::thread t1([] { doSomething('.'); });
-  std::thread t2([] { doSomething('+'); });
-  t1.join();
-  t2.join();
+  using namespace cxx_thread;
+
+  // single
+
+  {
+    ostringstream os;
+    std::thread t([&] { hello(os); });
+    t.join();
+    EXPECT_THAT(os.str(), "Hello Concurrent World");
+  }
+
+  // parallel
+  // +..+..+...+..+.+++++
+  // done
+
+  {
+    std::thread t1([] { doSomething('.'); });
+    std::thread t2([] { doSomething('+'); });
+    t1.join();
+    t2.join();
+  }
 }
 
 // true if the thread object identifies an active thread of execution, false
 // otherwise
 
-TEST(CConThread, Joinable)
+TEST(CCon, thread_joinable)
 {
   std::thread t([] { doSomething('+'); });
 
@@ -179,7 +182,6 @@ TEST(CConThread, Joinable)
 
 namespace cxx_thread
 {
-
   void thread_name_1(ostringstream &os)
   {
     // get thread name
@@ -206,7 +208,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, Name)
+TEST(CCon, thread_name)
 {
   using namespace cxx_thread;
 
@@ -228,7 +230,6 @@ TEST(CConThread, Name)
 
 namespace cxx_thread
 {
-
   void update_data(std::string &data) { data = "updated data"; }
 
   void use_reference(int &value) { value += 200; }
@@ -239,7 +240,7 @@ namespace cxx_thread
 
 // show how arg and return value from thread are used
 
-TEST(CConThread, ArgumentAndReturn)
+TEST(CCon, thread_ArgumentAndReturn)
 {
   using namespace cxx_thread;
 
@@ -320,7 +321,6 @@ TEST(CConThread, ArgumentAndReturn)
 
 namespace cxx_thread
 {
-
   class Foo
   {
   public:
@@ -336,7 +336,7 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
-TEST(CConThread, MemberFunction)
+TEST(CCon, thread_MemberFunction)
 {
   using namespace cxx_thread;
 
@@ -1292,7 +1292,7 @@ namespace cxx_mutex
 
   size_t i{};
 
-  std::string print(std::string const &s)
+  std::string print_use_lock_guard(std::string const &s)
   {
     std::lock_guard<std::mutex> l(print_mutex);
     std::string result{};
@@ -1306,7 +1306,21 @@ namespace cxx_mutex
     return result;
   }
 
-  std::string print_no_lock(std::string const &s)
+  std::string print_use_unique_lock(std::string const &s)
+  {
+    std::unique_lock<std::mutex> l(print_mutex);
+    std::string result{};
+
+    for (i = 0; i < s.size(); ++i)
+    {
+      this_thread::sleep_for(chrono::milliseconds(20));
+    }
+
+    result = "waited for " + to_string(i * 20) + "ms and " + s;
+    return result;
+  }
+
+  std::string print_use_no_lock(std::string const &s)
   {
     // std::lock_guard<std::mutex> l(print_mutex);
 
@@ -1323,10 +1337,7 @@ namespace cxx_mutex
 
 } // namespace cxx_mutex
 
-// note that this shows `deadlock` becuase calls lock() twice already before
-// running a thread which calls unlock().
-//
-// TEST(CCon, Sync_MultipleLockAndUnlock)
+// TEST(CCon, SHOW_DEADLOCK)
 // {
 //   std::mutex print_mutex;
 //
@@ -1336,9 +1347,18 @@ namespace cxx_mutex
 //   m.lock();
 //   m.lock();
 //
-//   std::thread t([&]{m.unlock();
-//   std::this_thread::sleep_for(std::chrono::seconds(2));}); std::cout << "set"
-//   << std::endl; result = true; m.unlock(); t.join();
+//   std::thread t( [&]
+//   {
+//      m.unlock();
+//      std::this_thread::sleep_for(std::chrono::seconds(2));
+//   }
+//   );
+//
+//   std::cout << "set" << std::endl;
+//   result = true;
+//
+//   m.unlock();
+//   t.join();
 //
 //   EXPECT_THAT(result, true);
 // }
@@ -1348,7 +1368,13 @@ namespace cxx_mutex
 // "On Linux, both of these operations succeed for this mutex type and a
 // PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
-TEST(CConMutex, MultipleLockAndUnlock)
+// 1. this works while the above shows `deadlock` becuase the above calls lock()
+// twice already before running a thread which calls unlock(). However, the
+// below runs thread before which calls unlock.
+//
+// 2. this works without calling second unlock() since *cxx-raii* do m.unlock();
+
+TEST(CCon, mutex_MultipleLockAndUnlock)
 {
   std::mutex m;
   bool result{false};
@@ -1356,7 +1382,7 @@ TEST(CConMutex, MultipleLockAndUnlock)
   m.lock();
 
   std::thread t([&] {
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     m.unlock();
   });
 
@@ -1364,24 +1390,35 @@ TEST(CConMutex, MultipleLockAndUnlock)
   std::cout << "set" << std::endl;
   result = true;
 
-  // note that this works without calling second unlock() since *cxx-raii*
-  // m.unlock();
-
   t.join();
 
   EXPECT_THAT(result, true);
 }
 
-TEST(CConMutex, LockGuard)
+TEST(CCon, mutex_Types)
 {
   using namespace cxx_mutex;
 
+  // use std::lock_guard
   {
     auto f1 =
-      std::async(std::launch::async, print, "Hello from a first thread");
+      std::async(std::launch::async, print_use_lock_guard, "Hello from a first thread");
 
     auto f2 =
-      std::async(std::launch::async, print, "Hello from a second thread");
+      std::async(std::launch::async, print_use_lock_guard, "Hello from a second thread");
+
+    EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
+
+    EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
+  }
+
+  // use std::unique_lock provides the same cxx-raii; unlocks in dtor
+  {
+    auto f1 =
+      std::async(std::launch::async, print_use_unique_lock, "Hello from a first thread");
+
+    auto f2 =
+      std::async(std::launch::async, print_use_unique_lock, "Hello from a second thread");
 
     EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
 

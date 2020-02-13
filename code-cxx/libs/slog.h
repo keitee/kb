@@ -6,9 +6,11 @@
 
 namespace Slog
 {
-  // <how-to-get-filename-without-full-path>
+  // *how-to-get-filename-without-full-path*
+  // *cxx-error* on "FILE"
+  // #define FILE (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#define FILE (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+  #define FILEX (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
   void errMsg(
     const char *file, int line, const char *function, const char *format, ...);
@@ -21,8 +23,8 @@ namespace Slog
 // Slog::errExit(__FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 
 #define LOG_MSG(fmt, ...)                                                      \
-  Slog::errMsg(FILE, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
+  Slog::errMsg(FILEX, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...)                                                      \
-  Slog::errExit(FILE, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
+  Slog::errExit(FILEX, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 
 #endif // SIMPLE_LOG_H

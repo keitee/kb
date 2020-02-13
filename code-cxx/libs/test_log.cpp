@@ -1,7 +1,7 @@
-#include "gmock/gmock.h"
-
 #include <fcntl.h>
 #include <iostream>
+
+#include "gmock/gmock.h"
 
 using namespace std;
 using namespace testing;

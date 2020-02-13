@@ -18,6 +18,7 @@ enable_testing()
 
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
+set(GTEST_DIR "$ENV{HOME}/works/googletest/googletest" CACHE PATH "The path to the GoogleTest")
 
 
 # Include the directory source_dir in your project. This directory must contain
@@ -63,7 +64,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # directory... 
 # The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ${GMOCK_DIR}/include ${GTEST_DIR}/include)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
@@ -77,7 +78,7 @@ file(GLOB SOURCES "*.cpp")
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 # to build test app
-add_executable(test_log "test_log.cxx" "lpi_error.cpp" slog.cpp rlog.cpp)
+add_executable(test_log "test_log.cpp" "lpi_error.cpp" slog.cpp rlog.cpp)
 target_link_libraries(test_log gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
