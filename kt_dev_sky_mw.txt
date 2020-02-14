@@ -7984,6 +7984,7 @@ By default the image provides an ssh service (dropbear) that is locked down.
 The following can be used to spin up a new instance of dropbear that allow
 root login.
 
+// since "/opt" is writable on xi6
 dropbearkey -t rsa -f /opt/sky-ssh-hostkey
 dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
 
@@ -10953,6 +10954,18 @@ instead.
 
 
 *as-asplayer*
+
+[Service]
+Type=dbus
+BusName=com.sky.as.player
+Environment="XDG_RUNTIME_DIR=/tmp"
+Environment="WAYLAND_DISPLAY=westeros-asplayer"
+Environment="PLAYERSINKBIN_USE_WESTEROSSINK=1"
+WorkingDirectory=/tmp
+ExecStartPre=/bin/rm -rf /tmp/llds
+ExecStart=/usr/sbin/asrdkplayer
+Restart=on-failure
+
 armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
 ./gst-plugins-rdk-aamp/1.99+git999-r0/gst-plugins-rdk-aamp-1.99+git999/libgstaamp.so
 
@@ -11201,21 +11214,35 @@ void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
 wget --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-01-31/Release_RDK_Readme.txt
 wget -r --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-02-10
 
-// on rdk box
-dropbear -p :10022 -P /var/run/dropbear2.pid -r /home/root/sky-ssh-hostkey -B
+
+// on xi6 rdk box
+dropbearkey -t rsa -f /opt/sky-ssh-hostkey
+dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
+
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -F
+
+ssh -p 10022 root@192.168.0.103
+
+systemctl status sky-asplayer
+systemctl stop sky-asplayer
+
+scp -r -P 10022 ./asrdkplayer root@192.168.0.103:/opt
+mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+
+systemctl start sky-asplayer
+
+journalctl -u sky-asplayer --since today
 
 
 // copy whole directory and must be on "/" on target
 
 scp -r -P 10022 ./futarque root@192.168.0.100:
 
-export XDG_RUNTIME_DIR='/run';export WAYLAND_DISPLAY=wayland-0; export WESTEROS_SINK_USE_GFX=1;
-LD_LIBRARY_PATH=./usr/lib ./MediaRite.exe
 
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -F
+// on pc
 
 ./ptestcli -s<your device's IP>:40660 
 ./ptestcli -s192.168.0.100:40660 
@@ -11391,6 +11418,94 @@ public:
     DvrUtilsRpcClient * getDvrUtilsClient(){return mpDvrUtilsRpc;}
     ProductionTestRpcClient * getProductionTestClient(){return mpProductionTestRpc;}
 };
+
+
+<scan-events>
+ethan-as-source/Components/AS/Services/Controllers/ServiceScanController/include/AS_SERVICESCAN_ServiceScanController.h
+
+/**
+ * @brief Types of events handled by service scan controller
+ */
+enum ServiceScanEvent
+{
+    SERVICE_SCAN_EVENT_UNDEF,                            ///< Undefined event
+    SERVICE_SCAN_EVENT_START,                            ///< Event to start a scan operation
+    SERVICE_SCAN_EVENT_ABORT,                            ///< Event to abort a current scan
+    SERVICE_SCAN_EVENT_COMMIT,                           ///< Event to commit a current scan
+    SERVICE_SCAN_EVENT_STATUS_UPDATE,                    ///< Event to notify the status of scan progress
+    SERVICE_SCAN_EVENT_UPDATE_SCAN_NOTIFICATION,         ///< Event to notify the state of the SPM updates
+    SERVICE_SCAN_EVENT_USER_ACTIVITY_UPDATE,             ///< Event to notify the user activity updates
+    SERVICE_SCAN_EVENT_SCAN_TIMEOUT,                     ///< Event to notify scan timer expiry
+    SERVICE_SCAN_EVENT_TERM                              ///< Event to terminate the controller thread execution
+};
+
+// ethan-as-source/Components/AS/Services/Controllers/ServiceScanController/include/AS_SERVICESCAN_ServiceScanController.h
+/**
+ * @brief Different states of service scan controller
+ */
+enum ServiceScanControllerState
+{
+    SERVICE_SCAN_CONTROLLER_STATE_IDLE,         ///< State when no new scan has been started. Set during startup or after a commit or abort
+    SERVICE_SCAN_CONTROLLER_STATE_RUNNING,      ///< State to indicate that there is a scan in progress
+    SERVICE_SCAN_CONTROLLER_STATE_BLOCKED,      ///< State to indicate that the scan is in blocked state and requires user intervention for the scan to continue
+    SERVICE_SCAN_CONTROLLER_STATE_COMPLETE,     ///< State to indicate that the scan is complete. Set when the scan is 100 percent complete
+    SERVICE_SCAN_CONTROLLER_STATE_FAILED        ///< State to indicate that the scan has failed.
+};
+
+// from mediarite
+enum ChannelSearchAction {
+    eChannelSearch_Init = 0,
+    eChannelSearch_Tuning,
+    eChannelSearch_Searching,
+    eChannelSearch_Aborting,
+    eChannelSearch_Aborted,
+    eChannelSearch_Processing,
+    eChannelSearch_Interaction,
+    eChannelSearch_Finished
+};
+
+// mediarite scan
+[09:42:44,745137] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:42:45,747573] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:42:46,750223] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:42:47,752795] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+...
+[09:43:03,881362] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:04,888871] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:05,900651] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:06,912160] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:07,954865] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+...
+[09:43:15,063992] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:16,077478] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:17,087105] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+...
+[09:43:22,194274] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:23,227244] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:24,238744] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:25,258268] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+...
+[09:43:30,350199] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:31,379964] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:34,459147] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:35,486484] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:40,618987] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:41,650456] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:47,817339] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:43:48,839922] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+...
+[09:43:58,138057] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Searching
+[09:43:59,168717] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+...
+[09:43:59,168717] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Tuning
+[09:45:07,865662] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Finished
+[09:45:08,866023] MAIN(10486).20 console.cpp:167(L1)SearchStatus: (DONE)
+
+
+// 1. controller which as q and thread
+// 2. register to SPM to get status
+
+ServiceScanController::ServiceScanController
 
 
 ={============================================================================
