@@ -10028,7 +10028,7 @@ namespace cxx_cpp
 #define foo 4
 } // namespace cxx_cpp
 
-TEST(CxxCpp, Stringification)
+TEST(CxxCpp, cpp_Stringification)
 {
   {
     double x = 10.0;
@@ -10229,7 +10229,7 @@ namespace cxx_cpp
 // int 10
 // int 97
 
-TEST(CxxCpp, VariableArgs)
+TEST(CxxCpp, cpp_VariableArgs)
 {
   using namespace cxx_cpp;
 
@@ -10257,7 +10257,7 @@ namespace cxx_cpp
 // success!
 // [       OK ] Cpp.VaargMacro (0 ms)
 
-TEST(CxxCpp, VariableArgsMacro)
+TEST(CxxCpp, cpp_VariableArgsMacro)
 {
   eprintf("success!\n");
 }
@@ -10268,7 +10268,7 @@ namespace cxx_cpp
   // #define CHECK_CXX_CPP_DEFINED 0
 } // namespace cxx_cpp
 
-TEST(CxxCpp, useDefined)
+TEST(CxxCpp, cpp_defined_keyword)
 {
 #if defined CHECK_CXX_CPP_DEFINED
   EXPECT_THAT(true, true);
@@ -10313,6 +10313,39 @@ TEST(CxxCpp, useDefined)
 #else
   EXPECT_THAT(false, true);
 #endif
+}
+
+namespace
+{
+#define SR1(x)  { std::cout << dec << boolalpha << showbase << x << std::endl; }
+
+#define VAR(var) " " #var "=" << (var)      // VAR here are only simple aguments allowed thus 'hex<<x' is not allowed
+#define _VAR(x) <<"," VAR(x)
+#define VAR2(name,var) " " #name "=" << var // no parenthesis around var - to make it possible to give 'hex<<x' as argument to var
+#define _VAR2(name,var) <<"," VAR2(name,var)
+} // namespace
+
+// [ RUN      ] CxxCpp.cpp_case1
+// cpp case example
+// cpp case example more to say
+// cpp case example value1=10
+// cpp case example value1=10
+// cpp case example value1=10, value2=10
+// cpp case example what=10
+// [       OK ] CxxCpp.cpp_case1 (0 ms)
+
+TEST(CxxCpp, cpp_case1)
+{
+  int value1{10};
+  int value2{10};
+
+  SR1("cpp case example");
+  SR1("cpp case example" << " more to say");
+  SR1("cpp case example"
+      << " value1=" << value1);
+  SR1("cpp case example" VAR(value1));
+  SR1("cpp case example" VAR(value1)_VAR(value2));
+  SR1("cpp case example" VAR2(what, value1));
 }
 
 // ={=========================================================================
