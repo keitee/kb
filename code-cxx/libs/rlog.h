@@ -102,8 +102,20 @@ extern void __log_sys_printf(int err,
 #define logSysError(err, fmt, ...)                                             \
   __LOG_SYS_PRINTF(err, LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
 
+#define LOG_SERR(err, fmt, ...)                                             \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+
 #define logSysWarning(err, fmt, ...)                                           \
   __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
+
+#define LOG_SWRN(err, fmt, ...)                                             \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
+
+#define logSysFatal(err,fmt,...) \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__)
+
+#define LOG_SFAT(err,fmt,...) \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__)
 
 // without errno supports
 #define logFatal(fmt, ...) __LOG_PRINTF(LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__)

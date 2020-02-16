@@ -17,6 +17,8 @@
 #include <fnmatch.h>
 #include <sys/prctl.h>
 #include <sys/uio.h> // readv()
+#include <semaphore.h>
+#include <pthread.h>
 
 // #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from <stdio.h> */
 //
@@ -51,7 +53,7 @@ os-file-io
 
 */
 
-TEST(LpiIO, open)
+TEST(OsIO, io_open)
 {
   int fd;
 
@@ -110,7 +112,7 @@ single writev() system call is cheaper than performing multiple write() calls
 
 */
 
-TEST(LpiIO, readv)
+TEST(OsIO, io_readv)
 {
   int fd;
 
@@ -1180,10 +1182,153 @@ TEST(OsAnsi, color)
   printf("\033[1;32m" "this is ansi color coded text\n" "\033[m");
 }
 
+/*
+={=============================================================================
+os-sem-unnamed
+
+Listing 53-6
+
+thread_incr_psem.c
+
+Use a POSIX unnamed semaphore to synchronize access by two threads to a global
+variable.
+See also thread_incr.c and thread_incr_mutex.c.
+ 
+*/
+
+namespace os_sem
+{
+  static int glob{0};
+  static sem_t sem;
+
+  static void *threadFunc(void *arg)
+  {
+    int loops = *((int *)arg);
+    int count{0}, j{0};
+
+    for (j = 0; j < loops; j++)
+    {
+      // Returns 0 on success, or -1 on error
+      if (-1 == sem_wait(&sem))
+        errExit("sem_wait failed");
+
+      count = glob;
+      count++;
+      glob = count;
+
+      if (-1 == sem_post(&sem))
+        errExit("sem_post failed");
+    }
+
+    return nullptr;
+  }
+}
+
+// see `sem` is global
+
+TEST(OsSem, sem_unnamed1)
+{
+  using namespace os_sem;
+
+  pthread_t t1, t2;
+  int loops, s;
+
+  // to be sure
+  glob = 0;
+
+  // loops = 10,000,000; 10M
+  loops = 10000000;
+
+  // init sem to be shared between threads
+  if (-1 == sem_init(&sem, 0, 1))
+    errExit("sem_init failed");
+
+  // create two threads
+  //
+  // int pthread_create
+  //  (pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
+
+  s = pthread_create(&t1, nullptr, threadFunc, &loops);
+  if (0 != s)
+    errExitEN(s, "pthread_create failed");
+
+  s = pthread_create(&t2, nullptr, threadFunc, &loops);
+  if (0 != s)
+    errExitEN(s, "pthread_create failed");
+
+  // wait for threads to finish
+  //
+  // int pthread_join( pthread_t thread, void **retval );
+
+  s = pthread_join(t1, nullptr);
+  if (0 != s)
+    errExitEN(s, "pthread_join failed");
+
+  s = pthread_join(t2, nullptr);
+  if (0 != s)
+    errExitEN(s, "pthread_join failed");
+
+  // since two threads runs
+  EXPECT_THAT(glob, (2 * loops));
+}
+
+// NOTE: see that `sem_local` is local to this function but not global. the
+// point is that as long as sem_t is accessable, it is okay to be defined and
+// inited in local scope.
+
+TEST(OsSem, sem_unnamed2)
+{
+  using namespace os_sem;
+
+  int loops, s;
+
+  sem_t sem_local;
+
+  // to be sure
+  glob = 0;
+
+  // loops = 10,000,000; 10M
+  loops = 10000000;
+
+  // init sem to be shared between threads
+  if (-1 == sem_init(&sem_local, 0, 1))
+    errExit("sem_init failed");
+
+  // create two threads and sue std::thread since it's more easy to pass args.
+
+  auto f = [&]() {
+    int count{0}, j{0};
+
+    for (j = 0; j < loops; j++)
+    {
+      // Returns 0 on success, or -1 on error
+      if (-1 == sem_wait(&sem_local))
+        errExit("sem_wait failed");
+
+      count = glob;
+      count++;
+      glob = count;
+
+      if (-1 == sem_post(&sem_local))
+        errExit("sem_post failed");
+    }
+  };
+
+  std::thread t1(f);
+  std::thread t2(f);
+
+  // wait for threads to finish
+
+  t1.join();
+  t2.join();
+
+  // since two threads runs
+  EXPECT_THAT(glob, (2 * loops));
+}
 
 // ={=========================================================================
 int main(int argc, char **argv)
-{
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  {
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

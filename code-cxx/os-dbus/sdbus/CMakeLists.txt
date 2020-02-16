@@ -18,6 +18,7 @@ enable_testing()
 # $ENV{FOO}
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
+set(GTEST_DIR "$ENV{HOME}/works/googletest/googletest" CACHE PATH "The path to the GoogleTest")
 
 
 # Include the directory source_dir in your project. This directory must contain
@@ -61,6 +62,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # directory...  The directories to be added to the list of include directories.
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ${GTEST_DIR}/include)
 
 
 # do not work
@@ -220,5 +222,7 @@ target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
 add_executable(sdbus_server_1 "sdbus_server_1.cpp")
 target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
 
-add_test(${PROJECT_NAME} ${PROJECT_NAME})
+# test_sdbus
+add_executable(test_sdbus "test_sdbus.cpp")
+target_link_libraries(test_sdbus gmock_main ${LIBS} "-lsystemd")
 

@@ -7,6 +7,7 @@
 
 #include "rlog.h"
 #include <cassert>
+#include <semaphore.h>
 
 // 25 secs
 #define DBUS_DEFAULT_TIMEOUT_USEC    (25 * 1000 * 1000)
@@ -35,6 +36,7 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
 {
   // take the message data. 
   // NOTE: access private member since both are in friendship
+  // TODO: need reset()?
 
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
@@ -45,7 +47,7 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
     assert(m_eventloop.onEventLoopThread());
 
     // construct sd_bus_message and get unique_ptr<sd_bus_messsage>
-    auto msg = messageData->toMessage_(m_bus);
+    auto msg = messageData->toMessage(m_bus);
     if (!msg)
       return false;
 
@@ -99,19 +101,67 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
   else
   {
     // otherwise queue it on the event loop thread
-    // return m_eventloop.invokeMethod(std::move(sendMessageLambda));
+    // NOTE: return m_eventloop.invokeMethod(std::move(sendMessageLambda));
     return m_eventloop.invokeMethod(sendMessageLambda);
   }
 }
 
-// 1. used from call() when it's called from other thread
+// private and static
+int methodCallCallback_(sd_bus_message *msg,
+                                 void *userData,
+                                 sd_bus_error *retError)
+{
+  DBusConnectionPrivate *self = reinterpret_cast<DBusConnectionPrivate *>(userData);
+
+  // shall be true since it's called back from event loop
+  assert(self->m_eventloop.onEventLoopThread());
+
+  // reply cookie
+  uint64_t cookie;
+  int r = sd_bus_message_get_reply_cookie(msg, &cookie);
+  if (r < 0)
+  {
+    logSysFatal(-r, "failed to get cookie of the reply");
+    return 0;
+  }
+
+  // this means that reply cookie is the same as cookie when sent.
+  auto it = self->m_callbacks.find(cookie);
+
+  // this case can really happen?
+  if (if == self->m_callbacks.end())
+  {
+    logFatal("failed to find callback for cookie %" PRIu64, cookie);
+    return 0;
+  }
+
+  auto f = it->second;
+  self->m_callbacks.erase(it);
+
+  if (f)
+    f(DBusMessage
+}
+
+// 1. the first use case.
+// used from ::call() when it's called on the other thread. the suppliced
+// callback has code to release `sem` and to get reply message.
 //
+// so send the `call` to eventloop if sd_message is constructed from the input
+// messge without errors. If errors occur while constructing, run the supplied
+// callabck to release `sem` and to pass back the error reply.
+
 bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
                                              const std::function<void(DBusMessage&&)> &callback,
                                              int msTimeout)
 {
-  // TODO:
-  std::function<void(DBusMessage&&)> errorCallback;
+  // convert ms timeout(10^3) to sd-bus timeout in micro sec(us) time(10^6)
+  uint64_t timeout;
+  if (msTimeout >= 0)
+    timeout = msTimeout * 1000;
+  else
+    timeout = DBUS_DEFAULT_TIMEOUT_USEC;
+
+  std::function<void(DBusMessage &&)> errorCallback;
 
   if (!m_eventloop.onEventLoopThread())
     errorCallback = callback;
@@ -121,14 +171,70 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
 
-  auto call = 
-    [this, messageData, callback, errorCallback, timeout]()
-    {
-      // must be false
-      assert(m_eventloop.onEventLoopThread());
+  auto call = [this, messageData, callback, errorCallback, timeout]() {
+    // must be false since it's called on the other thread
+    assert(m_eventloop.onEventLoopThread());
 
-      auto msg = messageData->toMessage(m_bus);
+    // construct the request message
+    auto msg = messageData->toMessage(m_bus);
+    if (!msg)
+    {
+      if (errorCallback)
+        errorCallback(DBusMessage(DBusMessage::ErrorType::Failed));
+
+      return false;
     }
+
+    // ok, the message is constructed and send it out
+    //
+    // int sd_bus_call_async(
+    //  sd_bus *bus,
+    //  sd_bus_slot **slot,
+    //  sd_bus_message *m,
+    //  sd_bus_message_handler_t callback,
+    //  void *userdata,
+    //  uint64_t usec);
+    int r = sd_bus_call_async(m_bus,
+                              nullptr,
+                              msg.get(),
+                              &DBusConnectionPrivate::methodCallCallback_,
+                              this,
+                              timeout);
+    if (r < 0)
+    {
+      logSysWarning(-rc, "dbus call failed");
+      if (errorCallback)
+        errorCallback(DBusMessage(DBusMessage::ErrorType::Failed));
+
+      return false;
+    }
+
+    uint64_t cookie = 0;
+    r = sd_bus_message_get_cookie(msg.get(), &cookie);
+    if (r < 0)
+    {
+      logSysWarning(-rc, "failed to get request message cookie");
+      if (errorCallback)
+        errorCallback(DBusMessage(DBusMessage::ErrorType::Failed));
+
+      return false;
+    }
+
+    // save the supplied callback
+    m_callbacks.emplace(cookie, callback);
+
+    return true;
+  } // call
+
+  // NOTE: really support this case??
+  // if (m_eventloop.onEventLoopThread())
+  // {
+  //   return call();
+  // }
+  // else
+  {
+    return m_eventloop.invokeMethod(std::move(call));
+  }
 }
 
 /* ={--------------------------------------------------------------------------
@@ -289,9 +395,9 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   {
     logWarning("trying to call with non-method call message");
 
-    // NOTE: see use of `enum class`
     // DBusMessage(DBusMessage::Failed);
-    return DBusMessage(ErrorType::Failed);
+    // when use `enum class`
+    return DBusMessage(DBusMessage::ErrorType::Failed);
   }
 
   // can access private member, m_bus, since they are in friendship.
@@ -299,7 +405,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   if (!priv || !priv->m_bus)
   {
     logWarning("sd_bus not connected");
-    return DBusMessage(ErrorType::NoNetwork);
+    return DBusMessage(DBusMessage::ErrorType::NoNetwork);
   }
 
   // called from the eventloop thread
@@ -310,38 +416,17 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     // construct `request` sd_bus_message from the given message and returns
     // unique_ptr
 
-    auto msg = message.m_private->toMessage_(priv->m_bus);
+    auto msg = message.m_private->toMessage(priv->m_bus);
     if (!msg)
     {
       logWarning("failed to make sd_bus message from DBusMessage");
-      return DBusMessage(ErrorType::Failed);
+      return DBusMessage(DBusMessage::ErrorType::Failed);
     }
-
-    // NOTE: there is no document for these calls but can see them in header. So
-    // they are sync call:
-    //
-    // This means that any synchronous remote operation (such as sd_bus_call(3),
-    // sd_bus_add_match(3) or sd_bus_request_name(3)),
-    //
-    // int sd_bus_call(
-    //  sd_bus *bus, 
-    //  sd_bus_message *m, 
-    //  uint64_t usec,
-    //  sd_bus_error *ret_error, 
-    //  sd_bus_message **reply); 
-    //
-    // int sd_bus_call_async(
-    //  sd_bus *bus, 
-    //  sd_bus_slot **slot, 
-    //  sd_bus_message *m,
-    //  sd_bus_message_handler_t callback, 
-    //  void *userdata, 
-    //  uint64_t usec);
 
     sd_bus_error error;
     memset(&error, 0, sizeof(error));
 
-    // convert ms timeout to sd-bus timeout in micro sec(us)
+    // convert ms timeout(10^3) to sd-bus timeout in micro sec(us) time(10^6)
     uint64_t timeout{};
     if (msTimeout >= 0)
       timeout = msTimeout * 1000;
@@ -383,20 +468,17 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
   sem_t sem;
 
-  // NOTE: shared between threads
   sem_init(&sem, 0, 0);
 
-  std::function<void(DBusMessage)> f = 
-    [&](DBusMessage &&reply)
-    {
-      // must be false since expects it runs on other thread
-      assert(priv->m_eventloop.onEventLoopThread());
+  std::function<void(DBusMessage)> f = [&](DBusMessage &&reply) {
+    // must be false since expects it runs on other thread
+    assert(priv->m_eventloop.onEventLoopThread());
 
-      replyMessage = std::move(reply);
+    replyMessage = std::move(reply);
 
-      if (0 != sem_post(&sem))
-        logSysFatal(errno, "failed to post semaphore");
-    };
+    if (0 != sem_post(&sem))
+      logSysFatal(errno, "failed to post semaphore");
+  };
 
   // make the dbus call
   if (!m_private->callWithCallback(std::move(message), f, msTimeout))

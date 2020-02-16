@@ -16,15 +16,20 @@ private:
   EventLoop m_eventloop;
   sd_bus *m_bus;
 
-  // TODO: callback supports
-  // std::map<uint64_t, std::function<void(DBusMessage &&)>> m_callbacks;
+  // pair<message cookie, callback>
+  std::map<uint64_t, std::function<void(DBusMessage &&)>> m_callbacks;
+
+private:
+  static int methodCallCallback_(sd_bus_message *msg,
+                                 void *userData,
+                                 sd_bus_error *retError);
 
 public:
   DBusConnectionPrivate(const EventLoop &eventloop, sd_bus *bus);
   ~DBusConnectionPrivate();
 
-  // send a message to dbus and uses corresponding sd_bus_send* call depending
-  // on message type.
+  // send a message,signal or call, to dbus and uses corresponding sd_bus_send*
+  // call depending on message type.
   //
   // runs either on calling thread or event loop thread
 

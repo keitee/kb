@@ -49756,6 +49756,9 @@ it should be used consistently for both compilation and linking.
 *os-thread-create*
 #include <pthread.h>
 
+int pthread_create
+  (pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
+
 return 0 if okay, positive Exxx on error which is different from most system
 calls. 
 
@@ -49772,9 +49775,6 @@ If attr is NULL, uses default values.
 
 EAGAIN : when cannot create a new thread because exceeded the limit on the
 number of threads
-
-int pthread_create
-  (pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
 
 <pthread-exit>
@@ -49807,17 +49807,17 @@ int pthread_create
 void pthread_exit(void *retval);
 
 
-{pthread-join} 
-// return 0 if okay, positive Exxx on error. 
-//
-// To 'wait' for a given thread to terminate. If that thread has already
-// terminated, pthread_join() returns 'immediately'.
-//
-// If retval is a non-NULL pointer, then it receives a copy of the terminated
-// thread's return value - that is, the value that was specified when the
-// thread performed a return or called pthread_exit().
-
+*os-pthread-join* 
 int pthread_join( pthread_t thread, void **retval );
+return 0 if okay, positive Exxx on error. 
+
+To wait for a given thread to terminate. If that thread has already
+terminated, pthread_join() returns immediately.
+
+If `retval` is a non-NULL pointer, then it receives a copy of the terminated
+thread's return value; that is, the value that was specified when the thread
+performed a return or called pthread_exit().
+
 
 <join-restriction>
 Calling pthread_join() for a thread ID that has been previously joined can
@@ -49852,7 +49852,7 @@ To put things another way, pthread_detach() simply controls what happens after a
 thread terminates, not how or when it terminates.
 
 
-{zombie-thread} *zombie-process*
+{zombie-thread} *os-process-zombie-process*
 If a thread is not detached, then we must join with it using pthread_join().
 If not, then, when the thread terminates, it produces the thread equivalent of
 a `zombie-process`. Aside from wasting system resources, if enough thread
@@ -56008,17 +56008,20 @@ made to decrease the value of the semaphore below 0, then the kernel blocks the
 operation until the semaphore's value increases to a level that permits the
 operation to be performed. 
 
-The meaning of a semaphore is determined by the application. A process
-decrements a semaphore from say, 1 to 0 in order to reserve exclusive access to
-some shared resource, and after completing work on the resource, increments the
-semaphore so that the shared resource is released for use by some other process.
-The use of a `binary semaphore` - a semaphore whose value is limited to 0 or
-1-is common.
+The meaning of a semaphore is determined by the application. 
+
+A process decrements a semaphore from say, 1 to 0 in order to reserve
+exclusive access to some shared resource, and after completing work on the
+resource, increments the semaphore so that the shared resource is released for
+use by some other process. The use of a `binary semaphore` - a semaphore whose
+value is limited to 0 or 1-is common. *os-mutex*
 
 However, an application that deals with multiple instances of a shared resource
 would employ a semaphore whose maximum value equals the number of shared
-resources. Linux provides both System V semaphores and POSIX semaphores, which
-have essentially similar functionality.
+resources. 
+
+Linux provides both System V semaphores and POSIX semaphores, which have
+essentially similar functionality.
 
 1. Setting the semaphore to an absolute value;
 2. Adding a number to the current value of the semaphore;            // give
@@ -56030,7 +56033,7 @@ semaphore has no meaning in and of itself. Its meaning is determined only by the
 associations given to it by the processes using the semaphore.
 
 However, System V semaphores are rendered unusually complex by the fact that
-they are allocated in groups called semaphore sets. So move to POSIX semaphore.
+they are allocated in groups called semaphore sets. `So move to POSIX semaphore.`
 
 
 *os-sem-posix*
@@ -56040,14 +56043,15 @@ POSIX semaphores operate in a manner similar to System V semaphores;
 
 that is, a POSIX semaphore is an integer whose value is not permitted to fall
   below 0. If a process attempts to decrease the value of a semaphore below
-  0(take), then, depending on the function used, the call either blocks or fails
-  with an error indicating that the operation was not currently possible.
+  0(take), then, depending on the function used, the call either blocks or
+  fails with an error indicating that the operation was not currently
+  possible.
 
 
 NOTE *os-linux*
-Some systems don't provide a full implementation of POSIX semaphores. A typical
-restriction is that only unnamed thread-shared semaphores are supported. That
-was the situation on Linux 2.4; 
+Some systems don't provide a full implementation of POSIX semaphores. A
+typical restriction is that only unnamed thread-shared semaphores are
+supported. That was the situation on Linux 2.4.
 
 With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX
 semaphores is available.
@@ -56114,18 +56118,28 @@ interface to the
 
 
 *os-sem-unnamed*
+53.4 Unnamed Semaphores
+
+Unnamed semaphores (also known as memory-based semaphores) are variables of
+type sem_t that are stored in memory allocated by the application. The
+semaphore is made available to the processes or threads that use it by placing
+it in an area of memory that they share.
 
 This type of semaphore doesn't have a name; instead, it resides at an
-`agreed-upon location in memory` Unnamed semaphores can be shared between
-processes or between a group of threads. When shared between processes, the
-semaphore must reside in a region of (System V, POSIX, or mmap()) shared memory.
-When shared between threads, the semaphore may reside in an area of memory
-shared by the threads (e.g., on the heap or in a global variable).
+`agreed-upon location in memory` 
 
+Unnamed semaphores can be shared between processes or between a group of
+threads. 
+
+  When shared between processes, the semaphore must reside in a region of
+  (System V, POSIX, or mmap()) shared memory.  
+
+  When shared between threads, the semaphore may reside in an area of memory
+  shared by the threads (e.g., on the heap or in a global variable).
 
 On Linux, they are created as small POSIX shared memory objects with names of
-the form sem.name, in a dedicated tmpfs file system (Section 14.10) mounted
-under the directory /dev/shm. This file system has `kernel persistence`-the
+the form `sem.name`, in a dedicated tmpfs file system (Section 14.10) mounted
+under the directory `/dev/shm`. This file system has `kernel persistence` - the
 semaphore objects that it contains will persist, even if no process currently
 has them open, but they will be lost if the system is shut down.
 
@@ -56136,13 +56150,47 @@ so on that are used to operate on named semaphores.
 
 `In addition, two further functions are required`:
 
+*os-sem-init*
 The `sem_init()` function initializes a semaphore and informs the system of
 whether the semaphore will be shared between processes or between the threads of
 a single process.
 
-The sem_destroy(sem) function destroys a semaphore. These functions should not
-be used with named semaphores.
+#include <semaphore.h>
+int sem_init(sem_t *sem, int pshared, unsigned int value);
+Returns 0 on success, or -1 on error
 
+The pshared argument indicates whether the semaphore is to be shared between
+threads or between processes.
+
+
+  `If pshared is 0, then the semaphore is to be shared between the threads` of
+  the calling process. In this case, sem is typically specified as the address
+  of `either a global variable or a variable allocated on the heap.` A
+  thread-shared semaphore has process persistence; it is destroyed when the
+  process terminates.
+
+  If pshared is nonzero, then the semaphore is to be shared between processes.
+  In this case, sem must be the address of a location in a region of shared
+  memory (a POSIX shared memory object, a shared mapping created using mmap(),
+      or a System V shared memory segment). The semaphore persists as long as
+  the shared memory in which it resides. (The shared memory regions created by
+      most of these techniques have kernel persistence. The exception is
+      shared anonymous mappings, which persist only as long as at least one
+      process maintains the mapping.) Since a child produced via fork()
+  inherits its parent’s memory mappings, process-shared semaphores are
+  inherited by the child of a fork(), and the parent and child can use these
+  semaphores to synchronize their actions.
+
+
+53.4.2 Destroying an Unnamed Semaphore
+
+The sem_destroy() function destroys the semaphore sem, which must be an
+unnamed semaphore that was previously initialized using sem_init(). It is safe
+to destroy a semaphore only if no processes or threads are waiting on it.
+
+#include <semaphore.h>
+int sem_destroy(sem_t *sem);
+Returns 0 on success, or -1 on error
 
 cases when useful to use unnamed:
 
@@ -56161,6 +56209,32 @@ o If we are building a dynamic data structure (e.g., a binary tree), each of
   each item would require us to design a convention for generating a (unique)
   semaphore name for each item and to manage those names (e.g., unlinking them
   when they are no longer required). note: real example? useful?
+
+
+53.5 Comparisons with Other Synchronization Techniques
+
+POSIX semaphores versus Pthreads mutexes
+
+POSIX semaphores and Pthreads mutexes can both be used to synchronize the
+actions of threads within the same process, and their performance is similar. 
+
+However, mutexes are usually preferable, because the ownership property of
+mutexes enforces good structuring of code (only the thread that locks a mutex
+    can unlock it). By contrast, one thread can increment a semaphore that was
+decremented by another thread. This flexibility can lead to poorly structured
+synchronization designs.  (For this reason, semaphores are sometimes referred
+    to as the “gotos” of concurrent programming.)
+
+*os-signal*
+There is one circumstance in which mutexes can’t be used in a multithreaded
+application and semaphores may therefore be preferable. Because it is
+async-signal-safe (see Table 21-1, on page 426), the sem_post() function can
+be used from within a signal handler to synchronize with another thread. This
+is not possible with mutexes, because the Pthreads functions for operating on
+mutexes are not async-signal-safe. However, because it is usually preferable
+to deal with asynchronous sig- nals by accepting them using sigwaitinfo() (or
+    similar), rather than using signal handlers (see Section 33.2.4), this
+advantage of semaphores over mutexes is seldom required.
 
 
 ={============================================================================

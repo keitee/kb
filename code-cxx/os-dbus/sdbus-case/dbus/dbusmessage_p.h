@@ -1,25 +1,35 @@
 #ifndef DBUSMESSAGE_P_H
 #define DBUSMESSAGE_P_H
 
-#include "dbusconnection_p.h"
-#include "dbusfiledescriptor.h"
-#include "dbusmessage.h"
-
 #include <list>
 #include <map>
 #include <memory>
 #include <string>
 
+// NOTE: can be removed by using forward declaration
+#include <systemd/sd-bus.h>
+
+#include "dbusfiledescriptor.h"
+
 // this class is to encapsulate sd_bus_error or sd_bus_message which are all
-// dbus message after all. 
+// dbus message after all.
 //
-// it provides conversion from or to them.
+// it provides conversion from or to them but limited to support types that are
+// in Arguments. For example, array type is not supported
+
+// NOTE: can use forward declaration for friendship.
+// #include "dbusconnection_p.h"
+// #include "dbusmessage.h"
+class DBusConnectionPrivate;
+class DBusConnection;
+class DBusMessage;
 
 class DBusMessagePrivate
 {
 private:
   friend DBusMessage;
   friend DBusConnectionPrivate;
+  friend DBusConnection;
 
   std::string m_path;
   std::string m_interface;
@@ -44,8 +54,9 @@ private:
   using sd_bus_message_ptr =
     std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
 
-  // NOTE: was public but make it private
-  sd_bus_message_ptr toMessage_(sd_bus *bus) const;
+  // NOTE: was public but make it private and is used by others directrly. shall
+  // be used through DBusMessage?
+  sd_bus_message_ptr toMessage(sd_bus *bus) const;
 
 private:
   struct Argument
@@ -143,12 +154,15 @@ private:
   std::list<Argument> m_args;
 
 public:
+
+  // used by DBusMessage
   explicit DBusMessagePrivate(DBusMessage::MessageType type,
                               const std::string &service,
                               const std::string &path,
                               const std::string &interface,
                               const std::string &method);
 
+  // the rest are used by DBusConection
   explicit DBusMessagePrivate(DBusMessage::ErrorType error,
                               const char *message);
 

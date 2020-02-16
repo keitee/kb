@@ -36,16 +36,6 @@ followed by the formatted output specified in the argument list.
 
 void errMsg(const char *format, ...);
 
-// #ifdef __GNUC__
-//     /* This macro stops 'gcc -Wall' complaining that "control reaches
-//        end of non-void function" if we use the following functions to
-//        terminate main() or some other non-void function. */
-//
-// #define NORETURN __attribute__ ((__noreturn__))
-// #else
-// #define NORETURN
-// #endif
-
 /*
 
 Display error message including `errno` diagnostic, and terminate the process
@@ -116,9 +106,25 @@ if (s != 0)
 
 Mainly, we use errExitEN() in programs that employ the POSIX threads API.
 
+So the point is that "errExitEN" do not use errno which is a function call in
+threaded app and use args in a call. Hence, efficient.
+
+
 */
 void errExitEN(int errnum, const char *format, ...);
 
+// org:
+//
+// #ifdef __GNUC__
+//     /* This macro stops 'gcc -Wall' complaining that "control reaches
+//        end of non-void function" if we use the following functions to
+//        terminate main() or some other non-void function. */
+//
+// #define NORETURN __attribute__ ((__noreturn__))
+// #else
+// #define NORETURN
+// #endif
+//
 // void errExit(const char *format, ...) NORETURN ;
 // void errExitEN(int errnum, const char *format, ...) NORETURN ;
 // void err_exit(const char *format, ...) NORETURN ;

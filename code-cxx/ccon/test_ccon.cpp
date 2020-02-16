@@ -1839,6 +1839,7 @@ TEST(CConCondition, ProducerAndConsumer_LPI_CondVar)
 
 namespace cxx_condition
 {
+  // to have all in a single object
   struct ConditionWait
   {
     std::queue<int> q;
@@ -1847,6 +1848,7 @@ namespace cxx_condition
     bool thread_running{true};
   };
 
+  // NOTE: why not lock on m?
   void push_items_and_notify(ConditionWait &cw)
   {
     // expect nothing happens since there is no item in the q since q is empty
@@ -1888,7 +1890,7 @@ namespace cxx_condition
 
 // to see how wait() works
 
-TEST(CConCondition, Wait)
+TEST(CConCondition, condition_Wait)
 {
   using namespace cxx_condition;
 

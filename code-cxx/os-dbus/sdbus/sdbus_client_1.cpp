@@ -146,7 +146,7 @@ int main(int argc, char *argvp[])
   r = sd_bus_message_read(m, "o", &path);
   if (r < 0)
   {
-    fprintf(stderr, "failed to parse response: %s\n", strerror(-r));
+    fprintf(stderr, "failed to parse reply message: %s\n", strerror(-r));
     goto finish;
   }
 

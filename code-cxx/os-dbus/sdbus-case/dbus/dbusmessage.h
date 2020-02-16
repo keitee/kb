@@ -12,6 +12,7 @@ class DBusMessage
 {
 private:
   friend class DBusConnectionPrivate;
+  friend class DBusConnection;
 
   std::shared_ptr<DBusMessagePrivate> m_private;
 

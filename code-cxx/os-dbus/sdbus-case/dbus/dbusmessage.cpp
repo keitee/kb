@@ -3,6 +3,7 @@
 #include "rlog.h"
 
 #include <cmath> // std::nan
+#include <systemd/sd-bus.h>
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -103,7 +104,6 @@ char DBusMessagePrivate::Argument::dbusType() const
 /* ={--------------------------------------------------------------------------
  @brief :
   DBusMessagePrivate
-*/
 
 const std::map<DBusMessage::ErrorType, std::string>
   DBusMessagePrivate::m_errorNames = {
@@ -140,6 +140,58 @@ const std::map<DBusMessage::ErrorType, std::string>
     {DBusMessage::InvalidService, "org.qtproject.QtDBus.Error.InvalidService"},
     {DBusMessage::InvalidMember, "org.qtproject.QtDBus.Error.InvalidMember"},
     {DBusMessage::InvalidInterface,
+     "org.qtproject.QtDBus.Error.InvalidInterface"}};
+*/
+
+// when use `enum class`
+const std::map<DBusMessage::ErrorType, std::string>
+  DBusMessagePrivate::m_errorNames = {
+    {DBusMessage::ErrorType::NoError, ""},
+    {DBusMessage::ErrorType::Other, ""},
+    {DBusMessage::ErrorType::Failed, "org.freedesktop.DBus.Error.Failed"},
+    {DBusMessage::ErrorType::NoMemory, "org.freedesktop.DBus.Error.NoMemory"},
+    {DBusMessage::ErrorType::ServiceUnknown,
+     "org.freedesktop.DBus.Error.ServiceUnknown"},
+    {DBusMessage::ErrorType::NoReply, "org.freedesktop.DBus.Error.NoReply"},
+    {DBusMessage::ErrorType::BadAddress,
+     "org.freedesktop.DBus.Error.BadAddress"},
+    {DBusMessage::ErrorType::NotSupported,
+     "org.freedesktop.DBus.Error.NotSupported"},
+    {DBusMessage::ErrorType::LimitsExceeded,
+     "org.freedesktop.DBus.Error.LimitsExceeded"},
+    {DBusMessage::ErrorType::AccessDenied,
+     "org.freedesktop.DBus.Error.AccessDenied"},
+    {DBusMessage::ErrorType::NoServer, "org.freedesktop.DBus.Error.NoServer"},
+    {DBusMessage::ErrorType::Timeout, "org.freedesktop.DBus.Error.Timeout"},
+    {DBusMessage::ErrorType::NoNetwork, "org.freedesktop.DBus.Error.NoNetwork"},
+    {DBusMessage::ErrorType::AddressInUse,
+     "org.freedesktop.DBus.Error.AddressInUse"},
+    {DBusMessage::ErrorType::Disconnected,
+     "org.freedesktop.DBus.Error.Disconnected"},
+    {DBusMessage::ErrorType::InvalidArgs,
+     "org.freedesktop.DBus.Error.InvalidArgs"},
+    {DBusMessage::ErrorType::UnknownMethod,
+     "org.freedesktop.DBus.Error.UnknownMethod"},
+    {DBusMessage::ErrorType::TimedOut, "org.freedesktop.DBus.Error.TimedOut"},
+    {DBusMessage::ErrorType::InvalidSignature,
+     "org.freedesktop.DBus.Error.InvalidSignature"},
+    {DBusMessage::ErrorType::UnknownInterface,
+     "org.freedesktop.DBus.Error.UnknownInterface"},
+    {DBusMessage::ErrorType::UnknownObject,
+     "org.freedesktop.DBus.Error.UnknownObject"},
+    {DBusMessage::ErrorType::UnknownProperty,
+     "org.freedesktop.DBus.Error.UnknownProperty"},
+    {DBusMessage::ErrorType::PropertyReadOnly,
+     "org.freedesktop.DBus.Error.PropertyReadOnly"},
+    {DBusMessage::ErrorType::InternalError,
+     "org.qtproject.QtDBus.Error.InternalError"},
+    {DBusMessage::ErrorType::InvalidObjectPath,
+     "org.qtproject.QtDBus.Error.InvalidObjectPath"},
+    {DBusMessage::ErrorType::InvalidService,
+     "org.qtproject.QtDBus.Error.InvalidService"},
+    {DBusMessage::ErrorType::InvalidMember,
+     "org.qtproject.QtDBus.Error.InvalidMember"},
+    {DBusMessage::ErrorType::InvalidInterface,
      "org.qtproject.QtDBus.Error.InvalidInterface"}};
 
 DBusMessagePrivate::DBusMessagePrivate(DBusMessage::MessageType type,
@@ -287,11 +339,11 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
 //         SD_BUS_TYPE_UNIX_FD          = 'h',
 //         SD_BUS_TYPE_ARRAY            = 'a',
 //         SD_BUS_TYPE_VARIANT          = 'v',
-//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in
-//         signatures */ SD_BUS_TYPE_STRUCT_BEGIN     = '(',
+//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in signatures */ 
+//         SD_BUS_TYPE_STRUCT_BEGIN     = '(',
 //         SD_BUS_TYPE_STRUCT_END       = ')',
-//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in
-//         signatures */ SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
+//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in signatures */ 
+//         SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
 //         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
 // };
 
@@ -395,7 +447,7 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
       }
     } // switch
 
-    // NOTE: single place to handle failure for all cases
+    // single place to handle failure for all cases
     if (rc < 0)
     {
       logSysWarning(-rc, "failed to read or skip message arguments");
@@ -406,7 +458,7 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 
 // construct a sd_bus_message for either a method call or signal
 DBusMessagePrivate::sd_bus_message_ptr
-DBusMessagePrivate::toMessage_(sd_bus *bus) const
+DBusMessagePrivate::toMessage(sd_bus *bus) const
 {
   int rc{};
 
@@ -502,7 +554,8 @@ DBusMessagePrivate::toMessage_(sd_bus *bus) const
  DBusMessage
 */
 
-// construct an invalid DBusMessage object
+// construct an invalid DBusMessage object. NOTE: shall make it private or
+// deleted?
 DBusMessage::DBusMessage()
     : m_private(nullptr)
 {}

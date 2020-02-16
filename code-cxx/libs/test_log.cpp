@@ -64,7 +64,7 @@ ERROR [ENOENT No such file or directory], this is error message from errExit
 
 */
 
-TEST(LPILog, useLog)
+TEST(Log, lpi_errMsg)
 {
   {
     int value{10};
@@ -78,6 +78,7 @@ TEST(LPILog, useLog)
               value);
   }
 
+  // shows errno use
   {
     int fd;
 
@@ -89,7 +90,7 @@ TEST(LPILog, useLog)
   }
 }
 
-TEST(LPILog, useLogExit)
+TEST(Log, lpi_errExit)
 {
   errMsg("this is error message from errExit");
 
@@ -100,6 +101,7 @@ TEST(LPILog, useLogExit)
 /*
 
 1. simple log do not supports `errno`
+2. simple log provides LOG_xxx defines
 
 [ RUN      ] SimpleLog.useLog
 LOG| F:test_log.cxx C:virtual void SimpleLog_useLog_Test::TestBody() L:00099 :
@@ -114,7 +116,7 @@ LOG| F:test_log.cxx C:void func3() L:00108 : this is func3()
 
 */
 
-TEST(SimpleLog, useLog)
+TEST(Log, simple_useMessage)
 {
   int value{10};
   std::string message{"errMsg"};
@@ -143,7 +145,7 @@ void func1()
   func2();
 }
 
-TEST(SimpleLog, showCorrectLineNumbers)
+TEST(Log, simple_showCorrectLineNumbers)
 {
   func1();
 }
@@ -172,7 +174,7 @@ TEST(SimpleLog, showCorrectLineNumbers)
 // 0001200307.527447 ERR: < M:test_log.cxx F:TestBody L:181 > failed to open file (2-No such file or directory)
 // [       OK ] Rlog.useCategory (0 ms)
 
-TEST(Rlog, useCategory)
+TEST(Log, rlog_useCategory)
 {
   {
     int fd;
@@ -183,6 +185,19 @@ TEST(Rlog, useCategory)
     if (fd == -1)
     {
       logSysError(errno, "failed to open file");
+    }
+  }
+
+  // use macro
+  {
+    int fd;
+
+    errno = 0;
+
+    fd = open("startup", O_RDONLY);
+    if (fd == -1)
+    {
+      LOG_SERR(errno, "failed to open file");
     }
   }
 }
