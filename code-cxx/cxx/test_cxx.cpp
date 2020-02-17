@@ -4915,32 +4915,71 @@ TEST(CxxFunctionObject, LambdaCompare)
 
 namespace cxx_smart_pointer
 {
-  class SmartFoo
+  // private ctor
+  class SmartFoo1
   {
   private:
     std::string m_name;
 
   private:
-    explicit SmartFoo()
+    explicit SmartFoo1()
     {
-      std::cout << "SmartFoo()" << std::endl;
-      m_name = "smart foo";
+      std::cout << "SmartFoo1()" << std::endl;
+      m_name = "foo1";
+    }
+
+    explicit SmartFoo1(const std::string name)
+        : m_name(name)
+    {
+      std::cout << "SmartFoo1(std::string)" << std::endl;
     }
 
   public:
-    ~SmartFoo() = default;
+    ~SmartFoo1() = default;
 
-    static std::shared_ptr<SmartFoo> getFoo();
+    static std::shared_ptr<SmartFoo1> getFoo1();
+    static std::shared_ptr<SmartFoo1> getFoo2();
   };
 
-  std::shared_ptr<SmartFoo> SmartFoo::getFoo()
+  std::shared_ptr<SmartFoo1> SmartFoo1::getFoo1()
   {
-    std::cout << "return smart pointer" << std::endl;
-    return std::shared_ptr<SmartFoo>();
+    return std::shared_ptr<SmartFoo1>();
   }
+
+  std::shared_ptr<SmartFoo1> SmartFoo1::getFoo2()
+  {
+    // error: ‘cxx_smart_pointer::SmartFoo1::SmartFoo1()’ is private within this context
+    // return std::make_shared<SmartFoo1>();
+
+    // but this works
+    return std::shared_ptr<SmartFoo1>(new SmartFoo1);
+  }
+
+  // public ctor
+  class SmartFoo2
+  {
+  private:
+    std::string m_name;
+
+  public:
+    explicit SmartFoo2()
+    {
+      std::cout << "SmartFoo2()" << std::endl;
+      m_name = "smart foo";
+    }
+
+    explicit SmartFoo2(const std::string name)
+        : m_name(name)
+    {
+      std::cout << "SmartFoo2(std::string)" << std::endl;
+    }
+
+  public:
+    ~SmartFoo2() = default;
+  };
 } // namespace cxx_smart_pointer
 
-TEST(CxxSmartPointer, construct)
+TEST(CxxSmartPointer, sp_construct)
 {
   using namespace cxx_smart_pointer;
 
@@ -4961,8 +5000,29 @@ TEST(CxxSmartPointer, construct)
   //   shared_ptr<string> pNico = new string("nico");
   // }
 
+  // this is *cxx-sp-ctor-empty* and do not create SmartFoo1. sp is null
   {
-    std::shared_ptr<SmartFoo> foo = std::shared_ptr<SmartFoo>(); // OK
+    std::shared_ptr<SmartFoo1> foo = std::shared_ptr<SmartFoo1>(); // OK
+    EXPECT_THAT(foo, nullptr);
+  }
+
+  // cxx-error:
+  // ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
+  // SmartFoo foo;
+  //
+  // new_allocator.h:120:4:
+  // error: ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
+  // std::shared_ptr<SmartFoo> sp = std::make_shared<SmartFoo>();
+  // {
+  //   std::shared_ptr<SmartFoo1> foo = std::make_shared<SmartFoo1>(); // OK
+  // }
+
+  // cases that have public ctors
+  {
+    std::shared_ptr<SmartFoo2> foo = std::make_shared<SmartFoo2>(); // OK
+  }
+  {
+    std::shared_ptr<SmartFoo2> foo = std::make_shared<SmartFoo2>("foo2"); // OK
   }
 
   // to see how use std::string's constructors
@@ -4988,24 +5048,20 @@ TEST(CxxSmartPointer, construct)
   }
 
   {
-    // cxx-error:
-    // ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
-    // SmartFoo foo;
-
-    // new_allocator.h:120:4:
-    // error: ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
-    // std::shared_ptr<SmartFoo> sp = std::make_shared<SmartFoo>();
-
-    // Ok.
     // 1. must be static since cannot get object to call getFoo().
     // 2. so SmartFoo can only be created from this
     // 3. cxx-move
 
-    std::shared_ptr<SmartFoo> sp = SmartFoo::getFoo();
+    // but getFoo1 is wrong implementation
+    std::shared_ptr<SmartFoo1> sp1 = SmartFoo1::getFoo1();
+    EXPECT_THAT(sp1, nullptr);
+
+    std::shared_ptr<SmartFoo1> sp2 = SmartFoo1::getFoo2();
+    EXPECT_THAT(sp2, Not(nullptr));
   }
 }
 
-TEST(CxxSmartPointerShared, copy)
+TEST(CxxSmartPointer, sp_shared_copy)
 {
   auto p = make_shared<int>(42);
 
@@ -5033,7 +5089,7 @@ TEST(CxxSmartPointerShared, copy)
 }
 
 // common for shared and unique
-TEST(CxxSmartPointer, reset)
+TEST(CxxSmartPointer, sp_reset)
 {
   // 1. sp, shared structure, and referenced object are *separate* entity.
   //
@@ -5116,7 +5172,7 @@ TEST(CxxSmartPointer, reset)
 
 // CXXSLR 5.2 Smart Pointers
 
-TEST(CxxSmartPointerShared, example1)
+TEST(CxxSmartPointer, sp_shared_example1)
 {
   std::shared_ptr<std::string> pNico{new std::string("nico")};
   std::shared_ptr<std::string> pJutta{new std::string("jutta")};
@@ -5159,7 +5215,7 @@ TEST(CxxSmartPointerShared, example1)
 }
 
 // common
-TEST(CxxSmartPointer, bool)
+TEST(CxxSmartPointer, sp_bool)
 {
   {
     auto p = make_shared<int>(42);
@@ -5236,7 +5292,7 @@ TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
 
 */
 
-TEST(CxxSmartPointer, unique_Construct)
+TEST(CxxSmartPointer, sp_unique_Construct)
 {
   {
     std::unique_ptr<std::string> up(new std::string);
@@ -5288,7 +5344,7 @@ namespace cxx_sp_shared
   };
 } // namespace cxx_sp_shared
 
-TEST(CxxSmartPointer, unique_moveAssign)
+TEST(CxxSmartPointer, sp_unique_moveAssign)
 {
   // Foo ctor(1)
   // Foo ctor(2)
@@ -5377,7 +5433,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(CxxSmartPointer, unique_SinkSource)
+TEST(CxxSmartPointer, sp_unique_SinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -5466,7 +5522,7 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
-TEST(CxxSmartPointer, all_Deleter)
+TEST(CxxSmartPointer, sp_Deleter)
 {
   using namespace cxx_sp_delete;
 
@@ -5558,7 +5614,7 @@ TEST(CxxSmartPointer, all_Deleter)
 // deleting Nicolai
 // deleting Jutta
 
-TEST(CxxSmartPointer, DeleteTime)
+TEST(CxxSmartPointer, sp_DeleteTime)
 {
   using namespace cxx_sp_delete;
 
@@ -5624,7 +5680,7 @@ TEST(CxxSmartPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(CxxSmartPointer, unique_DeleteReleaseReset)
+TEST(CxxSmartPointer, sp_unique_DeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -5682,7 +5738,7 @@ namespace cxx_sp_use_count
 
 // Is use_count() reliable?
 
-TEST(CxxSmartPointer, all_UseCount)
+TEST(CxxSmartPointer, sp_UseCount)
 {
   using namespace cxx_sp_use_count;
 

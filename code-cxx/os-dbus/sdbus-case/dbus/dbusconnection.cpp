@@ -106,8 +106,8 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
   }
 }
 
-// private and static
-int methodCallCallback_(sd_bus_message *msg,
+// private and static and called back with reply
+int methodCallCallback_(sd_bus_message *reply,
                                  void *userData,
                                  sd_bus_error *retError)
 {
@@ -118,7 +118,7 @@ int methodCallCallback_(sd_bus_message *msg,
 
   // reply cookie
   uint64_t cookie;
-  int r = sd_bus_message_get_reply_cookie(msg, &cookie);
+  int r = sd_bus_message_get_reply_cookie(reply, &cookie);
   if (r < 0)
   {
     logSysFatal(-r, "failed to get cookie of the reply");
@@ -139,7 +139,10 @@ int methodCallCallback_(sd_bus_message *msg,
   self->m_callbacks.erase(it);
 
   if (f)
-    f(DBusMessage
+    f(DBusMessage(std::make_unique<DBusMessagePrivate>(reply)));
+
+  // done. NOTE: any documentation about return value of handler?
+  return 0;
 }
 
 // 1. the first use case.
@@ -167,7 +170,8 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
     errorCallback = callback;
 
   // take the message data
-  // TODO: why need reset()?
+  // NOTE: need reset()? since DBusMessagePrivate do not have move-assign, do it
+  // manually
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
 
@@ -397,6 +401,8 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
     // DBusMessage(DBusMessage::Failed);
     // when use `enum class`
+
+    // TODO: NO ctor???
     return DBusMessage(DBusMessage::ErrorType::Failed);
   }
 
@@ -433,7 +439,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     else
       timeout = DBUS_DEFAULT_TIMEOUT_USEC;
 
-    // make the call
+    // make the sync call and get reply
     sd_bus_message *reply{nullptr};
     int rc = sd_bus_call(priv->m_bus, msg.get(), timeout, &error, &reply);
 
