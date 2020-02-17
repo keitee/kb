@@ -582,12 +582,14 @@ DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
 //      template<typename _Tp1, typename _Del>
 //        shared_ptr(std::unique_ptr<_Tp1, _Del>&& __r)
 //        : __shared_ptr<_Tp>(std::move(__r)) { }
-//
-// 2. use private ctor since it's friend to DBusMessagePrivate
 
 DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
     : m_private(std::move(rhs))
 //    : m_private(rhs)
+{}
+
+DBusMessage::DBusMessage(ErrorType error, const char *message)
+  : m_private(std::make_unique<DBusMessagePrivate>(error, message))
 {}
 
 // true if the message is valid

@@ -106,10 +106,10 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
   }
 }
 
-// private and static and called back with reply
-int methodCallCallback_(sd_bus_message *reply,
-                                 void *userData,
-                                 sd_bus_error *retError)
+// private and static and this is handler called back with reply by event loop
+int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
+                                               void *userData,
+                                               sd_bus_error *retError)
 {
   DBusConnectionPrivate *self = reinterpret_cast<DBusConnectionPrivate *>(userData);
 
@@ -129,7 +129,7 @@ int methodCallCallback_(sd_bus_message *reply,
   auto it = self->m_callbacks.find(cookie);
 
   // this case can really happen?
-  if (if == self->m_callbacks.end())
+  if (it == self->m_callbacks.end())
   {
     logFatal("failed to find callback for cookie %" PRIu64, cookie);
     return 0;
@@ -152,6 +152,9 @@ int methodCallCallback_(sd_bus_message *reply,
 // so send the `call` to eventloop if sd_message is constructed from the input
 // messge without errors. If errors occur while constructing, run the supplied
 // callabck to release `sem` and to pass back the error reply.
+//
+// If all goes well, handler will get called later with the reply by event loop
+// and get the saved callbacks and call it with the reply.
 
 bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
                                              const std::function<void(DBusMessage&&)> &callback,
@@ -206,7 +209,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
                               timeout);
     if (r < 0)
     {
-      logSysWarning(-rc, "dbus call failed");
+      logSysWarning(-r, "dbus call failed");
       if (errorCallback)
         errorCallback(DBusMessage(DBusMessage::ErrorType::Failed));
 
@@ -217,7 +220,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
     r = sd_bus_message_get_cookie(msg.get(), &cookie);
     if (r < 0)
     {
-      logSysWarning(-rc, "failed to get request message cookie");
+      logSysWarning(-r, "failed to get request message cookie");
       if (errorCallback)
         errorCallback(DBusMessage(DBusMessage::ErrorType::Failed));
 
@@ -228,7 +231,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
     m_callbacks.emplace(cookie, callback);
 
     return true;
-  } // call
+  }; // call
 
   // NOTE: really support this case??
   // if (m_eventloop.onEventLoopThread())

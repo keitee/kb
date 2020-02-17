@@ -4,6 +4,7 @@
 #include "dbusmessage.h"
 #include "eventloop.h"
 
+#include <map>
 #include <systemd/sd-bus.h>
 #include <systemd/sd-event.h>
 
@@ -27,6 +28,10 @@ private:
 public:
   DBusConnectionPrivate(const EventLoop &eventloop, sd_bus *bus);
   ~DBusConnectionPrivate();
+
+  bool callWithCallback(DBusMessage &&message,
+                                             const std::function<void(DBusMessage&&)> &callback,
+                                             int msTimeout);
 
   // send a message,signal or call, to dbus and uses corresponding sd_bus_send*
   // call depending on message type.
