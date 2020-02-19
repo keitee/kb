@@ -355,7 +355,7 @@ EventLoop::EventLoop(const EventLoop &other)
 {}
 
 EventLoop::EventLoop(EventLoop &&other)
-    : m_private(other.m_private)
+    : m_private(std::move(other.m_private))
 {}
 
 EventLoop::~EventLoop()
@@ -412,7 +412,6 @@ bool EventLoop::invokeMethodImpl(std::function<void()> &&f) const
   // to ‘std::function<void()>&&’
   //
   // return m_private->invokeMethod(f);
-  //
-  // can solve by using but why? TODO:
+
   return m_private->invokeMethod(std::move(f));
 }

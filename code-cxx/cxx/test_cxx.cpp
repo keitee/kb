@@ -111,7 +111,6 @@ using namespace testing;
 6245:TEST(Stdio, SpecialTypes)
 6309:TEST(Stdio, Manipulators)
 6343:TEST(Stdio, ManipulatorsFloat)
-6377:TEST(CxxMove, useStdMove)
 6435:TEST(Override, Condition_1)
 6497:TEST(Override, Condition_2)
 6550:TEST(Override, Condition_3)
@@ -7138,81 +7137,131 @@ TEST(CxxIO, fstream_wildcard)
 // ={=========================================================================
 // cxx-move
 
-TEST(CxxMove, lvalue)
-{
-  int x = 10;
-  int *pint;
-
-  pint = &(++x);
-
-  // *cxx-error* since & requires lvalue
-  // : error: lvalue required as unary ‘&’ operand
-  // pint = &(x++);
-}
-
 namespace cxx_move
 {
-  class Move
+  // one which uses copy version
+  class Move1
   {
   private:
     std::string m_name;
     int m_value;
 
   public:
-    explicit Move(std::string name = "", int value = 0)
+    explicit Move1(std::string name = "", int value = 0)
         : m_name(name)
         , m_value(value)
     {}
 
     // copy controls
-    Move(const Move &rhs)
+    Move1(const Move1 &rhs)
         : m_name(rhs.m_name)
         , m_value(rhs.m_value)
     {
-      std::cout << "Move(const Move &rhs)" << std::endl;
-      // m_name = rns.m_name;
-      // m_value = rhs.m_value;
+      std::cout << "Move1(const Move &rhs)" << std::endl;
     }
 
-    Move &operator=(const Move &rhs)
+    Move1 &operator=(const Move1 &rhs)
     {
-      std::cout << "Move &operator=(const Move &rhs)" << std::endl;
+      std::cout << "Move1 &operator=(const Move &rhs)" << std::endl;
       m_name  = rhs.m_name;
       m_value = rhs.m_value;
     }
 
-#ifdef MOVE_BUT_USE_COPY
+    // NOTE: std::string m_name uses its copy ctor
     // move controls
-    Move(Move &&rhs)
+    Move1(Move1 &&rhs)
         : m_name(rhs.m_name)
         , m_value(rhs.m_value)
     {
-      std::cout << "Move(Move &rhs)" << std::endl;
+      std::cout << "Move1(Move1 &&rhs)" << std::endl;
     }
 
-    Move &operator=(Move &&rhs)
+    Move1 &operator=(Move1 &&rhs)
     {
-      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      std::cout << "Move1 &operator=(Move &&rhs)" << std::endl;
       m_name  = rhs.m_name;
       m_value = rhs.m_value;
     }
-#else
+
+    bool isNameEmpty() const { return m_name.empty(); }
+
+    void setMembers1(std::string &&name, int &&value)
+    {
+      m_name  = name;
+      m_value = value;
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
+
+    void setMembers2(std::string &&name, int &&value)
+    {
+      // still need to move on std::string
+      m_name  = std::move(name);
+      m_value = std::move(value);
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
+
+    void printMembers() const
+    {
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
+  };
+
+  // use cxx-overload
+  void set_move(const Move1 &m)
+  {
+    // m.setMembers("set_move", 30);
+    std::cout << "set_move1(const &)" << std::endl;
+    m.printMembers();
+  }
+
+  void set_move(Move1 &&m)
+  {
+    std::cout << "set_move1(&&)" << std::endl;
+    m.printMembers();
+  }
+
+  // one which uses move version
+  class Move2
+  {
+  private:
+    std::string m_name;
+    int m_value;
+
+  public:
+    explicit Move2(std::string name = "", int value = 0)
+        : m_name(name)
+        , m_value(value)
+    {}
+
+    // copy controls
+    Move2(const Move2 &rhs)
+        : m_name(rhs.m_name)
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move2(const Move2 &rhs)" << std::endl;
+    }
+
+    Move2 &operator=(const Move2 &rhs)
+    {
+      std::cout << "Move2 &operator=(const Move2 &rhs)" << std::endl;
+      m_name  = rhs.m_name;
+      m_value = rhs.m_value;
+    }
+
     // move controls
-    Move(Move &&rhs)
+    Move2(Move2 &&rhs)
         : m_name(std::move(rhs.m_name))
         , m_value(rhs.m_value)
     {
-      std::cout << "Move(Move &rhs)" << std::endl;
+      std::cout << "Move2(Move2 &&rhs)" << std::endl;
     }
 
-    Move &operator=(Move &&rhs)
+    Move2 &operator=(Move2 &&rhs)
     {
-      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      std::cout << "Move2 &operator=(Move2 &&rhs)" << std::endl;
       m_name  = std::move(rhs.m_name);
       m_value = rhs.m_value;
     }
-
-#endif
 
     bool isNameEmpty() const { return m_name.empty(); }
 
@@ -7228,104 +7277,230 @@ namespace cxx_move
       std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
     }
   };
-
-  void set_move(const Move &m)
-  {
-    // m.setMembers("set_move", 30);
-    m.printMembers();
-  }
 } // namespace cxx_move
 
-TEST(CxxMove, binding)
+TEST(CxxMove, move_binding)
 {
-  using namespace cxx_move;
+  {
+    int x = 10;
+    int *pint;
+
+    pint = &(++x);
+
+    // *cxx-error* since & requires lvalue
+    // : error: lvalue required as unary ‘&’ operand
+    // pint = &(x++);
+  }
 
   {
     int i = 42;
 
     int &r = i; // okay
 
-    // cxx-error, cannot bind `rvalue-reference` to `lvalue`
+    // cxx-error, cannot bind  `lvalue(from)` to `rvalue-reference`
     // : error: cannot bind ‘int’ lvalue to ‘int&&’
     // int &&rr = i;
 
-    // cxx-error, i*42 is rvalue
+    // cxx-error, cannot bind `rvalue(from)` to `lvalue-reference`
+    // i*42 is rvalue
     // error: invalid initialization of non-const reference of type ‘int&’ from
-    // an rvalue of type ‘int’ int &r2 = i*42;
+    // an rvalue of type ‘int’ 
+    // int &r2 = i*42;
 
-    const int &r3 = i * 42; // okay  bind `rvalue` to `const-lvalue-reference`
+    // okay to bind `rvalue(from)` to `const-lvalue-reference`
+    const int &r3 = i * 42;
 
-    int &&r4 = i * 42; // okay
+    int &&r4 = i * 42;
   }
+}
+
+// [ RUN      ] CxxMove.move_signal1
+// Move1(const Move &rhs)
+// Move1(const Move &rhs)
+// Move1(const Move &rhs)
+// [       OK ] CxxMove.move_signal1 (1 ms)
+// [ RUN      ] CxxMove.move_signal11
+// Move1 &operator=(const Move &rhs)
+// Move1 &operator=(const Move &rhs)
+// [       OK ] CxxMove.move_signal11 (0 ms)
+
+// uses copy
+TEST(CxxMove, move_signal1)
+{
+  using namespace cxx_move;
+
+  std::vector<Move1> coll;
+
+  Move1 m1{"m1", 10};
+  Move1 m2{"m2", 20};
+
+  coll.push_back(m1);
+  coll.push_back(m2);
+
+  // string member is not empty since it's copied
+  EXPECT_THAT(m1.isNameEmpty(), false);
+  EXPECT_THAT(m2.isNameEmpty(), false);
+}
+
+TEST(CxxMove, move_signal11)
+{
+  using namespace cxx_move;
+
+  std::vector<Move1> coll;
+
+  Move1 m1{"m1", 10};
+  Move1 m2{"m2", 20};
+
+  Move1 m3;
+  Move1 m4;
+
+  m3 = m1;
+  m4 = m2;
+
+  // string member is not empty since it's copied
+  EXPECT_THAT(m1.isNameEmpty(), false);
+  EXPECT_THAT(m2.isNameEmpty(), false);
+}
+
+// [ RUN      ] CxxMove.move_signal2
+// Move1(Move1 &&rhs)
+// Move1(Move1 &&rhs)
+// Move1(const Move &rhs)
+// [       OK ] CxxMove.move_signal2 (0 ms)
+// [ RUN      ] CxxMove.move_signal22
+// Move1 &operator=(Move &&rhs)
+// Move1 &operator=(Move &&rhs)
+// [       OK ] CxxMove.move_signal22 (0 ms)
+
+// std::move() should signal move version? Yes for Move1 but not string member
+// since it's uses copy so wll not be empty
+TEST(CxxMove, move_signal2)
+{
+  using namespace cxx_move;
+
+  std::vector<Move1> coll;
+
+  Move1 m1{"m1", 10};
+  Move1 m2{"m2", 20};
+
+  coll.push_back(std::move(m1));
+  coll.push_back(std::move(m2));
+
+  // string member is not empty since it's copied
+  EXPECT_THAT(m1.isNameEmpty(), false);
+  EXPECT_THAT(m2.isNameEmpty(), false);
+}
+
+TEST(CxxMove, move_signal22)
+{
+  using namespace cxx_move;
+
+  std::vector<Move1> coll;
+
+  Move1 m1{"m1", 10};
+  Move1 m2{"m2", 20};
+
+  Move1 m3;
+  Move1 m4;
+
+  m3 = std::move(m1);
+  m4 = std::move(m2);
+
+  // string member is not empty since it's copied
+  EXPECT_THAT(m1.isNameEmpty(), false);
+  EXPECT_THAT(m2.isNameEmpty(), false);
+}
+
+// Ok, uses Move2 which has real move controls but here uses copy
+TEST(CxxMove, move_signal3)
+{
+  using namespace cxx_move;
+
+  std::vector<Move2> coll;
+
+  Move2 m1{"m1", 10};
+  Move2 m2{"m2", 20};
+
+  coll.push_back(m1);
+  coll.push_back(m2);
+
+  // string member is not empty since it's copied
+  EXPECT_THAT(m1.isNameEmpty(), false);
+  EXPECT_THAT(m2.isNameEmpty(), false);
+}
+
+// MOVE!
+TEST(CxxMove, move_signal4)
+{
+  using namespace cxx_move;
+
+  std::vector<Move2> coll;
+
+  Move2 m1{"m1", 10};
+  Move2 m2{"m2", 20};
+
+  coll.push_back(std::move(m1));
+  coll.push_back(std::move(m2));
+
+  // string member is *moved* so it's empty
+  EXPECT_THAT(m1.isNameEmpty(), true);
+  EXPECT_THAT(m2.isNameEmpty(), true);
+}
+
+// `std::move() doesn't itself do any moving`, but merely signal function
+// matching or resolution and trigger cxx-overload
+TEST(CxxMove, move_signal5)
+{
+  using namespace cxx_move;
 
   {
-    Move m;
+    Move1 m;
+
+    const std::string cname("cmove");
+    const int cvalue{10};
 
     std::string name("move");
     int value{10};
 
-    // lvalue to rvalue error
-    // error: cannot bind
+    // lvalue(from) to rvalue error
+    // cxx-error: cannot bind
     // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue to
     // ‘std::__cxx11::string&& {aka std::__cxx11::basic_string<char>&&}’
     //
     // m.setMembers(name, value);
 
-    m.setMembers("move", 10);
-    m.setMembers(std::move(name), std::move(value));
-  }
-}
+    // lvalue to rvalue error
+    // m.setMembers(cname, cvalue);
 
-TEST(CxxMove, signal)
-{
-  using namespace cxx_move;
+    m.setMembers1("move", 10);
 
-  // use copy controls
-  {
-    std::vector<Move> coll;
+    m.setMembers1(std::move(name), std::move(value));
+    EXPECT_THAT(name.empty(), false);
 
-    Move m1{"m1", 10};
-    Move m2{"m2", 20};
-
-    coll.push_back(m1);
-    coll.push_back(m2);
-
-    // string member is not empty since it's copied
-    EXPECT_THAT(m1.isNameEmpty(), false);
-    EXPECT_THAT(m2.isNameEmpty(), false);
-  }
-
-  // use move controls
-  {
-    std::vector<Move> coll;
-
-    Move m1{"m1", 10};
-    Move m2{"m2", 20};
-
-    coll.push_back(std::move(m1));
-    coll.push_back(std::move(m2));
-
-#ifdef MOVE_BUT_USE_COPY
-    // string member is NOT empty since it's NOT moved
-    EXPECT_THAT(m1.isNameEmpty(), false);
-    EXPECT_THAT(m2.isNameEmpty(), false);
-#else
-    // string member is empty since it's moved
-    EXPECT_THAT(m1.isNameEmpty(), true);
-    EXPECT_THAT(m2.isNameEmpty(), true);
-#endif
+    // `setMembers2` is version that do move in it so name should be empty.
+    m.setMembers2(std::move(name), std::move(value));
+    EXPECT_THAT(name.empty(), true);
   }
 
   // which will be called? no copy or move controls are called
+  //
   // *cxx-reference-binding* Can bind `rvalue` to `const-lvalue-reference`
-  // assume that the moved is const and that meanss nothing will be changed so
+  // assume that the moved is const and that means nothing will be changed so
   // why bother to copy of it? so no copy or move.
   {
-    Move m1{"m1", 10};
-    Move m2{"m2", 20};
+    Move1 m1{"m1", 10};
+    Move1 m2{"m2", 20};
 
-    // void set_move(const Move &m); rvalue to lvalue reference
-    set_move(std::move(m2));
+    // bind `rvalue(moved-from)` to `const-lvalue-reference(moved-to)`
+    // void set_move1(const Move1 &m);
+    set_move(std::move(m1));
+    set_move(m2);
+
+    // void set_move2(Move1 &&m);
+    set_move(std::move(m1));
+
+    // cxx-error: cannot bind ‘cxx_move::Move1’ lvalue to ‘cxx_move::Move1&&’
+    // set_move2(m2);
   }
 }
 

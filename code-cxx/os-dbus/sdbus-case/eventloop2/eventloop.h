@@ -42,6 +42,7 @@ public:
   template <typename F>
   inline bool invokeMethod(F &&f) const
   {
+    // org:
     // return invokeMethodImpl(std::forward<F>(f));
     return invokeMethodImpl(f);
   }
