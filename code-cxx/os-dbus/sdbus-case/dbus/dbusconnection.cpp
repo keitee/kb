@@ -139,15 +139,18 @@ int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
   self->m_callbacks.erase(it);
 
   if (f)
+  {
+    logWarning("methodCallCallback_:: calls f");
     f(DBusMessage(std::make_unique<DBusMessagePrivate>(reply)));
+  }
 
   // done. NOTE: any documentation about return value of handler?
   return 0;
 }
 
 // 1. the first use case.
-// used from ::call() when it's called on the other thread. the suppliced
-// callback has code to release `sem` and to get reply message.
+// used from ::call() when it's called from other than event loop thread. the
+// suppliced callback has code to release `sem` and to move reply message.
 //
 // so send the `call` to eventloop if sd_message is constructed from the input
 // messge without errors. If errors occur while constructing, run the supplied
@@ -173,7 +176,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
     errorCallback = callback;
 
   // take the message data
-  // NOTE: need reset()? since DBusMessagePrivate do not have move-assign, do it
+  // need reset()? since DBusMessagePrivate do not have move-assign, so move it
   // manually
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
@@ -181,6 +184,8 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
   auto call = [this, messageData, callback, errorCallback, timeout]() {
     // must be false since it's called on the other thread
     assert(m_eventloop.onEventLoopThread());
+
+    logWarning("callWithCallback::call() called on the event loop thread");
 
     // construct the request message
     auto msg = messageData->toMessage(m_bus);
@@ -240,6 +245,8 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
   // }
   // else
   {
+    logWarning(
+      "callWithCallback::call() place a call on the event loop thread");
     return m_eventloop.invokeMethod(std::move(call));
   }
 }
@@ -253,7 +260,6 @@ DBusConnection::DBusConnection() {}
 
 DBusConnection::DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&priv)
     : m_private(std::move(priv))
-//  : m_private(priv)
 {}
 
 DBusConnection::DBusConnection(const DBusConnection &rhs)
@@ -392,8 +398,10 @@ bool DBusConnection::registerName(const std::string &name)
 // it is safe to call this from any thread. If called from the event loop thread
 // it will block the event loop until complete
 //
-// TODO: ??? otherwise it will post a message to the event loop and send the dbus
-// message within that.
+// otherwise it will post a message to the event loop and send the dbus
+// message within that. when reply is ready, registered handler,
+// methodCallCallback_ gets called and find callback from reply cookie which
+// release sem and relay replay.
 
 DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 {
@@ -402,10 +410,10 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   {
     logWarning("trying to call with non-method call message");
 
+    // when use enum
     // DBusMessage(DBusMessage::Failed);
-    // when use `enum class`
 
-    // TODO: NO ctor???
+    // changed to use `enum class`
     return DBusMessage(DBusMessage::ErrorType::Failed);
   }
 
@@ -449,8 +457,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     // if there is an error reply
     if ((rc < 0) || (!reply))
     {
-      // TODO: construct DBusMessage from the sd_bus_error of call
-      // DBusMessagePrivate is exposed and can we fix it??
+      // construct DBusMessage from the sd_bus_error of call
       DBusMessage errorMessage(std::make_unique<DBusMessagePrivate>(&error));
       sd_bus_error_free(&error);
       return errorMessage;
@@ -503,5 +510,6 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
   sem_destroy(&sem);
 
+  logWarning("call:: return replyMessage");
   return replyMessage;
 }

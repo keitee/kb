@@ -14,9 +14,16 @@ class DBusConnection
 private:
   std::shared_ptr<DBusConnectionPrivate> m_private;
 
+  // NOTE: 
+  // DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
+  // did not hide shared pointer arg inside and this means user have to specify
+  // it. WHY?
+  //
+  // systemBus() call returns either invalid connection or valid one. To
+  // distinguish two case, have two seperate ctors. 
+
 private:
   DBusConnection();
-  // used by static members, systemBus(), for example.
   DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
 public:

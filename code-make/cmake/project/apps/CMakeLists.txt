@@ -7,7 +7,4 @@ add_executable(app app.cxx)
 
 target_compile_features(app PRIVATE cxx_std_11)
 
-# TODO:
-# how does it find `student` library?
-
 target_link_libraries(app PRIVATE student)

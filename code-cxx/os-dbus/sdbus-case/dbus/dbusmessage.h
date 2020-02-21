@@ -63,6 +63,7 @@ public:
   };
 
 private:
+  // these are private but used by friends
   explicit DBusMessage(std::unique_ptr<DBusMessagePrivate> &&);
   explicit DBusMessage(ErrorType error, const char *message = nullptr);
 

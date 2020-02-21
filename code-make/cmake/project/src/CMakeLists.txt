@@ -15,7 +15,8 @@
 # Optionally glob, but only for CMake 3.12 or later:
 # file(GLOB HEADER_LIST CONFIGURE_DEPENDS "${ModernCMakeExample_SOURCE_DIR}/include/modern/*.hpp")
 
-set(HEADER_LIST "${ModernCMakeExample_SOURCE_DIR}/include/modern/Student.h")
+# NOTE: even we don't need it
+# set(HEADER_LIST "${ModernCMakeExample_SOURCE_DIR}/include/modern/Student.h")
 
 # https://cmake.org/cmake/help/latest/command/add_library.html?highlight=add_library
 #
@@ -23,7 +24,11 @@ set(HEADER_LIST "${ModernCMakeExample_SOURCE_DIR}/include/modern/Student.h")
 # the current value of the variable BUILD_SHARED_LIBS is ON. 
 
 # Make an automatic library - will be static or dynamic based on user setting
-# TODO: where??
+# 
+# If no type is given explicitly the type is STATIC or SHARED based on whether
+# the current value of the variable BUILD_SHARED_LIBS is ON.
+# NOTE: static is made and it seems static is default
+
 add_library(student Student.cxx ${HEADER_LIST})
 
 # we need this directory, and users of our library will need it too.

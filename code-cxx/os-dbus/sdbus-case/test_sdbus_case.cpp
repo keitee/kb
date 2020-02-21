@@ -7,6 +7,7 @@
 
 #include "gmock/gmock.h"
 
+#include "dbusconnection.h"
 #include "dbusmessage.h"
 #include "eventloop.h"
 
@@ -383,11 +384,42 @@ TEST(EventLoop, event_cli)
 
 TEST(DBusMessage, message_create)
 {
-  DBusMessage message =
-    DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
-                                  "/org/freedesktop/DBus", // path
-                                  "org.freedesktop.DBus",  // interface
-                                  "ListNames");            // method
+  // create event loop
+  EventLoop loop;
+
+  // connect to dbus
+  DBusConnection conn = DBusConnection::sessionBus(loop);
+  EXPECT_THAT(conn.isConnected(), true);
+
+  // without `target` to call member function since it's static
+  auto f1 = std::async(std::launch::async, [&]() {
+
+      std::string name;
+
+    // wait for some time
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    DBusMessage message =
+      DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
+                                    "/org/freedesktop/DBus", // path
+                                    "org.freedesktop.DBus",  // interface
+                                    "ListNames");            // method
+
+    DBusMessage reply = conn.call(std::move(message));
+    EXPECT_THAT(reply.isError(), false);
+
+    for (int i = 0; i < 5; i++)
+    {
+      reply >> name;
+      std::cout << "name: " << name << std::endl;
+    }
+
+    loop.quit(0);
+  });
+
+  // blocks here
+  std::cout << "event loops blocks on here" << std::endl;
+  loop.run();
 }
 
 // ={=========================================================================

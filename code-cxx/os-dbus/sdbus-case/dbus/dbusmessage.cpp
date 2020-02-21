@@ -2,6 +2,10 @@
 #include "dbusmessage_p.h"
 #include "rlog.h"
 
+// debug
+#include <vector>
+#include <iostream>
+
 #include <cmath> // std::nan
 #include <systemd/sd-bus.h>
 
@@ -346,6 +350,13 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
 //         SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
 //         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
 // };
+//
+// int sd_bus_message_read_basic(	sd_bus_message *m,
+// 	char type,
+// 	void *p);
+//
+// int sd_bus_message_skip(	sd_bus_message *m,
+// 	const char* types);
 
 bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 {
@@ -421,16 +432,68 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 
       case SD_BUS_TYPE_ARRAY:
       case SD_BUS_TYPE_STRUCT:
+      // {
+      //   std::string types;
+
+      //   // is used to skip below
+      //   types += type;
+      //   if (content)
+      //     types += content;
+
+      //   logWarning("received message with unsupported array or struct so skip");
+      //   rc = sd_bus_message_skip(message, types.c_str());
+      //   break;
+      // }
       {
-        std::string types;
+        std::vector<std::string> names;
 
-        // is used to skip below
-        types += type;
-        if (content)
-          types += content;
+        // _public_ int sd_bus_message_enter_container(sd_bus_message *m,
+        //                                             char type,
+        //                                             const char *contents);
+        //
+        int r =
+          sd_bus_message_enter_container(message, SD_BUS_TYPE_ARRAY, nullptr);
+        if (r < 0)
+        {
+          logSysError(-r, "failed to enter container");
+        }
 
-        logWarning("received message with unsupported array or struct so skip");
-        rc = sd_bus_message_skip(message, types.c_str());
+        // returns true if we're at the end of the current container.
+        // _public_ int sd_bus_message_at_end(sd_bus_message *m, int complete);
+        //
+        //  bool atEnd() 
+        //  { return (sd_bus_message_at_end(mMessage, false) != 0); }
+        //
+        // so sd_bus_message_at_end() returns 1(true?) when reaches the end
+
+        while (0 == sd_bus_message_at_end(message, false))
+        {
+          const char *str{nullptr};
+
+          // _public_ int sd_bus_message_read_basic(sd_bus_message *m, char type, void *p);
+          r = sd_bus_message_read_basic(message, SD_BUS_TYPE_STRING, &str);
+          if ((r < 0) || !str)
+          {
+            logSysError(-r, "failed to read message");
+          }
+
+          m_args.emplace_back(Argument(std::string(str)));
+
+          names.emplace_back(std::string(str));
+        } // while
+
+        // ok, reading is done and close it
+        // _public_ int sd_bus_message_close_container(sd_bus_message *m);
+        r = sd_bus_message_exit_container(message);
+        if (r < 0)
+        {
+          logSysError(-r, "failed to exit container");
+        }
+
+        // // ok, let see what we've got back from the call
+        // for (const auto e : names)
+        //   std::cout << "names: " << e << std::endl;
+
         break;
       }
 
@@ -576,7 +639,7 @@ DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
   return *this;
 }
 
-// TODO: have to use std::move() since uses rvalue from unique to shared
+// have to use std::move() since uses rvalue from unique to shared
 // pointer.
 //
 //      template<typename _Tp1, typename _Del>
@@ -585,7 +648,6 @@ DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
 
 DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
     : m_private(std::move(rhs))
-//    : m_private(rhs)
 {}
 
 DBusMessage::DBusMessage(ErrorType error, const char *message)
@@ -672,9 +734,13 @@ DBusMessage &DBusMessage::operator>>(T &arg)
 
   return *this;
 }
-
 // TODO what if don't have these?  `cxx-template-explicit-argument`
 template DBusMessage &DBusMessage::operator>><bool>(bool &);
+
+// In function `DBusMessage_message_create_Test::TestBody()::{lambda()#1}::operator()() const':
+// undefined reference to `DBusMessage& DBusMessage::operator>><std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)'
+// collect2: error: ld returned 1 exit status
+template DBusMessage &DBusMessage::operator>> <std::string>(std::string&);
 
 template <typename T>
 DBusMessage &DBusMessage::operator<<(const T &arg)
