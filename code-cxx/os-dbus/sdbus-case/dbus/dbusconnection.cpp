@@ -25,7 +25,8 @@ DBusConnectionPrivate::DBusConnectionPrivate(const EventLoop &eventloop,
 
 DBusConnectionPrivate::~DBusConnectionPrivate()
 {
-  m_eventloop.flush();
+  // TODO: temporary fix
+  // m_eventloop.flush();
 
   // free the bus
   // sd_bus_unref() and sd_bus_flush_close_unref() always return NULL.
@@ -187,7 +188,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
 
     logWarning("callWithCallback::call() called on the event loop thread");
 
-    // construct the request message
+    // construct the request sd_bus_message
     auto msg = messageData->toMessage(m_bus);
     if (!msg)
     {
@@ -402,6 +403,9 @@ bool DBusConnection::registerName(const std::string &name)
 // message within that. when reply is ready, registered handler,
 // methodCallCallback_ gets called and find callback from reply cookie which
 // release sem and relay replay.
+//
+// use input message to make a call and return newly created message from reply
+// to the call.
 
 DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 {

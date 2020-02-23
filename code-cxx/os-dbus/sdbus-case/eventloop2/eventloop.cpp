@@ -75,11 +75,16 @@ EventLoopPrivate::~EventLoopPrivate()
   {
     // sd_event_unref returns null
     m_eventloop = sd_event_unref(m_eventloop);
+
+#ifdef EVENTLOOP_DEBUG
+   logWarning("EventLoopPrivate::~EventLoopPrivate()");
+#endif
   }
 }
 
 // event handler
-// typedef int (*sd_event_io_handler_t)(sd_event_source *s,
+// typedef int (*sd_event_io_handler_t)(
+//    sd_event_source *s,
 //  	int fd,
 //  	uint32_t revents,
 //  	void *userdata);
@@ -139,7 +144,8 @@ int EventLoopPrivate::run()
 
   sd_event_source *event_source_quit{nullptr};
 
-  // int sd_event_add_io(	sd_event *event,
+  // int sd_event_add_io(
+  //    sd_event *event,
   //  	sd_event_source **source,
   //  	int fd,
   //  	uint32_t events,
@@ -176,8 +182,10 @@ int EventLoopPrivate::run()
 
   int exit_code = sd_event_loop(m_eventloop);
 
+#ifdef EVENTLOOP_DEBUG
   logWarning("eventloop stops and set the thread local to null");
   m_loopRunning = nullptr;
+#endif
 
   return exit_code;
 }
@@ -227,8 +235,9 @@ same as 1 since `static` only make it availbble without making instance.
 
 3. static thread_local EventLoopPrivate *m_loopRunning;
 So how can differentiate threads? By using `thread_local`, a thread which
-created EventLoop will have a copy of m_loopRunning but other thread which uses
-public interface don't. So it'll be null.
+runs EventLoop will have a copy of m_loopRunning since run() is where it's used
+first time and gets create/set but other threads which uses public interface
+will not have this variable set and it'll be null.
 
 
 So deadlock will happen since when flush() gets called from different thread,

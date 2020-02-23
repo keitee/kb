@@ -432,18 +432,23 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 
       case SD_BUS_TYPE_ARRAY:
       case SD_BUS_TYPE_STRUCT:
-      // {
-      //   std::string types;
 
-      //   // is used to skip below
-      //   types += type;
-      //   if (content)
-      //     types += content;
+      // original code
+#if 0
+       {
+         std::string types;
+      
+         // is used to skip below
+         types += type;
+         if (content)
+           types += content;
 
-      //   logWarning("received message with unsupported array or struct so skip");
-      //   rc = sd_bus_message_skip(message, types.c_str());
-      //   break;
-      // }
+         logWarning("received message with unsupported array or struct so skip");
+         rc = sd_bus_message_skip(message, types.c_str());
+         break;
+       }
+#endif
+
       {
         std::vector<std::string> names;
 
@@ -630,12 +635,12 @@ DBusMessage::~DBusMessage()
 
 // move supports
 DBusMessage::DBusMessage(DBusMessage &&rhs) noexcept
-    : m_private(rhs.m_private)
+    : m_private(std::move(rhs.m_private))
 {}
 
 DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
 {
-  m_private = rhs.m_private;
+  m_private = std::move(rhs.m_private);
   return *this;
 }
 
@@ -734,13 +739,21 @@ DBusMessage &DBusMessage::operator>>(T &arg)
 
   return *this;
 }
-// TODO what if don't have these?  `cxx-template-explicit-argument`
+
+// NOTE: what if don't have these? will see link error and see
+// *cxx-template-control-instantiation*
+
 template DBusMessage &DBusMessage::operator>><bool>(bool &);
 
 // In function `DBusMessage_message_create_Test::TestBody()::{lambda()#1}::operator()() const':
 // undefined reference to `DBusMessage& DBusMessage::operator>><std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)'
 // collect2: error: ld returned 1 exit status
 template DBusMessage &DBusMessage::operator>> <std::string>(std::string&);
+
+template DBusMessage &DBusMessage::operator>> <int>(int&);
+template DBusMessage &DBusMessage::operator>> <unsigned>(unsigned&);
+template DBusMessage &DBusMessage::operator>> <double>(double&);
+template DBusMessage &DBusMessage::operator>> <DBusFileDescriptor>(DBusFileDescriptor&);
 
 template <typename T>
 DBusMessage &DBusMessage::operator<<(const T &arg)
@@ -763,9 +776,13 @@ DBusMessage &DBusMessage::operator<<(const T &arg)
   return *this;
 }
 
-// TODO what if don't have these?  `cxx-template-explicit-argument`
 template DBusMessage &DBusMessage::operator<< <bool>(const bool &);
-
+template DBusMessage &DBusMessage::operator<< <int>(const int&);
+template DBusMessage &DBusMessage::operator<< <unsigned>(const unsigned&);
+template DBusMessage &DBusMessage::operator<< <double>(const double&);
+template DBusMessage &DBusMessage::operator<< <std::string>(const std::string&);
+template DBusMessage &
+  DBusMessage::operator<<<DBusFileDescriptor>(const DBusFileDescriptor &);
 
 DBusMessage DBusMessage::createMethodCall(const std::string &service,
                                           const std::string &path,

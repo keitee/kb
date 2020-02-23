@@ -2375,9 +2375,12 @@ namespace cxx_dispatcher_ex_2019_12
                    std::ref(fm),
                    std::ref(this->running_)));
 
-    // unlike sync() which use condition variable, use `double lock` on mutex
-    // waits for callback is called
-    // NOTE: that is flush() is the same as sync except doing stop().
+    // NOTE: 
+    // 1. unlike sync() which use condition variable, use mutex and `double
+    // lock` on mutex waits for flush callback is called
+    //
+    // 2. flush() do the same as sync and do stop() as well.
+
     fm.lock();
     fm.unlock();
     stop();

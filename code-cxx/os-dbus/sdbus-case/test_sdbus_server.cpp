@@ -286,9 +286,9 @@ static int method_function1(sd_bus_message *m, void *data, sd_bus_error *error)
 {
   DBusMessage message =
     DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
-        "/org/freedesktop/DBus", // path
-        "org.freedesktop.DBus",  // interface
-        "ListNames");            // method
+                                  "/org/freedesktop/DBus", // path
+                                  "org.freedesktop.DBus",  // interface
+                                  "ListNames");            // method
 }
 
 static const sd_bus_vtable calculator_vtable[] = {
@@ -296,7 +296,11 @@ static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_METHOD(
     "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
-  SD_BUS_METHOD("Function1", nullptr, nullptr, method_function1, SD_BUS_VTABLE_UNPRIVILEGED),
+  SD_BUS_METHOD("Function1",
+                nullptr,
+                nullptr,
+                method_function1,
+                SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_VTABLE_END};
 
 // tracker callback
@@ -377,7 +381,6 @@ static void send_signal(DBusConnection &conn)
 
   sd_bus_message_unref(msg);
 }
-
 
 // ={=========================================================================
 int main(int argc, char **argv)
@@ -478,9 +481,9 @@ int main(int argc, char **argv)
   {
     DBusMessage message =
       DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
-          "/org/freedesktop/DBus", // path
-          "org.freedesktop.DBus",  // interface
-          "ListNames");            // method
+                                    "/org/freedesktop/DBus", // path
+                                    "org.freedesktop.DBus",  // interface
+                                    "ListNames");            // method
 
     DBusMessage reply = conn.call(std::move(message));
   }

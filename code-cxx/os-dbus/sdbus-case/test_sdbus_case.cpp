@@ -67,8 +67,10 @@ TEST(DISABLED_EventLoop, event_flush_no_work)
   EXPECT_THAT(value, 0);
 }
 
-// running on a different thread should make difference?
-// two threas and one event loop.
+// one thread which runs event loop and the other pushes task and use flush()
+//
+// it surfaces deadlock issue and works oken when have
+// #define DEADLOCK_FIX
 
 TEST(EventLoop, event_deadlock)
 {
@@ -97,10 +99,28 @@ TEST(EventLoop, event_deadlock)
   EXPECT_THAT(value, 10);
 }
 
-// two threas and one event loop. so do not use flush().
-// NOTE: can share event loop between threads
+// flush() is not called in dtor. do we ever need to call flush()? As
+// event_flush2 shows, there is no real need to do since quit() pushes exist
+// task which will be in the last of the queue. So until that gets processed,
+// event loop runs and no exit.
 
-TEST(EventLoop, event_share)
+// [ RUN      ] EventLoop.event_flush1
+// M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(139919476278208)
+// M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(139919476278208), m_loopRunning(0x0x557fd4f13620)
+// M:eventloop.cpp F:flush L:322 > flush called from different thread(139919440869120), m_loopRunning(0x(nil))
+// M:eventloop.cpp F:operator() L:329 > sem_post
+// M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+// M:eventloop.cpp F:~EventLoopPrivate L:80 > EventLoopPrivate::~EventLoopPrivate()
+//
+// M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(139919476278208)
+// M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(139919476278208), m_loopRunning(0x0x557fd4f13620)
+// M:eventloop.cpp F:flush L:322 > flush called from different thread(139919440869120), m_loopRunning(0x(nil))
+// M:eventloop.cpp F:operator() L:329 > sem_post
+// M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+// M:eventloop.cpp F:~EventLoopPrivate L:80 > EventLoopPrivate::~EventLoopPrivate()
+// [       OK ] EventLoop.event_flush1 (1 ms)
+
+TEST(EventLoop, event_flush1)
 {
   {
     int value{};
@@ -114,7 +134,12 @@ TEST(EventLoop, event_share)
       for (int i = 0; i < 10; ++i)
         loop.invokeMethod(std::bind(w1, std::ref(value)));
 
-      EXPECT_THAT(loop.size(), 10);
+      // here, there is no guarantee that all posted work are in the queue so
+      // sometimes okay or sometimes fail.
+      // EXPECT_THAT(loop.size(), 10);
+
+      loop.flush();
+      EXPECT_THAT(loop.size(), 0);
 
       loop.quit(0);
     });
@@ -138,7 +163,12 @@ TEST(EventLoop, event_share)
       for (int i = 0; i < 10; ++i)
         loop.invokeMethod(w1, std::ref(value));
 
-      EXPECT_THAT(loop.size(), 10);
+      // here, there is no guarantee that all posted work are in the queue so
+      // sometimes okay or sometimes fail.
+      // EXPECT_THAT(loop.size(), 10);
+
+      loop.flush();
+      EXPECT_THAT(loop.size(), 0);
 
       loop.quit(0);
     });
@@ -148,6 +178,115 @@ TEST(EventLoop, event_share)
 
     EXPECT_THAT(value, 10);
   }
+}
+
+TEST(EventLoop, event_flush2)
+{
+  const int count{10000000};
+
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < count; ++i)
+        loop.invokeMethod(std::bind(w1, std::ref(value)));
+
+      // here, there is no guarantee that all posted work are in the queue so
+      // sometimes okay or sometimes fail.
+      // EXPECT_THAT(loop.size(), 10);
+
+      // loop.flush();
+      // EXPECT_THAT(loop.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    EXPECT_THAT(value, count);
+  }
+
+  // same as above but use the convenient form of invokeMethod()
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < count; ++i)
+        loop.invokeMethod(w1, std::ref(value));
+
+      // here, there is no guarantee that all posted work are in the queue so
+      // sometimes okay or sometimes fail.
+      // EXPECT_THAT(loop.size(), 10);
+
+      // loop.flush();
+      // EXPECT_THAT(loop.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    EXPECT_THAT(value, count);
+  }
+}
+
+// NOTE: sometimes works and sometimes not. race condition.
+//
+// [ RUN      ] EventLoop.event_flush3
+// 0000017889.273986 WRN: < M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140032610059200)
+// 0000017889.274065 WRN: < M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(140032610059200), m_loopRunning(0x0x55dccb25c7a0)
+// 0000017889.274160 WRN: < M:eventloop.cpp F:flush L:322 > flush called from different thread(140032574650112), m_loopRunning(0x(nil))
+// 0000017889.274220 WRN: < M:eventloop.cpp F:operator() L:329 > sem_post
+// 0000017889.274251 WRN: < M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+// 0000017889.274302 WRN: < M:eventloop.cpp F:~EventLoopPrivate L:80 > EventLoopPrivate::~EventLoopPrivate()
+// [       OK ] EventLoop.event_flush3 (0 ms)
+// [----------] 1 test from EventLoop (0 ms total)
+//
+// [----------] Global test environment tear-down
+// [==========] 1 test from 1 test case ran. (0 ms total)
+// [  PASSED  ] 1 test.
+// keitee@kit-hdebi:~/git/kb/code-cxx/os-dbus/sdbus-case/build$ ./test_sdbus_case --gtest_filter=*event_flush3*
+// Note: Google Test filter = *event_flush3*
+// [==========] Running 1 test from 1 test case.
+// [----------] Global test environment set-up.
+// [----------] 1 test from EventLoop
+// [ RUN      ] EventLoop.event_flush3
+// 0000017889.913828 WRN: < M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140079097209792)
+// 0000017889.913904 WRN: < M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(140079097209792), m_loopRunning(0x0x559c049627a0)
+// 0000017889.914018 WRN: < M:eventloop.cpp F:flush L:322 > flush called from different thread(140079061800704), m_loopRunning(0x(nil))
+// 0000017889.914052 WRN: < M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+
+TEST(EventLoop, event_flush3)
+{
+  int value{};
+
+  EventLoop loop;
+
+  auto f1 = std::async(std::launch::async, [&]() {
+    // shall use std::ref
+    for (int i = 0; i < 10; ++i)
+      loop.invokeMethod(std::bind(w1, std::ref(value)));
+
+    loop.quit(0);
+    loop.flush();
+  });
+
+  // blocks here
+  loop.run();
+
+  EXPECT_THAT(value, 10);
 }
 
 namespace
@@ -382,7 +521,47 @@ TEST(EventLoop, event_cli)
 }
 */
 
-TEST(DBusMessage, message_create)
+// M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140408928236480)
+// event loops blocks on here
+// M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(140408928236480), m_loopRunning(0x0x5651c1ad9620)
+// M:dbusconnection.cpp F:call L:481 > DBusConnection::call() is called on the other thread
+// M:dbusconnection.cpp F:callWithCallback L:249 > callWithCallback::call() place a call on the event loop thread
+// M:dbusconnection.cpp F:operator() L:188 > callWithCallback::call() called on the event loop thread
+// M:dbusconnection.cpp F:methodCallCallback_ L:143 > methodCallCallback_:: calls f
+// M:dbusconnection.cpp F:call L:513 > call:: return replyMessage
+// name: org.freedesktop.DBus
+// name: org.freedesktop.Notifications
+// name: :1.7
+// name: org.freedesktop.network-manager-applet
+// name: :1.8
+//
+// NOTE: it causes `deadlock` and m_loopRunning is null when called from the
+// same thread?
+//
+// since loop.quit() set it to null and ends event loop. Then DBusConnection()
+// dtor calls loop.flush() but event loop is already gone. so blocking forever.
+// so same as callig, like `event_flush3` case
+//
+// loop.quit();
+// loop.flush();
+//
+// M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+// M:eventloop.cpp F:flush L:322 > flush called from different thread(140408928236480), m_loopRunning(0x(nil))
+//
+// So, to fix?
+// 1. works when remove flush() from DBusConnection
+// 2. case examples do not use quit()
+//
+// NOTE:
+// 1. it is less likely to use flush() from event loop thread and if do, have to
+// post a task which calls flush().
+//
+// 2. should consider to use quit() in event loop dtor and to have check in
+// flush() to see whether event loop is still running or not.
+//
+// 3. case examples seems not to handle "dtor/exit" path of event loop.
+
+TEST(DBusMessage, message_call)
 {
   // create event loop
   EventLoop loop;
@@ -393,8 +572,7 @@ TEST(DBusMessage, message_create)
 
   // without `target` to call member function since it's static
   auto f1 = std::async(std::launch::async, [&]() {
-
-      std::string name;
+    std::string name;
 
     // wait for some time
     std::this_thread::sleep_for(std::chrono::seconds(5));

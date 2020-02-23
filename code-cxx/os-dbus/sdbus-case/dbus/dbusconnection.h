@@ -48,6 +48,7 @@ public:
   bool registerName(const std::string &name);
 
   DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
+
   bool callWithCallback(DBusMessage &&message,
                         const std::function<void(DBusMessage &&)> &callback,
                         int msTimeout = -1) const;
