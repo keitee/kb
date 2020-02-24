@@ -39,11 +39,11 @@ StateMachine::~StateMachine()
 void StateMachine::logTransition(int oldState, int newState) const
 {
   // create the logging message
-  std::ostringstream message;
+  std::ostringstream message{};
 
   if (oldState == newState)
   {
-    message << "[" << name() << "] re-entering state "
+    message << "[" << name() << "] re-entering state -> "
             << m_states.at(newState).name << "(" << newState << ")";
   }
   else if (oldState == -1)

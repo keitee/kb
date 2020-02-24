@@ -59,7 +59,7 @@ public:
   // void transition(int fromState, int toState);
 
 private:
-  std::string objectName() const;
+  std::string name() const;
   int shouldMoveState(int event) const;
   void triggerStateMove(int newState);
   void moveToState(int newState);

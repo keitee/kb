@@ -5033,6 +5033,38 @@ TEST(CxxSmartPointer, sp_construct)
     auto p6 = make_shared<vector<string>>();
   }
 
+  // cxx-up
+  {
+    std::unique_ptr<std::string> up(new std::string);
+    // causes compile error 
+    // EXPECT_THAT(up, true);
+
+    // to get around, this works.
+    EXPECT_THAT(!!up, true);
+
+    // string itself is empty. std::string().empty()
+    EXPECT_THAT(up->empty(), true);
+  }
+
+  // since *cxx-14* and
+  // template< class T, class... Args >
+  //  unique_ptr<T> make_unique( Args&&... args );
+  //
+  // https://gcc.gnu.org/projects/cxx-status.html
+  //
+  // C++14 Support in GCC
+  // GCC has full support for the previous revision of the C++ standard, which
+  // was published in 2014.
+  //
+  // This mode is the default in GCC 6.1 and above; it can be explicitly
+  // selected with the -std=c++14 command-line flag, or -std=gnu++14 to enable
+  // GNU extensions as well.
+
+  {
+    auto up = std::make_unique<std::string>("unique pointer");
+    EXPECT_THAT(*up, "unique pointer");
+  }
+
   // construct sp from up
   {
     std::unique_ptr<std::string> up = std::make_unique<std::string>("unique");
@@ -5290,34 +5322,6 @@ TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
 }
 
 */
-
-TEST(CxxSmartPointer, sp_unique_Construct)
-{
-  {
-    std::unique_ptr<std::string> up(new std::string);
-    // std::string()->empty()
-    EXPECT_THAT(up->empty(), true);
-  }
-
-  // since *cxx-14* and
-  // template< class T, class... Args >
-  //  unique_ptr<T> make_unique( Args&&... args );
-  //
-  // https://gcc.gnu.org/projects/cxx-status.html
-  //
-  // C++14 Support in GCC
-  // GCC has full support for the previous revision of the C++ standard, which
-  // was published in 2014.
-  //
-  // This mode is the default in GCC 6.1 and above; it can be explicitly
-  // selected with the -std=c++14 command-line flag, or -std=gnu++14 to enable
-  // GNU extensions as well.
-
-  {
-    auto up = make_unique<std::string>("unique pointer");
-    EXPECT_THAT(*up, "unique pointer");
-  }
-}
 
 namespace cxx_sp_shared
 {

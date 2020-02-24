@@ -54,21 +54,21 @@ void StateMachine::logTransition(int oldState, int newState) const
 
   if (oldState == newState)
   {
-    message << "[" << objectName() << "] re-entering -> "
+    message << "[" << name() << "] re-entering state -> "
             << m_states.at(newState).name << "(" << newState << ")";
   }
   else if (oldState == -1)
   {
 
-    message << "[" << objectName() << "] -> " << m_states.at(newState).name
-            << "(" << newState << ")";
+    message << "[" << name() << "] moving to state "
+            << m_states.at(newState).name << "(" << newState << ")";
   }
   else
   {
 
-    message << "[" << objectName() << "] " << m_states.at(oldState).name << "("
-            << oldState << ")"
-            << " -> " << m_states.at(newState).name << "(" << newState << ")";
+    message << "[" << name() << "] moving from state "
+            << m_states.at(oldState).name << "(" << oldState << ")"
+            << " to " << m_states.at(newState).name << "(" << newState << ")";
   }
 
   if (m_transitionLogLevel)
@@ -184,8 +184,6 @@ void StateMachine::moveToState(int newState)
       }
     }
 
-    // TODO
-    // emit transition(oldState, m_currentState);
 
     // emit the entry signal for any states we've now entered
     for (const int &_newState : newStates)
@@ -286,11 +284,7 @@ int StateMachine::shouldMoveState(int event) const
   return -1;
 }
 
-
-std::string StateMachine::objectName() const
-{
-  return m_name;
-}
+std::string StateMachine::name() const { return m_name; }
 
 void StateMachine::setObjectName(std::string const &name)
 {
@@ -489,7 +483,6 @@ void StateMachine::postEvent(int event)
     return;
   }
 
-  // if (QThread::currentThread() == QObject::thread())
   {
     // the calling thread is the same as ours so post the event to our
     // local queue if inside a handler, otherwise just process the event
