@@ -270,16 +270,20 @@ int main(int argc, char *argvp[])
   //
   // sd_bus_add_object_vtable() is used to declare attributes for the path
   // object path `path` connected to the bus connection bus under the interface
-  // interface. 
+  // interface.
   //
   // The table vtable may contain property declarations using SD_BUS_PROPERTY()
   // or SD_BUS_WRITABLE_PROPERTY(), method declarations using SD_BUS_METHOD(),
   // SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(), or
   // SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
-  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below. 
+  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below.
   //
-  // The `userdata` parameter contains a pointer that will be passed to various
+  // The `userdata` parameter contains a pointer that will be passed to handler
   // callback functions. It may be specified as NULL if no value is necessary.
+  //
+  // typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
+  //  	void *userdata,
+  //  	sd_bus_error *ret_error);
   //
   // For both functions, a `match slot` is created internally. If the output
   // parameter slot is NULL, a "floating" slot object is created, see

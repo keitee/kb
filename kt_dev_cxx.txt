@@ -215,8 +215,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-coll-cxx-list-forward-list
 
 *kt_dev_cxx_0000* cxx-coll-associative
-*kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
-*kt_dev_cpp_0000* cxx-coll-map cxx-map cxx-multimap cxx-size-t
+*kt_dev_cxx_0000* cxx-coll-cxx-set cxx-multiset
+*kt_dev_cpp_0000* cxx-coll-cxx-map cxx-multimap cxx-size-t
 *kt_dev_cxx_0000* cxx-coll-unordered
 *kt_dev_cxx_0000* cxx-container-print-elements
 
@@ -44410,7 +44410,7 @@ lowercase word "unternehmen" note: The signature of operator() must be const.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
+*kt_dev_cxx_0000* cxx-coll-cxx-set cxx-multiset
 
 namespace cxx_code
 {
@@ -44740,22 +44740,36 @@ namespace cxx_code
     };
 
   // bits/stl_multimap.h
-  // same as *cxx-set-multi* in using _Compare
   template 
     <typename _Key, typename _Tp,
     `typename _Compare = std::less<_Key>,`
       typename _Alloc = std::allocator<std::pair<const _Key, _Tp> > >
       class multimap
       {
+        // [23.3.1.2] element access
         /**
-         *  @brief  Creates a %multimap with no elements.
-         *  @param  __comp  A comparison object.
-         *  @param  __a  An allocator object.
+         *  @brief  Subscript ( @c [] ) access to %map data.
+         *  @param  __k  The key for which data should be retrieved.
+         *  @return  A reference to the data of the (key,data) %pair.
+         *
+         *  Allows for easy lookup with the subscript ( @c [] )
+         *  operator.  Returns data associated with the key specified in
+         *  subscript.  If the key does not exist, a pair with that key
+         *  is created using default values, which is then returned.
+         *
+         *  Lookup requires logarithmic time.
          */
-        explicit
-          multimap(const _Compare& __comp,
-              const allocator_type& __a = allocator_type())
-          : _M_t(__comp, _Pair_alloc_type(__a)) { }
+        mapped_type&
+          operator[](const key_type& __k)
+          {
+            iterator __i = lower_bound(__k);
+
+            // __i->first is greater than or equivalent to __k.
+            if (__i == end() || `key_comp()(__k, (*__i).first)`)
+              __i = insert(__i, value_type(__k, mapped_type()));
+
+            return (*__i).second;
+          }
       };
 } // namespace
 
@@ -44765,9 +44779,11 @@ The elements of a map or a multimap may have any types Key and Tp that meet
 the following two requirements:
 
 o Both key and value must be copyable or movable.
-o The key must be comparable with the sorting criterion. the default is `cxx-less`
 
-As with set, key is 'constant'. However, a direct modification of the value of
+o The key must be comparable with the sorting criterion. the default is `cxx-less`
+  As with unique_ptr *cxx-sp-delete*, use `typename` to set comp.
+
+As with set, key is `constant`. However, a direct modification of the value of
 the element is still possible, provided that the type of the value is not
 constant.
 
@@ -44796,7 +44812,7 @@ map<string, int>::mapped_type v5;   // int
 functions that perform better because of their internal tree structure
 
 c.count(val) 
-Returns the number of elements with 'key' val
+Returns the number of elements with `key` 
 
 c.find(val) 
 Returns the position(iterator) of `the first element with key` or end() if
@@ -44852,36 +44868,13 @@ on map returns `mapped_type` but dereferencing of iterator returns
   "Thus, to use this feature, you can't use a value type that has no default
   constructor." 
 
-namespace cxx_code
-{
-  // bits/stl_map.h
-
-  // [23.3.1.2] element access
-  /**
-   *  @brief  Subscript ( @c [] ) access to %map data.
-   *  @param  __k  The key for which data should be retrieved.
-   *  @return  A reference to the data of the (key,data) %pair.
-   *
-   *  Allows for easy lookup with the subscript ( @c [] )
-   *  operator.  Returns data associated with the key specified in
-   *  subscript.  If the key does not exist, a pair with that key
-   *  is created using default values, which is then returned.
-   *
-   *  Lookup requires logarithmic time.
-   */
-  mapped_type&
-    operator[](const key_type& __k)
-    {
-      __i = insert(__i, value_type(__k, mapped_type()));
-    }
-} // namespace
 
 <ex>
 *cxx-const-error-const* when calls non-const member on const object.
 
-    std::map<int, State> m_states;
+std::map<int, State> m_states;
 
-void StateMachine::logTransition(int oldState, int newState) const
+void StateMachine::logTransition(int oldState, int newState) `const`
 {
   if (oldState == newState) {
     message << "[" << objectName() << "] re-entering state "
@@ -44889,53 +44882,8 @@ void StateMachine::logTransition(int oldState, int newState) const
   }
 }
 
-errors on "m_states[newState].name". ????
+errors on "m_states[newState].name"
 
-namespace cxx_map
-{
-  struct SampleEntry
-  {
-    int id;
-    std::string name;
-  };
-
-  void print_name(std::map<unsigned int, SampleEntry> const &coll)
-  {
-    ASSERT_THAT(coll.size(), 3);
-    // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as ‘this’ argument discards qualifiers [-fpermissive]
-    //      std::cout << "name: " << coll[1].name << std::endl;
-    //                                     ^
-    // std::cout << "name: " << coll[1].name << std::endl;
-
-    // okay as: bits/stl_map.h
-    // const mapped_type&
-    // at(const key_type& __k) const
-    // {}
-    //
-    // so operator[] of map do not support const
-
-    std::cout << "name: " << coll.at(1).name << std::endl;
-  }
-} // namespace
-
-TEST(Map, Access)
-{
-  using namespace cxx_map;
-
-  std::map<unsigned int, SampleEntry> coll{};
-
-  coll.insert({0, {100, "string1"}});
-  coll.insert({1, {200, "string2"}});
-  coll.insert({2, {300, "string3"}});
-
-  ASSERT_THAT(coll.size(), 3);
-
-  std::cout << "name: " << coll[1].name << std::endl;
-  coll[1].name = "changed2";
-  std::cout << "name: " << coll[1].name << std::endl;
-
-  print_name(coll);
-}
 
 <ex> *ex-count-words* *ex-count-keyword*
 
@@ -45289,110 +45237,6 @@ TEST(AlgoMinMax, Map)
     EXPECT_THAT(*pos, make_pair(1, 2));
   }
 }
-
-
-<cxx-map-copy-assign>
-
-#include<iostream>
-#include<iomanip>
-#include<string>
-#include<map>
-
-using namespace std;
-
-int main()
-{
-  // dict1
-  map<string, string> dict1;
-
-  dict1.insert(
-      {
-        { "day", "Tag" }, { "strange", "fremd" },
-        { "car", "Auto" }, { "smart", "elegant" }
-      }
-      );
-
-  // prints all elements *cxx-stream-setf*
-  cout.setf (ios::left, ios::adjustfield);
-  cout << ' ' << setw(10) << "engligh " << "german " << endl;
-
-  cout << setfill('-') << setw(20) << "" << setfill(' ') << endl;
-  for( const auto& elem : dict1 ) {
-    cout << ' ' << setw(10) << elem.first << elem.second << endl;
-  }
-  cout << endl;
-
-  // dict2
-  map<string, string> dict2;
-
-  dict2.insert(
-      {
-        { "width", "1024" }, { "height", "768" },
-        { "cofig", "ABR" }, { "video", "MP4" },
-        { "audio", "stereo" }, { "codec", "dash" },
-        { "media", "ts" }, { "app", "ms-x" }
-      }
-      );
-
-  // prints all elements
-  cout.setf (ios::left, ios::adjustfield);
-  cout << ' ' << setw(10) << "property " << "value " << endl;
-
-  cout << setfill('-') << setw(20) << "" << setfill(' ') << endl;
-  for( const auto& elem : dict2 ) {
-    cout << ' ' << setw(10) << elem.first << elem.second << endl;
-  }
-  cout << endl;
-
-  // copy map
-  dict1 = dict2;
-
-  // prints all elements
-  cout.setf (ios::left, ios::adjustfield);
-  cout << ' ' << setw(10) << "engligh " << "german " << endl;
-
-  cout << setfill('-') << setw(20) << "" << setfill(' ') << endl;
-  for( const auto& elem : dict1 ) {
-    cout << ' ' << setw(10) << elem.first << elem.second << endl;
-  }
-  cout << endl;
-
-  cout << "size of dict1: " << dict1.size() 
-    << ", size of dict2: " << dict2.size() << endl;
-}
-
-
-$ ./a.out 
- engligh   german 
---------------------
- car       Auto
- day       Tag
- smart     elegant
- strange   fremd
-
- property  value 
---------------------
- app       ms-x
- audio     stereo
- codec     dash
- cofig     ABR
- height    768
- media     ts
- video     MP4
- width     1024
-
- engligh   german 
---------------------
- app       ms-x
- audio     stereo
- codec     dash
- cofig     ABR
- height    768
- media     ts
- video     MP4
- width     1024
-
-size of dict1: 8, size of dict2: 8
 
 
 ={============================================================================
@@ -48501,6 +48345,7 @@ namespace std {
       { return __x * __y; }
     };
 
+  *cxx-less*
   template<typename _Tp>
     struct less : public binary_function<_Tp, _Tp, bool>
     {

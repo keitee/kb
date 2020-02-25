@@ -1749,7 +1749,7 @@ TEST(Queue, Priority)
 // ={=========================================================================
 // cxx-set
 
-TEST(Set, InsertAndEmplace)
+TEST(CxxSet, set_InsertAndEmplace)
 {
   set<int> coll1{};
 
@@ -1766,7 +1766,7 @@ TEST(Set, InsertAndEmplace)
   EXPECT_THAT(coll2, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
 }
 
-TEST(Set, SortOrder)
+TEST(CxxSet, set_SortOrder)
 {
   {
     // less <
@@ -1903,125 +1903,100 @@ TEST(Set, Erase)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxMap, Insert)
+TEST(CxxMap, map_FindAndAccess)
 {
-  // cannot be a const map since operator[] is for non-const.
+  {
+    std::map<float, float>
+      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
 
-  map<unsigned int, string> coll{{1, "one"},
-                                 {2, "two"},
-                                 {3, "three"},
-                                 {4, "four"}};
+    // find with key
+    {
+      // *cxx-error*
+      // when tries to use custom matcher, get's link error
+      // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
 
-  coll[3] = "threee";
-  coll[3] = "threeee";
-  coll[3] = "threeeee";
-  coll[3] = "threeeeee";
+      auto it = coll.find(3.0);
+      EXPECT_THAT(*it, make_pair(3, 2));
 
-  ASSERT_THAT(coll[3], Eq("threeeeee"));
+      EXPECT_THAT(it->first, 3);
+      EXPECT_THAT(it->second, 2);
+    }
 
-  coll.insert({3, "third"});
-  coll.insert({3, "thirdd"});
-  coll.insert({3, "thirddd"});
-  coll.insert({3, "thirdddd"});
+    // returns value
+    {
+      auto value = coll.at(3.0);
+      EXPECT_THAT(value, 2);
+    }
 
-  // not changed since cxx-set and cxx-map do not allow duplicates and nothing
-  // happens when key is already exist
+    // find with value
+    {
+      // *algo-find-if-const* error if there is no const on predicate.
+      // since it's *cxx-algo-non-modifying* ?
 
-  ASSERT_THAT(coll[3], Eq("threeeeee"));
+      // *cxx-decltype*
+      auto it = find_if(coll.cbegin(),
+                        coll.cend(),
+                        // [] ( const pair<float,float> &elem )
+                        // [] ( const map<float,float>::value_type &elem )
+                        [](const decltype(coll)::value_type &elem) {
+                          return elem.second == 3.0;
+                        });
+      EXPECT_THAT(it->first, Eq(4));
+      EXPECT_THAT(it->second, Eq(3));
+    }
+  }
 }
 
-namespace cxx_map
+TEST(CxxMap, map_Const)
 {
-  struct SampleEntry
+  // cannot be a const map since operator[] is for non-const.
   {
-    int id;
-    std::string name;
-  };
+    std::map<unsigned int, std::string> coll{{1, "one"},
+                                             {2, "two"},
+                                             {3, "three"},
+                                             {4, "four"}};
 
-  void print_name(std::map<unsigned int, SampleEntry> const &coll)
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+
+    coll.insert({3, "third"});
+    coll.insert({3, "thirdd"});
+    coll.insert({3, "thirddd"});
+    coll.insert({3, "thirdddd"});
+
+    // not changed since cxx-set and cxx-map do not allow duplicates and nothing
+    // happens when key is already exist
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
   {
-    ASSERT_THAT(coll.size(), 3);
+    const std::map<float, float>
+      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
 
-    // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as
-    // ‘this’ argument discards qualifiers [-fpermissive]
-    //      std::cout << "name: " << coll[1].name << std::endl;
-    //                                     ^
-    // std::cout << "name: " << coll[1].name << std::endl;
+    // again, operator[] do not work on const
+    //
+    // error: passing ‘const std::__debug::map<float, float>’ as ‘this’ argument discards qualifiers [-fpermissive]
+    // {
+    //   EXPECT_THAT(coll[1], 7);
+    // }
 
     // okay as: bits/stl_map.h
     // const mapped_type&
     // at(const key_type& __k) const
     // {}
-    //
-    // NOTE: so operator[] of map do not support const
-
-    std::cout << "name: " << coll.at(1).name << std::endl;
-  }
-} // namespace cxx_map
-
-TEST(CxxMap, FindAndAccess)
-{
-  {
-    map<float, float>
-      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
-
-    // *cxx-error*
-    // when tries to use custom matcher, get's link error
-    // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
-
-    auto posKey = coll.find(3.0);
-    EXPECT_THAT(*posKey, make_pair(3, 2));
-
-    // *algo-find-if-const* error if there is no const on predicate.
-    // since it's *cxx-algo-non-modifying* ?
-
-    // *cxx-decltype*
-    auto posVal = find_if(coll.cbegin(),
-                          coll.cend(),
-                          // [] ( const pair<float,float> &elem )
-                          // [] ( const map<float,float>::value_type &elem )
-                          [](const decltype(coll)::value_type &elem) {
-                            return elem.second == 3.0;
-                          });
-    EXPECT_THAT(posVal->first, Eq(4));
-    EXPECT_THAT(posVal->second, Eq(3));
-  }
-
-  {
-    map<float, float>
-      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
-
-    auto value = coll.at(3.0);
-    EXPECT_THAT(value, 2);
-
-    auto it = coll.find(3.0);
-    EXPECT_THAT(it->first, 3);
-    EXPECT_THAT(it->second, 2);
-  }
-
-  {
-    using namespace cxx_map;
-
-    std::map<unsigned int, SampleEntry> coll{};
-
-    coll.insert({0, {100, "string1"}});
-    coll.insert({1, {200, "string2"}});
-    coll.insert({2, {300, "string3"}});
-
-    ASSERT_THAT(coll.size(), 3);
-
-    EXPECT_THAT(coll[1].name, "string2");
-    coll[1].name = "changed2";
-    EXPECT_THAT(coll[1].name, "changed2");
-
-    print_name(coll);
+    {
+      EXPECT_THAT(coll.at(1), 7);
+    }
   }
 }
 
-TEST(CxxMap, Iterate)
+TEST(CxxMap, map_Iterate)
 {
-  using namespace cxx_map;
-
   {
     std::map<unsigned int, std::string> coll{};
     std::vector<std::string> ret{};
@@ -2050,14 +2025,16 @@ TEST(CxxMap, Iterate)
     std::map<unsigned int, std::string> coll{};
     std::vector<std::string> ret{};
 
-    coll.insert({4, "string0"});
-    coll.insert({3, "string1"});
-    coll.insert({2, "string2"});
-    coll.insert({1, "string3"});
-    coll.insert({0, "string4"});
+    // can do in single shot
+    coll.insert({{4, "string0"},
+                 {3, "string1"},
+                 {2, "string2"},
+                 {1, "string3"},
+                 {0, "string4"}});
 
     ASSERT_THAT(coll.size(), 5);
 
+    // *cxx-auto*
     // both cause cxx-error when use "++it" as both makes "it" const and "it"
     // is iterator
     //
@@ -2099,7 +2076,36 @@ TEST(CxxMap, Iterate)
   }
 }
 
-TEST(CxxMap, EqualRange)
+TEST(CxxMap, map_Copy)
+{
+  {
+    std::map<unsigned int, std::string> coll1{};
+
+    // can do in single shot
+    coll1.insert({{4, "string0"},
+                  {3, "string1"},
+                  {2, "string2"},
+                  {1, "string3"},
+                  {0, "string4"}});
+
+    ASSERT_THAT(coll1.size(), 5);
+
+    std::map<unsigned int, std::string> coll2{};
+
+    // can do in single shot
+    coll2.insert({{14, "string10"}, {11, "string13"}, {10, "string14"}});
+
+    ASSERT_THAT(coll2.size(), 3);
+
+    coll1 = coll2;
+
+    // now both are same
+    ASSERT_THAT(coll1.size(), 3);
+    ASSERT_THAT(coll2.size(), 3);
+  }
+}
+
+TEST(CxxMap, map_multi_EqualRange)
 {
   std::string str = "total";
 
@@ -2171,6 +2177,135 @@ TEST(CxxMap, EqualRange)
                 ElementsAre("Sot-Weed Factor",
                             "Lost in the Funhouse",
                             "A way to success"));
+  }
+}
+
+TEST(CxxMap, map_Compare)
+{
+  // use cxx-less by default
+  {
+    std::map<std::string, unsigned int> coll{};
+    std::vector<int> ret{};
+
+    // can do in single shot
+    coll.insert({{"stringA", 0},
+                 {"stringB", 1},
+                 {"stringC", 2},
+                 {"stringD", 3},
+                 {"stringE", 4}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // so "sorted"
+    EXPECT_THAT(ret, ElementsAre(0, 1, 2, 3, 4));
+  }
+
+  {
+    struct CustomComp
+    {
+      bool operator()(const std::string &lhs, const std::string &rhs)
+      {
+        // would be if it was cxx-less
+        // return lhs < rhs;
+
+        // to make opposite
+        return lhs > rhs;
+      }
+    };
+
+    std::map<std::string, unsigned int, CustomComp> coll{};
+    std::vector<int> ret{};
+
+    // can do in single shot
+    coll.insert({{"stringA", 0},
+                 {"stringB", 1},
+                 {"stringC", 2},
+                 {"stringD", 3},
+                 {"stringE", 4}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // now it's reversed
+    EXPECT_THAT(ret, ElementsAre(4, 3, 2, 1, 0));
+  }
+
+  // sorted by case
+  {
+    std::map<std::string, std::string> coll{};
+    std::vector<std::string> ret{};
+
+    // can do in single shot
+    coll.insert({{"one", "one"},
+                 {"One", "One"},
+                 {"Onwards", "Onwards"},
+                 {"oragne", "orange"},
+                 {"Paris", "Paris"}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // so "sorted" by case
+    EXPECT_THAT(ret, ElementsAre("One", "Onwards", "Paris", "one", "orange"));
+  }
+
+  // sorted by less and non-case
+  {
+
+    // strcasecmp, strncasecmp - compare two strings ignoring case
+    //
+    // #include <strings.h>
+    //
+    // int strcasecmp(const char *s1, const char *s2);
+    //
+    // int strncasecmp(const char *s1, const char *s2, size_t n);
+
+    struct CustomComp
+    {
+      bool operator()(const std::string &lhs, const std::string &rhs)
+      {
+        return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
+      }
+    };
+
+    std::map<std::string, std::string, CustomComp> coll{};
+    std::vector<std::string> ret{};
+
+    // can do in single shot
+    coll.insert({{"one", "one"},
+                 {"One", "One"},
+                 {"Onwards", "Onwards"},
+                 {"oragne", "orange"},
+                 {"Paris", "Paris"}});
+
+    // NOTE: it is 4 since non-case comp makes duplcates so comp do affect not
+    // only the order but also `insert`
+    ASSERT_THAT(coll.size(), 4);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // so "sorted" by non-case
+    EXPECT_THAT(ret, ElementsAre("one", "Onwards", "orange", "Paris"));
   }
 }
 
