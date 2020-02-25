@@ -44701,54 +44701,62 @@ namespace cxx_code
   template
     <typename _Key, typename _Tp, `typename _Compare = std::less<_Key>,`
     typename _Alloc = std::allocator<std::pair<const _Key, _Tp> >> 
-      class map
-      {
-        public:
-          typedef _Key                                          key_type;
-          typedef _Tp                                           mapped_type;
+    class map
+    {
+      public:
+        typedef _Key                                          key_type;
+        typedef _Tp                                           mapped_type;
 
-          typedef std::pair<const _Key, _Tp>                    value_type;
+        typedef std::pair<const _Key, _Tp>                    value_type;
 
-          typedef typename _Rep_type::size_type              size_type;
+        typedef typename _Rep_type::size_type              size_type;
 
-          typedef _Rb_tree<key_type, value_type, _Select1st<value_type>,
-                  key_compare, _Pair_alloc_type> _Rep_type;
+        typedef _Rb_tree<key_type, value_type, _Select1st<value_type>,
+                key_compare, _Pair_alloc_type> _Rep_type;
 
-          typedef _Compare                                      key_compare;
-          typedef _Alloc                                        allocator_type;
+        typedef _Compare                                      key_compare;
+        typedef _Alloc                                        allocator_type;
 
-          // *cxx-map-insert*
-          /**
-           *  @brief Attempts to insert a std::pair into the %map.
+        // *cxx-map-insert*
+        /**
+         *  @brief Attempts to insert a std::pair into the %map.
 
-           *  @param __x Pair to be inserted (see std::make_pair for easy
-           *    creation of pairs).
-           *
-           *  @return  A pair, of which the first element is an iterator that 
-           *           points to the possibly inserted pair, and the second is 
-           *           a bool that is true if the pair was actually inserted.
-           *
-           *  This function attempts to insert a (key, value) %pair into the %map.
-           *  A %map relies on unique keys and thus a %pair is only inserted if its
-           *  first element (the key) is not already present in the %map.
-           *
-           *  Insertion requires logarithmic time.
-           */
-          std::pair<iterator, bool>
-            insert(const value_type& __x)
-            { return _M_t._M_insert_unique(__x); }
-      };
+         *  @param __x Pair to be inserted (see std::make_pair for easy
+         *    creation of pairs).
+         *
+         *  @return  A pair, of which the first element is an iterator that 
+         *           points to the possibly inserted pair, and the second is 
+         *           a bool that is true if the pair was actually inserted.
+         *
+         *  This function attempts to insert a (key, value) %pair into the %map.
+         *  A %map relies on unique keys and thus a %pair is only inserted if its
+         *  first element (the key) is not already present in the %map.
+         *
+         *  Insertion requires logarithmic time.
+         */
+        std::pair<iterator, bool>
+          insert(const value_type& __x)
+          { return _M_t._M_insert_unique(__x); }
+    };
 
   // bits/stl_multimap.h
-
+  // same as *cxx-set-multi* in using _Compare
   template 
     <typename _Key, typename _Tp,
     `typename _Compare = std::less<_Key>,`
-    typename _Alloc = std::allocator<std::pair<const _Key, _Tp> > >
+      typename _Alloc = std::allocator<std::pair<const _Key, _Tp> > >
       class multimap
       {
+        /**
+         *  @brief  Creates a %multimap with no elements.
+         *  @param  __comp  A comparison object.
+         *  @param  __a  An allocator object.
+         */
+        explicit
+          multimap(const _Compare& __comp,
+              const allocator_type& __a = allocator_type())
+          : _M_t(__comp, _Pair_alloc_type(__a)) { }
       };
-
 } // namespace
 
 
@@ -57646,8 +57654,8 @@ NOTE:
 
 o the passed deleter is not allowed to throw exceptions.
 
-o unique_ptr uses typename and shared_ptr uses object for deleter.
-
+o unique_ptr uses template and typename. shared_ptr uses object for deleter and
+  template function.
 
 namespace cxx_code *cxx-sp-code*
 {
@@ -57656,6 +57664,8 @@ namespace cxx_code *cxx-sp-code*
   template <typename _Tp, `typename _Dp = default_delete<_Tp>`>
     class unique_ptr
     {
+      `using deleter_type  = _Dp;`
+
       /** Takes ownership of a pointer.
        *
        * @param __p  A pointer to an object of @c element_type
@@ -57671,7 +57681,7 @@ namespace cxx_code *cxx-sp-code*
       /** Takes ownership of a pointer.
        *
        * @param __p  A pointer to an object of @c element_type
-       * @param __d  A reference to a deleter.
+       * `@param __d  A reference to a deleter.`
        *
        * The deleter will be initialized with @p __d
        */
@@ -57785,12 +57795,11 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
-TEST(CxxSmartPointer, Deleter)
+TEST(CxxSmartPointer, sp_Deleter)
 {
   using namespace cxx_sp_delete;
 
   // unique pointers
-
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"));
@@ -57798,8 +57807,7 @@ TEST(CxxSmartPointer, Deleter)
     EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
-  // same as the above since unique_ptr ctor() uses deleter type to create
-  // delter to use
+  // same as the above and another unique_ptr ctor
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"),
@@ -57822,7 +57830,6 @@ TEST(CxxSmartPointer, Deleter)
   // }
 
   // shared pointers
-
   {
     std::shared_ptr<string> sp1(new std::string("nico on function"),
                                 function_delete);
@@ -57848,31 +57855,43 @@ TEST(CxxSmartPointer, Deleter)
 }
 
 <ex>
+Uses typedef like unique_ptr but also provides a way to set comp object
+reference
 
 namespace cxx_code *cxx-set-multi*
 {
   // stl_multiset.h
 
-  template <typename _Key, typename _Compare = std::less<_Key>,
-           typename _Alloc = std::allocator<_Key> >
-             class multiset
-             {
-               /**
-                *  @brief  Creates a %multiset with no elements.
-                *  @param  __comp  Comparator to use.
-                *  @param  __a  An allocator object.
-                */
-               explicit
-                 multiset(const _Compare& __comp,
-                     const allocator_type& __a = allocator_type())
-                 : _M_t(__comp, _Key_alloc_type(__a)) { }
-             } 
+  template 
+    <typename _Key, `typename _Compare = std::less<_Key>`,
+    typename _Alloc = std::allocator<_Key>> 
+      class multiset
+      {
+        typedef _Compare key_compare;
+        typedef _Compare value_compare;
 
+        // allocation/deallocation
+        /**
+         *  @brief  Default constructor creates no elements.
+         */
+        multiset() = default;
+
+        /**
+         *  @brief  Creates a %multiset with no elements.
+         *  @param  __comp  Comparator to use.
+         *  @param  __a  An allocator object.
+         */
+        explicit
+          multiset(const _Compare& __comp,
+              const allocator_type& __a = allocator_type())
+          : _M_t(__comp, _Key_alloc_type(__a)) { }
+      } 
 } // namespace
 
 class BulkQuoteTest : public ::testing::Test
 {
   protected:
+    // pass compare() reference
     BulkQuoteTest() : items_{compare} {}
 
     static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)

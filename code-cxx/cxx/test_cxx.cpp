@@ -4947,6 +4947,7 @@ namespace cxx_smart_pointer
 
   std::shared_ptr<SmartFoo1> SmartFoo1::getFoo2()
   {
+    // NOTE:
     // error: ‘cxx_smart_pointer::SmartFoo1::SmartFoo1()’ is private within this context
     // return std::make_shared<SmartFoo1>();
 
@@ -5529,8 +5530,7 @@ TEST(CxxSmartPointer, sp_Deleter)
 {
   using namespace cxx_sp_delete;
 
-  // unique pointers
-
+  // unique shares pointers uses type of deleter
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"));
@@ -5538,8 +5538,7 @@ TEST(CxxSmartPointer, sp_Deleter)
     EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
-  // same as the above since unique_ptr ctor() uses deleter type to create
-  // delter to use
+  // same as the above and another unique_ptr ctor
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"),
@@ -5586,8 +5585,7 @@ TEST(CxxSmartPointer, sp_Deleter)
     unique_ptr_with_function up(nullptr, function_delete);
   }
 
-  // shared pointers
-
+  // shared pointer takes object as argument
   {
     std::shared_ptr<string> sp1(new std::string("nico on function"),
                                 function_delete);
