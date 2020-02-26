@@ -142,9 +142,9 @@ TEST(CxxJSON, jsoncpp_ex1)
       }
 
       std::cout << "characters:    name: " << chars[i]["name"].asString()
-        << std::endl;
+                << std::endl;
       std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
-        << std::endl;
+                << std::endl;
     }
   }
 
@@ -154,7 +154,7 @@ TEST(CxxJSON, jsoncpp_ex1)
     // json reader object
 
     Json::CharReaderBuilder builder;
-    builder["allowComments"] = true;
+    builder["allowComments"]     = true;
     builder["allowSingleQuotes"] = true;
 
     std::ifstream ifs("../alice.json");
@@ -177,14 +177,43 @@ TEST(CxxJSON, jsoncpp_ex1)
     for (int i = 0; i < chars.size(); i++)
     {
       std::cout << "characters:    name: " << chars[i]["name"].asString()
-        << std::endl;
+                << std::endl;
       std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
-        << std::endl;
+                << std::endl;
     }
   }
 }
 
-// what does `empty` mesna?
+// what does `empty` mean?
+//
+// {
+//     "book":"Alice in Wonderland",
+//     "year":1865,
+//     "characters":
+//     [
+//         {"name":"Jabberwock", "chapter":1},
+//         {"name":"Cheshire Cat", "chapter":6},
+//         {"name":"Mad Hatter", "chapter":7}
+//         {"name":, "chapter":}                  // is it empty?
+//     ],
+//     "name":
+// }
+//
+// [ RUN      ] CxxJSON.jsoncpp_ex1_1
+// book: Alice in Wonderland
+// year: 1865
+// book: Alice in Wonderland
+// year: 1865
+// i : 0 is object and not empty
+// characters:    name: Jabberwock
+// characters: chapter: 1
+// i : 1 is object and not empty
+// characters:    name: Cheshire Cat
+// characters: chapter: 6
+// i : 2 is object and not empty
+// characters:    name: Mad Hatter
+// characters: chapter: 7
+// [       OK ] CxxJSON.jsoncpp_ex1_1 (0 ms)
 
 TEST(CxxJSON, jsoncpp_ex1_1)
 {
@@ -228,10 +257,16 @@ TEST(CxxJSON, jsoncpp_ex1_1)
       }
 
       std::cout << "characters:    name: " << chars[i]["name"].asString()
-        << std::endl;
+                << std::endl;
       std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
-        << std::endl;
+                << std::endl;
     }
+
+    // 
+    const Json::Value name = root["name"];
+
+    EXPECT_THAT(name.isNull(), true);
+    EXPECT_THAT(name.empty(), true);
   }
 }
 
@@ -262,6 +297,7 @@ TEST(CxxJSON, jsoncpp_ex2)
 {
   // create the characters array
   Json::Value ch;
+
   ch[0]["name"]    = "Jabberwock";
   ch[0]["chapter"] = 1;
   ch[1]["name"]    = "Cheshire Cat";
@@ -271,6 +307,7 @@ TEST(CxxJSON, jsoncpp_ex2)
 
   // create the main object
   Json::Value val;
+
   val["book"]       = "Alice in Wonderland";
   val["year"]       = 1865;
   val["characters"] = ch;
@@ -385,7 +422,7 @@ true if the document was successfully parsed, false if an error occurred.
 TEST(CxxJSON, jsoncpp_ex3)
 {
   std::cout << "======================" << std::endl;
-  // char array as reads 
+  // char array as reads
   {
     for (int i = 0; i < gAConfigSize; i++)
     {
@@ -479,8 +516,8 @@ TEST(CxxJSON, jsoncpp_ex4)
 
   const std::map<std::string, std::pair<const char *, size_t>> config_files = {
     {"drm", {reinterpret_cast<const char *>(gDrmConfigData), gDrmConfigSize}},
-    {"net", {reinterpret_cast<const char *>(gNetflixConfigData), gNetflixConfigSize}}
-  };
+    {"net",
+     {reinterpret_cast<const char *>(gNetflixConfigData), gNetflixConfigSize}}};
 
   // pair{filename, root value}
   std::map<std::string, const Json::Value> parsed;
@@ -557,7 +594,7 @@ TEST(CxxJSON, jsoncpp_ex4)
       {
         // std::cout << "u: " << u << std::endl;
 
-        // objectValue 	
+        // objectValue
         // object value (collection of name/value pairs).
 
         Json::Value item(Json::objectValue);
@@ -582,6 +619,117 @@ TEST(CxxJSON, jsoncpp_ex4)
   }
 
   // std::cout << "urls: " << urls << std::endl;
+}
+
+// read directly from raw std::string
+
+namespace
+{
+  const std::string ConfigJson = R"JSON(
+{
+  "uris": [
+    {
+      "path": "/as/drm/status",
+      "method": "ws",
+      "thread": "AS_WS_PLAYER"
+    },
+    {
+      "path": "/as/players/<vwid>/status",
+      "method": "ws",
+      "thread": "AS_WS_PLAYER"
+    },
+    {
+      "path": "/as/players/<vwid>/action/watchpvr",
+      "method": "post",
+      "expectsBody": false
+    },
+    {
+      "path": "/as/players/<vwid>/action/watchbdl",
+      "method": "post",
+      "expectsBody": false
+    }
+  ]
+}
+)JSON";
+
+} // namespace
+
+TEST(CxxJSON, jsoncpp_ex5) 
+{
+  Json::Reader reader;
+  Json::Value root;
+
+  // parse the json
+  if (!reader.parse(ConfigJson.data(),
+                    ConfigJson.data() + ConfigJson.length(),
+                    root))
+  {
+    std::cout << "failed to parse config json" << std::endl;
+    return;
+  }
+
+  if (!root.isObject())
+  {
+    std::cout << "invalid root config object" << std::endl;
+    return;
+  }
+
+  static const Json::StaticString domain("domain");
+  static const Json::StaticString urisName("uris");
+  static const Json::StaticString sysInfoName("providesSystemInfo");
+  static const Json::StaticString sysStatusName("providesSystemStatus");
+  static const Json::StaticString testPrefsName("testPreferences");
+  static const Json::StaticString sysSettingsName("systemSettings");
+
+  {
+    const Json::Value domainName = root[domain];
+
+    if (domainName.isString())
+    {
+      std::cout << "domain : " << domainName.asString() << std::endl;
+    }
+    else if (!domainName.isNull())
+    {
+      // not string and not null. shall be string or null.
+      std::cout << "invalid domain name format" << std::endl;
+    }
+  }
+
+  {
+    const Json::Value uris = root[urisName];
+
+    if (uris.isArray())
+    {
+      for (const Json::Value &uri : uris)
+      {
+        const Json::Value path = uri["path"];
+        const Json::Value method = uri["method"];
+
+        if (path.isString())
+        {
+          std::cout << "path   : " << path.asString() << std::endl;
+        }
+        else if (!path.isNull())
+        {
+          std::cout << "invalid path format" << std::endl;
+        }
+
+        if (method.isString())
+        {
+          std::cout << "method : " << method.asString() << std::endl;
+        }
+        else if (!method.isNull())
+        {
+          std::cout << "invalid method format" << std::endl;
+        }
+      }
+    }
+    else if (!uris.isNull())
+    {
+      // not string and not null. shall be array or null.
+      std::cout << "invalid uris format" << std::endl;
+    }
+  }
 }
 
 // ={=========================================================================
