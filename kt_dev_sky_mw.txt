@@ -11132,8 +11132,67 @@ ProtectHome=true
 ProtectSystem=full
 
 
-./ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
-./ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+
+namespace AS_MAIN
+{
+  class ProxyUrlMap : public AS_WORKER::UrlMap
+  {
+    void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
+        const std::string &url,
+        AS_WORKER::Factory *factory,
+        const std::string &threadName )
+    {
+      pthread_rwlock_wrlock(&mRwLock);
+
+      // for some reason the RegisterUrl methods take a non-const char pointer, so
+      // copy the url into a mutable buffer
+      static char urlBuf[256];
+      strncpy(urlBuf, url.c_str(), sizeof(urlBuf));
+      urlBuf[sizeof(urlBuf) - 1] = '\0';
+
+      // create the thread params if a name was given
+      AS_WORKER::ThreadParams *threadParams = nullptr;
+      if (!threadName.empty())
+      {
+        threadParams = new AS_WORKER::ThreadParams(threadName.c_str());
+      }
+
+      // call the original methods to register the url
+      AS_WORKER::UrlMap::RegisterUrl(method, urlBuf, factory, nullptr, threadParams);
+
+      pthread_rwlock_unlock(&mRwLock);
+
+      // can now add the url and method to the allowed ones for CORS
+      mCorsExecutor->add(method, url);
+    }
+  }
+}
+
+// ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
+0000149570.661152 MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
+0000149570.661168 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
+0000149570.661234 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
+0000149570.661297 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
+0000149570.661351 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
+0000149570.661406 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
+0000149570.661466 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
+0000149570.661520 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
+0000149570.661574 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
+0000149570.661628 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
+0000149570.661689 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
+
+0000149568.659294 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
+0000149568.659381 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
+0000149568.659457 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
+0000149568.659508 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
+0000149568.659558 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
+0000149568.659611 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
+0000149568.659663 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
+0000149568.991743 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
+0000149568.991804 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
+0000149568.991861 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
@@ -11276,19 +11335,30 @@ ssh -p 10022 root@192.168.0.103
 
 systemctl status sky-asplayer
 systemctl stop sky-asplayer
+systemctl start sky-asplayer
+
+journalctl -fu sky-asplayer
+
+
+// copy player
+scp -r -P 10022 ./asrdkplayer root@192.168.0.104:/opt
+mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+
 
 systemctl status sky-asproxy
 systemctl stop sky-asproxy
 systemctl start sky-asproxy
 
-scp -r -P 10022 ./asrdkplayer root@192.168.0.103:/opt
-mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+// copy proxy
+scp -r -P 10022 ./asproxy root@192.168.0.104:/opt
+mount-copybind ./asproxy /usr/sbin/asproxy
 
 systemctl start sky-asplayer
 
 journalctl -u sky-asplayer --since today
 
 services/scan/action/start
+http://192.168.0.104:9005/as/services/scan/action/start?scantype=DTT-FULL
 
 services/favourites
 
@@ -11299,6 +11369,9 @@ services/favourites
  { "lcn": 2, "sid": "2314"}
  ]
 }
+
+// get log from box to host
+scp -P 10022 root@192.168.0.104:/opt/log.out .
 
 // copy whole directory and must be on "/" on target
 
@@ -11566,9 +11639,40 @@ enum ChannelSearchAction {
 [09:45:07,865662] MAIN(10486).20 console.cpp:162(L1)KT: --------------------------------> SearchStatus: Finished
 [09:45:08,866023] MAIN(10486).20 console.cpp:167(L1)SearchStatus: (DONE)
 
+*as-dtt-scan-status*
 
-[1563970136.24] /services/scan/status ws: {u'status': u'RUNNING', u'progress': 99, u'scantype': u'DTT-UPDATE', u'radiochannels': 0, u'tvchannels': 6}
+// ethan-as-source/Components/AS/Services/Controllers/ServiceScanController/source/AS_SERVICESCAN_ServiceScanController.cpp
+void ServiceScanController::BuildScanStatusJson( AS::string &jsonResponse )
 
+/services/scan/status ws: {u'status': u'RUNNING', u'progress': 99, u'scantype': u'DTT-UPDATE', u'radiochannels': 0, u'tvchannels': 6}
+/services/scan/status ws: {
+  u'status': u'RUNNING', 
+  u'progress': 99, 
+  u'scantype': u'DTT-UPDATE', 
+  u'radiochannels': 0, 
+  u'tvchannels': 6
+}
+
+/**
+ * @brief Structure that holds scan status information
+ */
+struct ScanStatus
+{
+    bool operator != ( const ScanStatus& scanStatus )
+    {
+        return (    (this->progress != scanStatus.progress)
+                 || (this->numTVServices != scanStatus.numTVServices)
+                 || (this->numRadioServices != scanStatus.numRadioServices)
+                 || (this->signalStatus != scanStatus.signalStatus)
+                 || (this->hasConflicts != scanStatus.hasConflicts) );
+    }
+
+    uint32_t progress;                  ///< Progress of the current scan in percent (0 - 100)
+    uint32_t numTVServices;             ///< Number of TV services acquired during the scan
+    uint32_t numRadioServices;          ///< Number of radio services acquired during the scan
+    SignalStatus signalStatus;          ///< Signal status for the locked transponder
+    bool hasConflicts;                  ///< Flag to indicate if there are duplicate LCN values
+};
 
 // 1. controller which as q and thread
 // 2. register to SPM to get status
