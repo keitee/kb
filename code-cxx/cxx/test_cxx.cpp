@@ -5037,7 +5037,7 @@ TEST(CxxSmartPointer, sp_construct)
   // cxx-up
   {
     std::unique_ptr<std::string> up(new std::string);
-    // causes compile error 
+    // causes compile error
     // EXPECT_THAT(up, true);
 
     // to get around, this works.
@@ -5722,7 +5722,7 @@ TEST(CxxSmartPointer, sp_unique_DeleteReleaseReset)
 
 namespace cxx_sp_use_count
 {
-  class Foo
+  class Foo : public std::enable_shared_from_this<Foo>
   {
   private:
     int id;
@@ -5733,7 +5733,12 @@ namespace cxx_sp_use_count
     {
       cout << "Foo ctor(" << id << ")" << endl;
     }
+
+    void value() { std::cout << "Foo value: " << id << std::endl; }
+
     ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+
+    std::shared_ptr<Foo> getFoo() { return shared_from_this(); }
   };
 } // namespace cxx_sp_use_count
 
@@ -5746,9 +5751,11 @@ TEST(CxxSmartPointer, sp_UseCount)
   shared_ptr<Foo> p1(new Foo(1));
   shared_ptr<Foo> p2(p1);
 
+  // shared so it's up to 2
   EXPECT_THAT(p1.use_count(), 2);
   EXPECT_THAT(p2.use_count(), 2);
 
+  // release p1 and down to 1
   p1 = nullptr;
 
   // *cxx-sp-bool*
@@ -5758,19 +5765,18 @@ TEST(CxxSmartPointer, sp_UseCount)
   EXPECT_THAT(p1.use_count(), 0);
   EXPECT_THAT(p2.use_count(), 1);
 
+  // do it again but no effect
   p1 = nullptr;
   EXPECT_THAT(p1.use_count(), 0);
   EXPECT_THAT(p2.use_count(), 1);
 
-  p1 = nullptr;
-  EXPECT_THAT(p1.use_count(), 0);
-  EXPECT_THAT(p2.use_count(), 1);
-
+  // release p2
   p2 = nullptr;
 
   EXPECT_THAT(p1.use_count(), 0);
   EXPECT_THAT(p2.use_count(), 0);
 
+  // do it again but no effect
   p2 = nullptr;
   EXPECT_THAT(p1.use_count(), 0);
   EXPECT_THAT(p2.use_count(), 0);
@@ -5778,6 +5784,55 @@ TEST(CxxSmartPointer, sp_UseCount)
   p2 = nullptr;
   EXPECT_THAT(p1.use_count(), 0);
   EXPECT_THAT(p2.use_count(), 0);
+}
+
+// started from a quesion; what's going to happen when the shared pointer from
+// shared_from_this()? will it delete the pointee?
+// So as shown below, the parent on which shared_from_this() is called is also
+// shared pointer and if not, "bad_weak_ptr" will be thrown
+
+TEST(CxxSmartPointer, sp_SharedFromThis1)
+{
+  using namespace cxx_sp_use_count;
+
+  try
+  {
+    Foo f(1);
+
+    {
+      auto sp = f.getFoo();
+      sp->value();
+      EXPECT_THAT(sp.use_count(), 1);
+    }
+  } catch (exception &e)
+  {
+    std::cout << "e.what : " << e.what() << std::endl;
+  }
+}
+
+TEST(CxxSmartPointer, sp_SharedFromThis2)
+{
+  using namespace cxx_sp_use_count;
+
+  try
+  {
+    std::shared_ptr<Foo> sp = std::make_shared<Foo>(1);
+
+    {
+      auto f = sp->getFoo();
+      f->value();
+      EXPECT_THAT(f.use_count(), 2);
+    }
+
+    // sp is still available?
+    sp->value();
+    EXPECT_THAT(sp.use_count(), 1);
+
+  } catch (exception &e)
+  {
+    std::cout << "e.what : " << e.what() << std::endl;
+  }
+
 }
 
 // ={=========================================================================
@@ -5961,7 +6016,7 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
     auto sp = std::make_shared<int>(42);
 
     // copy assign
-    wp      = sp;
+    wp = sp;
 
     EXPECT_THAT(wp.expired(), false);
     EXPECT_THAT(wp.use_count(), 1);
@@ -7306,7 +7361,7 @@ TEST(CxxMove, move_binding)
     // cxx-error, cannot bind `rvalue(from)` to `lvalue-reference`
     // i*42 is rvalue
     // error: invalid initialization of non-const reference of type ‘int&’ from
-    // an rvalue of type ‘int’ 
+    // an rvalue of type ‘int’
     // int &r2 = i*42;
 
     // okay to bind `rvalue(from)` to `const-lvalue-reference`
@@ -9883,7 +9938,7 @@ TEST(CxxAuto, auto_const)
     EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5));
   }
 
-  // error: passing ‘const __gnu_cxx::__normal_iterator<const int*, std::vector<int> >’ 
+  // error: passing ‘const __gnu_cxx::__normal_iterator<const int*, std::vector<int> >’
   //  as ‘this’ argument discards qualifiers [-fpermissive]
   //
   //      for (const auto it = coll1.cbegin(); it != coll1.cend(); ++it)
@@ -9906,7 +9961,9 @@ TEST(CxxAuto, auto_const)
     std::vector<int> coll1{1, 2, 3, 4, 5};
     std::vector<int> coll2;
 
-    for (std::vector<int>::const_iterator it = coll1.cbegin(); it != coll1.cend(); ++it)
+    for (std::vector<int>::const_iterator it = coll1.cbegin();
+         it != coll1.cend();
+         ++it)
     {
       coll2.push_back(*it);
     }
@@ -10550,12 +10607,19 @@ TEST(CxxCpp, cpp_defined_keyword)
 
 namespace
 {
-#define SR1(x)  { std::cout << dec << boolalpha << showbase << x << std::endl; }
+#define SR1(x)                                                                 \
+  {                                                                            \
+    std::cout << dec << boolalpha << showbase << x << std::endl;               \
+  }
 
-#define VAR(var) " " #var "=" << (var)      // VAR here are only simple aguments allowed thus 'hex<<x' is not allowed
-#define _VAR(x) <<"," VAR(x)
-#define VAR2(name,var) " " #name "=" << var // no parenthesis around var - to make it possible to give 'hex<<x' as argument to var
-#define _VAR2(name,var) <<"," VAR2(name,var)
+#define VAR(var)                                                               \
+  " " #var "="                                                                 \
+    << (var) // VAR here are only simple aguments allowed thus 'hex<<x' is not allowed
+#define _VAR(x) << "," VAR(x)
+#define VAR2(name, var)                                                        \
+  " " #name "="                                                                \
+    << var // no parenthesis around var - to make it possible to give 'hex<<x' as argument to var
+#define _VAR2(name, var) << "," VAR2(name, var)
 } // namespace
 
 // [ RUN      ] CxxCpp.cpp_case1
@@ -10573,11 +10637,12 @@ TEST(CxxCpp, cpp_case1)
   int value2{10};
 
   SR1("cpp case example");
-  SR1("cpp case example" << " more to say");
+  SR1("cpp case example"
+      << " more to say");
   SR1("cpp case example"
       << " value1=" << value1);
   SR1("cpp case example" VAR(value1));
-  SR1("cpp case example" VAR(value1)_VAR(value2));
+  SR1("cpp case example" VAR(value1) _VAR(value2));
   SR1("cpp case example" VAR2(what, value1));
 }
 
