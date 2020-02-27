@@ -99,7 +99,7 @@ TEST(CCon, thread_id)
     EXPECT_THAT(os.str(), "Hello Concurrent World");
   }
 
-  // get id from pthred
+  // get id and return value from pthred
   {
     using namespace cxx_thread;
 
@@ -126,6 +126,7 @@ TEST(CCon, thread_id)
       exit(EXIT_FAILURE);
     }
 
+    // get return
     EXPECT_THAT((long)res, 11);
   }
 }
@@ -135,7 +136,6 @@ TEST(CCon, thread_run)
   using namespace cxx_thread;
 
   // single
-
   {
     ostringstream os;
     std::thread t([&] { hello(os); });
@@ -664,7 +664,6 @@ TEST(CConThread, ThreadLocal)
 
 namespace cxx_async
 {
-
   int sum{0};
 
   int find_the_answer()
@@ -675,7 +674,7 @@ namespace cxx_async
 
   void do_other_stuff()
   {
-    this_thread::sleep_for(chrono::seconds(20));
+    this_thread::sleep_for(chrono::seconds(10));
     sum = 10;
   }
 
@@ -695,7 +694,7 @@ namespace cxx_async
 
 } // namespace cxx_async
 
-TEST(CConAsync, MemberFunction)
+TEST(CConAsync, async_MemberFunction)
 {
   using namespace cxx_async;
 
@@ -713,21 +712,25 @@ TEST(CConAsync, MemberFunction)
   }
 }
 
-// expect that do_other_stuff() finishes first
+// expect that do_other_stuff() finishes first. Is it? Since don't know when
+// async runs, answer can be either 90 or 100? always 90?
 
-TEST(CConAsync, Async)
+TEST(CConAsync, async_IsRace)
 {
   using namespace cxx_async;
 
   std::future<int> the_answer = std::async(find_the_answer);
   do_other_stuff();
-  EXPECT_THAT(the_answer.get(), 100);
+  // EXPECT_THAT(the_answer.get(), 100);
+  EXPECT_THAT(the_answer.get(), 90);
 }
 
+// Using Launch Policies
+//
 // Note, finally, that the object passed to async() may be any type of a
 // callable object:
 //
-// A call of async() does not guarantee that the passed functionality gets
+// A call of async() does *not guarantee* that the passed functionality gets
 // started and finished.
 //
 // It is necessary to ensure that sooner or later, the passed functionality gets
@@ -741,6 +744,9 @@ TEST(CConAsync, Async)
 
 // cxx-async with no option
 //
+// NOTE: this is not always the case and means see the same result as
+// LaunchPolicy2
+//
 // If async() couldn’t start func1(), it will run after func2(), when get() gets
 // called, so that the program will have the following output:
 //
@@ -751,9 +757,9 @@ TEST(CConAsync, Async)
 //
 // this is `sequential`
 
-TEST(CConAsync, Default)
+TEST(CConAsync, async_LaunchPolicy1)
 {
-  future<int> result1(std::async([] { return doSomething('.'); }));
+  std::future<int> result1(std::async([] { return doSomething('.'); }));
 
   int result2 = doSomething('+');
 
@@ -763,9 +769,7 @@ TEST(CConAsync, Default)
   EXPECT_THAT(result, 89);
 }
 
-// Using Launch Policies
-//
-// You can force async() to not defer the passed functionality, by explicitly
+// You can force async() *not* to defer the passed functionality, by explicitly
 // passing a launch policy directing async() that it should definitely start the
 // passed functionality asynchronously the moment it is called:
 //
@@ -779,9 +783,9 @@ TEST(CConAsync, Default)
 // +++++
 // [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
-TEST(CConAsync, LaunchPolicy)
+TEST(CConAsync, async_LaunchPolicy2)
 {
-  future<int> result1(
+  std::future<int> result1(
     std::async(launch::async, [] { return doSomething('.'); }));
 
   int result2 = doSomething('+');
@@ -812,21 +816,36 @@ TEST(CConAsync, LaunchPolicy)
 // anywhere, the caller will block until the passed functionality has finished,
 // which would mean that this is nothing but a synchronous call.
 
-TEST(CConAsync, NotUseResultAndSequential)
+// NOTE: so even if uses `launch::async`, it runs sequentially
+
+TEST(CConAsync, async_LaunchPolicy3)
 {
   // future<int> result1(std::async(launch::async, []{return
   // doSomething('.');}));
+
   std::async(launch::async, [] { return doSomething('.'); });
 
   doSomething('+');
 }
 
+// not use future return and just to make it runs parallel
+TEST(CConAsync, async_LaunchPolicy4)
+{
+  std::future<int> result1(
+    std::async(launch::async, [] { return doSomething('.'); }));
+
+  doSomething('+');
+}
+
+// NOTE: this is not always the case since it runs parallel on some machine.
+//
 // starting 2 operations synchronously
 //
 // ..........
 // ++++++++++
 //
 // done
+//
 // starting 2 operations asynchronously
 //
 // deffered
@@ -836,31 +855,34 @@ TEST(CConAsync, NotUseResultAndSequential)
 //
 // done
 
-TEST(CConAsync, Status)
+
+TEST(CConAsync, async_Status1)
 {
   {
-    cout << "starting 2 operations synchronously" << endl;
+    std::cout << "starting 2 operations synchronously" << std::endl;
 
     // start two loops in the background printing characters . or +
-    auto f1 = async([] { doSomething('.'); });
-    auto f2 = async([] { doSomething('+'); });
+    auto f1 = std::async([] { doSomething('.'); });
+    auto f2 = std::async([] { doSomething('+'); });
 
     // if at least one of the background tasks is running
     if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
         f2.wait_for(chrono::seconds(0)) != future_status::deferred)
     {
-      cout << "\ndeffered" << endl;
+      std::cout << "\nnot deffered" << std::endl;
 
       // poll until at least one of the loops finished
       while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
              f2.wait_for(chrono::seconds(0)) != future_status::ready)
       {
         //...;
-        cout << "yield,";
-        this_thread::yield(); // hint to reschedule to the next thread
+        // std::cout << "yield,";
+        std::cout << "w";
+        std::this_thread::yield(); // hint to reschedule to the next thread
       }
     }
-    cout.put('\n').flush();
+
+    std::cout.put('\n').flush();
 
     // wait for all loops to be finished and process any exception
     try
@@ -873,7 +895,10 @@ TEST(CConAsync, Status)
     }
     cout << "\ndone" << endl;
   }
+}
 
+TEST(CConAsync, async_Status2)
+{
   {
     string const waits{"\\|/-"};
     int i{};
@@ -881,27 +906,27 @@ TEST(CConAsync, Status)
     cout << "starting 2 operations asynchronously" << endl;
 
     // start two loops in the background printing characters . or +
-    auto f1 = async(std::launch::async, [] { doSomething('.'); });
-    auto f2 = async(std::launch::async, [] { doSomething('+'); });
+    auto f1 = std::async(std::launch::async, [] { doSomething('.'); });
+    auto f2 = std::async(std::launch::async, [] { doSomething('+'); });
 
     // if at least one of the background tasks is running
     if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
         f2.wait_for(chrono::seconds(0)) != future_status::deferred)
     {
-      cout << "\ndeffered" << endl;
+      cout << "\nnot deffered" << endl;
 
       // poll until at least one of the loops finished
       while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
              f2.wait_for(chrono::seconds(0)) != future_status::ready)
       {
         //...;
-        cout << flush << "\r" << waits[i % 4];
+        std::cout << flush << "\r" << waits[i % 4];
         ++i;
 
         this_thread::yield(); // hint to reschedule to the next thread
       }
     }
-    cout.put('\n').flush();
+    std::cout.put('\n').flush();
 
     // wait for all loops to be finished and process any exception
     try
