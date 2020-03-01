@@ -180,6 +180,7 @@ TEST(EventLoop, event_flush1)
   }
 }
 
+// see that it works without flush()
 TEST(EventLoop, event_flush2)
 {
   const int count{10000000};
@@ -243,6 +244,7 @@ TEST(EventLoop, event_flush2)
 }
 
 // NOTE: sometimes works and sometimes not. race condition.
+// see TEST(DBusMessage, message_call)
 //
 // [ RUN      ] EventLoop.event_flush3
 // 0000017889.273986 WRN: < M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140032610059200)
@@ -338,9 +340,139 @@ namespace
     for (int i = 0; i < 10; ++i)
       m_eventloop.invokeMethod(&Work2::printArgs, 10, 20, 30);
   }
+
+  // from ASRequestPrivate::marshallAndSendReply
+  static void marshallAndSendReply(const std::vector<std::string> &headers, const std::string &body)
+  {
+    std::this_thread::sleep_for(chrono::milliseconds(100));
+
+    std::cout << "================" << std::endl;
+    std::cout << "headers: size : " << headers.size() << ": ";
+    for (const auto &h : headers)
+    {
+      std::cout << h << ", ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "body: " << body << std::endl;
+  }
 } // namespace
 
-// may memeber function
+// invokeMethod() use copy? okay use on temporary? yes since cxx-bind use copy
+// context which is usded in invokeMethod()
+
+// [ RUN      ] EventLoop.event_invoke_do_copy
+// reset them and quit  <<---
+// ================
+// headers: size : 1: header1,
+// body: body1
+// ================
+// headers: size : 2: header1, header2,
+// body: body2
+// ================
+// headers: size : 3: header1, header2, header3,
+// body: body3
+// ================
+// headers: size : 4: header1, header2, header3, header4,
+// body: body4
+// ================
+// headers: size : 5: header1, header2, header3, header4, header5,
+// body: body5
+// [       OK ] EventLoop.event_invoke_do_copy (501 ms)
+// 
+// [ RUN      ] EventLoop.event_invoke_do_copy
+// ================
+// headers: size : 1: header1,
+// body: body1
+// ================
+// headers: size : 2: header1, header2,
+// body: body2
+// ================
+// headers: size : 3: header1, header2, header3,
+// body: body3
+// ================
+// headers: size : 4: header1, header2, header3, header4,
+// body: body4
+// reset them and quit  <<---
+// ================
+// headers: size : 5: header1, header2, header3, header4, header5,
+// body: body5
+// [       OK ] EventLoop.event_invoke_do_copy (501 ms)
+// 
+// [ RUN      ] EventLoop.event_invoke_do_copy
+// ================
+// headers: size : 1: header1,
+// body: body1
+// ================
+// headers: size : 2: header1, header2,
+// body: body2
+// ================
+// headers: size : 3: header1, header2, header3,
+// body: body3
+// reset them and quit  <<--- 
+// ================
+// headers: size : 4: header1, header2, header3, header4,
+// body: body4
+// ================
+// headers: size : 5: header1, header2, header3, header4, header5,
+// body: body5
+// [       OK ] EventLoop.event_invoke_do_copy (501 ms)
+
+TEST(EventLoop, event_invoke_do_copy)
+{
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      std::vector<std::string> header;
+      std::string body;
+
+      // header.push_back(std::string("header1"));
+      header.push_back("header1");
+      body = "body1";
+
+      loop.invokeMethod(marshallAndSendReply, header, body);
+      
+      // now changes header and body. post it
+      header.push_back("header2");
+      body = "body2";
+      loop.invokeMethod(marshallAndSendReply, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header3");
+      body = "body3";
+      loop.invokeMethod(marshallAndSendReply, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header4");
+      body = "body4";
+      loop.invokeMethod(marshallAndSendReply, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header5");
+      body = "body5";
+      loop.invokeMethod(marshallAndSendReply, header, body);
+
+      // okay, reset them 
+      header.clear();
+      body.clear();
+
+      std::cout << "reset them and quit" << std::endl;
+
+      EXPECT_THAT(header.size(), 0);
+      EXPECT_THAT(body.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+  }
+}
+
+// use memeber function
 
 TEST(EventLoop, event_invoke_member)
 {

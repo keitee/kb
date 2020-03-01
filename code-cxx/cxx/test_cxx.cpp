@@ -578,6 +578,70 @@ TEST(CxxType, type_variant)
   }
 }
 
+namespace cxx_variant
+{
+  class VariantMap
+  {
+  private:
+    struct Variant
+    {
+      enum Type
+      {
+        Boolean,
+        Integer,
+        Double,
+        String
+      } m_type;
+
+      union Basic
+      {
+        bool boolean;
+        int integer;
+        double real;
+
+        Basic() = default;
+
+        explicit Basic(bool b)
+            : boolean(b)
+        {}
+        explicit Basic(int i)
+            : integer(i)
+        {}
+        explicit Basic(double d)
+            : real(d)
+        {}
+      } m_basic;
+
+      std::string m_string;
+
+      explicit Variant(bool b)
+          : m_type(Boolean)
+          , m_basic(b)
+      {}
+      explicit Variant(int i)
+          : m_type(Integer)
+          , m_basic(i)
+      {}
+      explicit Variant(double d)
+          : m_type(Double)
+          , m_basic(d)
+      {}
+      explicit Variant(const std::string &str)
+          : m_type(String)
+          , m_string(str)
+      {}
+      explicit Variant(std::string &&str)
+          : m_type(String)
+          , m_string(std::move(str))
+      {}
+      explicit Variant(const char *str)
+          : m_type(String)
+          , m_string(str)
+      {}
+    }
+  };
+} // namespace cxx_variant
+
 // ={=========================================================================
 // cxx-array
 
@@ -5832,7 +5896,6 @@ TEST(CxxSmartPointer, sp_SharedFromThis2)
   {
     std::cout << "e.what : " << e.what() << std::endl;
   }
-
 }
 
 // ={=========================================================================
