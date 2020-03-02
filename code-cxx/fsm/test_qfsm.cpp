@@ -95,17 +95,14 @@ m_stateMachine.postEvent() or;
 m_stateMachine.postDelayed();
 
 
-To use the final state:
+To use the final state: stop() or setFinalState() to restart fsm again
 -------------------------------------------------------------------------------
 
 1. setFinalState() is used to set m_finalState and when transition happens, it's
 checked if new state is the final state. If so run codes that stop() do; make
 running false, call cleanUpEvents(), and make currentState -1
 
-2. when reaches to the final state, state machine emits `finished` so could use
-that if uses Qt fsm 
-
-3. or use enter/exit signal of the final state
+2. or use enter/exit signal of the final state
 
 
 To start the state machine again:
@@ -474,6 +471,138 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
 
   // add transition with invalid event type
   EXPECT_FALSE(fsm.addTransition(s1, -1, s2));
+}
+
+// starts fsm again. stop() or use final state. 
+TEST_F(StateMachineTest, startFsmAgain1)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) {
+    enters[state]++;
+  };
+
+  auto exited = [&](int state) {
+    exits[state]++;
+  };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+
+  // ok, try to start fsm again.
+  fsm.stop();
+  enters.clear();
+  exits.clear();
+
+  EXPECT_THAT(fsm.isRunning(), false);
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+}
+
+TEST_F(StateMachineTest, startFsmAgain2)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+  EXPECT_TRUE(fsm.setFinalState(s3));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) {
+    enters[state]++;
+  };
+
+  auto exited = [&](int state) {
+    exits[state]++;
+  };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+
+  // ok, try to start fsm again. Since used setFinalState(), no need to stop().
+  // fsm.stop();
+  enters.clear();
+  exits.clear();
+
+  EXPECT_THAT(fsm.isRunning(), false);
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
 }
 
 // start the state fsm but stops right away since it's stopped in `enter`

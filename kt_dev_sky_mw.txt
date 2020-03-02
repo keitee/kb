@@ -1038,9 +1038,8 @@ curl 192.168.0.102:9005/as/test/preferences -X POST --data '{"enableirinput":"fa
    "status" : "PAIRING"
 }
 
-={============================================================================
-*kt_dev_skymw_0000* skymw-as-log
 
+<as-log>
 NDS: ^0000000208.838051 !MIL   -AS           < p:00000e00 t:75390dc0 T:AS_MAIN_TH_9001 M:AS_DMS_Writer.cpp F:LogReceivedRequest L:00258 > 
   @ctx:AS_WEBSERVER AS_WEB_SERVER_RequestResponseLogger.cpp(205) HTTP Request received. 
   httpRequestHandle: 235, httpMethod: 1, Port: 9001, URI: /as/audiostreamer/bluetooth/action/startvisibility?timeout=105
@@ -1109,6 +1108,98 @@ NDS: ^0000000431.114917
         __AI_LOG_PRINTF(AI_DEBUG_LEVEL_INFO, fmt, ##__VA_ARGS__)
 #   define AI_LOG_MILESTONE(fmt,...) \
         __AI_LOG_PRINTF(AI_DEBUG_LEVEL_MILESTONE, fmt, ##__VA_ARGS__)
+
+
+<q-as-code>
+
+// ethan-as-source/Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
+
+void bindMethods( AS_WORKER::UrlMap *map )
+{
+    map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",                           servicelistexecutor );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/start",                  serviceScanStartExecutor,        new ServicesScanActionStartParamValidator() );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",                  serviceScanAbortExecutor );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",                 serviceScanCommitExecutor );
+    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",                        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
+}
+
+*as-services*
+as-api:/as/services/0/0
+
+// struct Service
+// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_Service.cpp
+
+int ServiceList::AddServiceObject( Service service )
+
+ServiceListController::
+        m_serviceList->AddServiceObject( service );
+
+int ServiceListController::GetServiceList(
+    AS::string ifNoneMatch, AS::string &serviceListEtag, AS::string &serviceList)
+
+{
+  "version": 1, 
+  "documentId": "1563970127340"
+}
+[
+  {
+    "dvbtriplet": "318.4.8583", 
+    "servicetypes": [
+      "DTT"
+    ], 
+    "c": "21", 
+    "t": "Rai 4", 
+    "sid": "M13e-4-2187", 
+    "sf": "sd", 
+    "xsg": 8
+  }, 
+  {
+    "dvbtriplet": "318.4.8585", 
+    "servicetypes": [
+      "DTT"
+    ], 
+    "c": "24", 
+    "t": "Rai Movie", 
+    "sid": "M13e-4-2189", 
+    "sf": "sd", 
+    "xsg": 8
+  }, 
+]
+
+GET
+http://192.168.0.105:9005/as/services/0/0
+
+documentId
+document unique identifier (e.g. timestamp at version 0)
+
+version
+the version of this complete document
+
+services
+service list
+
+sid
+service id – a private, opaque, string for AS use only
+
+c
+logical channel number
+
+t
+title, which can be an empty string
+
+sf
+service format (sd, hd, uhd or au)
+
+dvbtriplet
+a dvb triplet in the format onid.tsid.sid. Not required if the servicetype is
+OTT, mandatory in all other cases
+
+C[0]: PK
+C[1]: Name
+C[2]: epgPresent.StartTime
+C[3]: epgPresent.Name
+C[4]: _id
 
 
 ={============================================================================
@@ -11335,15 +11426,17 @@ ssh -p 10022 root@192.168.0.103
 
 systemctl status sky-asplayer
 systemctl stop sky-asplayer
+
+// copy player
+scp -r -P 10022 ./asrdkplayer root@192.168.0.104:/opt
+
+umount /usr/sbin/asrdkplayer
+mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+
 systemctl start sky-asplayer
 
 journalctl -fu sky-asplayer
 journalctl -u sky-asplayer --since today
-
-// copy player
-scp -r -P 10022 ./asrdkplayer root@192.168.0.104:/opt
-mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
-umount /usr/sbin/asrdkplayer
 
 
 systemctl status sky-asproxy
@@ -11354,8 +11447,9 @@ journalctl -fu sky-asproxy
 
 
 // copy proxy
-scp -r -P 10022 ./asproxy root@192.168.0.104:/opt
+scp -r -P 10022 ./asproxy root@192.168.0.105:/opt
 mount-copybind ./asproxy /usr/sbin/asproxy
+umount /usr/sbin/asproxy
 
 ssh -p 10022 root@192.168.0.105 journalctl -u sky-asproxy --since today
 ssh -p 10022 root@192.168.0.105 journalctl -u sky-asproxy --since today > /opt/log.out
@@ -11380,6 +11474,7 @@ services/favourites
  { "lcn": 2, "sid": "2314"}
  ]
 }
+
 
 // xi6-core-dump
 root@arrisxi6-morty:/opt# ls /var/lib/systemd/coredump/

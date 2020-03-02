@@ -54,3 +54,9 @@ set(xyz "321" CACHE STRING "???")
 
 message("Regular variable (after): ${abc}")
 message("Cache variable (after): ${xyz}")
+
+if(TARGET_REGION STREQUAL "XI")
+  message("TARGET_REGION : ${CMAKE_CURRENT_LIST_DIR}")
+else()
+  message("TARGET_REGION is not defined")
+endif()
