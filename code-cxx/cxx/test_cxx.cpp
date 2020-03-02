@@ -569,11 +569,12 @@ TEST(CxxType, type_variant)
 
   {
     Argument arg1(3301.0);
-    EXPECT_THAT((int)arg1, 3301.0);
+    EXPECT_THAT((double)arg1, 3301.0);
   }
 
   {
-    Argument arg1("string variant");
+    // since ctor is explicit
+    Argument arg1(std::string("string variant"));
     EXPECT_THAT((std::string)arg1, std::string("string variant"));
   }
 }
@@ -638,9 +639,164 @@ namespace cxx_variant
           : m_type(String)
           , m_string(str)
       {}
+    };
+
+    std::map<std::string, Variant> m_map;
+
+  public:
+    VariantMap() = default;
+    VariantMap(const VariantMap &) = default;
+    VariantMap(VariantMap &&) = default;
+
+    // insert for bool values
+    void insert(const std::string &key, bool value)
+    { m_map.emplace(key, value); }
+
+    void insert(std::string &&key, bool value)
+    { m_map.emplace(std::move(key), value); }
+
+    // insert for int values
+    void insert(const std::string &key, int value)
+    { m_map.emplace(key, value); }
+
+    void insert(std::string &&key, int value)
+    { m_map.emplace(std::move(key), value); }
+
+    // insert for string values
+    void insert(const std::string &key, const std::string &value)
+    { m_map.emplace(key, value); }
+
+    void insert(std::string &&key, std::string &&value)
+    { m_map.emplace(std::move(key), std::move(value)); }
+    
+    void clear()
+    { m_map.clear(); }
+
+    bool empty() const
+    { return m_map.empty(); }
+  
+  public:
+    struct Visitor
+    {
+      virtual void operator()(const std::string &, bool) {}
+      virtual void operator()(const std::string &, int) {}
+      virtual void operator()(const std::string &, double) {}
+      virtual void operator()(const std::string &, const std::string &) {}
+    };
+
+    // void visit(Visitor &&visitor) const
+    // this is original code and which means it uses a temporary like:
+    //
+    // apply the visitor to all entries in the map, this will populate the
+    // dictionary in the reply message
+    // variantMap.visit(VariantVisitor(msg));
+    //
+    // instead, use msg and populate variant map contents into it. visitor
+    // struct can have a pointer to real object and populate maps into it. 
+    //
+    // struct VariantVisitor : ASVariantMap::Visitor
+    // {
+    //  sd_bus_message * const reply;
+    //  ...
+    // }
+
+    void visit(Visitor &visitor) const
+    {
+      for (const auto &e : m_map)
+      {
+        const std::string &key = e.first;
+        const Variant &value = e.second;
+
+        switch (value.m_type)
+        {
+          case Variant::Boolean:
+            // visitor.operator()(key, value.m_basic.boolean);
+            visitor(key, value.m_basic.boolean);
+            break;
+          case Variant::Integer:
+            visitor.operator()(key, value.m_basic.integer);
+            break;
+          case Variant::Double:
+            visitor.operator()(key, value.m_basic.real);
+            break;
+          case Variant::String:
+            visitor.operator()(key, value.m_string);
+            break;
+        }
+      }
     }
   };
 } // namespace cxx_variant
+
+// [ RUN      ] CxxType.type_variantMap
+// {key1:b}
+// {key2:b}
+// {key3:i}
+// {key4:i}
+// {key5:b}
+// {key6:b}
+// [       OK ] CxxType.type_variantMap (0 ms)
+
+TEST(CxxType, type_variantMap)
+{
+  using namespace cxx_variant;
+
+  struct CustomVisitor : VariantMap::Visitor
+  {
+    std::vector<std::string> coll;
+
+    CustomVisitor() = default;
+
+    virtual void operator()(const std::string &key, bool value) override
+    {
+      coll.emplace_back("{" + key + ":b}");
+    }
+
+    virtual void operator()(const std::string &key, int value) override 
+    {
+      coll.emplace_back("{" + key + ":i}");
+    }
+
+    virtual void operator()(const std::string &key, double value) override
+    {
+      coll.emplace_back("{" + key + ":d}");
+    }
+
+    virtual void operator()(const std::string &key, const std::string &value) override
+    {
+      coll.emplace_back("{" + key + ":" + value + "}");
+    }
+  };
+
+  VariantMap vmap;
+  CustomVisitor visitor;
+
+  vmap.insert("key1", true);
+  vmap.insert("key2", false);
+
+  vmap.insert("key3", 3);
+  vmap.insert("key4", 4);
+
+  // vmap.insert("key5", "variant1");
+  // vmap.insert("key6", "variant2");
+  //
+  // will have:
+  //
+  // {key5:b}
+  // {key6:b}
+
+  vmap.insert("key5", std::string("variant1"));
+  vmap.insert("key6", std::string("variant2"));
+
+  vmap.visit(visitor);
+
+  EXPECT_THAT(visitor.coll.size(), 6);
+
+  for (const auto e : visitor.coll)
+  {
+    cout << e << endl;
+  }
+}
 
 // ={=========================================================================
 // cxx-array
