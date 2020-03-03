@@ -1875,7 +1875,7 @@ TEST(StlColl, set_Search)
 
     {
       std::vector<int> coll1;
-      for (auto it = coll.begin(); it < coll.lower_bound(3); ++it)
+      for (auto it = coll.begin(); it != coll.lower_bound(3); ++it)
         coll1.push_back(*it);
       EXPECT_THAT(coll1, ElementsAre(1, 2));
     }
