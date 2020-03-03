@@ -1826,7 +1826,7 @@ TEST(StlColl, set_SortOrder)
   }
 }
 
-TEST(StlColl, set_search)
+TEST(StlColl, set_Search)
 {
   {
     std::set<int> coll;
@@ -1872,6 +1872,14 @@ TEST(StlColl, set_search)
     // since multiset is not contiguous, cannot use iterator arithmetic. use
     // distance().
     EXPECT_THAT(distance(coll.begin(), coll.lower_bound(3)), 2);
+
+    {
+      std::vector<int> coll1;
+      for (auto it = coll.begin(); it < coll.lower_bound(3); ++it)
+        coll1.push_back(*it);
+      EXPECT_THAT(coll1, ElementsAre(1, 2));
+    }
+
     EXPECT_THAT(distance(coll.begin(), coll.upper_bound(3)), 5);
 
     EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).first), 2);
