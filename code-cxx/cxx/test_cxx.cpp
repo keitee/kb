@@ -777,6 +777,7 @@ TEST(CxxType, type_variantMap)
   vmap.insert("key3", 3);
   vmap.insert("key4", 4);
 
+  // see cxx-string
   // vmap.insert("key5", "variant1");
   // vmap.insert("key6", "variant2");
   //

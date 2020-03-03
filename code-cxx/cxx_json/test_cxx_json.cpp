@@ -732,6 +732,106 @@ TEST(CxxJSON, jsoncpp_ex5)
   }
 }
 
+//  {
+//    "dvbtriplet": "318.4.8583", 
+//    "servicetypes": [
+//      "DTT"
+//    ], 
+//    "c": "21", 
+//    "t": "Rai 4", 
+//    "sid": "M13e-4-2187", 
+//    "sf": "sd", 
+//    "xsg": 8
+//  }, 
+//  {
+//    "dvbtriplet": "318.4.8585", 
+//    "servicetypes": [
+//      "DTT"
+//    ], 
+//    "c": "24", 
+//    "t": "Rai Movie", 
+//    "sid": "M13e-4-2189", 
+//    "sf": "sd", 
+//    "xsg": 8
+//  },
+//
+// [ RUN      ] CxxJSON.jsoncpp_ex6
+// {
+//    "documentId" : "1563970127340",
+//    "services" : [
+//       {
+//          "c" : "21",
+//          "dvbtriplet" : "318.4.8583",
+//          "servicetypes" : [ "DTT", "OTT" ],
+//          "sf" : "sd",
+//          "sid" : "M13e-4-2187",
+//          "t" : "Rai 4",
+//          "xsg" : 8
+//       },
+//       {
+//          "c" : "24",
+//          "dvbtriplet" : "318.4.8585",
+//          "servicetypes" : [ "DTT" ],
+//          "sf" : "sd",
+//          "sid" : "M13e-4-2189",
+//          "t" : "Rai Movie",
+//          "xsg" : 8
+//       }
+//    ],
+//    "version" : 1
+// }
+// 
+// [       OK ] CxxJSON.jsoncpp_ex6 (0 ms)
+
+// construct and write ex
+TEST(CxxJSON, jsoncpp_ex6)
+{
+  Json::Value servicelist;
+
+  servicelist["documentId"] = "1563970127340";
+  servicelist["version"] = 1;
+
+  Json::Value service1;
+  service1["dvbtriplet"] = "318.4.8583"; 
+
+  service1["servicetypes"] = Json::Value(Json::arrayValue);
+  service1["servicetypes"].append("DTT");
+  service1["servicetypes"].append("OTT");
+
+  service1["c"] = "21";
+  service1["t"] = "Rai 4";
+  service1["sid"] = "M13e-4-2187";
+  service1["sf"] = "sd";
+  service1["xsg"] = 8;
+
+  Json::Value service2;
+  service2["dvbtriplet"] = "318.4.8585"; 
+  service2["servicetypes"] = Json::Value(Json::arrayValue);
+  service2["servicetypes"].append("DTT");
+  service2["c"] = "24";
+  service2["t"] = "Rai Movie";
+  service2["sid"] = "M13e-4-2189";
+  service2["sf"] = "sd";
+  service2["xsg"] = 8;
+
+  servicelist["services"] = Json::Value(Json::arrayValue);
+  servicelist["services"].append(service1);
+  servicelist["services"].append(service2);
+
+  // use writer
+  Json::StyledWriter writer;
+
+  // write() to std::string
+  // http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_styled_writer.html
+  // virtual std::string write(const Value &root); // write JSON object to a
+  // string
+  // std::cout << writer.write(servicelist) << std::endl;
+
+  std::string response;
+  response.assign(writer.write(servicelist).c_str());
+  std::cout << response << std::endl;
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

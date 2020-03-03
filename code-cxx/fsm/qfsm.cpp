@@ -260,7 +260,6 @@ int StateMachine::shouldMoveState(int event) const
 
   do
   {
-
     // find the current state and sanity check it is in the map
     auto it = m_states.find(state);
     if (G_UNLIKELY(it == m_states.end()))
@@ -291,7 +290,9 @@ int StateMachine::shouldMoveState(int event) const
 
   } while (state != -1);
 
-  LOG_ERROR("not found target state from current state %d", state);
+  LOG_ERROR("not found event %d transition from current state %d",
+            event,
+            m_currentState);
   return -1;
 }
 
@@ -554,28 +555,16 @@ bool StateMachine::postEvent(int event)
 
   if (G_UNLIKELY(event < (-1)))
   {
-
     LOG_ERROR("event type must be in valid event range (> -1)");
-
-    // LOG_ERROR("event type must be in user event range (%d <= %d <= %d)",
-    //     QEvent::User, event, QEvent::MaxUser);
     return false;
   }
 
-  // QThread *QObject::thread() const
-  // Returns the thread in which the object lives.
-
-  // QThread *QThread::currentThread()
-  // Returns a pointer to a QThread which manages the currently executing thread.
-
-  // if (QThread::currentThread() == QObject::thread())
   {
     // the calling thread is the same as ours so post the event to our
     // local queue if inside a handler, otherwise just process the event
     // immediately
     if (m_withinStateMover)
     {
-
       // just for debugging
       if (G_UNLIKELY(m_localEvents.size() > 1024))
         LOG_ERROR("state machine event queue getting large");
@@ -585,7 +574,6 @@ bool StateMachine::postEvent(int event)
     }
     else
     {
-
       // not being called from within our own state mover so check if
       // this event will trigger the current state to move, if so
       // trigger that
@@ -594,6 +582,8 @@ bool StateMachine::postEvent(int event)
       // check if we should be moving to a new state
       if (newState != -1)
         triggerStateMove(newState);
+      else
+        return false;
     }
   }
 

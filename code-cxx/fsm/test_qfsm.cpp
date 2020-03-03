@@ -473,6 +473,74 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
   EXPECT_FALSE(fsm.addTransition(s1, -1, s2));
 }
 
+// check return from postEvent() since do no checking on return of postEvent()
+// and it can go silent without transition. So changed postEvent() to return
+// bool valure more correctly and client should check it
+
+TEST_F(StateMachineTest, postEventError)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3,
+    s4
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.addState(s4));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+  EXPECT_TRUE(fsm.addTransition(s3, 1, s1));
+  EXPECT_TRUE(fsm.addTransition(s3, 2, s4));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) {
+    enters[state]++;
+  };
+
+  auto exited = [&](int state) {
+    exits[state]++;
+  };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  // check current state
+  EXPECT_THAT(fsm.state(), s3);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+
+  fsm.postEvent(1);
+  // check current state
+  EXPECT_THAT(fsm.state(), s1);
+
+  // expect no state change since event 2 is not in the transition.
+  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00293 : 
+  // not found event 2 transition from current state 0
+  EXPECT_THAT(fsm.postEvent(2), false);
+  EXPECT_THAT(fsm.state(), s1);
+}
+
 // starts fsm again. stop() or use final state. 
 TEST_F(StateMachineTest, startFsmAgain1)
 {

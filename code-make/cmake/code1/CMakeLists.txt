@@ -55,6 +55,26 @@ set(xyz "321" CACHE STRING "???")
 message("Regular variable (after): ${abc}")
 message("Cache variable (after): ${xyz}")
 
+# https://cmake.org/cmake/help/v3.7/manual/cmake.1.html
+#
+# -D <var>:<type>=<value>, -D <var>=<value>
+# Create a cmake cache entry.
+# 
+# When cmake is first run in an empty build tree, it creates a CMakeCache.txt
+# file and populates it with customizable settings for the project. This option
+# may be used to specify a setting that takes priority over the project’s
+# default value. The option may be repeated for as many cache entries as
+# desired.
+# 
+# If the :<type> portion is given it must be one of the types specified by the
+# set() command documentation for its CACHE signature. If the :<type> portion is
+# omitted the entry will be created with no type if it does not exist with a
+# type already. If a command in the project sets the type to PATH or FILEPATH
+# then the <value> will be converted to an absolute path.
+# 
+# This option may also be given as a single argument: -D<var>:<type>=<value> or
+# -D<var>=<value>.
+
 if(TARGET_REGION STREQUAL "XI")
   message("TARGET_REGION : ${CMAKE_CURRENT_LIST_DIR}")
 else()

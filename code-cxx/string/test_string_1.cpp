@@ -38,7 +38,7 @@ TEST(StringIterator, PosEnd)
 // ={=========================================================================
 // *cxx-string-ctor*
 
-TEST(CxxString, create)
+TEST(String, string_Create)
 {
   {
     string s("nico");
@@ -156,6 +156,55 @@ TEST(String, CtorsConst)
     s.append(1, letter);
     EXPECT_EQ(s, "A");
   }
+}
+
+namespace cxx_string
+{
+  // // insert for bool values
+  void insert(const std::string &key, bool value)
+  { 
+    std::cout << "insert(const std::string &key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, bool value)
+  { 
+    std::cout << "insert(std::string &&key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  // insert for string values
+  void insert(const std::string &key, const std::string &value)
+  { 
+    std::cout << "insert(const std::string &key, const std::string &value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, std::string &&value)
+  { 
+    std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+}
+
+// NOTE: if remove "insert for bool values", then both will use string version.
+// Looks like it's to do with resolution.
+//
+// there is no bool conversion of string. Then how it uses bool version?
+
+// [ RUN      ] String.string_Resolution
+// insert(std::string &&key, bool value)
+// key: key1, value: 1
+// insert(std::string &&key, std::string &&value)
+// key: key2, value: value2
+// [       OK ] String.string_Resolution (0 ms)
+
+TEST(String, string_Resolution)
+{
+  using namespace cxx_string;
+
+  insert("key1", "value1");
+  insert("key2", std::string("value2"));
 }
 
 // ={=========================================================================
@@ -289,8 +338,9 @@ TEST(CxxStringOperation, SubstringFind)
   }
 }
 
+// cxx-string-substr
 // is to extract substring
-TEST(CxxStringOperation, SubstringSubStr)
+TEST(StringOperation, substring_substr)
 {
   std::string coll{"interchangeability"};
 
@@ -305,6 +355,7 @@ TEST(CxxStringOperation, SubstringSubStr)
 
   EXPECT_THAT(coll.substr(coll.find('c')), "changeability");
 
+  // [11, end)
   EXPECT_THAT(coll.substr(11), "ability");
 
   // note that the second is `length`

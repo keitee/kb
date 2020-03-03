@@ -64,7 +64,8 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-D_GLIBCXX_DEBUG")
+# add_compile_options("-g;-D_GLIBCXX_DEBUG")
+add_compile_options("-g")
 
 
 # cmake help
@@ -185,6 +186,10 @@ target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
 # _boost.cpp
 add_executable(test_boost "test_boost.cpp")
 target_link_libraries(test_boost gmock_main Boost::thread)
+
+# test_stl.cpp
+add_executable(test_stl "test_stl.cpp")
+target_link_libraries(test_stl gmock_main Boost::thread)
 
 # # cxx_xx.cpp
 # add_executable(${PROJECT_NAME}_xx "cxx_xx.cpp")

@@ -1130,6 +1130,7 @@ as-api:/as/services/0/0
 // struct Service
 // ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_Service.cpp
 
+// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/include/AS_SERVICELIST_ServiceListContainer.h
 int ServiceList::AddServiceObject( Service service )
 
 ServiceListController::
@@ -1173,14 +1174,36 @@ http://192.168.0.105:9005/as/services/0/0
 documentId
 document unique identifier (e.g. timestamp at version 0)
 
+void ServiceListController::SetServiceJsonDefault()
+{
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    SYSTEMTIME_TIMEDATE creationTime;
+
+    SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
+    if ( status == GUIDE_API_STATUS_OK )
+    {
+        AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
+
+        // Update the creation time
+        m_serviceLongListCreationTime = creationTime;
+        m_lastModificationTime = creationTime;
+    }
+    else
+    {
+        AS_LOG_ERROR( "GUIDE_API_List_GetLastModifiedTime failed with status, 0x%x", status );
+    }
+
+    AS_LOG_EXIT( "%s", __func__ );
+}
+
+    AS::string documentId = AS_DMSUTILS::uint32ToString( m_serviceLongListCreationTime );
+
 version
 the version of this complete document
 
 services
 service list
-
-sid
-service id – a private, opaque, string for AS use only
 
 c
 logical channel number
@@ -1188,8 +1211,17 @@ logical channel number
 t
 title, which can be an empty string
 
+sid
+service id – a private, opaque, string for AS use only
+
+// ethan-as-source/Components/AS/Services/DMSUtils/source/AS_DMSUTILS_SystemLocatorUtils.cpp
+  serialisedLocator = ("M" + uint32ToHexString( dvbOnid ) + "-" + uint32ToHexString( dvbTsid ) + "-" + uint32ToHexString( dvbSid ) + "-" + uint32ToHexString( dvbCnid )).c_str();
+
 sf
 service format (sd, hd, uhd or au)
+
+xsg
+XSI service genre
 
 dvbtriplet
 a dvb triplet in the format onid.tsid.sid. Not required if the servicetype is
@@ -11427,12 +11459,10 @@ ssh -p 10022 root@192.168.0.103
 systemctl status sky-asplayer
 systemctl stop sky-asplayer
 
+umount /usr/sbin/asrdkplayer
 // copy player
 scp -r -P 10022 ./asrdkplayer root@192.168.0.104:/opt
-
-umount /usr/sbin/asrdkplayer
 mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
-
 systemctl start sky-asplayer
 
 journalctl -fu sky-asplayer
