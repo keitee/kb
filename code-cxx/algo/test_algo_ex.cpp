@@ -1,14 +1,14 @@
-#include <iostream>
-#include <cstring>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <set>
 #include <algorithm>
 #include <bitset>
-#include <stack>
+#include <cstring>
+#include <iostream>
 #include <list>
+#include <map>
 #include <queue>
+#include <set>
+#include <stack>
+#include <unordered_map>
+#include <vector>
 
 #include "gmock/gmock.h"
 
@@ -19,35 +19,34 @@ using namespace testing;
 
 // ={=========================================================================
 template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << elem << " ";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << elem << " ";
+    ++count;
+  }
 
-    cout << "(" << count << ")" << endl;
+  cout << "(" << count << ")" << endl;
 }
 
 template <typename T>
-void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << "(" << elem.first << ", " << elem.second << ") ";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << "(" << elem.first << ", " << elem.second << ") ";
+    ++count;
+  }
 
-    cout << "(" << count << ")" << endl;
+  cout << "(" << count << ")" << endl;
 }
-
 
 // ={=========================================================================
 // algo-leetcode-1
@@ -83,7 +82,7 @@ namespace leetcode_easy_001
         for (int second = first + 1; second < (int)size; ++second)
         {
           if (abs(nums[second]) == abs(target - nums[first]))
-              return vector<int>{first, second};
+            return vector<int>{first, second};
         }
       }
     }
@@ -144,9 +143,9 @@ namespace leetcode_easy_001
   //
   // one pass to build table and one pass to find a match
   //
-  // Q: what if there are duplicates in the input? 
-  
-  // Approach 3: One-pass Hash Table 
+  // Q: what if there are duplicates in the input?
+
+  // Approach 3: One-pass Hash Table
   // turns out we can do it in one-pass. While we iterate and inserting
   // elements into the table, we also look back to check if current element's
   // complement already exists in the table. If it exists, we have found a
@@ -167,7 +166,7 @@ namespace leetcode_easy_001
     {
       // search second
       auto found = table.find(target - nums[first]);
-      
+
       // should be
       // return vector<int>{found->second, first};
       //
@@ -178,7 +177,7 @@ namespace leetcode_easy_001
       // the index of the second
 
       if (found != table.end())
-          return vector<int>{found->second, first};
+        return vector<int>{found->second, first};
 
       table[nums[first]] = first;
     }
@@ -192,9 +191,9 @@ namespace leetcode_easy_001
   // py code
   //
   // def two_sum(nums, target):
-  // 
+  //
   //     myHash = {}
-  // 
+  //
   //     for index, value in enumerate(nums):
   //         if target - value in myHash:
   //             return [myHash[target-value], index]
@@ -215,47 +214,47 @@ namespace leetcode_easy_001
     {
       // search second
       auto found = table.find(target - nums[first]);
-      
+
       if (found != table.end())
-          return vector<int>{found->second, first};
+        return vector<int>{found->second, first};
 
       table[nums[first]] = first;
     }
 
     return vector<int>{-1, -1};
   }
-} // namespace
+} // namespace leetcode_easy_001
 
 TEST(LeetCode, Easy_001_TwoSum_01)
 {
   using namespace leetcode_easy_001;
 
   {
-    vector<int> nums{2,7,11,15};
+    vector<int> nums{2, 7, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{7,2,11,15};
+    vector<int> nums{7, 2, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{11,15,2,7};
+    vector<int> nums{11, 15, 2, 7};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,7,1,8};
+    vector<int> nums{11, 15, 2, 7, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,6,1,8};
+    vector<int> nums{11, 15, 2, 6, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4,5));
+    EXPECT_THAT(coll, ElementsAre(4, 5));
   }
 
   // failed and by leetcode
@@ -263,9 +262,9 @@ TEST(LeetCode, Easy_001_TwoSum_01)
   // case.
 
   {
-    vector<int> nums{0,4,3,0};
+    vector<int> nums{0, 4, 3, 0};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,3));
+    EXPECT_THAT(coll, ElementsAre(0, 3));
   }
 
   // failed and by leetcode
@@ -273,20 +272,19 @@ TEST(LeetCode, Easy_001_TwoSum_01)
   // add abs() on values.
 
   {
-    vector<int> nums{-1,-2,-3,-4,-5};
+    vector<int> nums{-1, -2, -3, -4, -5};
     auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2,4));
+    EXPECT_THAT(coll, ElementsAre(2, 4));
   }
 
   // failed and by leetcode
 
   {
-    vector<int> nums{-3,4,3,90};
+    vector<int> nums{-3, 4, 3, 90};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,2));
+    EXPECT_THAT(coll, ElementsAre(0, 2));
   }
 }
-
 
 TEST(LeetCode, Easy_001_TwoSum_02)
 {
@@ -294,31 +292,31 @@ TEST(LeetCode, Easy_001_TwoSum_02)
   const auto two_sum = two_sum_single_pass_map;
 
   {
-    vector<int> nums{2,7,11,15};
+    vector<int> nums{2, 7, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{7,2,11,15};
+    vector<int> nums{7, 2, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{11,15,2,7};
+    vector<int> nums{11, 15, 2, 7};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,7,1,8};
+    vector<int> nums{11, 15, 2, 7, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,6,1,8};
+    vector<int> nums{11, 15, 2, 6, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4,5));
+    EXPECT_THAT(coll, ElementsAre(4, 5));
   }
 
   // failed and by leetcode
@@ -326,9 +324,9 @@ TEST(LeetCode, Easy_001_TwoSum_02)
   // case.
 
   {
-    vector<int> nums{0,4,3,0};
+    vector<int> nums{0, 4, 3, 0};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,3));
+    EXPECT_THAT(coll, ElementsAre(0, 3));
   }
 
   // failed and by leetcode
@@ -336,17 +334,17 @@ TEST(LeetCode, Easy_001_TwoSum_02)
   // add abs() on values.
 
   {
-    vector<int> nums{-1,-2,-3,-4,-5};
+    vector<int> nums{-1, -2, -3, -4, -5};
     auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2,4));
+    EXPECT_THAT(coll, ElementsAre(2, 4));
   }
 
   // failed and by leetcode
 
   {
-    vector<int> nums{-3,4,3,90};
+    vector<int> nums{-3, 4, 3, 90};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,2));
+    EXPECT_THAT(coll, ElementsAre(0, 2));
   }
 }
 
@@ -356,31 +354,31 @@ TEST(LeetCode, Easy_001_TwoSum_03)
   const auto two_sum = two_sum_single_pass_unordered_map;
 
   {
-    vector<int> nums{2,7,11,15};
+    vector<int> nums{2, 7, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{7,2,11,15};
+    vector<int> nums{7, 2, 11, 15};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0,1));
+    EXPECT_THAT(coll, ElementsAre(0, 1));
   }
 
   {
-    vector<int> nums{11,15,2,7};
+    vector<int> nums{11, 15, 2, 7};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,7,1,8};
+    vector<int> nums{11, 15, 2, 7, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2,3));
+    EXPECT_THAT(coll, ElementsAre(2, 3));
   }
   {
-    vector<int> nums{11,15,2,6,1,8};
+    vector<int> nums{11, 15, 2, 6, 1, 8};
     auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4,5));
+    EXPECT_THAT(coll, ElementsAre(4, 5));
   }
 
   // failed and by leetcode
@@ -388,9 +386,9 @@ TEST(LeetCode, Easy_001_TwoSum_03)
   // case.
 
   {
-    vector<int> nums{0,4,3,0};
+    vector<int> nums{0, 4, 3, 0};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,3));
+    EXPECT_THAT(coll, ElementsAre(0, 3));
   }
 
   // failed and by leetcode
@@ -398,20 +396,19 @@ TEST(LeetCode, Easy_001_TwoSum_03)
   // add abs() on values.
 
   {
-    vector<int> nums{-1,-2,-3,-4,-5};
+    vector<int> nums{-1, -2, -3, -4, -5};
     auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2,4));
+    EXPECT_THAT(coll, ElementsAre(2, 4));
   }
 
   // failed and by leetcode
 
   {
-    vector<int> nums{-3,4,3,90};
+    vector<int> nums{-3, 4, 3, 90};
     auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0,2));
+    EXPECT_THAT(coll, ElementsAre(0, 2));
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-167
@@ -462,8 +459,8 @@ namespace leetcode_easy_167
 {
   vector<int> two_sum(vector<int> &nums, int target)
   {
-    int right = nums.size() -1;
-    int left = 0;
+    int right = nums.size() - 1;
+    int left  = 0;
     int sum{};
 
     while (left < right)
@@ -474,7 +471,7 @@ namespace leetcode_easy_167
       {
         // *cxx-return*
         // return vector<int>{left+1, right+1};
-        return {left+1, right+1};
+        return {left + 1, right + 1};
       }
       else if (sum > target)
         right--;
@@ -485,7 +482,7 @@ namespace leetcode_easy_167
     // return vector<int>{0, 0};
     return {0, 0};
   }
-} // namespace
+} // namespace leetcode_easy_167
 
 TEST(LeetCode, Easy_167_TwoSum)
 {
@@ -493,12 +490,11 @@ TEST(LeetCode, Easy_167_TwoSum)
   const auto func = two_sum;
 
   {
-    vector<int> nums{2,7,11,15};
+    vector<int> nums{2, 7, 11, 15};
     auto coll = func(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(1,2));
+    EXPECT_THAT(coll, ElementsAre(1, 2));
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-2
@@ -529,27 +525,27 @@ overflows.
 
 namespace leetcode_easy_002
 {
-//  void simple_itoa(int value)
-//  {
-//    while (value)
-//    {
-//      remains = value % 10;
-//      result += '0' + remains;
-//      value /= 10;
-//    }
-//
-//    // reverse result string
-//  }
-//
-//  void simple_atoi(std::string input)
-//  {
-//    int result{};
-//
-//    for (int i = 0; i < input.size(); ++i)
-//    {
-//      result = input[i] - '0' + 10*result;
-//    }
-//  }
+  //  void simple_itoa(int value)
+  //  {
+  //    while (value)
+  //    {
+  //      remains = value % 10;
+  //      result += '0' + remains;
+  //      value /= 10;
+  //    }
+  //
+  //    // reverse result string
+  //  }
+  //
+  //  void simple_atoi(std::string input)
+  //  {
+  //    int result{};
+  //
+  //    for (int i = 0; i < input.size(); ++i)
+  //    {
+  //      result = input[i] - '0' + 10*result;
+  //    }
+  //  }
 
   // Unlike atoi(), there is no need to handle:
   //
@@ -591,10 +587,12 @@ namespace leetcode_easy_002
 
     // return result;
     // return result > std::numeric_limits<int>::max() ? 0 : result;
-    return (result > std::numeric_limits<int>::max() || result < std::numeric_limits<int>::min()) ? 0 : result;
+    return (result > std::numeric_limits<int>::max() ||
+            result < std::numeric_limits<int>::min())
+             ? 0
+             : result;
   }
-} // namespace
-
+} // namespace leetcode_easy_002
 
 // signed int and unsigned int
 //
@@ -647,7 +645,6 @@ TEST(LeetCode, Easy_002_ReverseInteger)
   EXPECT_THAT(reverse_integer(-2147483648), 0);
 }
 
-
 // ={=========================================================================
 // ={=========================================================================
 // algo-leetcode-5
@@ -678,14 +675,14 @@ namespace leetcode_easy_005
 {
   // own approach which fails on:
   //
-  // fail 0: 
+  // fail 0:
   // input []
-  // 
+  //
   // fail 1:
   // input ["aa","aa"]
   // input ["aa","bb"]
 
-  string longestCommonPrefix_01(const vector<string>& strs) 
+  string longestCommonPrefix_01(const vector<string> &strs)
   {
     vector<unsigned int> table(26, 0);
 
@@ -697,14 +694,14 @@ namespace leetcode_easy_005
       return "";
 
     // build table from input strings
-    for (const auto& e : strs)
+    for (const auto &e : strs)
     {
-      for (const auto& c : e)
+      for (const auto &c : e)
         table[c - 'a'] += 1;
     }
 
     // take one input
-    for (const auto& c : strs[0])
+    for (const auto &c : strs[0])
     {
       if (table[c - 'a'] != num_of_input)
         break;
@@ -715,22 +712,21 @@ namespace leetcode_easy_005
     return strs[0].substr(0, common);
   }
 
-
   // Approach 1: Horizontal scanning
-  // 
+  //
   // For a start we will describe a simple way of finding the longest prefix
   // shared by a set of strings LCP(S1 ... Sn)
-  // 
+  //
   // We will use the observation that :
-  // 
+  //
   // LCP(S1 ... Sn) = LCP(LCP(LCP(S1, S2),S3), ... Sn)
-  // 
+  //
   // Algorithm
-  // 
+  //
   // To employ this idea, the algorithm iterates through the strings [S1 ...
   // Sn], finding at each iteration i the longest common prefix of strings
   // LCP(S1 ...  Si)
-  // 
+  //
   // When LCP(S1 ... Si) is an empty string, the algorithm ends. Otherwise after
   // nn iterations, the algorithm returns LCP(S1 ... Sn)
   //
@@ -741,10 +737,10 @@ namespace leetcode_easy_005
   // In the *worst case* all n strings are the same. The algorithm compares the
   // string S1 with the other strings [S2 ... Sn]. There are S character
   // comparisons, where S is the sum of all characters in the input array.
-  // 
-  // Space complexity : O(1)O(1). We only used constant extra space. 
+  //
+  // Space complexity : O(1)O(1). We only used constant extra space.
 
-  string longestCommonPrefix_02(const vector<string>& strs) 
+  string longestCommonPrefix_02(const vector<string> &strs)
   {
     auto num_of_input = strs.size();
 
@@ -760,7 +756,7 @@ namespace leetcode_easy_005
 
       for (idx = 0; idx < len; ++idx)
       {
-        // cout << "idx: " << idx << ", lcp[idx]:" << lcp[idx] 
+        // cout << "idx: " << idx << ", lcp[idx]:" << lcp[idx]
         //   << ", strs[i][idx]:" << strs[i][idx] << endl;
 
         // ok, found uncommon char between two
@@ -778,7 +774,7 @@ namespace leetcode_easy_005
 
     return lcp;
   }
-} // namespace
+} // namespace leetcode_easy_005
 
 TEST(LeetCode, Easy_005_LongestCommonPrefix)
 {
@@ -787,27 +783,28 @@ TEST(LeetCode, Easy_005_LongestCommonPrefix)
   {
     const auto func = longestCommonPrefix_01;
 
-    EXPECT_THAT(func(std::vector<std::string>{"flower","flow","flight"}), "fl");
-    EXPECT_THAT(func(std::vector<std::string>{"dog","racecar","car"}), "");
+    EXPECT_THAT(func(std::vector<std::string>{"flower", "flow", "flight"}),
+                "fl");
+    EXPECT_THAT(func(std::vector<std::string>{"dog", "racecar", "car"}), "");
 
     // should be "aa"
-    EXPECT_THAT(func(std::vector<std::string>{"aa","aa"}), "");
+    EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "");
 
     // should be ""
-    EXPECT_THAT(func(std::vector<std::string>{"aa","bb"}), "aa");
+    EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "aa");
   }
 
   {
     const auto func = longestCommonPrefix_02;
 
-    EXPECT_THAT(func(std::vector<std::string>{"flower","flow","flight"}), "fl");
-    EXPECT_THAT(func(std::vector<std::string>{"dog","racecar","car"}), "");
-    
-    EXPECT_THAT(func(std::vector<std::string>{"aa","aa"}), "aa");
-    EXPECT_THAT(func(std::vector<std::string>{"aa","bb"}), "");
+    EXPECT_THAT(func(std::vector<std::string>{"flower", "flow", "flight"}),
+                "fl");
+    EXPECT_THAT(func(std::vector<std::string>{"dog", "racecar", "car"}), "");
+
+    EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "aa");
+    EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "");
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-6
@@ -904,7 +901,7 @@ namespace leetcode_easy_006
         default:
           break;
       } // switch
-    } // for
+    }   // for
 
     // should be empty if all matches up
     return coll.empty() ? true : false;
@@ -913,7 +910,7 @@ namespace leetcode_easy_006
   // algo-stack
   //
   // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Valid
-  // Parentheses.  
+  // Parentheses.
   //
   // Memory Usage: 8.9 MB, less than 81.58% of C++ online submissions for Valid
   // Parentheses.
@@ -939,9 +936,8 @@ namespace leetcode_easy_006
           auto prev = coll.top();
           coll.pop();
 
-          auto match = (prev == '(' && e == ')') 
-            || (prev == '[' && e == ']')
-            || (prev == '{' && e == '}');
+          auto match = (prev == '(' && e == ')') || (prev == '[' && e == ']') ||
+                       (prev == '{' && e == '}');
 
           if (!match)
             return false;
@@ -955,7 +951,7 @@ namespace leetcode_easy_006
     // should be empty if all matches up
     return coll.empty() ? true : false;
   }
-} // namespace
+} // namespace leetcode_easy_006
 
 TEST(LeetCode, Easy_006_ValidParentheses)
 {
@@ -993,7 +989,6 @@ TEST(LeetCode, Easy_006_ValidParentheses)
   }
 }
 
-
 // ={=========================================================================
 // algo-leetcode-7
 /*
@@ -1025,13 +1020,17 @@ public:
 
 namespace leetcode_easy_007
 {
-  struct ListNode {
+  struct ListNode
+  {
     int val;
     ListNode *next;
-    ListNode(int x) : val(x), next(NULL) {}
+    ListNode(int x)
+        : val(x)
+        , next(NULL)
+    {}
   };
 
-  ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) 
+  ListNode *mergeTwoLists(ListNode *l1, ListNode *l2)
   {
     if (l1 == nullptr && l2 != nullptr)
       return l1;
@@ -1040,7 +1039,7 @@ namespace leetcode_easy_007
     else if (l1 == nullptr && l2 == nullptr)
       return nullptr;
 
-    auto first = l1;
+    auto first  = l1;
     auto second = l2;
 
     ListNode *result_head{};
@@ -1051,25 +1050,25 @@ namespace leetcode_easy_007
       // ascending order
       if (first->val <= second->val)
       {
-        if(!result_head)
+        if (!result_head)
         {
           result_head = result_end = first;
         }
 
         result_end->next = first;
-        result_end = first;
+        result_end       = first;
 
         first = first->next;
       }
       else
       {
-        if(!result_head)
+        if (!result_head)
         {
           result_head = result_end = second;
         }
 
         result_end->next = second;
-        result_end = second;
+        result_end       = second;
 
         second = second->next;
       }
@@ -1089,16 +1088,16 @@ namespace leetcode_easy_007
     return result_head;
   }
 
-  void print_list(ListNode* l1) 
+  void print_list(ListNode *l1)
   {
     ListNode *run = l1;
 
-    for(; run; run = run->next)
+    for (; run; run = run->next)
     {
       cout << "val : " << run->val << endl;
     }
   }
-} // namespace
+} // namespace leetcode_easy_007
 
 // Input: 1->2->4, 1->3->4
 // Output: 1->1->2->3->4->4
@@ -1125,10 +1124,9 @@ TEST(LeetCode, Easy_007_MergeSortedList)
   print_list(&s1);
 
   cout << "====" << endl;
-  auto x = mergeTwoLists(&e1, &s1); 
+  auto x = mergeTwoLists(&e1, &s1);
   print_list(x);
 }
-
 
 // ={=========================================================================
 // algo-leetcode-8
@@ -1198,14 +1196,14 @@ namespace leetcode_easy_008
     {
       int run = nums[i];
 
-      // cout << "for i: " << i << ", run: " << run 
+      // cout << "for i: " << i << ", run: " << run
       //   << ", value: " << value << endl;
 
       // update current max when current value is bigger
       if (run > value)
         value = run;
       // ends when see smaller and means reaches the the new end
-      else if(run < value)
+      else if (run < value)
       {
         // cout << "break i: " << i << endl;
         break;
@@ -1213,8 +1211,8 @@ namespace leetcode_easy_008
       // when run == value, swap it to tne end.
       else
       {
-        for (size_t s = i; s < nums.size()-1; ++s)
-          swap(nums[s], nums[s+1]);
+        for (size_t s = i; s < nums.size() - 1; ++s)
+          swap(nums[s], nums[s + 1]);
 
         // since nums[i] is swapped, it may be bigger
 
@@ -1229,7 +1227,7 @@ namespace leetcode_easy_008
   }
 
   // o the key idea is to swap to the left
-  // o no repeated swap until see the new end. single swap is enough 
+  // o no repeated swap until see the new end. single swap is enough
   // o swap() should be done after updating current_max
   //
   // o end is index but shold return len so +1 -> revised. As algo-partition,
@@ -1268,7 +1266,7 @@ namespace leetcode_easy_008
 
     return end;
   }
-  
+
   using ITERATOR = vector<int>::iterator;
 
   ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
@@ -1297,7 +1295,7 @@ namespace leetcode_easy_008
   int RemoveDuplicates_03(vector<int> &nums)
   {
     auto first = nums.begin();
-    auto last = nums.end();
+    auto last  = nums.end();
 
     auto end = adjacent_find(first, last);
 
@@ -1348,7 +1346,7 @@ namespace leetcode_easy_008
     return unique_end + 1;
   }
 
-} // namespace
+} // namespace leetcode_easy_008
 
 TEST(LeetCode, Easy_008_RemoveDuplicates)
 {
@@ -1358,7 +1356,7 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
   {
     const auto func = RemoveDuplicates_01;
 
-    vector<int> coll{1,1,2};
+    vector<int> coll{1, 1, 2};
     auto len = func(coll);
 
     EXPECT_THAT(len, 2);
@@ -1368,14 +1366,14 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,2));
+    EXPECT_THAT(result, ElementsAre(1, 2));
   }
 
   // fails
   {
     const auto func = RemoveDuplicates_01;
 
-    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
     auto len = func(coll);
 
     EXPECT_THAT(len, Not(5));
@@ -1385,13 +1383,13 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, Not(ElementsAre(0,1,2,3,4)));
+    EXPECT_THAT(result, Not(ElementsAre(0, 1, 2, 3, 4)));
   }
 
   {
     const auto func = RemoveDuplicates_02;
 
-    vector<int> coll{1,1,2};
+    vector<int> coll{1, 1, 2};
     auto len = func(coll);
 
     EXPECT_THAT(len, 2);
@@ -1401,13 +1399,13 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,2));
+    EXPECT_THAT(result, ElementsAre(1, 2));
   }
 
   {
     const auto func = RemoveDuplicates_02;
 
-    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
     auto len = func(coll);
 
     EXPECT_THAT(len, 5);
@@ -1417,7 +1415,7 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(0,1,2,3,4));
+    EXPECT_THAT(result, ElementsAre(0, 1, 2, 3, 4));
   }
 
   // same ex as AlgoUnique
@@ -1434,7 +1432,7 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,4,6));
+    EXPECT_THAT(result, ElementsAre(1, 4, 6));
   }
   {
     const auto func = RemoveDuplicates_03;
@@ -1449,7 +1447,7 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,4,6));
+    EXPECT_THAT(result, ElementsAre(1, 4, 6));
   }
   {
     const auto func = RemoveDuplicates_03;
@@ -1458,8 +1456,9 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
 
     auto len = func(coll);
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4,5,7,5,4,4}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
     EXPECT_THAT(len, 12);
 
     vector<int> result{};
@@ -1467,11 +1466,9 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, 
-        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4}));
+    EXPECT_THAT(result, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-9
@@ -1558,7 +1555,7 @@ namespace leetcode_easy_009
     return end;
   }
 
-} // namespace
+} // namespace leetcode_easy_009
 
 TEST(LeetCode, Easy_009_RemoveIf)
 {
@@ -1567,7 +1564,7 @@ TEST(LeetCode, Easy_009_RemoveIf)
   {
     const auto func = RemoveIf_01;
 
-    vector<int> coll{3,2,2,3};
+    vector<int> coll{3, 2, 2, 3};
     auto len = func(coll, 3);
 
     EXPECT_THAT(len, 2);
@@ -1577,13 +1574,13 @@ TEST(LeetCode, Easy_009_RemoveIf)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(2,2));
+    EXPECT_THAT(result, ElementsAre(2, 2));
   }
 
   {
     const auto func = RemoveIf_01;
 
-    vector<int> coll{0,1,2,2,3,0,4,2};
+    vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
     auto len = func(coll, 2);
 
     EXPECT_THAT(len, 5);
@@ -1593,10 +1590,9 @@ TEST(LeetCode, Easy_009_RemoveIf)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(0,1,3,0,4));
+    EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-10
@@ -1649,7 +1645,7 @@ namespace leetcode_easy_010
   // Memory Usage: 9.3 MB, less than 96.70% of C++ online submissions for
   // Implement strStr().
 
-  int strStr_1(string haystack, string needle) 
+  int strStr_1(string haystack, string needle)
   {
     int result{-1};
     size_t count{};
@@ -1662,8 +1658,8 @@ namespace leetcode_easy_010
 
     for (size_t hay = 0; hay < haystack.size(); ++hay)
     {
-      if (haystack[hay] == needle[0] 
-          && ((hay + needle.size() -1) < haystack.size()))
+      if (haystack[hay] == needle[0] &&
+          ((hay + needle.size() - 1) < haystack.size()))
       {
         for (size_t ni = 0, hi = hay; ni < needle.size(); ++ni, ++hi)
           if (haystack[hi] == needle[ni])
@@ -1671,7 +1667,7 @@ namespace leetcode_easy_010
 
         // cout << "needle: " << needle << ", count: " << count << ", result: " << result << endl;
 
-        if(count == needle.size())
+        if (count == needle.size())
         {
           result = hay;
           // cout << "needle: " << needle << ", count: " << count << ", result: " << result << endl;
@@ -1686,7 +1682,7 @@ namespace leetcode_easy_010
     return result;
   }
 
-  // int strStr_2(string haystack, string needle) 
+  // int strStr_2(string haystack, string needle)
   // {
   //   hay_size = haystack.size();
   //   needle_size = needle.size();
@@ -1699,7 +1695,7 @@ namespace leetcode_easy_010
   //   }
   // }
 
-} // namespace
+} // namespace leetcode_easy_010
 
 TEST(LeetCode, Easy_010_StrStr)
 {
@@ -1719,12 +1715,10 @@ TEST(LeetCode, Easy_010_StrStr)
 
   EXPECT_THAT(strStr_1("mississippi", "issipi"), -1);
 
-
   EXPECT_THAT(string("hello").find("ll"), 2);
   EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
   EXPECT_THAT(string("aaaaa").find("bba"), -1);
 }
-
 
 // ={=========================================================================
 // algo-leetcode-11
@@ -1755,7 +1749,6 @@ Output: 0
 */
 
 // see algo-binary-search
-
 
 // ={=========================================================================
 // algo-leetcode-12 algo-recursion
@@ -1819,7 +1812,7 @@ namespace leetcode_easy_012
           result += to_string(count) + current_char;
 
         current_char = ch;
-        count = 1;
+        count        = 1;
       }
     }
 
@@ -1847,7 +1840,7 @@ namespace leetcode_easy_012
       {
         result += to_string(count) + current_char;
         current_char = input[i];
-        count = 1;
+        count        = 1;
       }
     }
 
@@ -1864,7 +1857,7 @@ namespace leetcode_easy_012
     if (n == 1)
       return "1";
 
-    auto result = count_and_say_1(n-1);
+    auto result = count_and_say_1(n - 1);
     return count_string_1(result);
   }
 
@@ -1873,7 +1866,7 @@ namespace leetcode_easy_012
     if (n == 1)
       return "1";
 
-    auto result = count_and_say_2(n-1);
+    auto result = count_and_say_2(n - 1);
     return count_string_2(result);
   }
 
@@ -1890,7 +1883,7 @@ namespace leetcode_easy_012
     if (n == 1)
       return "1";
 
-    auto input = count_and_say_3(n-1);
+    auto input = count_and_say_3(n - 1);
 
     // return count_string_2(result);
     // string count_string_2(string const &input)
@@ -1907,7 +1900,7 @@ namespace leetcode_easy_012
         {
           result += to_string(count) + current_char;
           current_char = input[i];
-          count = 1;
+          count        = 1;
         }
       }
 
@@ -1917,7 +1910,7 @@ namespace leetcode_easy_012
       return result;
     }
   }
-} // namespace 
+} // namespace leetcode_easy_012
 
 TEST(LeetCode, Easy_012_CountAndSay_1)
 {
@@ -1929,7 +1922,7 @@ TEST(LeetCode, Easy_012_CountAndSay_1)
   EXPECT_THAT(count_string_1("11"), "21");
   // 4th
   EXPECT_THAT(count_string_1("21"), "1211");
-  // 5th 
+  // 5th
   EXPECT_THAT(count_string_1("1211"), "111221");
   // 6th
   EXPECT_THAT(count_string_1("111221"), "312211");
@@ -1999,7 +1992,6 @@ TEST(LeetCode, Easy_012_CountAndSay_3)
     count_and_say_2(i).size();
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-53
@@ -2075,7 +2067,7 @@ This is about "sum" but not "sub array" How about returnning "sub array"?
 
 namespace leetcode_easy_053
 {
-  int maxSubArray_1(vector<int>& nums)
+  int maxSubArray_1(vector<int> &nums)
   {
     int current_max{};
 
@@ -2090,12 +2082,12 @@ namespace leetcode_easy_053
       // only for positive previous item
       // why [i-1]? since updates `nums` and refer back to the previous
 
-      if (nums[i-1] > 0)
+      if (nums[i - 1] > 0)
       {
         // update input to keep *prefix-sum* since do not care changes to the
         // input
 
-        nums[i] += nums[i-1];
+        nums[i] += nums[i - 1];
 
         // to find max sum
         if (nums[i] > current_max)
@@ -2112,17 +2104,17 @@ namespace leetcode_easy_053
   // Memory Usage: 10.5 MB, less than 15.81% of C++ online submissions for
   // Maximum Subarray.
 
-  int maxSubArray_2(vector<int>& nums)
+  int maxSubArray_2(vector<int> &nums)
   {
     for (size_t i = 1; i < nums.size(); ++i)
     {
       // only for positive previous item
-      if (nums[i-1] > 0)
+      if (nums[i - 1] > 0)
       {
         // update input to keep *prefix-sum* since do not care changes to the
         // input
 
-        nums[i] += nums[i-1];
+        nums[i] += nums[i - 1];
       }
     }
 
@@ -2137,7 +2129,7 @@ namespace leetcode_easy_053
   // (max_so_far is used for this). Each time we get a positive sum compare it
   // with max_so_far and update max_so_far if it is greater than max_so_far
 
-  int maxSubArray_3(vector<int>& nums)
+  int maxSubArray_3(vector<int> &nums)
   {
     int max_so_far{std::numeric_limits<int>::min()};
     int max_current{};
@@ -2163,7 +2155,7 @@ namespace leetcode_easy_053
     return max_so_far;
   }
 
-} // namespace
+} // namespace leetcode_easy_053
 
 TEST(LeetCode, Easy_053_MaxSubArray_1)
 {
@@ -2187,7 +2179,7 @@ TEST(LeetCode, Easy_053_MaxSubArray_1)
     }
 
     {
-      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 6);
     }
 
@@ -2196,7 +2188,7 @@ TEST(LeetCode, Easy_053_MaxSubArray_1)
       // 102
       // >>> sum([100,-3,4,-1,2,1])
       // 103
-      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 103);
     }
   }
@@ -2215,12 +2207,12 @@ TEST(LeetCode, Easy_053_MaxSubArray_1)
     }
 
     {
-      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 6);
     }
 
     {
-      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 103);
     }
   }
@@ -2239,17 +2231,16 @@ TEST(LeetCode, Easy_053_MaxSubArray_1)
     }
 
     {
-      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 6);
     }
 
     {
-      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(func(coll), 103);
     }
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-122
@@ -2305,7 +2296,7 @@ namespace leetcode_easy_122
   // Memory Usage: 9.6 MB, less than 11.03% of C++ online submissions for Best
   // Time to Buy and Sell Stock II.
 
-  int maxProfit_1(vector<int>& prices) 
+  int maxProfit_1(vector<int> &prices)
   {
     int prev_profit{};
     int current_profit{};
@@ -2313,7 +2304,7 @@ namespace leetcode_easy_122
 
     for (size_t i = 1; i < prices.size(); ++i)
     {
-      current_profit = current_profit + (prices[i] - prices[i-1]);
+      current_profit = current_profit + (prices[i] - prices[i - 1]);
       current_profit = max(0, current_profit);
 
       if (current_profit >= prev_profit)
@@ -2321,7 +2312,7 @@ namespace leetcode_easy_122
         accumulated_diff += current_profit - prev_profit;
         prev_profit = current_profit;
       }
-      else 
+      else
       {
         // accumulated_diff += current_diff;
         prev_profit = current_profit;
@@ -2338,13 +2329,13 @@ namespace leetcode_easy_122
   // [7, 1, 5, 3, 6, 4].
   //
   // If we plot the numbers of the given array on a graph, we get:
-  //  
+  //
   // 7                _           _
   //      _           B     6     C
   //      A     5
   //                              4
   //                  3
-  //      1     
+  //      1
   // ------------------------------
   //
   // If we analyze the graph, we notice that the points of interest are the
@@ -2365,23 +2356,23 @@ namespace leetcode_easy_122
 
   int maxProfit_2(vector<int> &prices)
   {
-    int i = 0;
+    int i      = 0;
     int valley = prices[0];
-    int peak = prices[0];
+    int peak   = prices[0];
     int max_profit{};
 
     // since see i and i+1 in th loop
-    int length = prices.size()-1;
+    int length = prices.size() - 1;
 
     while (i < length)
     {
       // like [5,3]
-      while (i < length && prices[i] >= prices[i+1])
+      while (i < length && prices[i] >= prices[i + 1])
         ++i;
       valley = prices[i];
 
       // like [3,6]
-      while (i < length && prices[i] <= prices[i+1])
+      while (i < length && prices[i] <= prices[i + 1])
         ++i;
       peak = prices[i];
 
@@ -2391,9 +2382,8 @@ namespace leetcode_easy_122
     return max_profit;
   }
 
-
   // Approach 3: Simple One Pass
-  // 
+  //
   // This solution follows the logic used in Approach 2 itself, but with only a
   // slight variation. In this case, instead of looking for every peak following
   // a valley, we can simply go on crawling over the slope and keep on adding
@@ -2418,8 +2408,8 @@ namespace leetcode_easy_122
 
     for (size_t i = 1; i < prices.size(); ++i)
     {
-      if (prices[i] > prices[i-1])
-        max_profit += prices[i] - prices[i-1];
+      if (prices[i] > prices[i - 1])
+        max_profit += prices[i] - prices[i - 1];
     }
 
     return max_profit;
@@ -2429,7 +2419,7 @@ namespace leetcode_easy_122
   //
   // In this case, we simply calculate the profit corresponding to all the
   // possible sets of transactions and find out the maximum profit out of them.
-  // 
+  //
   // calculate(0, 6)
   // calculate(start:1, i:2)
   // calculate(3, 6)
@@ -2472,7 +2462,7 @@ namespace leetcode_easy_122
         {
           cout << "calculate(start:" << start << ", i:" << i << ")" << endl;
 
-          int profit = calculate(prices, i+1) + prices[i] - prices[start];
+          int profit = calculate(prices, i + 1) + prices[i] - prices[start];
           if (profit > max_profit)
             max_profit = profit;
         }
@@ -2486,13 +2476,9 @@ namespace leetcode_easy_122
     return max;
   }
 
-  int maxProfit_4(vector<int> &prices)
-  {
-    return calculate(prices, 0);
-  }
+  int maxProfit_4(vector<int> &prices) { return calculate(prices, 0); }
 
-} // namespace
-
+} // namespace leetcode_easy_122
 
 TEST(LeetCode, Easy_122_MaxProfit_1)
 {
@@ -2502,11 +2488,11 @@ TEST(LeetCode, Easy_122_MaxProfit_1)
     auto func = maxProfit_1;
 
     {
-      vector<int> coll{7,1,5,3,6,4};
+      vector<int> coll{7, 1, 5, 3, 6, 4};
       EXPECT_THAT(func(coll), 7);
     }
     {
-      vector<int> coll{1,2,3,4,5};
+      vector<int> coll{1, 2, 3, 4, 5};
       EXPECT_THAT(func(coll), 4);
     }
   }
@@ -2515,11 +2501,11 @@ TEST(LeetCode, Easy_122_MaxProfit_1)
     auto func = maxProfit_2;
 
     {
-      vector<int> coll{7,1,5,3,6,4};
+      vector<int> coll{7, 1, 5, 3, 6, 4};
       EXPECT_THAT(func(coll), 7);
     }
     {
-      vector<int> coll{1,2,3,4,5};
+      vector<int> coll{1, 2, 3, 4, 5};
       EXPECT_THAT(func(coll), 4);
     }
   }
@@ -2528,11 +2514,11 @@ TEST(LeetCode, Easy_122_MaxProfit_1)
     auto func = maxProfit_3;
 
     {
-      vector<int> coll{7,1,5,3,6,4};
+      vector<int> coll{7, 1, 5, 3, 6, 4};
       EXPECT_THAT(func(coll), 7);
     }
     {
-      vector<int> coll{1,2,3,4,5};
+      vector<int> coll{1, 2, 3, 4, 5};
       EXPECT_THAT(func(coll), 4);
     }
   }
@@ -2541,7 +2527,7 @@ TEST(LeetCode, Easy_122_MaxProfit_1)
     auto func = maxProfit_4;
 
     {
-      vector<int> coll{7,1,5,3,6,4};
+      vector<int> coll{7, 1, 5, 3, 6, 4};
       EXPECT_THAT(func(coll), 7);
     }
     // {
@@ -2550,7 +2536,6 @@ TEST(LeetCode, Easy_122_MaxProfit_1)
     // }
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-14
@@ -2583,7 +2568,7 @@ namespace leetcode_easy_014
   {
     int count{};
 
-    int i = s.size() -1;
+    int i = s.size() - 1;
 
     for (; i >= 0; --i)
       if (!isspace(s[i]))
@@ -2592,14 +2577,14 @@ namespace leetcode_easy_014
     for (; i >= 0; --i)
     {
       if (s[i] == ' ')
-          return count;
+        return count;
 
       ++count;
     }
 
     return count;
   }
-}
+} // namespace leetcode_easy_014
 
 TEST(LeetCode, Easy_014_LengthOfLastWord_1)
 {
@@ -2613,7 +2598,6 @@ TEST(LeetCode, Easy_014_LengthOfLastWord_1)
   EXPECT_THAT(lengthOfLastWord("a"), 1);
   EXPECT_THAT(lengthOfLastWord("a "), 1);
 }
-
 
 // ={=========================================================================
 // algo-leetcode-15
@@ -2652,21 +2636,21 @@ namespace leetcode_easy_015
   //
   // but looks it's not right approach
   //
-  // vector<int> plusOne_1(vector<int>& digits) 
+  // vector<int> plusOne_1(vector<int>& digits)
   // {
   // }
   //
   //  python solution:
   //
   //  def answer(self, digits):
-  //      return [int(c) for c in str(int(''.join(str(d) for d in digits)) + 1)] 
- 
+  //      return [int(c) for c in str(int(''.join(str(d) for d in digits)) + 1)]
+
   // solution from lonelydream
   //
   // the key idea is that:
   //
   // if addition cause a carry made then continue doing so until it do not
-  // create a carry. 
+  // create a carry.
   //
   // when done, if [0] == 0, means there was a carry so insert 1 at the
   // beginning.
@@ -2676,11 +2660,11 @@ namespace leetcode_easy_015
   // Memory Usage: 8.7 MB, less than 15.95% of C++ online submissions for Plus
   // One.
 
-  vector<int> plusOne_2(vector<int>& digits) 
+  vector<int> plusOne_2(vector<int> &digits)
   {
-    for (int i = digits.size()-1; i >= 0; --i)
+    for (int i = digits.size() - 1; i >= 0; --i)
     {
-      digits[i] += 1; 
+      digits[i] += 1;
 
       if (digits[i] > 9)
       {
@@ -2699,7 +2683,7 @@ namespace leetcode_easy_015
 
     return digits;
   }
-}
+} // namespace leetcode_easy_015
 
 TEST(LeetCode, Easy_015_PlusOne)
 {
@@ -2708,19 +2692,18 @@ TEST(LeetCode, Easy_015_PlusOne)
   auto func = plusOne_2;
 
   {
-    vector<int> coll{1,2,3};
-    EXPECT_THAT(func(coll), ElementsAre(1,2,4));
+    vector<int> coll{1, 2, 3};
+    EXPECT_THAT(func(coll), ElementsAre(1, 2, 4));
   }
   {
-    vector<int> coll{4,3,2,1};
-    EXPECT_THAT(func(coll), ElementsAre(4,3,2,2));
+    vector<int> coll{4, 3, 2, 1};
+    EXPECT_THAT(func(coll), ElementsAre(4, 3, 2, 2));
   }
   {
-    vector<int> coll{9,9,9};
-    EXPECT_THAT(func(coll), ElementsAre(1,0,0,0));
+    vector<int> coll{9, 9, 9};
+    EXPECT_THAT(func(coll), ElementsAre(1, 0, 0, 0));
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-16
@@ -2754,11 +2737,11 @@ namespace leetcode_easy_016
   //
   // Memory Usage: 8.6 MB, less than 55.73% of C++ online submissions for Add
   // Binary.
-  
+
   string addBinary_1(string a, string b)
   {
-    int i = a.size() -1;
-    int j = b.size() -1;
+    int i    = a.size() - 1;
+    int j    = b.size() - 1;
     auto len = max(i, j);
 
     int carry{};
@@ -2791,7 +2774,7 @@ namespace leetcode_easy_016
 
     return result;
   }
-}
+} // namespace leetcode_easy_016
 
 TEST(LeetCode, Easy_016_AddBinary)
 {
@@ -2807,7 +2790,6 @@ TEST(LeetCode, Easy_016_AddBinary)
   // fails at run and fixed
   EXPECT_THAT(func("0", "0"), "0");
 }
-
 
 // ={=========================================================================
 // algo-leetcode-17
@@ -2845,7 +2827,7 @@ namespace leetcode_easy_017
   //  |---|--------|-------|--------------------|
   //
   //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
-  //  value but used 
+  //  value but used
 
   int floor_sqrt_1(int x)
   {
@@ -2855,7 +2837,7 @@ namespace leetcode_easy_017
 
     // starts from 1 since it's covered in base cases
     int start{1};
-    int end{x-1};
+    int end{x - 1};
     int ans{};
 
     while (start <= end)
@@ -2870,7 +2852,7 @@ namespace leetcode_easy_017
         // so discard [1, mid], update start and move closer to sqrt(x)
         start = mid + 1;
 
-        // we need floor answer so update ans  
+        // we need floor answer so update ans
         ans = mid;
       }
       // discard [mid, x]
@@ -2898,7 +2880,7 @@ namespace leetcode_easy_017
 
     // starts from 1 since it's covered in base cases
     int start{0};
-    int end{x/2};
+    int end{x / 2};
     int ans{};
 
     while (start <= end)
@@ -2913,7 +2895,7 @@ namespace leetcode_easy_017
         // so discard [1, mid], update start and move closer to sqrt(x)
         start = mid + 1;
 
-        // we need floor answer so update ans  
+        // we need floor answer so update ans
         ans = mid;
       }
       // discard [mid, x]
@@ -2938,12 +2920,12 @@ namespace leetcode_easy_017
 
     // starts from 1 since it's covered in base cases
     int start{0};
-    int end{x/2};
+    int end{x / 2};
     int ans{};
 
     while (start <= end)
     {
-      long long mid = (start + end) / 2;
+      long long mid   = (start + end) / 2;
       long long sqare = mid * mid;
 
       // equality; perfect square
@@ -2954,7 +2936,7 @@ namespace leetcode_easy_017
         // so discard [1, mid], update start and move closer to sqrt(x)
         start = mid + 1;
 
-        // we need floor answer so update ans  
+        // we need floor answer so update ans
         ans = mid;
       }
       // discard [mid, x]
@@ -2965,7 +2947,6 @@ namespace leetcode_easy_017
     // return floor value rather than `not found`
     return ans;
   }
-
 
   // having square variable for mid * mid causes performance penalty?
   //
@@ -2982,7 +2963,7 @@ namespace leetcode_easy_017
 
     // starts from 1 since it's covered in base cases
     int start{0};
-    int end{x/2};
+    int end{x / 2};
     int ans{};
 
     long long mid{};
@@ -2999,7 +2980,7 @@ namespace leetcode_easy_017
         // so discard [1, mid], update start and move closer to sqrt(x)
         start = mid + 1;
 
-        // we need floor answer so update ans  
+        // we need floor answer so update ans
         ans = mid;
       }
       // discard [mid, x]
@@ -3020,23 +3001,23 @@ namespace leetcode_easy_017
 
   int floor_sqrt_5(int x)
   {
-    long long l=1,r=x,mid;
+    long long l = 1, r = x, mid;
 
-    if(x==0)
+    if (x == 0)
       return 0;
 
-    while(l<=r)
+    while (l <= r)
     {
-      mid = l+(r-l)/2;
+      mid = l + (r - l) / 2;
 
-      if( mid*mid==x)
+      if (mid * mid == x)
         return mid;
-      else if( mid*mid>x)
-        r=mid-1;
+      else if (mid * mid > x)
+        r = mid - 1;
       else
       {
-        l=mid+1;
-        if(l*l>x)
+        l = mid + 1;
+        if (l * l > x)
           return mid;
       }
     }
@@ -3044,7 +3025,7 @@ namespace leetcode_easy_017
     // just to avoid warning
     return mid;
   }
-} // namespace
+} // namespace leetcode_easy_017
 
 TEST(LeetCode, Easy_017_Sqrt)
 {
@@ -3098,7 +3079,7 @@ TEST(LeetCode, Easy_017_Sqrt)
     //
     // >>> 46340*46340, ceiling
     // 2,147,395,600
-    
+
     auto func = floor_sqrt_3;
     EXPECT_THAT(func(2147395599), 46339);
     EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
@@ -3112,7 +3093,7 @@ TEST(LeetCode, Easy_017_Sqrt)
     //
     // >>> 46340*46340, ceiling
     // 2,147,395,600
-    
+
     auto func = floor_sqrt_4;
     EXPECT_THAT(func(1), 1);
     EXPECT_THAT(func(2147395599), 46339);
@@ -3143,7 +3124,6 @@ TEST(LeetCode, Easy_017_Sqrt_Performance_2)
     EXPECT_THAT(func(2147395599), 46339);
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-18
@@ -3203,7 +3183,7 @@ return 1 means found and return 0 means not found.
 
 Space complexity : O(n) The depth of the recursion tree can go upto n.
 
-*/ 
+*/
 
 namespace leetcode_easy_018
 {
@@ -3217,11 +3197,8 @@ namespace leetcode_easy_018
     return climb_stairs(start + 1, end) + climb_stairs(start + 2, end);
   }
 
-  int climbStairs_1(int n) 
-  {
-    return climb_stairs(0, n);
-  }
-} // namespace
+  int climbStairs_1(int n) { return climb_stairs(0, n); }
+} // namespace leetcode_easy_018
 
 TEST(LeetCode, Easy_018_ClimbStairs_1)
 {
@@ -3233,7 +3210,6 @@ TEST(LeetCode, Easy_018_ClimbStairs_1)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
-
 
 /*
 Approach 2: Recursion with memoization
@@ -3272,19 +3248,20 @@ namespace leetcode_easy_018
       return 1;
     else if (start > end)
       return 0;
-    else if(memo[start])
+    else if (memo[start])
       return memo[start];
 
-    memo[start] = climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
+    memo[start] =
+      climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
     return memo[start];
   }
 
-  int climbStairs_2(int n) 
+  int climbStairs_2(int n)
   {
     vector<int> memo(n + 1, 0);
     return climb_stairs(0, n, memo);
   }
-} // namespace
+} // namespace leetcode_easy_018
 
 TEST(LeetCode, Easy_018_ClimbStairs_2)
 {
@@ -3296,7 +3273,6 @@ TEST(LeetCode, Easy_018_ClimbStairs_2)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
-
 
 /*
 Approach 3: Dynamic Programming
@@ -3371,28 +3347,31 @@ their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
 
 namespace leetcode_easy_018
 {
-  int climbStairs_3(int n) 
+  int climbStairs_3(int n)
   {
     // base cases
-    if(n <= 0) return 0;
-    if(n == 1) return 1;
-    if(n == 2) return 2;
+    if (n <= 0)
+      return 0;
+    if (n == 1)
+      return 1;
+    if (n == 2)
+      return 2;
 
-    int one_step_before = 2;    // when n == 2
-    int two_steps_before = 1;   // when n == 1
-    int all_ways = 0;
+    int one_step_before  = 2; // when n == 2
+    int two_steps_before = 1; // when n == 1
+    int all_ways         = 0;
 
     // starts from n == 3
-    for(int i=3; i <= n; i++)
+    for (int i = 3; i <= n; i++)
     {
-      all_ways = one_step_before + two_steps_before;
+      all_ways         = one_step_before + two_steps_before;
       two_steps_before = one_step_before;
-      one_step_before = all_ways;
+      one_step_before  = all_ways;
     }
 
     return all_ways;
   };
-} // namespace
+} // namespace leetcode_easy_018
 
 TEST(LeetCode, Easy_018_ClimbStairs_3)
 {
@@ -3404,7 +3383,6 @@ TEST(LeetCode, Easy_018_ClimbStairs_3)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
-
 
 // ={=========================================================================
 // algo-leetcode-19
@@ -3448,7 +3426,6 @@ Output: false
  
 */
 
-
 // ={=========================================================================
 // algo-leetcode-155
 /* 155. Min Stack, Easy
@@ -3477,94 +3454,89 @@ namespace leetcode_easy_155
   // o changed from using fixed contiguous arrary to using vector
   // o passes but slow and do not meet condition, "retrieving the minimum
   //   element in constant time"
-  
+
   class MinStack_1
   {
-    public:
-      MinStack_1() {}
+  public:
+    MinStack_1() {}
 
-      bool empty()
-      { return data_.empty(); }
+    bool empty() { return data_.empty(); }
 
-      void push(int x)
-      {
-        data_.push_back(x);
-        min_ = min(min_, x);
-      }
+    void push(int x)
+    {
+      data_.push_back(x);
+      min_ = min(min_, x);
+    }
 
-      void pop()
-      { 
-        if (empty())
-          throw runtime_error("stack is empty");
+    void pop()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
-        data_.pop_back();
+      data_.pop_back();
 
-        auto it = std::min_element(data_.begin(), data_.end());
-        if (it == data_.end())
-          min_ = std::numeric_limits<int>::max();
-        else
-          min_ = *it;
-      }
+      auto it = std::min_element(data_.begin(), data_.end());
+      if (it == data_.end())
+        min_ = std::numeric_limits<int>::max();
+      else
+        min_ = *it;
+    }
 
-      int top()
-      {
-        if (empty())
-          throw runtime_error("stack is empty");
+    int top()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
-        return data_.back();
-      }
+      return data_.back();
+    }
 
-      int getMin()
-      {
-        return min_;
-      }
+    int getMin() { return min_; }
 
-    private:
-      std::vector<int> data_;
-      int min_{std::numeric_limits<int>::max()};
+  private:
+    std::vector<int> data_;
+    int min_{std::numeric_limits<int>::max()};
   };
-
 
   // o as in the dicusstion, can use priority_queue<> but still do not meet
   //   condition, "retrieving the minimum element in constant time"
 
   // o can keep the min value as last min value and pop() without looping until
-  // see that than updating min every time do pop(). 
+  // see that than updating min every time do pop().
   //
   // improvement but when see the last min and poped it, search min and update
   // min value. still not constant.
-  // 
+  //
   // Looked at:
   //
   // Python single stack O(1) all operations, by destinynitsed
   //
   // both uses extra space to keep last min value when that item waw pushed and
-  // use the same idea. 
+  // use the same idea.
   //
   // Python code is clearer
   //
   // class MinStack:
-  // 
+  //
   //     def __init__(self):
   //         self.stack = []
-  // 
+  //
   //     def push(self, x):
   //         if self.stack:
   // 			      self.stack.append(min(self.stack[-2], x))
   //         else:
   //             self.stack.append(x)
   //         self.stack.append(x)
-  //         
-  // 
+  //
+  //
   //     def pop(self):
   //         if self.stack:
   //             self.stack.pop()
   //             self.stack.pop()
-  // 
+  //
   //     def top(self):
   //         if self.stack:
   //             return self.stack[-1]
-  // 
+  //
   //     def getMin(self):
   //         if self.stack:
   //             return self.stack[-2]
@@ -3574,55 +3546,53 @@ namespace leetcode_easy_155
 
   class MinStack_2
   {
-    public:
-      MinStack_2() {}
+  public:
+    MinStack_2() {}
 
-      bool empty()
-      { return data_.empty(); }
+    bool empty() { return data_.empty(); }
 
-      void push(int x)
+    void push(int x)
+    {
+      if (empty())
       {
-        if (empty())
-        {
-          data_.push_back(x);
-        }
-        else
-        {
-          data_.push_back(min(*(data_.end()-2), x));
-        }
-
         data_.push_back(x);
       }
-
-      void pop()
-      { 
-        if (empty())
-          throw runtime_error("stack is empty");
-
-        data_.pop_back();
-        data_.pop_back();
-      }
-
-      int top()
+      else
       {
-        if (empty())
-          throw runtime_error("stack is empty");
-
-        return data_.back();
+        data_.push_back(min(*(data_.end() - 2), x));
       }
 
-      int getMin()
-      {
-        if (empty())
-          throw runtime_error("stack is empty");
+      data_.push_back(x);
+    }
 
-        return *(data_.end()-2);
-      }
+    void pop()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
-    private:
-      std::vector<int> data_;
+      data_.pop_back();
+      data_.pop_back();
+    }
+
+    int top()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
+
+      return data_.back();
+    }
+
+    int getMin()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
+
+      return *(data_.end() - 2);
+    }
+
+  private:
+    std::vector<int> data_;
   };
-
 
   // Java accepted solution using one stack, by sometimescrazy
   // saves space by adding previous min only when min changes.
@@ -3634,65 +3604,64 @@ namespace leetcode_easy_155
 
   class MinStack_3
   {
-    public:
-      MinStack_3() {}
+  public:
+    MinStack_3() {}
 
-      bool empty()
-      { return data_.empty(); }
+    bool empty() { return data_.empty(); }
 
-      // only push the old minimum value when the current 
-      // minimum value changes after pushing the new value x
+    // only push the old minimum value when the current
+    // minimum value changes after pushing the new value x
 
-      void push(int x)
+    void push(int x)
+    {
+      if (x <= min_)
       {
-        if (x <= min_)
-        {
-          data_.push_back(min_);
-          min_ = x;
-        }
-
-        data_.push_back(x);
+        data_.push_back(min_);
+        min_ = x;
       }
 
-      // if pop operation could result in the changing of the current minimum
-      // value, pop twice and change the current minimum value to the last
-      // minimum value.
+      data_.push_back(x);
+    }
 
-      void pop()
-      { 
-        if (empty())
-          throw runtime_error("stack is empty");
+    // if pop operation could result in the changing of the current minimum
+    // value, pop twice and change the current minimum value to the last
+    // minimum value.
 
-        if (data_.back() == min_)
-        {
-          data_.pop_back();
-          min_ = data_.back();
-        }
+    void pop()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
+      if (data_.back() == min_)
+      {
         data_.pop_back();
+        min_ = data_.back();
       }
 
-      int top()
-      {
-        if (empty())
-          throw runtime_error("stack is empty");
+      data_.pop_back();
+    }
 
-        return data_.back();
-      }
+    int top()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
-      int getMin()
-      {
-        if (empty())
-          throw runtime_error("stack is empty");
+      return data_.back();
+    }
 
-        return min_;
-      }
+    int getMin()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
 
-    private:
-      std::vector<int> data_;
-      int min_{std::numeric_limits<int>::max()};
+      return min_;
+    }
+
+  private:
+    std::vector<int> data_;
+    int min_{std::numeric_limits<int>::max()};
   };
-} // namespace
+} // namespace leetcode_easy_155
 
 TEST(LeetCode, Easy_155_MinStack_1)
 {
@@ -3812,7 +3781,6 @@ TEST(LeetCode, Easy_155_MinStack_1)
   }
 }
 
-
 // ={=========================================================================
 // algo-leetcode-191
 /*
@@ -3884,7 +3852,7 @@ namespace leetcode_easy_171
   // Memory Usage: 8.2 MB, less than 27.21% of C++ online submissions for Excel
   // Sheet Column Number.
 
-  int titleToNumber_1(string s) 
+  int titleToNumber_1(string s)
   {
     int result{};
 
@@ -3893,14 +3861,14 @@ namespace leetcode_easy_171
       if (!isalpha(e))
         return 0;
 
-      result = result*26 + (e - 'A' + 1);
+      result = result * 26 + (e - 'A' + 1);
     }
 
     return result;
   }
 
   // base 10:
-  // 
+  //
   // 0  1   2   3   4   5   6   7   8   9
   // 10 11  12  13  14  15  16  17  18  19
   // ...
@@ -3931,15 +3899,15 @@ namespace leetcode_easy_171
     while (n)
     {
       value = (n % 26);
-      n = value == 0 ? (n / 26) - 1 : n / 26;
-      ch = value == 0 ? 'Z' : 'A' + value - 1;
+      n     = value == 0 ? (n / 26) - 1 : n / 26;
+      ch    = value == 0 ? 'Z' : 'A' + value - 1;
 
       // not use algo-reverse
       // result += ch;
       result.insert(result.begin(), 1, ch);
     }
 
-    return result; 
+    return result;
   }
 
   // remove special handing by using "--n" and make it same as algo-itoa
@@ -3955,26 +3923,27 @@ namespace leetcode_easy_171
     {
       --n;
       ch = 'A' + n % 26;
-      n /= 26; 
+      n /= 26;
 
       // not use algo-reverse
       // result += ch;
       result.insert(result.begin(), 1, ch);
     }
 
-    return result; 
+    return result;
   }
 
-  // algo-recursive 
+  // algo-recursive
   // My 1 lines code in Java, C++, and Python, xcv58
 
   string convertToTitle_3(int n)
   {
     // update: because the behavior of different compilers, the safe version should be:
-    return n == 0 ? "" : convertToTitle_3((n-1)/ 26) + (char) ((n-1) % 26 + 'A');
+    return n == 0 ? ""
+                  : convertToTitle_3((n - 1) / 26) + (char)((n - 1) % 26 + 'A');
   }
 
-} // namespace
+} // namespace leetcode_easy_171
 
 TEST(LeetCode, Easy_171_ExcelSheetColumnNumber)
 {
@@ -4009,7 +3978,6 @@ TEST(LeetCode, Easy_171_ExcelSheetColumnNumber)
     EXPECT_THAT(func(701), "ZY");
   }
 }
-
 
 // ={=========================================================================
 // algo-leetcode-198
@@ -4048,7 +4016,7 @@ Total amount you can rob = 2 + 9 + 1 = 12.
 
 namespace leetcode_easy_198
 {
-  int rob_1(vector<int>& nums) 
+  int rob_1(vector<int> &nums)
   {
     int sum{};
     int local_sum{std::numeric_limits<int>::min()};
@@ -4068,7 +4036,7 @@ namespace leetcode_easy_198
     return sum;
   }
 
-  int rob_2(vector<int>& nums) 
+  int rob_2(vector<int> &nums)
   {
     int sum{};
     int local_sum{std::numeric_limits<int>::min()};
@@ -4095,7 +4063,7 @@ namespace leetcode_easy_198
 
   // C 1ms, O(1)space,  very simple solution, Jasonly
 
-  int rob_3(vector<int>& nums) 
+  int rob_3(vector<int> &nums)
   {
     int a = 0;
     int b = 0;
@@ -4115,7 +4083,7 @@ namespace leetcode_easy_198
     return max(a, b);
   }
 
-} // namespace
+} // namespace leetcode_easy_198
 
 TEST(LeetCode, Easy_198_Rob)
 {
@@ -4125,17 +4093,17 @@ TEST(LeetCode, Easy_198_Rob)
     auto func = rob_1;
 
     {
-      vector<int> coll{1,2,3,1};
+      vector<int> coll{1, 2, 3, 1};
       EXPECT_THAT(func(coll), 4);
     }
     {
-      vector<int> coll{2,7,9,3,1};
+      vector<int> coll{2, 7, 9, 3, 1};
       EXPECT_THAT(func(coll), 12);
     }
 
     // falis as expects 4
     {
-      vector<int> coll{2,1,1,2};
+      vector<int> coll{2, 1, 1, 2};
       EXPECT_THAT(func(coll), 3);
     }
   }
@@ -4144,13 +4112,13 @@ TEST(LeetCode, Easy_198_Rob)
 
     // fails as expects 4
     {
-      vector<int> coll{2,1,1,2};
+      vector<int> coll{2, 1, 1, 2};
       EXPECT_THAT(func(coll), 5);
     }
 
     // fails as expects 4
     {
-      vector<int> coll{1,2,3,1};
+      vector<int> coll{1, 2, 3, 1};
       EXPECT_THAT(func(coll), 6);
     }
   }
@@ -4159,28 +4127,27 @@ TEST(LeetCode, Easy_198_Rob)
     auto func = rob_3;
 
     {
-      vector<int> coll{1,2,3,1};
+      vector<int> coll{1, 2, 3, 1};
       EXPECT_THAT(func(coll), 4);
     }
     {
-      vector<int> coll{2,7,9,3,1};
+      vector<int> coll{2, 7, 9, 3, 1};
       EXPECT_THAT(func(coll), 12);
     }
     {
-      vector<int> coll{2,1,1,2};
+      vector<int> coll{2, 1, 1, 2};
       EXPECT_THAT(func(coll), 4);
     }
     {
-      vector<int> coll{1,2,3,1};
+      vector<int> coll{1, 2, 3, 1};
       EXPECT_THAT(func(coll), 4);
     }
     {
-      vector<int> coll{2,7,9,3,1,4};
+      vector<int> coll{2, 7, 9, 3, 1, 4};
       EXPECT_THAT(func(coll), 15);
     }
   }
 }
-
 
 // ={=========================================================================
 // algo-xxx
@@ -4190,7 +4157,7 @@ namespace algo_xxx
   int water_volume(vector<int> const &A)
   {
     int lindex{};
-    int rindex{A.size()-1};
+    int rindex{A.size() - 1};
     int lmax{};
     int rmax{};
     int volume{};
@@ -4213,28 +4180,27 @@ namespace algo_xxx
 
     return volume;
   }
-} // namespace
+} // namespace algo_xxx
 
 TEST(X, XX)
 {
   using namespace algo_xxx;
 
-  auto func = water_volume; 
+  auto func = water_volume;
 
   {
-    vector<int> coll{2,5,1,2,3,4,7,7,6};
+    vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
     EXPECT_THAT(func(coll), 10);
   }
   {
-    vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+    vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
     EXPECT_THAT(func(coll), 17);
   }
   {
-    vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+    vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
     EXPECT_THAT(func(coll), 21);
   }
 }
-
 
 // ={=========================================================================
 // algo-list
@@ -4262,164 +4228,163 @@ namespace algo_list_linked
 
   struct ListEntry
   {
-    explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col), next_(nullptr) 
-      {}
+    explicit ListEntry(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+        , next_(nullptr)
+    {}
 
     int row_{};
     int col_{};
 
-    ListEntry* next_;
+    ListEntry *next_;
   };
 
   // cxx-operator-overload
-  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
   {
     return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
   }
 
-  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
     return !(lhs == rhs);
   }
 
   class List
   {
-    public:
-      explicit List() noexcept
+  public:
+    explicit List() noexcept
         : head_(nullptr)
-        {}
+    {}
 
-      bool emptry()
-      { return count_ == 0 ? true : false; }
+    bool emptry() { return count_ == 0 ? true : false; }
 
-      int size()
-      { return count_; }
+    int size() { return count_; }
 
-      // push_back()
-      void push_old(ListEntry const& entry)
+    // push_back()
+    void push_old(ListEntry const &entry)
+    {
+      if (!head_)
+        head_ = new ListEntry(entry);
+      else
       {
-        if (!head_)
-          head_ = new ListEntry(entry);
-        else
-        {
-          ListEntry* run = head_;
+        ListEntry *run = head_;
 
-          // unlike clear(), snap(), run shall be before end() so that can
-          // insert new one. Hence check run->next
+        // unlike clear(), snap(), run shall be before end() so that can
+        // insert new one. Hence check run->next
 
-          while (run->next_)
-            run = run->next_;
-
-          run->next_ = new ListEntry(entry);
-        }
-
-        ++count_;
-      }
-
-      // push_back()
-      void push(ListEntry const& entry)
-      {
-        ListEntry* run{};
-
-        // find node for insertion *algo-list-find-end*
-        // works both when head_ is null and is not null
-
-        for (run = head_; run && run->next_; run = run->next_)
-          ;
-
-        // first item
-        if (!run)
-          head_ = new ListEntry(entry);
-        else
-          run->next_ = new ListEntry(entry);
-
-        ++count_;
-      }
-
-      void clear()
-      {
-        ListEntry* run = head_;
-        ListEntry* prev{};
-
-        while (run)
-        {
-          prev = run;
+        while (run->next_)
           run = run->next_;
-          free(prev);
-          --count_;
-        }
 
-        head_ = run;
+        run->next_ = new ListEntry(entry);
       }
 
-      std::vector<ListEntry> snap()
+      ++count_;
+    }
+
+    // push_back()
+    void push(ListEntry const &entry)
+    {
+      ListEntry *run{};
+
+      // find node for insertion *algo-list-find-end*
+      // works both when head_ is null and is not null
+
+      for (run = head_; run && run->next_; run = run->next_)
+        ;
+
+      // first item
+      if (!run)
+        head_ = new ListEntry(entry);
+      else
+        run->next_ = new ListEntry(entry);
+
+      ++count_;
+    }
+
+    void clear()
+    {
+      ListEntry *run = head_;
+      ListEntry *prev{};
+
+      while (run)
       {
-        ListEntry* run = head_;
-        std::vector<ListEntry> coll;
-
-        while (run)
-        {
-          // ok as well
-          // coll.push_back(ListEntry(*run));
-          coll.push_back(*run);
-          run = run->next_;
-        }
-
-        return coll;
+        prev = run;
+        run  = run->next_;
+        free(prev);
+        --count_;
       }
 
-    private:
-      int count_{};
+      head_ = run;
+    }
 
-      // can use ListEntry head_; which changes member implementation
+    std::vector<ListEntry> snap()
+    {
+      ListEntry *run = head_;
+      std::vector<ListEntry> coll;
 
-      ListEntry* head_;
+      while (run)
+      {
+        // ok as well
+        // coll.push_back(ListEntry(*run));
+        coll.push_back(*run);
+        run = run->next_;
+      }
+
+      return coll;
+    }
+
+  private:
+    int count_{};
+
+    // can use ListEntry head_; which changes member implementation
+
+    ListEntry *head_;
   };
 
   struct ListNode
   {
-    explicit ListNode(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col), next(nullptr) 
-      {}
+    explicit ListNode(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+        , next(nullptr)
+    {}
 
     int row_{};
     int col_{};
 
-    ListNode* next;
+    ListNode *next;
   };
 
-  bool hasCycle(ListNode *head) 
+  bool hasCycle(ListNode *head)
   {
     ListNode *slow;
     ListNode *fast;
 
-    for (slow = head, fast = slow; 
-        slow && (fast = fast->next) && (fast = fast->next);)
+    for (slow = head, fast = slow;
+         slow && (fast = fast->next) && (fast = fast->next);)
     {
       if (slow == fast)
         return true;
-    
+
       slow = slow->next;
     }
 
-    return false; 
+    return false;
   }
 
-} // namespace
-
+} // namespace algo_list_linked
 
 TEST(AlgoList, LinkedSimple)
 {
   using namespace algo_list_linked;
 
-  std::vector<ListEntry> values{
-    ListEntry(1,2), 
-    ListEntry(2,3), 
-    ListEntry(3,4), 
-    ListEntry(4,5), 
-    ListEntry(5,6)
-  };
+  std::vector<ListEntry> values{ListEntry(1, 2),
+                                ListEntry(2, 3),
+                                ListEntry(3, 4),
+                                ListEntry(4, 5),
+                                ListEntry(5, 6)};
 
   List coll;
 
@@ -4428,18 +4393,16 @@ TEST(AlgoList, LinkedSimple)
 
   EXPECT_THAT(coll.size(), 5);
 
-  coll.push(ListEntry(6,7));
+  coll.push(ListEntry(6, 7));
   EXPECT_THAT(coll.size(), 6);
 
   // requires cxx-operator-overload
-  std::vector<ListEntry> expected{
-    ListEntry(1,2), 
-    ListEntry(2,3),
-    ListEntry(3,4),
-    ListEntry(4,5),
-    ListEntry(5,6),
-    ListEntry(6,7)
-  };
+  std::vector<ListEntry> expected{ListEntry(1, 2),
+                                  ListEntry(2, 3),
+                                  ListEntry(3, 4),
+                                  ListEntry(4, 5),
+                                  ListEntry(5, 6),
+                                  ListEntry(6, 7)};
 
   EXPECT_THAT(coll.snap(), expected);
 
@@ -4447,9 +4410,8 @@ TEST(AlgoList, LinkedSimple)
   EXPECT_THAT(coll.size(), 0);
 }
 
-
 // ={=========================================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
   return RUN_ALL_TESTS();

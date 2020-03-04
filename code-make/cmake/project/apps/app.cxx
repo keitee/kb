@@ -4,6 +4,9 @@
 //
 // also, have to use "<>" and "<modern/..." since include setting is "include"
 // but not "inlcude/modern"
+//
+// is that because it uses "student" library which has include setting and cmake
+// knows where to find header?
 
 #include <modern/Student.h>
 

@@ -1,6 +1,6 @@
+#include <QSharedPointer>
+#include <configsettings.h>
 #include <gtest/gtest.h>
-
-#include "configsettings.h"
 
 TEST(ConfigSettingsTest, defaultConfig)
 {

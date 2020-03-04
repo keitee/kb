@@ -10,6 +10,8 @@ add_library(configsettings
   configmodelsettings.cpp
   ${HEADER_LIST})
 
+target_include_directories(configsettings PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
 # we need this directory, and users of our library will need it too.
 # target_include_directories(student PUBLIC ../include)
 

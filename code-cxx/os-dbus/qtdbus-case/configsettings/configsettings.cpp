@@ -15,6 +15,9 @@
 //
 // daemon/resources/resources.default.qrc
 // 3:      <file alias="defaultconfig.json">config.default.json</file>
+//
+// TODO: here uses the fixed path. take file name from CMake variable or
+// property?
 
 QSharedPointer<ConfigSettings> ConfigSettings::defaults()
 {
@@ -23,7 +26,6 @@ QSharedPointer<ConfigSettings> ConfigSettings::defaults()
   // fail
   // return fromJsonFile_("./resources/config.default.json");
 
-  // TODO: take file name from CMake variable or property?
   return fromJsonFile_("/home/keitee/git/kb/code-cxx/os-dbus/qtdbus-case/"
                        "resources/config.default.json");
 }

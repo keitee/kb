@@ -42,7 +42,7 @@ else()
   message(STATUS "Qt5Core not found, not building moc")
 endif()
 
-find_package(Qt5Test)
+# find_package(Qt5Test)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -94,10 +94,6 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 
 add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
-# TODO how to access other modules??
-# add_subdirectory(configsettings)
-# add_subdirectory(/home/keitee/git/kb/code-cxx/os-dbus/qtdbus-case/configsettings)
-
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
 #
@@ -117,7 +113,6 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # The directories to be added to the list of include directories.
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
-include_directories(SYSTEM ../configsettings)
 
 
 # add_executable(test_qt "test_qt.cpp" "qclass.cpp")
@@ -135,5 +130,13 @@ include_directories(SYSTEM ../configsettings)
 # Qt5::Test is needed for QSignalSpy.h
 
 add_executable(test "tst_main.cpp" "tst_configsettings.cpp")
-target_link_libraries(test gmock_main configsettings Qt5::Core Qt5::Test)
 
+# NOTE: don't need to do this since uses "target_include_directories" in
+# configsettings.
+#
+# target_include_directories(test PUBLIC 
+#   ../configsettings)
+# target_include_directories(test PUBLIC 
+#    configsettings)
+
+target_link_libraries(test gmock_main configsettings Qt5::Core)

@@ -38,6 +38,7 @@ add_subdirectory(cmdlineoptions)
 add_subdirectory(configsettings)
 add_subdirectory(dbus)
 add_subdirectory(blercu)
+add_subdirectory(test)
 
 add_executable(qtdbus-case main.cpp blercu)
 

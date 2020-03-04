@@ -72,7 +72,7 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 // cxx-iter
 
 // core will be generated
-TEST(Iterator, InvalidOnVector)
+TEST(StlIterator, invalid)
 {
   std::vector<int> coll{1, 2, 3, 4};
 
@@ -3913,7 +3913,7 @@ TEST(AlgoEqual, UsePermutation)
 // ={=========================================================================
 // cxx-reverse
 
-TEST(StlAlgo, stl_reverse)
+TEST(StlAlgo, algo_Reverse)
 {
   std::vector<int> coll{1, 2, 3, 4, 5, 6, 7};
 
@@ -3952,7 +3952,7 @@ namespace algo_reverse
   }
 } // namespace algo_reverse
 
-TEST(AlgoReverse, UseOwn)
+TEST(StlAlgo, algo_ReverseUseOwn)
 {
   using namespace algo_reverse;
 

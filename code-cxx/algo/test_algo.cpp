@@ -1,14 +1,15 @@
-#include <iostream>
-#include <cstring>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <set>
 #include <algorithm>
 #include <bitset>
-#include <list>
+#include <cstring>
 #include <deque>
+#include <iostream>
+#include <list>
+#include <map>
 #include <memory>
+#include <random>
+#include <set>
+#include <unordered_map>
+#include <vector>
 
 #include "gmock/gmock.h"
 
@@ -18,38 +19,36 @@
 using namespace std;
 using namespace testing;
 
-
 // ={=========================================================================
 template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << elem << " ";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << elem << " ";
+    ++count;
+  }
 
-    cout << "(" << count << ")" << endl;
+  cout << "(" << count << ")" << endl;
 }
 
 template <typename T>
-void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << "(" << elem.first << ", " << elem.second << ") ";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << "(" << elem.first << ", " << elem.second << ") ";
+    ++count;
+  }
 
-    cout << "(" << count << ")" << endl;
+  cout << "(" << count << ")" << endl;
 }
-
 
 // ={=========================================================================
 // algo-two-player-card-game
@@ -376,61 +375,58 @@ namespace algo_two_player_card_game
 
   class CardPlayer
   {
+  public:
+    CardPlayer() = delete;
+    CardPlayer(std::string const &name)
+        : name_(name)
+    {}
+
+    void prepare_cards()
+    {
+      std::generate_n(back_inserter(cards_),
+                      NUM_OF_CARDS_PER_PLAYER,
+                      CardRandom());
+    }
+
+    bool has_card() { return !cards_.empty(); }
+
+    // assums that client call it when is has a card to return
+    Card get_card()
+    {
+      auto card = cards_.back();
+      cards_.pop_back();
+      return card;
+    }
+
+    void score_card(Card card) { scores_.push_back(card); }
+
+    uint32_t get_score() { return scores_.size(); }
+
+    std::string get_name() { return name_; }
+
+    void print_cards()
+    {
+      PRINT_ELEMENTS(cards_, name_ + ":play  cards: ");
+      PRINT_ELEMENTS(scores_, name_ + ":score cards: ");
+    }
+
+  private:
+    std::string name_;
+    std::vector<Card> cards_;
+    std::vector<Card> scores_;
+
+    static const uint32_t NUM_OF_CARDS_PER_PLAYER;
+    static const uint32_t MAX_NUM_OF_CARDS;
+
+    class CardRandom
+    {
     public:
-      CardPlayer() = delete;
-      CardPlayer(std::string const &name) : name_(name) {}
-
-      void prepare_cards() 
-      {
-        std::generate_n(
-            back_inserter(cards_), NUM_OF_CARDS_PER_PLAYER, CardRandom()
-            );
-      }
-
-      bool has_card() 
-      { return !cards_.empty(); }
-
-      // assums that client call it when is has a card to return
-      Card get_card() 
-      {
-        auto card = cards_.back();
-        cards_.pop_back();
-        return card;
-      }
-
-      void score_card(Card card) 
-      { scores_.push_back(card); }
-
-      uint32_t get_score() 
-      { return scores_.size(); }
-
-      std::string get_name()
-      { return name_; }
-
-      void print_cards()
-      {
-        PRINT_ELEMENTS(cards_, name_ +  ":play  cards: ");
-        PRINT_ELEMENTS(scores_, name_ + ":score cards: ");
-      }
+      int operator()() { return udist(dre); }
 
     private:
-      std::string name_;
-      std::vector<Card> cards_;
-      std::vector<Card> scores_;
-
-      static const uint32_t NUM_OF_CARDS_PER_PLAYER;
-      static const uint32_t MAX_NUM_OF_CARDS;
-
-      class CardRandom
-      {
-        public:
-          int operator() ()
-          { return udist(dre); }
-
-        private:
-          static std::default_random_engine dre;
-          static std::uniform_int_distribution<Card> udist;
-      };
+      static std::default_random_engine dre;
+      static std::uniform_int_distribution<Card> udist;
+    };
   };
 
   // *cxx-static*
@@ -438,78 +434,79 @@ namespace algo_two_player_card_game
   const uint32_t CardPlayer::NUM_OF_CARDS_PER_PLAYER{10};
   const uint32_t CardPlayer::MAX_NUM_OF_CARDS{24};
 
-  std::default_random_engine 
-    CardPlayer::CardRandom::dre;
+  std::default_random_engine CardPlayer::CardRandom::dre;
 
-  std::uniform_int_distribution<Card> 
-    CardPlayer::CardRandom::udist{1, MAX_NUM_OF_CARDS};
+  std::uniform_int_distribution<Card> CardPlayer::CardRandom::udist{
+    1, MAX_NUM_OF_CARDS};
 
   // simple
 
   class CardGame_1
   {
-    public:
-      CardGame_1() : lplayer("player1"), rplayer("player2") 
-      {
-        lplayer.prepare_cards();
-        rplayer.prepare_cards();
-      }
+  public:
+    CardGame_1()
+        : lplayer("player1")
+        , rplayer("player2")
+    {
+      lplayer.prepare_cards();
+      rplayer.prepare_cards();
+    }
 
-      // when has the same card, score them to both
+    // when has the same card, score them to both
 
-      void play() 
+    void play()
+    {
+      while (lplayer.has_card())
       {
-        while (lplayer.has_card())
+        auto lcard = lplayer.get_card();
+        auto rcard = rplayer.get_card();
+
+        if (lcard < rcard)
         {
-          auto lcard = lplayer.get_card();
-          auto rcard = rplayer.get_card();
-
-          if (lcard < rcard)
-          {
-            rplayer.score_card(rcard);
-          }
-          else if (lcard > rcard)
-          {
-            lplayer.score_card(lcard);
-          }
-          else
-          {
-            lplayer.score_card(lcard);
-            rplayer.score_card(lcard);
-          }
+          rplayer.score_card(rcard);
         }
-      }
-
-      void announce() 
-      {
-        std::string winner{};
-        uint32_t score{};
-
-        lplayer.print_cards();
-        rplayer.print_cards();
-
-        if (lplayer.get_score() < rplayer.get_score()) 
+        else if (lcard > rcard)
         {
-          winner = rplayer.get_name();
-          score = rplayer.get_score();
+          lplayer.score_card(lcard);
         }
         else
         {
-          winner = lplayer.get_name();
-          score = lplayer.get_score();
+          lplayer.score_card(lcard);
+          rplayer.score_card(lcard);
         }
+      }
+    }
 
-        std::cout << "=================================" << std::endl;
-        std::cout << "winner: " << winner << " got " 
-          << score << " scores" << std::endl;
+    void announce()
+    {
+      std::string winner{};
+      uint32_t score{};
+
+      lplayer.print_cards();
+      rplayer.print_cards();
+
+      if (lplayer.get_score() < rplayer.get_score())
+      {
+        winner = rplayer.get_name();
+        score  = rplayer.get_score();
+      }
+      else
+      {
+        winner = lplayer.get_name();
+        score  = lplayer.get_score();
       }
 
-    private:
-      CardPlayer lplayer;
-      CardPlayer rplayer;
+      std::cout << "=================================" << std::endl;
+      std::cout << "winner: " << winner << " got " << score << " scores"
+                << std::endl;
+    }
+
+  private:
+    CardPlayer lplayer;
+    CardPlayer rplayer;
   };
 
-} // namespace
+} // namespace algo_two_player_card_game
 
 TEST(AlgoTwoPlayerCardGame, Player)
 {
@@ -570,225 +567,221 @@ namespace algo_two_player_card_game
 
   class CardGame_2
   {
-    public:
-      CardGame_2() = delete;
+  public:
+    CardGame_2() = delete;
 
-      CardGame_2(size_t number_of_players)
+    CardGame_2(size_t number_of_players)
+    {
+      // to avoid reallocations
+
+      running_players_.reserve(MAX_NUM_OF_PLAYERS);
+      finished_players_.reserve(MAX_NUM_OF_PLAYERS);
+
+      prepare_players_(number_of_players);
+    }
+
+    // o when has the same card, score them to both
+    // o do not put a card back when lost. if dose, will have more turns to
+    // finish.
+
+    // NOTE: when not see the same value, put back the one which is not
+    // scored since GetCard() removes it from the vector. Otherwise, lost
+    // them. so now the number of cards that all players started with should
+    // match with the sum of the number of scores and the number of cards
+    // which is not played at the end of run.
+
+    void play()
+    {
+      Card lcard{};
+      Card rcard{};
+
+      while (has_running_players_())
       {
-        // to avoid reallocations
+        auto selected = get_players_to_play_();
 
-        running_players_.reserve(MAX_NUM_OF_PLAYERS);
-        finished_players_.reserve(MAX_NUM_OF_PLAYERS);
+        // to avoid ctors and copying them back to vector once used.
 
-        prepare_players_(number_of_players);
-      }
+        auto &lplayer = running_players_[selected.first];
+        auto &rplayer = running_players_[selected.second];
 
-      // o when has the same card, score them to both
-      // o do not put a card back when lost. if dose, will have more turns to
-      // finish.
+        // cards remvoed from players
+        lcard = lplayer.get_card();
+        rcard = rplayer.get_card();
 
-      // NOTE: when not see the same value, put back the one which is not
-      // scored since GetCard() removes it from the vector. Otherwise, lost
-      // them. so now the number of cards that all players started with should
-      // match with the sum of the number of scores and the number of cards
-      // which is not played at the end of run. 
-
-      void play() 
-      {
-        Card lcard{};
-        Card rcard{};
-
-        while (has_running_players_())
+        if (lcard < rcard)
         {
-          auto selected = get_players_to_play_();
+          rplayer.score_card(rcard);
+        }
+        else if (lcard > rcard)
+        {
+          lplayer.score_card(lcard);
+        }
+        else
+        {
+          lplayer.score_card(lcard);
+          rplayer.score_card(lcard);
+        }
 
-          // to avoid ctors and copying them back to vector once used.
+        move_finished_players_();
+      }
+    }
 
-          auto &lplayer = running_players_[selected.first];
-          auto &rplayer = running_players_[selected.second];
+    // copy version to show and this leads to use shared_ptr
+    //
+    // void Play()
+    // {
+    //   Card first_card{}, second_card{};
 
-          // cards remvoed from players
-          lcard = lplayer.get_card();
-          rcard = rplayer.get_card();
+    //   // NOTE: this causes two ctor/dtors
+    //   CardPlayer first_player{"first"};
+    //   CardPlayer second_player{"second"};
 
-          if (lcard < rcard)
-          {
-            rplayer.score_card(rcard);
-          }
-          else if (lcard > rcard)
-          {
-            lplayer.score_card(lcard);
-          }
-          else
-          {
-            lplayer.score_card(lcard);
-            rplayer.score_card(lcard);
-          }
+    //   while(HasRunningPlayers())
+    //   {
+    //     ++number_of_plays_;
 
-          move_finished_players_();
+    //     auto selected_players = GetRunningPlayers_();
+
+    //     // copy players
+    //     first_player = running_players_[selected_players.first];
+    //     second_player = running_players_[selected_players.second];
+
+    //     first_card = first_player.GetCard();
+    //     second_card = second_player.GetCard();
+
+    //     if(first_card == second_card)
+    //     {
+    //       second_player.SaveCardToScore(second_card);
+    //       first_player.SaveCardToScore(first_card);
+    //     }
+    //     else if(first_card > second_card)
+    //     {
+    //       first_player.SaveCardToScore(first_card);
+    //       second_player.SaveCardToPlay(second_card);
+    //     }
+    //     else
+    //     {
+    //       first_player.SaveCardToPlay(first_card);
+    //       second_player.SaveCardToScore(second_card);
+    //     }
+
+    //     // copy players back
+    //     running_players_[selected_players.first] = first_player;
+    //     running_players_[selected_players.second] = second_player;
+
+    //     MoveFinishedPlayers_();
+    //   }
+    // }
+
+    void announce()
+    {
+      std::string winner{};
+      uint32_t score{};
+
+      // consider const later
+
+      for (auto &e : finished_players_)
+      {
+        if (score < e.get_score())
+        {
+          score  = e.get_score();
+          winner = e.get_name();
         }
       }
 
-      // copy version to show and this leads to use shared_ptr
-      //
-      // void Play()
-      // {
-      //   Card first_card{}, second_card{};
+      std::cout << "=================================" << std::endl;
+      std::cout << "winner: " << winner << " got " << score << " scores"
+                << std::endl;
+    }
 
-      //   // NOTE: this causes two ctor/dtors
-      //   CardPlayer first_player{"first"};
-      //   CardPlayer second_player{"second"};
+  private:
+    static const uint32_t MAX_NUM_OF_PLAYERS;
 
-      //   while(HasRunningPlayers())
-      //   {
-      //     ++number_of_plays_;
+    std::vector<CardPlayer> running_players_;
+    std::vector<CardPlayer> finished_players_;
 
-      //     auto selected_players = GetRunningPlayers_();
+    void prepare_players_(size_t number)
+    {
+      std::string name{};
 
-      //     // copy players
-      //     first_player = running_players_[selected_players.first];
-      //     second_player = running_players_[selected_players.second];
-
-      //     first_card = first_player.GetCard();
-      //     second_card = second_player.GetCard();
-
-      //     if(first_card == second_card)
-      //     {
-      //       second_player.SaveCardToScore(second_card);
-      //       first_player.SaveCardToScore(first_card); 
-      //     }
-      //     else if(first_card > second_card)
-      //     {
-      //       first_player.SaveCardToScore(first_card); 
-      //       second_player.SaveCardToPlay(second_card); 
-      //     }
-      //     else
-      //     {
-      //       first_player.SaveCardToPlay(first_card); 
-      //       second_player.SaveCardToScore(second_card);
-      //     }
-
-      //     // copy players back
-      //     running_players_[selected_players.first] = first_player;
-      //     running_players_[selected_players.second] = second_player;
-
-      //     MoveFinishedPlayers_();
-      //   }
-      // }
-
-      void announce()
+      for (size_t i = 0; i < number; ++i)
       {
-        std::string winner{};
-        uint32_t score{};
+        name        = "player " + std::to_string(i);
+        auto player = CardPlayer(name);
+        player.prepare_cards();
+        running_players_.push_back(player);
+      }
+    }
 
-        // consider const later
+    // deals players that has cards to play so no check is needed to see if
+    // it has cards to play
+    //
+    // NOTE that should cover case when there is no running players
+    //
+    // this code works well until have 2 players. However, as soon as moves to
+    // 4 players, shows the issue.
+    //
+    // if(running_players_.size() == 0 || running_players_.size() % 2)
+    //
+    // because it's random to pick up players, some gets finished earlier than
+    // others and this makes the number of players odd sometimes. So have to
+    // remove a check on odd number of players.
+    //
+    // if(running_players_.size() == 0)
+    //
+    // starts to see hang with > 2 players sometimes but not always. Have to
+    // change since as the reason above, can see odd number of running players
+    // and this cause hang on rand() % 1. Have to end the play when there is
+    // only one running player that still have cards to play.
 
-        for (auto &e : finished_players_)
+    bool has_running_players_()
+    {
+      // if (running_players_.size() == 0 ||
+      //     running_players_.size() == 1)
+      //   return false;
+      // return true;
+
+      return running_players_.size() < 2 ? false : true;
+    }
+
+    size_t get_player_index_() { return rand() % running_players_.size(); }
+
+    // since running_players_ has only players that has cards to play
+
+    std::pair<size_t, size_t> get_players_to_play_()
+    {
+      auto lplayer = get_player_index_();
+      auto rplayer = get_player_index_();
+
+      // until find the other to play
+      while (lplayer == rplayer)
+        rplayer = get_player_index_();
+
+      return make_pair(lplayer, rplayer);
+    }
+
+    // see how cxx-move and *cxx-iter-invalid* used
+    void move_finished_players_()
+    {
+      for (auto it = running_players_.begin(); it != running_players_.end();
+           // nothing
+      )
+      {
+        // if do not cards
+        if (!it->has_card())
         {
-          if (score < e.get_score())
-          {
-            score = e.get_score();
-            winner = e.get_name();
-          }
+          finished_players_.push_back(std::move(*it));
+          it = running_players_.erase(it);
         }
-
-        std::cout << "=================================" << std::endl;
-        std::cout << "winner: " << winner << " got " 
-          << score << " scores" << std::endl;
+        else
+          ++it;
       }
-
-    private:
-      static const uint32_t MAX_NUM_OF_PLAYERS;
-
-      std::vector<CardPlayer> running_players_;
-      std::vector<CardPlayer> finished_players_;
-
-      void prepare_players_(size_t number)
-      {
-        std::string name{};
-
-        for (size_t i = 0; i < number; ++i)
-        {
-          name = "player " + std::to_string(i);
-          auto player = CardPlayer(name);
-          player.prepare_cards();
-          running_players_.push_back(player);
-        }
-      }
-
-      // deals players that has cards to play so no check is needed to see if
-      // it has cards to play
-      //
-      // NOTE that should cover case when there is no running players
-      //
-      // this code works well until have 2 players. However, as soon as moves to
-      // 4 players, shows the issue.
-      //
-      // if(running_players_.size() == 0 || running_players_.size() % 2)
-      // 
-      // because it's random to pick up players, some gets finished earlier than
-      // others and this makes the number of players odd sometimes. So have to
-      // remove a check on odd number of players.
-      //
-      // if(running_players_.size() == 0)
-      //
-      // starts to see hang with > 2 players sometimes but not always. Have to
-      // change since as the reason above, can see odd number of running players
-      // and this cause hang on rand() % 1. Have to end the play when there is
-      // only one running player that still have cards to play.
-
-      bool has_running_players_()
-      {
-        // if (running_players_.size() == 0 ||
-        //     running_players_.size() == 1)
-        //   return false;
-        // return true;
-
-        return running_players_.size() < 2 ? false : true;
-      }
-
-      size_t get_player_index_()
-      {
-        return rand() % running_players_.size();
-      }
-
-      // since running_players_ has only players that has cards to play
-
-      std::pair<size_t, size_t> get_players_to_play_()
-      {
-        auto lplayer = get_player_index_();
-        auto rplayer = get_player_index_();
-
-        // until find the other to play
-        while (lplayer == rplayer)
-          rplayer = get_player_index_();
-
-        return make_pair(lplayer, rplayer);
-      }
-
-      // see how cxx-move and *cxx-iter-invalid* used
-      void move_finished_players_()
-      {
-        for (auto it = running_players_.begin();
-            it != running_players_.end();
-            // nothing
-            )
-        {
-          // if do not cards
-          if (!it->has_card())
-          {
-            finished_players_.push_back(std::move(*it));
-            it = running_players_.erase(it);
-          }
-          else
-            ++it;
-        }
-      }
+    }
   };
 
   const uint32_t CardGame_2::MAX_NUM_OF_PLAYERS{10};
 
-} // namespace
+} // namespace algo_two_player_card_game
 
 TEST(AlgoTwoPlayerCardGame, Game_2)
 {
@@ -814,164 +807,159 @@ TEST(AlgoTwoPlayerCardGame, Game_2)
   }
 }
 
-
 namespace algo_two_player_card_game
 {
   // extended and shared_ptr
   //
   // note: not much benefit of using shared_ptr since already removed to use
-  // copy overhead in play() by using reference. 
+  // copy overhead in play() by using reference.
 
   class CardGame_3
   {
-    public:
-      CardGame_3() = delete;
+  public:
+    CardGame_3() = delete;
 
-      CardGame_3(size_t number_of_players)
+    CardGame_3(size_t number_of_players)
+    {
+      prepare_players_(number_of_players);
+    }
+
+    // o when has the same card, score them to both
+    // o do not put a card back when lost. if dose, will have more turns to
+    // finish.
+
+    // NOTE: when not see the same value, put back the one which is not
+    // scored since GetCard() removes it from the vector. Otherwise, lost
+    // them. so now the number of cards that all players started with should
+    // match with the sum of the number of scores and the number of cards
+    // which is not played at the end of run.
+
+    void play()
+    {
+      Card lcard{};
+      Card rcard{};
+
+      while (has_running_players_())
       {
-        prepare_players_(number_of_players);
-      }
+        auto selected = get_players_to_play_();
 
-      // o when has the same card, score them to both
-      // o do not put a card back when lost. if dose, will have more turns to
-      // finish.
+        // to avoid ctors and copying them back to vector once used.
 
-      // NOTE: when not see the same value, put back the one which is not
-      // scored since GetCard() removes it from the vector. Otherwise, lost
-      // them. so now the number of cards that all players started with should
-      // match with the sum of the number of scores and the number of cards
-      // which is not played at the end of run. 
+        auto &lplayer = running_players_[selected.first];
+        auto &rplayer = running_players_[selected.second];
 
-      void play() 
-      {
-        Card lcard{};
-        Card rcard{};
+        // cards remvoed from players
+        // note:
+        lcard = lplayer->get_card();
+        rcard = rplayer->get_card();
 
-        while (has_running_players_())
+        if (lcard < rcard)
         {
-          auto selected = get_players_to_play_();
+          rplayer->score_card(rcard);
+        }
+        else if (lcard > rcard)
+        {
+          lplayer->score_card(lcard);
+        }
+        else
+        {
+          lplayer->score_card(lcard);
+          rplayer->score_card(lcard);
+        }
 
-          // to avoid ctors and copying them back to vector once used.
+        move_finished_players_();
+      }
+    }
 
-          auto &lplayer = running_players_[selected.first];
-          auto &rplayer = running_players_[selected.second];
+    void announce()
+    {
+      std::string winner{};
+      uint32_t score{};
 
-          // cards remvoed from players
-          // note:
-          lcard = lplayer->get_card();
-          rcard = rplayer->get_card();
+      // consider const later
 
-          if (lcard < rcard)
-          {
-            rplayer->score_card(rcard);
-          }
-          else if (lcard > rcard)
-          {
-            lplayer->score_card(lcard);
-          }
-          else
-          {
-            lplayer->score_card(lcard);
-            rplayer->score_card(lcard);
-          }
-
-          move_finished_players_();
+      for (auto &e : finished_players_)
+      {
+        // note:
+        if (score < e->get_score())
+        {
+          score  = e->get_score();
+          winner = e->get_name();
         }
       }
 
-      void announce()
+      std::cout << "=================================" << std::endl;
+      std::cout << "winner: " << winner << " got " << score << " scores"
+                << std::endl;
+    }
+
+  private:
+    static const uint32_t MAX_NUM_OF_PLAYERS;
+
+    // note:
+    std::vector<std::shared_ptr<CardPlayer>> running_players_;
+    std::vector<std::shared_ptr<CardPlayer>> finished_players_;
+
+    void prepare_players_(size_t number)
+    {
+      std::string name{};
+
+      for (size_t i = 0; i < number; ++i)
       {
-        std::string winner{};
-        uint32_t score{};
+        name = "player " + std::to_string(i);
 
-        // consider const later
+        // note: to use shared_ptr
+        auto player = make_shared<CardPlayer>(name);
+        player->prepare_cards();
 
-        for (auto &e : finished_players_)
+        running_players_.push_back(player);
+      }
+    }
+
+    bool has_running_players_()
+    {
+      return running_players_.size() < 2 ? false : true;
+    }
+
+    size_t get_player_index_() { return rand() % running_players_.size(); }
+
+    // since running_players_ has only players that has cards to play
+
+    std::pair<size_t, size_t> get_players_to_play_()
+    {
+      auto lplayer = get_player_index_();
+      auto rplayer = get_player_index_();
+
+      // until find the other to play
+      while (lplayer == rplayer)
+        rplayer = get_player_index_();
+
+      return make_pair(lplayer, rplayer);
+    }
+
+    // see how cxx-move and *cxx-iter-invalid* used
+    void move_finished_players_()
+    {
+      for (auto it = running_players_.begin(); it != running_players_.end();
+           // nothing
+      )
+      {
+        // if do not cards
+        // note:
+        if (!(*it)->has_card())
         {
-          // note:
-          if (score < e->get_score())
-          {
-            score = e->get_score();
-            winner = e->get_name();
-          }
+          finished_players_.push_back(std::move(*it));
+          it = running_players_.erase(it);
         }
-
-        std::cout << "=================================" << std::endl;
-        std::cout << "winner: " << winner << " got " 
-          << score << " scores" << std::endl;
+        else
+          ++it;
       }
-
-    private:
-      static const uint32_t MAX_NUM_OF_PLAYERS;
-
-      // note:
-      std::vector<std::shared_ptr<CardPlayer>> running_players_;
-      std::vector<std::shared_ptr<CardPlayer>> finished_players_;
-
-      void prepare_players_(size_t number)
-      {
-        std::string name{};
-
-        for (size_t i = 0; i < number; ++i)
-        {
-          name = "player " + std::to_string(i);
-
-          // note: to use shared_ptr
-          auto player = make_shared<CardPlayer>(name);
-          player->prepare_cards();
-
-          running_players_.push_back(player);
-        }
-      }
-
-      bool has_running_players_()
-      {
-        return running_players_.size() < 2 ? false : true;
-      }
-
-      size_t get_player_index_()
-      {
-        return rand() % running_players_.size();
-      }
-
-      // since running_players_ has only players that has cards to play
-
-      std::pair<size_t, size_t> get_players_to_play_()
-      {
-        auto lplayer = get_player_index_();
-        auto rplayer = get_player_index_();
-
-        // until find the other to play
-        while (lplayer == rplayer)
-          rplayer = get_player_index_();
-
-        return make_pair(lplayer, rplayer);
-      }
-
-      // see how cxx-move and *cxx-iter-invalid* used
-      void move_finished_players_()
-      {
-        for (auto it = running_players_.begin();
-            it != running_players_.end();
-            // nothing
-            )
-        {
-          // if do not cards
-          // note:
-          if (!(*it)->has_card())
-          {
-            finished_players_.push_back(std::move(*it));
-            it = running_players_.erase(it);
-          }
-          else
-            ++it;
-        }
-      }
+    }
   };
 
   const uint32_t CardGame_3::MAX_NUM_OF_PLAYERS{10};
 
-} // namespace
+} // namespace algo_two_player_card_game
 
 TEST(AlgoTwoPlayerCardGame, Game_3)
 {
@@ -1005,19 +993,19 @@ namespace algo_swap
   void swap_1(int &a, int &b)
   {
     a = a + b;
-    b = a - b;      // b = a
-    a = a - b;      // a = b
+    b = a - b; // b = a
+    a = a - b; // a = b
   }
 
   // X XOR  X  = 0
   // X XOR  0  = X
   // X XOR  1  = ~X    // X XOR (~0) = ~X
-  // X XOR ~X  = 1     
-  // 
+  // X XOR ~X  = 1
+  //
   // 00000000000000000000111111000000 // x
   // 00000000000000000000111111000000 // x^0
   // 11111111111111111111000000111111 // x^(~0) but not x^1
-  // 
+  //
   // x =  1010; y = 0011;          // before
   // x =  1001 =  1010  ^ 0011     // x = x^y
   // y =  1010 = [1001] ^ 0011     // y = x^y, y = (x^y)^y = (x^0) = x
@@ -1027,10 +1015,10 @@ namespace algo_swap
   void swap_2(int &a, int &b)
   {
     a = a ^ b;
-    b = a ^ b;      // b = a^b = (a^b)^b = a^0 = a
-    a = a ^ b;      // a = a^b = (a^b)^a = b^0 = b
+    b = a ^ b; // b = a^b = (a^b)^b = a^0 = a
+    a = a ^ b; // a = a^b = (a^b)^a = b^0 = b
   }
-} // namespace
+} // namespace algo_swap
 
 TEST(AlgoSwap, Swap)
 {
@@ -1052,8 +1040,7 @@ TEST(AlgoSwap, Swap)
     EXPECT_THAT(a, Eq(4));
     EXPECT_THAT(b, Eq(9));
   }
-}  
-
+}
 
 // ={=========================================================================
 // algo-occurance find a number seen odd times
@@ -1078,17 +1065,14 @@ namespace algo_occurance
     for (const auto e : input)
       ++imap[e];
 
-    auto pos_return = find_if( imap.cbegin(), imap.cend(),
-        [] (const pair<size_t,size_t> &e)
-        { 
-
+    auto pos_return =
+      find_if(imap.cbegin(), imap.cend(), [](const pair<size_t, size_t> &e) {
         // odd times
-        if (e.second % 2) 
-          return true; 
+        if (e.second % 2)
+          return true;
 
         return false;
-        }
-        );
+      });
 
     return (pos_return != imap.cend()) ? pos_return->first : 0;
   }
@@ -1110,7 +1094,7 @@ namespace algo_occurance
 
     return result;
   }
-} // namespace
+} // namespace algo_occurance
 
 TEST(AlgoOccurance, OddTimes)
 {
@@ -1118,7 +1102,7 @@ TEST(AlgoOccurance, OddTimes)
 
   {
     // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
-    const vector<unsigned int> 
+    const vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(find_number_odd_times_1(input), 12);
   }
@@ -1127,42 +1111,41 @@ TEST(AlgoOccurance, OddTimes)
   // num of sequence:
   // 2 2 4 4 4 6 6 8 8 10 10 12 12 12 (15)
   {
-    const vector<unsigned int> 
+    const vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2};
     EXPECT_THAT(find_number_odd_times_2(input), 4);
   }
 
   // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
   {
-    const vector<unsigned int> 
+    const vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(find_number_odd_times_2(input), 12);
   }
 
   {
-    const vector<unsigned int> 
+    const vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(find_number_odd_times_3(input), 12);
   }
 }
-
 
 // ={=========================================================================
 // algo-occurance
 
 // When input a, and b are 0 <= a <= b <= 100,000,000), write a problem to find
 // out how many k integer appears.
-// 
+//
 // e.g.,
 // input: 11, 12, 13, 14, 15, k = 1
-// 
+//
 // k appears 6 times.
 
 namespace algo_occurance
 {
-  int count_occurance_1(const vector<int> &input, int key) 
+  int count_occurance_1(const vector<int> &input, int key)
   {
-    map<char,int> count_map;
+    map<char, int> count_map;
 
     for (auto value : input)
     {
@@ -1177,19 +1160,19 @@ namespace algo_occurance
     // auto ret = count_map.find(stringkey[0]);
 
     // if values are [0,9] and are ASCII then, can use:
-    auto ret = count_map.find(key+'0');
+    auto ret = count_map.find(key + '0');
 
     return ret->second;
   }
 
-  int count_occurance_2(const vector<int> &input, int key) 
+  int count_occurance_2(const vector<int> &input, int key)
   {
     int digit{}, count{};
 
     for (auto value : input)
     {
       // as algo-itoa
-      for(; value;)
+      for (; value;)
       {
         digit = value % 10;
 
@@ -1202,18 +1185,17 @@ namespace algo_occurance
 
     return count;
   }
-} // namespace
+} // namespace algo_occurance
 
-TEST(AlgoOccurance, CountKey) 
+TEST(AlgoOccurance, CountKey)
 {
   using namespace algo_occurance;
 
-  vector<int> coll{11,12,13,14,15};
+  vector<int> coll{11, 12, 13, 14, 15};
 
   EXPECT_THAT(count_occurance_1(coll, 1), 6);
   EXPECT_THAT(count_occurance_2(coll, 1), 6);
 }
-
 
 // ={=========================================================================
 // algo-occurance most frequent
@@ -1250,11 +1232,11 @@ Output: 2
 
 namespace algo_occurance
 {
-  std::vector<pair<int, int>> U48_1(std::vector<int> const& coll)
+  std::vector<pair<int, int>> U48_1(std::vector<int> const &coll)
   {
     std::vector<pair<int, int>> result{};
 
-    // 100? 
+    // 100?
     std::vector<int> bit_set(100);
 
     // first loop to count occurance of the input
@@ -1280,7 +1262,7 @@ namespace algo_occurance
         result.clear();
 
         // update current set
-        current_max = bit_set[i];
+        current_max     = bit_set[i];
         current_element = i;
       }
       else if (current_max == bit_set[i])
@@ -1289,7 +1271,7 @@ namespace algo_occurance
         result.push_back(make_pair(current_element, current_max));
 
         // update current set
-        current_max = bit_set[i];
+        current_max     = bit_set[i];
         current_element = i;
       }
     }
@@ -1305,45 +1287,46 @@ namespace algo_occurance
   }
 
   template <typename T>
-    std::vector<std::pair<T, size_t>> U48_Text(std::vector<T> const& range)
-    {
-      // loop1 to build a table
+  std::vector<std::pair<T, size_t>> U48_Text(std::vector<T> const &range)
+  {
+    // loop1 to build a table
 
-      std::map<T, size_t> counts;
-      for (auto const& e: range)
-        counts[e]++;
+    std::map<T, size_t> counts;
+    for (auto const &e : range)
+      counts[e]++;
 
-      // loop2 to find max occurance
+    // loop2 to find max occurance
 
-      // *cxx-algo-max-element* *cxx-algo-minmax*
-      //
-      // op is used to compare two elements:
-      // op(elem1,elem2)
-      // It should return true when the first element is less than the second
-      // element.
+    // *cxx-algo-max-element* *cxx-algo-minmax*
+    //
+    // op is used to compare two elements:
+    // op(elem1,elem2)
+    // It should return true when the first element is less than the second
+    // element.
 
-      auto maxelem = std::max_element(
-          std::begin(counts), std::end(counts),
-          [](pair<T, size_t> const& e1, pair<T, size_t> const& e2)
-          { return e1.second < e2.second; });
-      
-      // loop3 to find elements which are shown max times (assumes that there
-      // are multiple matches
+    auto maxelem = std::max_element(
+      std::begin(counts),
+      std::end(counts),
+      [](pair<T, size_t> const &e1, pair<T, size_t> const &e2) {
+        return e1.second < e2.second;
+      });
 
-      std::vector<std::pair<T, size_t>> result;
+    // loop3 to find elements which are shown max times (assumes that there
+    // are multiple matches
 
-      std::copy_if(begin(counts), end(counts),
-          back_inserter(result),
-          // [](auto const& e)
-          [=](pair<T, size_t> const& e)
-          {
-            return e.second == maxelem->second;
-          });
+    std::vector<std::pair<T, size_t>> result;
 
-      return result;
-    }
+    std::copy_if(
+      begin(counts),
+      end(counts),
+      back_inserter(result),
+      // [](auto const& e)
+      [=](pair<T, size_t> const &e) { return e.second == maxelem->second; });
 
-  int majorityElement_1(vector<int>& nums)
+    return result;
+  }
+
+  int majorityElement_1(vector<int> &nums)
   {
     int max_element{};
     std::map<int, size_t> table;
@@ -1372,14 +1355,14 @@ namespace algo_occurance
       if (current_max < e.second)
       {
         current_max = e.second;
-        max_element= e.first;
+        max_element = e.first;
       }
     }
 
     return max_element;
   }
 
-  int majorityElement_2(vector<int>& nums)
+  int majorityElement_2(vector<int> &nums)
   {
     int max_element{};
     std::unordered_map<int, size_t> table;
@@ -1396,7 +1379,7 @@ namespace algo_occurance
       if (current_max < e.second)
       {
         current_max = e.second;
-        max_element= e.first;
+        max_element = e.first;
       }
     }
 
@@ -1409,38 +1392,38 @@ namespace algo_occurance
   // If we had some way of counting instances of the majority element as +1 and
   // instances of any other element as -1, summing them would make it obvious
   // that the majority element is indeed the majority element.
-  // 
-  // Algorithm 
+  //
+  // Algorithm
   // Essentially, what Boyer-Moore does is look for a suffix suf of nums
-  // where suf[0] is the majority element in that suffix. 
+  // where suf[0] is the majority element in that suffix.
   //
   // To do this, we maintain a count, which is incremented whenever we see an
   // instance of our current candidate for majority element and decremented
   // whenever we see anything else. Whenever count equals 0, we effectively
   // forget about everything in nums up to the current index and consider the
-  // current number as the candidate for majority element. 
+  // current number as the candidate for majority element.
   //
   // It is not immediately obvious why we can get away with forgetting prefixes
   // of nums - consider the following examples (pipes are inserted to separate
   // runs of nonzero count).
-  // 
+  //
   // [7, 7, 5, 7, 5, 1 | 5, 7 | 5, 5, 7, 7 | 7, 7, 7, 7]
-  // 
+  //
   // Here, the 7 at index 0 is selected to be the first candidate for majority
   // element. count will eventually reach 0 after index 5 is processed, so the 5
   // at index 6 will be the next candidate. In this case, 7 is the true majority
   // element, so by disregarding this prefix, we are ignoring an equal number of
   // majority and minority elements - therefore, 7 will still be the majority
   // element in the suffix formed by throwing away the first prefix.
-  // 
+  //
   // [7, 7, 5, 7, 5, 1 | 5, 7 | 5, 5, 7, 7 | 5, 5, 5, 5]
-  // 
+  //
   // Now, the majority element is 5 (we changed the last run of the array from
   // 7s to 5s), but our first candidate is still 7. In this case, our candidate
   // is not the true majority element, but we still cannot discard more majority
   // elements than minority elements (this would imply that count could reach -1
   // before we reassign candidate, which is obviously false).
-  // 
+  //
   // Therefore, given that it is impossible (in both cases) to discard more
   // majority elements than minority elements, we are safe in discarding the
   // prefix and attempting to recursively solve the majority element problem for
@@ -1448,7 +1431,7 @@ namespace algo_occurance
   // 0, and the majority element of that suffix will necessarily be the same as
   // the majority element of the overall array.
 
-  int majorityElement_3(vector<int>& nums)
+  int majorityElement_3(vector<int> &nums)
   {
     int candidate{};
     int count{};
@@ -1476,50 +1459,49 @@ namespace algo_occurance
   // The problem states there must be a majority element; it has to show up >n/2
   // times NOT just n/2. Something like [1, 1, 1, 1, 2, 3, 4, 5] is an invalid
 
-  int majorityElement_4(vector<int>& nums)
+  int majorityElement_4(vector<int> &nums)
   {
     sort(nums.begin(), nums.end());
-    return nums[nums.size()/2];
+    return nums[nums.size() / 2];
   }
-} // namespace
+} // namespace algo_occurance
 
-
-TEST(AlgoOccurance, MostSeen) 
+TEST(AlgoOccurance, MostSeen)
 {
   using namespace algo_occurance;
 
   // 1 1 3 3 5 5 5 8 8 8 13 (11)
   {
-    std::vector<int> coll{1,1,3,5,8,13,3,5,8,8,5};
+    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
     auto result = U48_1(coll);
     EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
   }
   {
-    std::vector<int> coll{1,1,3,5,8,13,3,5,8,8,5};
+    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
     auto result = U48_Text(coll);
     EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
   }
   {
     auto func = majorityElement_1;
-    vector<int> coll{3,2,3};
+    vector<int> coll{3, 2, 3};
     EXPECT_THAT(func(coll), 3);
   }
 
   {
     auto func = majorityElement_2;
-    vector<int> coll{3,2,3};
+    vector<int> coll{3, 2, 3};
     EXPECT_THAT(func(coll), 3);
   }
 
   {
     auto func = majorityElement_3;
-    vector<int> coll{3,2,3};
+    vector<int> coll{3, 2, 3};
     EXPECT_THAT(func(coll), 3);
   }
 
   {
     auto func = majorityElement_3;
-    vector<int> coll{2,3,3};
+    vector<int> coll{2, 3, 3};
     EXPECT_THAT(func(coll), 3);
   }
 
@@ -1533,30 +1515,29 @@ TEST(AlgoOccurance, MostSeen)
     auto func = majorityElement_3;
     // okay
     // vector<int> coll{1,1,1,1,2,3,4,5};
-    vector<int> coll{1,1,1,1,2,3,4,5,6,7,8};
+    vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8};
     EXPECT_THAT(func(coll), Not(1));
     EXPECT_THAT(func(coll), 8);
   }
 
   {
     auto func = majorityElement_4;
-    vector<int> coll{3,2,3};
+    vector<int> coll{3, 2, 3};
     EXPECT_THAT(func(coll), 3);
   }
   {
     auto func = majorityElement_4;
-    vector<int> coll{2,3,3};
+    vector<int> coll{2, 3, 3};
     EXPECT_THAT(func(coll), 3);
   }
   {
     auto func = majorityElement_4;
     // okay
     // vector<int> coll{1,1,1,1,2,3,4,5};
-    vector<int> coll{1,1,1,1,2,3,4,5,6,7,8};
+    vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8};
     EXPECT_THAT(func(coll), Not(1));
   }
 }
-
 
 // ={=========================================================================
 // algo-occurance find the longest sequence of input char array
@@ -1565,14 +1546,12 @@ namespace algo_occurance
 {
   MATCHER_P(EqPair, expected, "")
   {
-    return arg.first == expected.first &&
-      arg.second == expected.second;
+    return arg.first == expected.first && arg.second == expected.second;
   }
 
   MATCHER_P(NotEqPair, expected, "")
   {
-    return arg.first != expected.first ||
-      arg.second != expected.second;
+    return arg.first != expected.first || arg.second != expected.second;
   }
 
   // this is the second try and works fine.
@@ -1583,27 +1562,27 @@ namespace algo_occurance
     size_t current_occurance{0}, longest_occurance{0};
     char current_char{0}, longest_char{0};
 
-    for( auto letter : input )
+    for (auto letter : input)
     {
-      if( letter != current_char )
+      if (letter != current_char)
       {
-        current_char = letter;
+        current_char      = letter;
         current_occurance = 1;
       }
       // if( letter == current_char )
       else
         ++current_occurance;
 
-      if( current_occurance > longest_occurance )
+      if (current_occurance > longest_occurance)
       {
-        longest_char = current_char;
+        longest_char      = current_char;
         longest_occurance = current_occurance;
       }
     }
 
     return pair<char, size_t>(longest_char, longest_occurance);
   }
-} // namspace
+} // namespace algo_occurance
 
 TEST(AlgoOccurance, FindLongest_1)
 {
@@ -1612,18 +1591,14 @@ TEST(AlgoOccurance, FindLongest_1)
   auto func = find_longest_1;
 
   const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-  EXPECT_THAT(func(input1), 
-      EqPair(pair<char, size_t>('F', 18)));
+  EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
 
   const string input2{"AAABBCCCCDDD"};
-  EXPECT_THAT(func(input2), 
-      EqPair(pair<char, size_t>('C', 4)));
+  EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
 
   const string input3{"AAAAAAAAAAAA"};
-  EXPECT_THAT(func(input3), 
-      EqPair(pair<char, size_t>('A', 12)));
+  EXPECT_THAT(func(input3), EqPair(pair<char, size_t>('A', 12)));
 }
-
 
 namespace algo_occurance
 {
@@ -1637,19 +1612,19 @@ namespace algo_occurance
       // cout << "diff: curr" << current_char << ", letter: " << letter << endl;
 
       // if see the different char. use XOR and looks fancy?
-      if (current_char^letter)
+      if (current_char ^ letter)
       {
         // cout << "diff: letter" << letter << endl;
 
         // save it if it's the longest so far
-        if(current_occurance > longest_occurance)
+        if (current_occurance > longest_occurance)
         {
           longest_occurance = current_occurance;
-          longest_char = current_char;
+          longest_char      = current_char;
         }
 
         // reset and str a search again
-        current_char = letter;
+        current_char      = letter;
         current_occurance = 1;
       }
       // if see the same before
@@ -1664,21 +1639,21 @@ namespace algo_occurance
   pair<unsigned char, size_t> find_longest_3(const string &input)
   {
     unsigned char current_char{}, saved_char{};
-    size_t        current_occurance{};
-    size_t        saved_occurance = numeric_limits<size_t>::min();
+    size_t current_occurance{};
+    size_t saved_occurance = numeric_limits<size_t>::min();
 
-    for(const auto e : input)
+    for (const auto e : input)
     {
       if (e != current_char)
       {
         // if see a longer sequence
         if (saved_occurance < current_occurance)
         {
-          saved_char = current_char;
+          saved_char      = current_char;
           saved_occurance = current_occurance;
         }
 
-        current_char = e;
+        current_char      = e;
         current_occurance = 1;
       }
       else
@@ -1688,14 +1663,14 @@ namespace algo_occurance
     // if see a longer sequence when input ends or input has only one sequence
     if (saved_occurance < current_occurance)
     {
-      saved_char = current_char;
+      saved_char      = current_char;
       saved_occurance = current_occurance;
     }
 
     return pair<unsigned char, size_t>(saved_char, saved_occurance);
   }
 
-} // namespace
+} // namespace algo_occurance
 
 TEST(AlgoOccurance, FindLongest_2)
 {
@@ -1705,39 +1680,32 @@ TEST(AlgoOccurance, FindLongest_2)
     auto func = find_longest_2;
 
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(func(input1), 
-        EqPair(pair<char, size_t>('F', 18)));
+    EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
 
     const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(func(input2), 
-        EqPair(pair<char, size_t>('C', 4)));
+    EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
 
     // Firstly, looks better but it fails when the input has one long sequence.
     // returns {0, 0} because variable longest_xxx gets updated only in if case
     // but not else(when char is the same)
 
     const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(func(input3), 
-        NotEqPair(pair<char, size_t>('A', 12)));
+    EXPECT_THAT(func(input3), NotEqPair(pair<char, size_t>('A', 12)));
   }
   {
     auto func = find_longest_3;
 
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(func(input1), 
-        EqPair(pair<char, size_t>('F', 18)));
+    EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
 
     const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(func(input2), 
-        EqPair(pair<char, size_t>('C', 4)));
+    EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
 
     // now okay
     const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(func(input3), 
-        EqPair(pair<char, size_t>('A', 12)));
+    EXPECT_THAT(func(input3), EqPair(pair<char, size_t>('A', 12)));
   }
 }
-
 
 // Can do better than O(n)? Can skip some chars in searching a sequence.
 
@@ -1751,29 +1719,29 @@ namespace algo_occurance
     size_t input_size = input.size();
 
     // take the first
-    current_char = input[0];
+    current_char      = input[0];
     current_occurance = 1;
 
-    // *TN* 
+    // *TN*
     // should kepp ++i here. Otherwise, would have no increase of i and
     // compare the same input in a loop.
     for (size_t i = 1; i < input_size; ++i)
     {
       // if see the different char. use XOR and looks fancy?
-      if (current_char^input[i])
+      if (current_char ^ input[i])
       {
         // save the previous sequence if it's the longest so far
         if (current_occurance > longest_occurance)
         {
           longest_occurance = current_occurance;
-          longest_char = current_char;
+          longest_char      = current_char;
         }
 
         // see i and i + (current longest sequence-1) and skip them in
         // between if they are different
         //
         // if they are the same, don't skip so don't change i
-        size_t check_skip = i + (current_occurance-1);
+        size_t check_skip = i + (current_occurance - 1);
 
         // *TN*
         // Have to have this check. Otherwise, access to out of range
@@ -1782,14 +1750,14 @@ namespace algo_occurance
           break;
 
         // if they are different
-        if (input[i]^input[check_skip])
+        if (input[i] ^ input[check_skip])
         {
           // cout << "skipped : " << current_occurance-1 << endl;
-          i += current_occurance-1;
+          i += current_occurance - 1;
         }
 
         // reset and str a search again
-        current_char = input[i];
+        current_char      = input[i];
         current_occurance = 1;
       }
       // if see the same before
@@ -1803,7 +1771,7 @@ namespace algo_occurance
     return pair<char, size_t>(longest_char, longest_occurance);
   }
 
-} // namespace
+} // namespace algo_occurance
 
 TEST(AlgoOccurance, FindLongest_3)
 {
@@ -1812,41 +1780,35 @@ TEST(AlgoOccurance, FindLongest_3)
   auto func = find_longest_4;
 
   const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-  EXPECT_THAT(func(input1), 
-      EqPair(pair<char, size_t>('F', 18)));
+  EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
 
   const string input2{"AAABBCCCCDDD"};
-  EXPECT_THAT(func(input2), 
-      EqPair(pair<char, size_t>('C', 4)));
+  EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
 
   // fails, return {0, 0}
   const string input3{"AAAAAAAAAAAA"};
-  EXPECT_THAT(func(input3), 
-      NotEqPair(pair<char, size_t>('A', 12)));
+  EXPECT_THAT(func(input3), NotEqPair(pair<char, size_t>('A', 12)));
 
   const string input4{"AAAABCBBBBBCCCCDDD"};
-  EXPECT_THAT(func(input4), 
-      EqPair(pair<char, size_t>('B', 5)));
+  EXPECT_THAT(func(input4), EqPair(pair<char, size_t>('B', 5)));
 
   // fails, return {A, 4}
   const string input5{"AAAABCCCCCCCC"};
-  EXPECT_THAT(func(input5), 
-      NotEqPair(pair<char, size_t>('C', 8)));
+  EXPECT_THAT(func(input5), NotEqPair(pair<char, size_t>('C', 8)));
 }
-
 
 // ={=========================================================================
 // algo-find if a string has all unique chars
-// 
+//
 // o. Space? assume ASCII 256 chars
 //    ask for clarity. Since it's only for alphabet uppercase then use 32
 //    bset and reduce space requirement.
 //
 // o. One simple optimization. return false if the length of input string is greater
 //    than the number of uniques chars in the set; e.g., ASCII, 256
-// 
+//
 //    if( sizeString > 256 ) return false;
-//    
+//
 // o. cstring or std::string?
 //
 // o. time O(n) and space O(1)
@@ -1871,7 +1833,6 @@ namespace algo_unique
     return true;
   }
 
-
   // use cxx-string-find()
   bool unique_2(const char *str)
   {
@@ -1889,7 +1850,7 @@ namespace algo_unique
 
     return true;
   }
-} // namespace
+} // namespace algo_unique
 
 TEST(AlgoUnique, IsUnique)
 {
@@ -1901,7 +1862,6 @@ TEST(AlgoUnique, IsUnique)
   EXPECT_THAT(unique_2("abcdefghijklmnopqa"), false);
   EXPECT_THAT(unique_2("abcdefghijklmnopqr"), true);
 }
-
 
 // ={=========================================================================
 // algo-reserve
@@ -1919,15 +1879,15 @@ namespace algo_reverse
       return;
 
     char *begin = input;
-    char *end = input + strlen(input)-1;
+    char *end   = input + strlen(input) - 1;
     char temp{};
 
     for (; begin < end; ++begin, --end)
     {
       // swap(begin, end);
-      temp = *begin;
+      temp   = *begin;
       *begin = *end;
-      *end = temp;
+      *end   = temp;
     }
   }
 
@@ -1936,9 +1896,9 @@ namespace algo_reverse
   void reverse_string_2(char *input)
   {
     int str{}, end{};
-    char temp{}; 
+    char temp{};
 
-    for (end = strlen(input)-1; str < end; ++str, --end)
+    for (end = strlen(input) - 1; str < end; ++str, --end)
     {
       // swap(str, end)
       temp = input[str], input[str] = input[end], input[end] = temp;
@@ -1964,26 +1924,26 @@ namespace algo_reverse
     std::string reversed{};
 
     for (auto len = input.size(); len > 0; --len)
-      reversed.push_back(input[len-1]);
+      reversed.push_back(input[len - 1]);
 
     return reversed;
   }
 
-} // namespace
+} // namespace algo_reverse
 
 TEST(AlgoReverse, Reverse)
 {
   using namespace algo_reverse;
 
   {
-    auto func = reverse_string_1;
+    auto func    = reverse_string_1;
     char input[] = "REVERSE IT";
     func(input);
     EXPECT_THAT(input, StrEq("TI ESREVER"));
   }
 
   {
-    auto func = reverse_string_2;
+    auto func    = reverse_string_2;
     char input[] = "REVERSE IT";
     func(input);
     EXPECT_THAT(input, StrEq("TI ESREVER"));
@@ -2049,7 +2009,6 @@ TEST(AlgoReverse, Reverse)
   }
 }
 
-
 namespace algo_reverse
 {
   // Write a program to reverse a string with all its duplicates removed. Only
@@ -2075,7 +2034,7 @@ namespace algo_reverse
       if (!(bappeared & (1 << (sin[i] - 'A'))))
       {
         sout += sin[i];
-        bappeared |= (1 << (sin[i]-'A'));
+        bappeared |= (1 << (sin[i] - 'A'));
       }
     }
 
@@ -2084,7 +2043,7 @@ namespace algo_reverse
     // return reverse;
     return std::string{sout.crbegin(), sout.crend()};
   }
-} // namespace
+} // namespace algo_reverse
 
 TEST(AlgoReverse, ReverseAndRemoveDuplicates)
 {
@@ -2096,7 +2055,6 @@ TEST(AlgoReverse, ReverseAndRemoveDuplicates)
   EXPECT_THAT(func(input), Eq("LHSIKAVTJ"));
 }
 
-
 // ={=========================================================================
 // algo-anagram
 //
@@ -2106,7 +2064,7 @@ TEST(AlgoReverse, ReverseAndRemoveDuplicates)
 //
 // o. One simple optimization. return false if the length of input strings
 //    are different
-// 
+//
 // o. cstring or std::string?
 //
 // o. time O(n) and space O(1)
@@ -2114,7 +2072,7 @@ TEST(AlgoReverse, ReverseAndRemoveDuplicates)
 namespace algo_anagram
 {
   bool anagram_1(string one, string two)
-  { 
+  {
     if (one.size() != two.size())
       return false;
 
@@ -2125,7 +2083,7 @@ namespace algo_anagram
   }
 
   bool anagram_2(const string one, const string two)
-  { 
+  {
     if (one.size() != two.size())
       return false;
 
@@ -2138,7 +2096,7 @@ namespace algo_anagram
     {
       if (!bset[e])
       {
-        return false; 
+        return false;
       }
     }
 
@@ -2150,14 +2108,14 @@ namespace algo_anagram
   //  2. move size check after removing duplicates.
 
   bool anagram_3(string one, string two)
-  { 
+  {
     bitset<256> bset{};
 
-    auto one_end_unique = unique( one.begin(), one.end() );
-    one.erase( one_end_unique, one.end() );
+    auto one_end_unique = unique(one.begin(), one.end());
+    one.erase(one_end_unique, one.end());
 
-    auto two_end_unique = unique( two.begin(), two.end() );
-    two.erase( two_end_unique, two.end() );
+    auto two_end_unique = unique(two.begin(), two.end());
+    two.erase(two_end_unique, two.end());
 
     if (one.size() != two.size())
       return false;
@@ -2169,13 +2127,13 @@ namespace algo_anagram
     {
       if (!bset[e])
       {
-        return false; 
+        return false;
       }
     }
 
     return true;
   }
-} // namespace
+} // namespace algo_anagram
 
 TEST(AlgoAnagram, Anagram)
 {
@@ -2209,7 +2167,6 @@ TEST(AlgoAnagram, Anagram)
     EXPECT_THAT(func("PARK", "PAAA"), false);
   }
 }
-
 
 // ={=========================================================================
 // algo-palindrome
@@ -2282,8 +2239,7 @@ namespace algo_palindrome
 
     return result == input ? true : false;
   }
-} // namespace
-
+} // namespace algo_palindrome
 
 TEST(AlgoPalindrome, Integer)
 {
@@ -2297,7 +2253,6 @@ TEST(AlgoPalindrome, Integer)
   EXPECT_THAT(is_palindrome(1230000000), false);
   EXPECT_THAT(is_palindrome(1234554321), true);
 }
-
 
 /*
 The Modern C++ Challenge
@@ -2353,15 +2308,14 @@ namespace algo_palindrome
     // moving i
     for (decltype(length) i = 0; i < length; ++i)
     {
-      // whenever moves i, start search again 
+      // whenever moves i, start search again
       current.clear();
       current_char = text[i];
 
       current.push_back(current_char);
 
-      for (lidx = i - 1, ridx = i + 1; 
-          lidx >= 0 && ridx < (int)length; 
-          --lidx, ++ridx)
+      for (lidx = i - 1, ridx = i + 1; lidx >= 0 && ridx < (int)length;
+           --lidx, ++ridx)
       {
         if (text[lidx] == text[ridx])
         {
@@ -2369,7 +2323,7 @@ namespace algo_palindrome
           current.push_back(text[lidx]);
           if (saved.length() < current.length())
             saved = current;
-        } 
+        }
         else
         {
           // exit as soon as break symmetric condition
@@ -2423,9 +2377,9 @@ namespace algo_palindrome
 
   std::string longest_palindrome_text(std::string str)
   {
-    size_t const len = str.size();
+    size_t const len    = str.size();
     size_t longestBegin = 0;
-    size_t maxLen = 1;
+    size_t maxLen       = 1;
 
     std::vector<bool> table(len * len, false);
 
@@ -2435,25 +2389,25 @@ namespace algo_palindrome
 
     for (size_t i = 0; i < len; i++)
     {
-      table[i*len + i] = true;
+      table[i * len + i] = true;
     }
 
     // and all the elements [i,i+i] with true for all consecutive two identical
     // characters (for two-character palindromes). We then go on to inspect
     //
     // why "len -1"? since needs two chars to inspect
-    // 0 1 2 3 4, len is 5 
+    // 0 1 2 3 4, len is 5
     // l e v e 1
 
     for (size_t i = 0; i < len - 1; ++i)
     {
       if (str[i] == str[i + 1])
       {
-        table[i*len + i + 1] = true;
+        table[i * len + i + 1] = true;
         if (maxLen < 2)
         {
           longestBegin = i;
-          maxLen = 2;
+          maxLen       = 2;
         }
       }
     }
@@ -2462,7 +2416,7 @@ namespace algo_palindrome
     //
     // We then go on to inspect substrings greater than two characters, setting
     // the element at [i,j] to true if the element at [i+1,j-1] is true and the
-    // characters on the positions i and j in the string are also equal. 
+    // characters on the positions i and j in the string are also equal.
     //
     // Along the way, we retain the start position and length of the longest
     // palindromic substring in order to extract it after finishing computing
@@ -2474,20 +2428,23 @@ namespace algo_palindrome
       {
         size_t j = i + k - 1;
 
-        cout << "k: " << k << ", i: " << i << ", j: " << j << ", table[" << ((i + 1)*len + j - 1) << "]:" 
-          << table[(i + 1)*len + j - 1] << endl;
+        cout << "k: " << k << ", i: " << i << ", j: " << j << ", table["
+             << ((i + 1) * len + j - 1) << "]:" << table[(i + 1) * len + j - 1]
+             << endl;
 
-        if (str[i] == str[j] && table[(i + 1)*len + j - 1])
+        if (str[i] == str[j] && table[(i + 1) * len + j - 1])
         {
-          table[i*len +j] = true;
+          table[i * len + j] = true;
 
-          cout << "k: " << k << ", i: " << i << ", j: " << j << ", table[" << ((i + 1)*len + j - 1) << "]:" 
-            << table[(i + 1)*len + j - 1] << ", table[" << i*len +j << "] = true" << endl;
+          cout << "k: " << k << ", i: " << i << ", j: " << j << ", table["
+               << ((i + 1) * len + j - 1)
+               << "]:" << table[(i + 1) * len + j - 1] << ", table["
+               << i * len + j << "] = true" << endl;
 
           if (maxLen < k)
           {
             longestBegin = i;
-            maxLen = k;
+            maxLen       = k;
           }
         }
       }
@@ -2496,14 +2453,14 @@ namespace algo_palindrome
     return std::string(str.substr(longestBegin, maxLen));
   }
 
-} // namespace
+} // namespace algo_palindrome
 
 // TEST(U28, 2018_12_03)
 TEST(AlgoPalindrome, LongestSubString)
 {
   using namespace algo_palindrome;
 
-  { 
+  {
     EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
     EXPECT_THAT(longest_palindrome("level"), "level");
 
@@ -2534,7 +2491,6 @@ TEST(AlgoPalindrome, LongestSubString)
   }
 }
 
-
 // algo-leetcode-19
 /*
 125. Valid Palindrome, Easy
@@ -2563,13 +2519,13 @@ namespace algo_palindrome
   // Palindrome.
 
   // use iterator
-  bool isPalindrome_1(string s) 
+  bool isPalindrome_1(string s)
   {
     if (s.empty())
       return true;
 
     auto begin = s.begin();
-    auto end = --s.end();
+    auto end   = --s.end();
 
     while (begin < end)
     {
@@ -2596,10 +2552,10 @@ namespace algo_palindrome
   }
 
   // use index
-  bool isPalindrome_1_1(string s) 
+  bool isPalindrome_1_1(string s)
   {
     int begin{};
-    int end{(int)s.size()-1};
+    int end{(int)s.size() - 1};
 
     while (begin < end)
     {
@@ -2627,18 +2583,18 @@ namespace algo_palindrome
 
   // from discussion:
 
-  bool isPalindrome_2(string s) 
+  bool isPalindrome_2(string s)
   {
     int i = 0;
     int j = s.size() - 1;
 
-    while (i < j) 
+    while (i < j)
     {
       if (!isalnum(s[i]))
         ++i;
       else if (!isalnum(s[j]))
         --j;
-      else 
+      else
       {
         if (tolower(s[i]) != tolower(s[j]))
           return false;
@@ -2650,15 +2606,15 @@ namespace algo_palindrome
   }
 
   // let's make it faster but this is wrong since ++begin/--end runs in every
-  // runrun. 
+  // runrun.
 
-  bool isPalindrome_wrong(string s) 
+  bool isPalindrome_wrong(string s)
   {
     if (s.empty())
       return true;
 
     auto begin = s.begin();
-    auto end = --s.end();
+    auto end   = --s.end();
 
     while (begin < end)
     {
@@ -2687,19 +2643,19 @@ namespace algo_palindrome
     return true;
   }
 
-  // after all, "if and else if" is to reduce outer loop so use while instead 
+  // after all, "if and else if" is to reduce outer loop so use while instead
   // However, inner while changes begin/end and it requires outer check on every
-  // if; makes outer check invalid. 
+  // if; makes outer check invalid.
   //
   // is it any better? seems not.
 
-  bool isPalindrome_4_wrong(string s) 
+  bool isPalindrome_4_wrong(string s)
   {
     if (s.empty())
       return true;
 
     auto begin = s.begin();
-    auto end = --s.end();
+    auto end   = --s.end();
 
     while (begin < end)
     {
@@ -2719,13 +2675,13 @@ namespace algo_palindrome
     return true;
   }
 
-  bool isPalindrome_4(string s) 
+  bool isPalindrome_4(string s)
   {
     if (s.empty())
       return true;
 
     auto begin = s.begin();
-    auto end = --s.end();
+    auto end   = --s.end();
 
     while (begin < end)
     {
@@ -2748,20 +2704,20 @@ namespace algo_palindrome
   // from discussion *py-code*
   // # trick 1: save re.sub() result to s itself
   // # trick 2: palindrome is the same when reversed
-  // 
+  //
   // class Solution_isPalindrome:
   //     def answer(self, s):
   //         s = re.sub(r'\W', '', s).upper()
   //         return s == s[::-1]
 
-} // namespace
+} // namespace algo_palindrome
 
 TEST(AlgoPalindrome, String)
 {
   using namespace algo_palindrome;
 
   {
-    auto func = isPalindrome_1_1; 
+    auto func = isPalindrome_1_1;
 
     EXPECT_THAT(func(""), true);
     EXPECT_THAT(func("121"), true);
@@ -2778,7 +2734,7 @@ TEST(AlgoPalindrome, String)
   }
 
   {
-    auto func = isPalindrome_2; 
+    auto func = isPalindrome_2;
 
     EXPECT_THAT(func(""), true);
     EXPECT_THAT(func("121"), true);
@@ -2788,7 +2744,7 @@ TEST(AlgoPalindrome, String)
   }
 
   {
-    auto func = isPalindrome_4; 
+    auto func = isPalindrome_4;
 
     EXPECT_THAT(func(""), true);
     EXPECT_THAT(func("121"), true);
@@ -2799,7 +2755,6 @@ TEST(AlgoPalindrome, String)
     EXPECT_THAT(func(".,"), true);
   }
 }
-
 
 // ={=========================================================================
 // algo-find first unique byte
@@ -2818,16 +2773,16 @@ namespace algo_unique
 {
   unsigned char first_unique_1(const vector<unsigned char> &input)
   {
-    // note: 
+    // note:
     // input order depends on the input size. Here, the order is one for that
     // byte. NO.
 
-    size_t occurance[256]={}, order[256]={};
+    size_t occurance[256] = {}, order[256] = {};
 
     // build occurance and order
     size_t input_order{};
 
-    for (const auto e: input)
+    for (const auto e : input)
     {
       ++occurance[e];
       // here order starts from 1
@@ -2885,11 +2840,11 @@ namespace algo_unique
 
     unsigned char current_index{};
 
-    for (const auto e: lookup_table)
+    for (const auto e : lookup_table)
     {
       if (e.first == 1 && e.second < current_order)
       {
-        current_byte = current_index;
+        current_byte  = current_index;
         current_order = e.second;
       }
 
@@ -2899,7 +2854,7 @@ namespace algo_unique
     return current_byte;
   }
 
-} // namespace
+} // namespace algo_unique
 
 TEST(AlgoUnique, FirstUnique)
 {
@@ -2907,16 +2862,19 @@ TEST(AlgoUnique, FirstUnique)
 
   {
     auto func = first_unique_1;
-    const vector<unsigned char> input{20, 11, 23, 33, 34, 54, 44, 38, 215, 126, 101, 20, 11, 20, 54, 54, 44, 38, 38, 215, 126, 215, 23};
-    EXPECT_THAT(func(input),Eq(33));
+    const vector<unsigned char> input{20,  11,  23,  33,  34,  54,  44, 38,
+                                      215, 126, 101, 20,  11,  20,  54, 54,
+                                      44,  38,  38,  215, 126, 215, 23};
+    EXPECT_THAT(func(input), Eq(33));
   }
   {
     auto func = first_unique_2;
-    const vector<unsigned char> input{20, 11, 23, 33, 34, 54, 44, 38, 215, 126, 101, 20, 11, 20, 54, 54, 44, 38, 38, 215, 126, 215, 23};
-    EXPECT_THAT(func(input),Eq(33));
+    const vector<unsigned char> input{20,  11,  23,  33,  34,  54,  44, 38,
+                                      215, 126, 101, 20,  11,  20,  54, 54,
+                                      44,  38,  38,  215, 126, 215, 23};
+    EXPECT_THAT(func(input), Eq(33));
   }
 }
-
 
 // ={=========================================================================
 // algo-grade
@@ -2945,11 +2903,11 @@ namespace algo_grade
       {
         grade.clear();
 
-        int band = (e - 50)/10;
-        grade = grade_table[band];
+        int band = (e - 50) / 10;
+        grade    = grade_table[band];
 
-        int plus_or_minus = (e - 50)%10;
-        if (plus_or_minus <3)
+        int plus_or_minus = (e - 50) % 10;
+        if (plus_or_minus < 3)
           grade += "-";
         else if (plus_or_minus > 7)
           grade += "+";
@@ -2975,10 +2933,10 @@ namespace algo_grade
       {
         grade.clear();
 
-        grade = grade_table[(e - 50)/10];
+        grade = grade_table[(e - 50) / 10];
 
         int plus_or_minus = e % 10;
-        if (plus_or_minus <3)
+        if (plus_or_minus < 3)
           grade += "-";
         else if (plus_or_minus > 7)
           grade += "+";
@@ -3007,7 +2965,7 @@ namespace algo_grade
     const vector<double> range_limit{50.0, 65.0, 75.0, 90.0, 100.0};
     const vector<string> grade{"F", "D", "C", "B", "A"};
 
-    int max_grade_level = grade.size()-1;
+    int max_grade_level = grade.size() - 1;
     int grade_level{};
     string student_grade{"A"};
 
@@ -3022,18 +2980,20 @@ namespace algo_grade
     return student_grade;
   }
 
-} // namespace
+} // namespace algo_grade
 
 TEST(AlgoGrade, Grades)
 {
   using namespace algo_grade;
 
   const vector<int> coll{54, 60, 62, 66, 68, 71, 73, 78, 89, 98};
-  EXPECT_THAT(grade_1(coll), 
-      ElementsAre("F", "D-", "D-","D", "D+","C-", "C", "C+", "B+", "A+"));
+  EXPECT_THAT(
+    grade_1(coll),
+    ElementsAre("F", "D-", "D-", "D", "D+", "C-", "C", "C+", "B+", "A+"));
 
-  EXPECT_THAT(grade_2(coll), 
-      ElementsAre("F", "D-", "D-","D", "D+","C-", "C", "C+", "B+", "A+"));
+  EXPECT_THAT(
+    grade_2(coll),
+    ElementsAre("F", "D-", "D-", "D", "D+", "C-", "C", "C+", "B+", "A+"));
 
   EXPECT_THAT(grade_3(49.0), "F");
   EXPECT_THAT(grade_3(60.0), "D");
@@ -3044,23 +3004,22 @@ TEST(AlgoGrade, Grades)
   EXPECT_THAT(grade_3(98.0), "A");
 }
 
-
 // ={=========================================================================
 // algo-intersect find if rectangles intersect
 //
 // from ANSIC 130. Handles point rather than each value.
 //
 // assumption about bot/and.
-// 
-//     +--------+ top(x2, y2)      +--------+ bot(x2, y2)   
-//     |        |                  |        |            
-//     |        |                  |        |            
-//     +--------+                  +--------+            
-//  bot(x1,y1)                  top(x1,y1)               
+//
+//     +--------+ top(x2, y2)      +--------+ bot(x2, y2)
+//     |        |                  |        |
+//     |        |                  |        |
+//     +--------+                  +--------+
+//  bot(x1,y1)                  top(x1,y1)
 //
 //
 // since depending on how Rect is defined, checking can be different in
-// is_point_in_rect(). 
+// is_point_in_rect().
 //
 // this assumes bot < point < top and if use top/bot way, it fails
 //
@@ -3079,7 +3038,10 @@ namespace algo_intersect
   struct Point
   {
     // not a default ctor so have to define it
-    Point(const int x, const int y) : x_(x), y_(y) {}
+    Point(const int x, const int y)
+        : x_(x)
+        , y_(y)
+    {}
     int x_{};
     int y_{};
   };
@@ -3088,7 +3050,10 @@ namespace algo_intersect
   {
     // not a default ctor so have to define it
     // Rect(bot, top);
-    Rect(const Point &a, const Point &b) : bot_(a), top_(b) {}
+    Rect(const Point &a, const Point &b)
+        : bot_(a)
+        , top_(b)
+    {}
     Point bot_;
     Point top_;
   };
@@ -3100,11 +3065,10 @@ namespace algo_intersect
 
   bool is_point_in_rect(const Point &point, const Rect &rect)
   {
-    return ((rect.top_.x_ >= point.x_ && rect.bot_.x_ <= point.x_) 
-        || (rect.bot_.x_ >= point.x_ && rect.top_.x_ <= point.y_)) 
-      &&
-      ((rect.top_.y_ >= point.y_ && rect.bot_.y_ <= point.y_) 
-       || (rect.bot_.y_ >= point.y_ && rect.top_.y_ <= point.y_));
+    return ((rect.top_.x_ >= point.x_ && rect.bot_.x_ <= point.x_) ||
+            (rect.bot_.x_ >= point.x_ && rect.top_.x_ <= point.y_)) &&
+           ((rect.top_.y_ >= point.y_ && rect.bot_.y_ <= point.y_) ||
+            (rect.bot_.y_ >= point.y_ && rect.top_.y_ <= point.y_));
   }
 
   bool is_intersected(const Rect &r1, const Rect &r2)
@@ -3112,7 +3076,7 @@ namespace algo_intersect
     return is_point_in_rect(r1.top_, r2) || is_point_in_rect(r1.bot_, r2);
   }
 
-} // namespace
+} // namespace algo_intersect
 
 TEST(AlgoIntersect, Intersected)
 {
@@ -3120,33 +3084,32 @@ TEST(AlgoIntersect, Intersected)
 
   {
     // bot/top
-    Rect a(Point(10,10), Point(20,20));
-    Rect b(Point(15,15), Point(25,25));
+    Rect a(Point(10, 10), Point(20, 20));
+    Rect b(Point(15, 15), Point(25, 25));
     EXPECT_THAT(is_intersected(a, b), Eq(true));
   }
 
   {
     // top/bot
-    Rect a(Point(20, 20), Point(10,10));
-    Rect b(Point(25, 25), Point(15,15));
+    Rect a(Point(20, 20), Point(10, 10));
+    Rect b(Point(25, 25), Point(15, 15));
     EXPECT_THAT(is_intersected(a, b), Eq(true));
   }
 
   {
     // bot/top, inclues the same point
-    Rect a(Point(10,10), Point(20,20));
-    Rect b(Point(20,20), Point(25,25));
+    Rect a(Point(10, 10), Point(20, 20));
+    Rect b(Point(20, 20), Point(25, 25));
     EXPECT_THAT(is_intersected(a, b), Eq(true));
   }
 
   {
     // bot/top, inclues the same point
-    Rect a(Point(10,10), Point(20,20));
-    Rect b(Point(25,25), Point(35,35));
+    Rect a(Point(10, 10), Point(20, 20));
+    Rect b(Point(25, 25), Point(35, 35));
     EXPECT_THAT(is_intersected(a, b), Eq(false));
   }
 }
-
 
 // ={=========================================================================
 // algo-roman-numeric
@@ -3164,7 +3127,7 @@ TEST(AlgoIntersect, Intersected)
 //  1000    : M
 //
 // 2. As itoa(), use loop, %, and / to get a digit to convert:
-//  
+//
 //      tens    2   1   0
 //              X   X   X
 //      digit   D   D   D
@@ -3242,136 +3205,148 @@ namespace algo_roman
 {
   class RomanConvert
   {
-    public:
+  public:
+    // 1. tried to use input/output string arg like
+    //
+    //      void convert(uint32_t, std::string &)
+    //
+    // and use public string member in the fixture class.
+    // However, since there are many asserts in a test, have to reset
+    // this string member before using the next assert. dropped.
+    //
+    // 2. uses one single string and add at the front whenever converted a
+    // letter. By this, no need to reverse the result as itoa() does but
+    // there will be a downside; relocation and performance. Howerver, since
+    // it is not a long string, do not think they matter here.
 
-      // 1. tried to use input/output string arg like 
-      //
-      //      void convert(uint32_t, std::string &)
-      //
-      // and use public string member in the fixture class.
-      // However, since there are many asserts in a test, have to reset
-      // this string member before using the next assert. dropped.
-      //
-      // 2. uses one single string and add at the front whenever converted a
-      // letter. By this, no need to reverse the result as itoa() does but
-      // there will be a downside; relocation and performance. Howerver, since
-      // it is not a long string, do not think they matter here. 
+    std::string convert(uint32_t number) const
+    {
+      std::string converted;
+      uint32_t tens{0}, digit{0};
 
-      std::string convert(uint32_t number) const 
+      // for fixed roman letters
+      // the code works without this to cover fixed romans since the loop
+      // below will find it eventually. However, it uses a map already and
+      // may save some time.
+
+      auto it = roman_table.find(number);
+      if (it != roman_table.cend())
+        return it->second;
+
+      for (; number;)
       {
-        std::string converted;
-        uint32_t tens{0}, digit{0};
+        digit = number % 10;
 
-        // for fixed roman letters
-        // the code works without this to cover fixed romans since the loop
-        // below will find it eventually. However, it uses a map already and
-        // may save some time.
-
-        auto it = roman_table.find(number);
-        if (it != roman_table.cend())
-          return it->second;
-
-        for (; number;)
+        if (digit < 4)
         {
-          digit = number % 10;
-
-          if (digit < 4)
-          {
-            padWithFoundRoman(digit, tens, 0, converted);
-          }
-          else if (digit > 5 && digit < 9)
-          {
-            padWithFoundRoman(digit, tens, 5, converted);
-          }
-          else if (!(digit % 5))
-          {
-            findFiveBaseRoman(digit, tens, converted);
-          }
-          else if (digit == 4 || digit == 9)
-          {
-            findSubstractRoman(digit, tens, converted);
-          }
-
-          ++tens;
-
-          number /= 10;
+          padWithFoundRoman(digit, tens, 0, converted);
+        }
+        else if (digit > 5 && digit < 9)
+        {
+          padWithFoundRoman(digit, tens, 5, converted);
+        }
+        else if (!(digit % 5))
+        {
+          findFiveBaseRoman(digit, tens, converted);
+        }
+        else if (digit == 4 || digit == 9)
+        {
+          findSubstractRoman(digit, tens, converted);
         }
 
-        return converted;
+        ++tens;
+
+        number /= 10;
       }
 
-    private:
-      const std::map<uint32_t, std::string> roman_table{
-        {0, ""},
-          {1, "I"}, {5, "V"},
-          {10, "X"}, {50, "L"},
-          {100, "C"}, {500, "D"},
-          {1000, "M"}
-      };
+      return converted;
+    }
 
-      void padWithFoundRoman(uint32_t number, uint32_t tens, uint32_t fixed, std::string &padded) const
-      {
-        std::string result;
+  private:
+    const std::map<uint32_t, std::string> roman_table{{0, ""},
+                                                      {1, "I"},
+                                                      {5, "V"},
+                                                      {10, "X"},
+                                                      {50, "L"},
+                                                      {100, "C"},
+                                                      {500, "D"},
+                                                      {1000, "M"}};
 
-        // find the letter to pad
-        auto it = roman_table.find( pow(10, tens) );
-        if ( it == roman_table.cend() )
-          std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+    void padWithFoundRoman(uint32_t number,
+                           uint32_t tens,
+                           uint32_t fixed,
+                           std::string &padded) const
+    {
+      std::string result;
 
-        std::string letter = it->second;
+      // find the letter to pad
+      auto it = roman_table.find(pow(10, tens));
+      if (it == roman_table.cend())
+        std::cout << "roman_table(" << pow(10, tens) << ") not found"
+                  << std::endl;
 
-        // find the base
-        it = roman_table.find( fixed*pow(10, tens) );
-        if ( it == roman_table.cend() )
-          std::cout << "roman_table(" << fixed*pow( 10, tens ) << ") not found" << std::endl;
+      std::string letter = it->second;
 
-        std::string base = it->second;
+      // find the base
+      it = roman_table.find(fixed * pow(10, tens));
+      if (it == roman_table.cend())
+        std::cout << "roman_table(" << fixed * pow(10, tens) << ") not found"
+                  << std::endl;
 
-        // add the base once
-        result += base;
+      std::string base = it->second;
 
-        // add the pad
-        for (uint32_t count = number - fixed; count; --count)
-          result += letter;
+      // add the base once
+      result += base;
 
-        padded.insert(0, result);
-      }
+      // add the pad
+      for (uint32_t count = number - fixed; count; --count)
+        result += letter;
 
-      void findSubstractRoman(uint32_t number, uint32_t tens, std::string &converted) const
-      {
-        std::string padded;
+      padded.insert(0, result);
+    }
 
-        // find the letter in substract form
-        auto it = roman_table.find( pow(10, tens) );
-        if ( it == roman_table.cend() )
-          std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+    void findSubstractRoman(uint32_t number,
+                            uint32_t tens,
+                            std::string &converted) const
+    {
+      std::string padded;
 
-        std::string letter = it->second;
+      // find the letter in substract form
+      auto it = roman_table.find(pow(10, tens));
+      if (it == roman_table.cend())
+        std::cout << "roman_table(" << pow(10, tens) << ") not found"
+                  << std::endl;
 
-        // find the base
-        it = roman_table.find( (number+1)*pow(10, tens) );
-        if ( it == roman_table.cend() )
-          std::cout << "roman_table(" << (number+1)*pow( 10, tens ) << ") not found" << std::endl;
+      std::string letter = it->second;
 
-        std::string base = it->second;
+      // find the base
+      it = roman_table.find((number + 1) * pow(10, tens));
+      if (it == roman_table.cend())
+        std::cout << "roman_table(" << (number + 1) * pow(10, tens)
+                  << ") not found" << std::endl;
 
-        converted.insert( 0, letter + base );
-      }
+      std::string base = it->second;
 
-      void findFiveBaseRoman(uint32_t number, uint32_t tens, std::string &converted) const
-      {
-        // find the letter in substract form
-        auto it = roman_table.find( number * pow(10, tens) );
-        if ( it == roman_table.cend() )
-          std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+      converted.insert(0, letter + base);
+    }
 
-        converted.insert( 0, it->second );
-      }
+    void findFiveBaseRoman(uint32_t number,
+                           uint32_t tens,
+                           std::string &converted) const
+    {
+      // find the letter in substract form
+      auto it = roman_table.find(number * pow(10, tens));
+      if (it == roman_table.cend())
+        std::cout << "roman_table(" << pow(10, tens) << ") not found"
+                  << std::endl;
+
+      converted.insert(0, it->second);
+    }
   };
 
-} // namespace
+} // namespace algo_roman
 
-TEST(AlgoRoman, ToRomans_1) 
+TEST(AlgoRoman, ToRomans_1)
 {
   using namespace algo_roman;
 
@@ -3415,10 +3390,9 @@ TEST(AlgoRoman, ToRomans_1)
   EXPECT_THAT(converter.convert(3447), Eq("MMMCDXLVII"));
 }
 
-
 namespace algo_roman
 {
-  string to_roman_2(unsigned int arabic) 
+  string to_roman_2(unsigned int arabic)
   {
     string convert{};
 
@@ -3428,26 +3402,24 @@ namespace algo_roman
     // 3. to fix a warning on signed int and unsigned int comparion, use "u"
     // suffix.
 
-    const auto lookup_table = {
-      make_pair(1000u, "M"),
-      make_pair(900u, "CM"),
-      // make_pair(600, "DC"),
-      make_pair(500u, "D"),
-      make_pair(400u, "CD"),
-      make_pair(100u, "C"),
-      //
-      make_pair(90u, "XC"),
-      // make_pair(60, "LX"),
-      make_pair(50u, "L"),
-      make_pair(40u, "XL"),
-      make_pair(10u, "X"),
-      //
-      make_pair(9u, "IX"),
-      // make_pair(6, "VI"),
-      make_pair(5u, "V"),
-      make_pair(4u, "IV"),
-      make_pair(1u, "I")
-    };
+    const auto lookup_table = {make_pair(1000u, "M"),
+                               make_pair(900u, "CM"),
+                               // make_pair(600, "DC"),
+                               make_pair(500u, "D"),
+                               make_pair(400u, "CD"),
+                               make_pair(100u, "C"),
+                               //
+                               make_pair(90u, "XC"),
+                               // make_pair(60, "LX"),
+                               make_pair(50u, "L"),
+                               make_pair(40u, "XL"),
+                               make_pair(10u, "X"),
+                               //
+                               make_pair(9u, "IX"),
+                               // make_pair(6, "VI"),
+                               make_pair(5u, "V"),
+                               make_pair(4u, "IV"),
+                               make_pair(1u, "I")};
 
     for (const auto e : lookup_table)
     {
@@ -3463,12 +3435,11 @@ namespace algo_roman
     return convert;
   }
 
-} // namespace
-
+} // namespace algo_roman
 
 // from TDD book
 
-TEST(AlgoRoman, ToRomans_2) 
+TEST(AlgoRoman, ToRomans_2)
 {
   using namespace algo_roman;
 
@@ -3514,21 +3485,37 @@ namespace algo_roman
 {
   const string to_roman_3(unsigned int value)
   {
-    const auto roman_table{
-      make_pair(1000u, "M"),
-        make_pair(900u, "CM"),
-        make_pair(500u, "D"),
-        make_pair(400u, "CD"),
-        make_pair(100u, "C"),
-        make_pair(90u, "XC"),
-        make_pair(50u, "L"),
-        make_pair(40u, "XL"),
-        make_pair(10u, "X"),
-        make_pair(9u, "IX"),
-        make_pair(5u, "V"),
-        make_pair(4u, "IV"),
-        make_pair(1u, "I")
-    };
+
+    // error: direct-list-initialization of ‘auto’ requires exactly one element [-fpermissive]
+    // const auto roman_table{
+    //   make_pair(1000u, "M"),
+    //     make_pair(900u, "CM"),
+    //     make_pair(500u, "D"),
+    //     make_pair(400u, "CD"),
+    //     make_pair(100u, "C"),
+    //     make_pair(90u, "XC"),
+    //     make_pair(50u, "L"),
+    //     make_pair(40u, "XL"),
+    //     make_pair(10u, "X"),
+    //     make_pair(9u, "IX"),
+    //     make_pair(5u, "V"),
+    //     make_pair(4u, "IV"),
+    //     make_pair(1u, "I")
+    // };
+
+    const auto roman_table = {make_pair(1000u, "M"),
+                              make_pair(900u, "CM"),
+                              make_pair(500u, "D"),
+                              make_pair(400u, "CD"),
+                              make_pair(100u, "C"),
+                              make_pair(90u, "XC"),
+                              make_pair(50u, "L"),
+                              make_pair(40u, "XL"),
+                              make_pair(10u, "X"),
+                              make_pair(9u, "IX"),
+                              make_pair(5u, "V"),
+                              make_pair(4u, "IV"),
+                              make_pair(1u, "I")};
 
     string result{};
 
@@ -3549,21 +3536,19 @@ namespace algo_roman
   // 2018
   const string to_roman_4(unsigned int value)
   {
-    const initializer_list<pair<unsigned int, string>> roman_table{
-      {1000u, "M"},
-        {900u, "CM"},
-        {500u, "D"},
-        {400u, "CD"},
-        {100u, "C"},
-        {90u, "XC"},
-        {50u, "L"},
-        {40u, "XL"},
-        {10u, "X"},
-        {9u, "IX"},
-        {5u, "V"},
-        {4u, "IV"},
-        {1u, "I"}
-    };
+    const initializer_list<pair<unsigned int, string>> roman_table{{1000u, "M"},
+                                                                   {900u, "CM"},
+                                                                   {500u, "D"},
+                                                                   {400u, "CD"},
+                                                                   {100u, "C"},
+                                                                   {90u, "XC"},
+                                                                   {50u, "L"},
+                                                                   {40u, "XL"},
+                                                                   {10u, "X"},
+                                                                   {9u, "IX"},
+                                                                   {5u, "V"},
+                                                                   {4u, "IV"},
+                                                                   {1u, "I"}};
 
     string result{};
 
@@ -3581,9 +3566,9 @@ namespace algo_roman
     return result;
   }
 
-} // namespace
+} // namespace algo_roman
 
-TEST(AlgoRoman, ToRomans_3) 
+TEST(AlgoRoman, ToRomans_3)
 {
   using namespace algo_roman;
 
@@ -3686,28 +3671,27 @@ namespace algo_roman
     // start position and string size. contine doing so until there is no match
     // and if there is no match, move on to the next char.
 
-    const initializer_list<pair<std::string, int>> table = {
-      {"M", 1000},
-      {"CM", 900},
-      {"D", 500},
-      {"CD", 400},
-      {"C", 100},
-      {"XC", 90},
-      {"L", 50},
-      {"XL", 40},
-      {"X", 10},
-      {"IX", 9},
-      {"V", 5},
-      {"IV", 4},
-      {"I", 1}
-    };
+    const initializer_list<pair<std::string, int>> table = {{"M", 1000},
+                                                            {"CM", 900},
+                                                            {"D", 500},
+                                                            {"CD", 400},
+                                                            {"C", 100},
+                                                            {"XC", 90},
+                                                            {"L", 50},
+                                                            {"XL", 40},
+                                                            {"X", 10},
+                                                            {"IX", 9},
+                                                            {"V", 5},
+                                                            {"IV", 4},
+                                                            {"I", 1}};
 
     size_t run{};
     int result{};
 
-    for (const auto& e : table)
+    for (const auto &e : table)
     {
-      while ((run < input.size()) && (input.substr(run, e.first.size()) == e.first))
+      while ((run < input.size()) &&
+             (input.substr(run, e.first.size()) == e.first))
       {
         // cout << "first: " << e.first << endl;
         result += e.second;
@@ -3721,21 +3705,34 @@ namespace algo_roman
 
   int to_integer_2(std::string input)
   {
-    const auto table{
-      make_pair(string("M"), 1000),
-      make_pair(string("CM"), 900),
-      make_pair(string("D"), 500),
-      make_pair(string("CD"), 400),
-      make_pair(string("C"), 100),
-      make_pair(string("XC"), 90),
-      make_pair(string("L"), 50),
-      make_pair(string("XL"), 40),
-      make_pair(string("X"), 10),
-      make_pair(string("IX"), 9),
-      make_pair(string("V"), 5),
-      make_pair(string("IV"), 4),
-      make_pair(string("I"), 1)
-    };
+    // error: direct-list-initialization of ‘auto’ requires exactly one element [-fpermissive]
+    // const auto table{make_pair(string("M"), 1000),
+    //                  make_pair(string("CM"), 900),
+    //                  make_pair(string("D"), 500),
+    //                  make_pair(string("CD"), 400),
+    //                  make_pair(string("C"), 100),
+    //                  make_pair(string("XC"), 90),
+    //                  make_pair(string("L"), 50),
+    //                  make_pair(string("XL"), 40),
+    //                  make_pair(string("X"), 10),
+    //                  make_pair(string("IX"), 9),
+    //                  make_pair(string("V"), 5),
+    //                  make_pair(string("IV"), 4),
+    //                  make_pair(string("I"), 1)};
+
+    const auto table = {make_pair(string("M"), 1000),
+                     make_pair(string("CM"), 900),
+                     make_pair(string("D"), 500),
+                     make_pair(string("CD"), 400),
+                     make_pair(string("C"), 100),
+                     make_pair(string("XC"), 90),
+                     make_pair(string("L"), 50),
+                     make_pair(string("XL"), 40),
+                     make_pair(string("X"), 10),
+                     make_pair(string("IX"), 9),
+                     make_pair(string("V"), 5),
+                     make_pair(string("IV"), 4),
+                     make_pair(string("I"), 1)};
 
     int result{};
     size_t start{};
@@ -3751,8 +3748,7 @@ namespace algo_roman
 
     return result;
   }
-} // namespace
-
+} // namespace algo_roman
 
 TEST(AlgoRoman, ToInteger)
 {
@@ -3841,7 +3837,6 @@ TEST(AlgoRoman, ToInteger)
   }
 }
 
-
 // ={=========================================================================
 // algo-recursion-hanoi
 
@@ -3851,15 +3846,15 @@ namespace algo_recursion_hanoi
 
   void print_depth(bool dash, unsigned int depth)
   {
-    for( unsigned int i=0; i <= depth; ++i)
+    for (unsigned int i = 0; i <= depth; ++i)
     {
-      if(dash)
+      if (dash)
         cout << "--";
       else
         cout << "  ";
     }
 
-    if(dash)
+    if (dash)
       cout << "(" << depth << ") ";
     else
       cout << "      ";
@@ -3871,27 +3866,30 @@ namespace algo_recursion_hanoi
     ++recursion_depth;
     print_depth(true, recursion_depth);
 
-    cout << "Move(" << count << "," << start << "," << finish << "," << temp << ")" << endl;
+    cout << "Move(" << count << "," << start << "," << finish << "," << temp
+         << ")" << endl;
 
     if (count > 0)
     {
-      move_disk(count-1, start, temp, finish);
+      move_disk(count - 1, start, temp, finish);
 
       print_depth(false, recursion_depth);
-      cout << "move " << count << " disk, " << start << " -> " << finish << endl;
+      cout << "move " << count << " disk, " << start << " -> " << finish
+           << endl;
 
-      move_disk(count-1, temp, finish, start);
+      move_disk(count - 1, temp, finish, start);
     }
     else
     {
       print_depth(false, recursion_depth);
-      cout << "move " << count << " disk, " << start << " -> " << finish << endl;
+      cout << "move " << count << " disk, " << start << " -> " << finish
+           << endl;
     }
 
     --recursion_depth;
   }
 
-} // namespace
+} // namespace algo_recursion_hanoi
 
 // disks are 0, 1, 2, 3
 //
@@ -3932,7 +3930,7 @@ namespace algo_recursion_hanoi
 //                 move 0 disk, 2 -> 3
 // [       OK ] AlgoRecursion.Hanoi (3 ms)
 
-TEST(AlgoRecursion, Hanoi) 
+TEST(AlgoRecursion, Hanoi)
 {
   using namespace algo_recursion_hanoi;
 
@@ -3940,7 +3938,6 @@ TEST(AlgoRecursion, Hanoi)
 
   move_disk(DISKS, 1, 3, 2);
 }
-
 
 // ={=========================================================================
 // algo-recursion-fibonacci
@@ -3956,13 +3953,13 @@ namespace algo_recursion_fibonacci
     else if (n == 1)
       return 1;
     else
-      return fibonacci_1(n-1) + fibonacci_1(n-2);
+      return fibonacci_1(n - 1) + fibonacci_1(n - 2);
   }
 
   int fibonacci_2(int n)
   {
-    int twoback{};  // f(n-2)
-    int oneback{};  // f(n-1)
+    int twoback{}; // f(n-2)
+    int oneback{}; // f(n-1)
     int current{};
 
     if (n <= 0)
@@ -3988,9 +3985,9 @@ namespace algo_recursion_fibonacci
     return current;
   }
 
-} // namespace
+} // namespace algo_recursion_fibonacci
 
-TEST(AlgoRecursion, Fibonacci) 
+TEST(AlgoRecursion, Fibonacci)
 {
   using namespace algo_recursion_fibonacci;
 
@@ -4004,7 +4001,6 @@ TEST(AlgoRecursion, Fibonacci)
   EXPECT_THAT(fibonacci_2(6), 8);
   EXPECT_THAT(fibonacci_2(7), 13);
 }
-
 
 // algo-leetcode-18
 /*
@@ -4063,7 +4059,7 @@ return 1 means found and return 0 means not found.
 
 Space complexity : O(n) The depth of the recursion tree can go upto n.
 
-*/ 
+*/
 
 namespace leetcode_easy_018
 {
@@ -4077,11 +4073,8 @@ namespace leetcode_easy_018
     return climb_stairs(start + 1, end) + climb_stairs(start + 2, end);
   }
 
-  int climbStairs_1(int n) 
-  {
-    return climb_stairs(0, n);
-  }
-} // namespace
+  int climbStairs_1(int n) { return climb_stairs(0, n); }
+} // namespace leetcode_easy_018
 
 TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_1)
 {
@@ -4093,7 +4086,6 @@ TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_1)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
-
 
 /*
 Approach 2: Recursion with memoization
@@ -4132,19 +4124,20 @@ namespace leetcode_easy_018
       return 1;
     else if (start > end)
       return 0;
-    else if(memo[start])
+    else if (memo[start])
       return memo[start];
 
-    memo[start] = climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
+    memo[start] =
+      climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
     return memo[start];
   }
 
-  int climbStairs_2(int n) 
+  int climbStairs_2(int n)
   {
     vector<int> memo(n + 1, 0);
     return climb_stairs(0, n, memo);
   }
-} // namespace
+} // namespace leetcode_easy_018
 
 TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_2)
 {
@@ -4156,7 +4149,6 @@ TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_2)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
-
 
 /*
 Approach 3: Dynamic Programming
@@ -4231,28 +4223,31 @@ their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
 
 namespace leetcode_easy_018
 {
-  int climbStairs_3(int n) 
+  int climbStairs_3(int n)
   {
     // base cases
-    if(n <= 0) return 0;
-    if(n == 1) return 1;
-    if(n == 2) return 2;
+    if (n <= 0)
+      return 0;
+    if (n == 1)
+      return 1;
+    if (n == 2)
+      return 2;
 
-    int one_step_before = 2;    // when n == 2
-    int two_steps_before = 1;   // when n == 1
-    int all_ways = 0;
+    int one_step_before  = 2; // when n == 2
+    int two_steps_before = 1; // when n == 1
+    int all_ways         = 0;
 
     // starts from n == 3
-    for(int i=3; i <= n; i++)
+    for (int i = 3; i <= n; i++)
     {
-      all_ways = one_step_before + two_steps_before;
+      all_ways         = one_step_before + two_steps_before;
       two_steps_before = one_step_before;
-      one_step_before = all_ways;
+      one_step_before  = all_ways;
     }
 
     return all_ways;
   };
-} // namespace
+} // namespace leetcode_easy_018
 
 TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_3)
 {
@@ -4265,7 +4260,6 @@ TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_3)
   EXPECT_THAT(func(30), 1346269);
 }
 
-
 // ={=========================================================================
 // algo-recursion-factorial
 
@@ -4276,7 +4270,7 @@ namespace algo_recursion_factorial
   {
     // CodeComplete 440, #19
     if (value > 1)
-      return factorial_1(value-1)*value;
+      return factorial_1(value - 1) * value;
 
     return 1;
   }
@@ -4309,13 +4303,12 @@ namespace algo_recursion_factorial
 
     return result;
   }
-} // namespace
-
+} // namespace algo_recursion_factorial
 
 // not good idea to use factorial to see performance difference due to tail
 // recursion since number gets bigger quickly
 
-TEST(AlgoRecursion, Factorial) 
+TEST(AlgoRecursion, Factorial)
 {
   using namespace algo_recursion_factorial;
 
@@ -4328,13 +4321,12 @@ TEST(AlgoRecursion, Factorial)
   EXPECT_THAT(factorial_3(5), 120);
 }
 
-
 // ={=========================================================================
 // algo-recursion-maze algo-maze
 
 using MazePoint = std::pair<int, int>;
 
-// 1. input and point(row, col) which is the same as point(y, x) but 
+// 1. input and point(row, col) which is the same as point(y, x) but
 // not point(x, y). This has to do with array access.
 //
 // 2. If it's valid point which are not checked against to traveled points, call
@@ -4349,7 +4341,7 @@ using MazePoint = std::pair<int, int>;
 // 3. To support range from (1,1) to (N,N), used padding to the input data:
 //
 // {2,2,2,2,2,2},
-// {2,0,0,0,0,0}, 
+// {2,0,0,0,0,0},
 // {2,1,1,1,1,0},
 // {2,0,0,0,0,0},
 // {2,0,1,1,1,1},
@@ -4414,7 +4406,6 @@ using MazePoint = std::pair<int, int>;
 //    6.708 ms [ 10578] |   } /* find_path */
 //    7.233 ms [ 10578] | } /* find_path */
 
-
 struct Maze
 {
   std::vector<std::vector<int>> input;
@@ -4429,7 +4420,9 @@ struct Maze
   std::vector<MazePoint> path_points{};
 
   Maze(int row, int col)
-    : row_(row), col_(col) {}
+      : row_(row)
+      , col_(col)
+  {}
 
   bool AlreadyTried(MazePoint position)
   {
@@ -4438,7 +4431,7 @@ struct Maze
 
   bool FoundTheExit(MazePoint position)
   {
-    return position == MazePoint(row_-1, col_-1) ? true : false;
+    return position == MazePoint(row_ - 1, col_ - 1) ? true : false;
   }
 
   void RememberPosition(MazePoint position)
@@ -4447,7 +4440,8 @@ struct Maze
     if (!result.second)
     {
       cout << "RememberPosition: founds duplicates" << endl;
-      cout << "RememberPosition: (" << position.first << ", " << position.second << ")" << endl;
+      cout << "RememberPosition: (" << position.first << ", " << position.second
+           << ")" << endl;
       PRINT_M_ELEMENTS(visited_points);
     }
   }
@@ -4455,13 +4449,13 @@ struct Maze
   // if cannot move, return the input position
   MazePoint GetPositionToMoveLeft(MazePoint position)
   {
-    MazePoint point_to_move{position.first, position.second-1};
+    MazePoint point_to_move{position.first, position.second - 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4469,13 +4463,13 @@ struct Maze
 
   MazePoint GetPositionToMoveRight(MazePoint position)
   {
-    MazePoint point_to_move{position.first, position.second+1};
+    MazePoint point_to_move{position.first, position.second + 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4483,13 +4477,13 @@ struct Maze
 
   MazePoint GetPositionToMoveUp(MazePoint position)
   {
-    MazePoint point_to_move{position.first-1, position.second};
+    MazePoint point_to_move{position.first - 1, position.second};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4497,13 +4491,13 @@ struct Maze
 
   MazePoint GetPositionToMoveDown(MazePoint position)
   {
-    MazePoint point_to_move{position.first+1, position.second};
+    MazePoint point_to_move{position.first + 1, position.second};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4511,13 +4505,13 @@ struct Maze
 
   MazePoint GetPositionToDiagRightUp(MazePoint position)
   {
-    MazePoint point_to_move{position.first-1, position.second+1};
+    MazePoint point_to_move{position.first - 1, position.second + 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4525,13 +4519,13 @@ struct Maze
 
   MazePoint GetPositionToDiagRightDown(MazePoint position)
   {
-    MazePoint point_to_move{position.first+1, position.second+1};
+    MazePoint point_to_move{position.first + 1, position.second + 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4539,13 +4533,13 @@ struct Maze
 
   MazePoint GetPositionToDiagLeftUp(MazePoint position)
   {
-    MazePoint point_to_move{position.first-1, position.second-1};
+    MazePoint point_to_move{position.first - 1, position.second - 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
@@ -4553,26 +4547,24 @@ struct Maze
 
   MazePoint GetPositionToDiagLeftDown(MazePoint position)
   {
-    MazePoint point_to_move{position.first+1, position.second-1};
+    MazePoint point_to_move{position.first + 1, position.second - 1};
 
     if (ValidMazePoint(point_to_move))
     {
       return point_to_move;
     }
-    else 
+    else
     {
       return position;
     }
   }
 
-  private:
-
+private:
   bool ValidMazePoint(MazePoint position)
   {
     if ((0 <= position.first && position.first < row_) &&
         (0 <= position.second && position.second < col_) &&
-        input[position.first][position.second] != 1
-       )
+        input[position.first][position.second] != 1)
     {
       return true;
     }
@@ -4586,8 +4578,7 @@ struct Maze
   int col_{};
 };
 
-
-// To use uftrace log, changed it from 
+// To use uftrace log, changed it from
 // bool find_path(Maze &maze, MazePoint position)
 
 bool find_path(Maze &maze, int row, int col)
@@ -4595,7 +4586,7 @@ bool find_path(Maze &maze, int row, int col)
   MazePoint position{row, col};
 
   // to prevent circular path and going backwards and this make it search
-  // forward. 
+  // forward.
   if (maze.AlreadyTried(position))
   {
     return false;
@@ -4664,7 +4655,7 @@ bool find_path(Maze &maze, int row, int col)
     }
   }
 
-  // diag right up 
+  // diag right up
   if ((new_position = maze.GetPositionToDiagRightUp(position)) != position)
   {
     // cout << "dru:(" << new_position.first << ", " << new_position.second << ")" << endl;
@@ -4677,7 +4668,7 @@ bool find_path(Maze &maze, int row, int col)
     }
   }
 
-  // diag right down 
+  // diag right down
   if ((new_position = maze.GetPositionToDiagRightDown(position)) != position)
   {
     // cout << "drd:(" << new_position.first << ", " << new_position.second << ")" << endl;
@@ -4690,7 +4681,7 @@ bool find_path(Maze &maze, int row, int col)
     }
   }
 
-  // diag left up 
+  // diag left up
   if ((new_position = maze.GetPositionToDiagLeftUp(position)) != position)
   {
     // cout << "dlu:(" << new_position.first << ", " << new_position.second << ")" << endl;
@@ -4703,7 +4694,7 @@ bool find_path(Maze &maze, int row, int col)
     }
   }
 
-  // diag left down 
+  // diag left down
   if ((new_position = maze.GetPositionToDiagLeftDown(position)) != position)
   {
     // cout << "dld:(" << new_position.first << ", " << new_position.second << ")" << endl;
@@ -4722,13 +4713,11 @@ bool find_path(Maze &maze, int row, int col)
 TEST(AlgoMaze, ExerciseInterfaces)
 {
   Maze maze(5, 5);
-  maze.input = {
-    {0,0,0,0,0},
-    {1,1,1,1,0},
-    {0,0,0,0,0},
-    {0,1,1,1,1},
-    {2,0,0,0,0}
-  };
+  maze.input = {{0, 0, 0, 0, 0},
+                {1, 1, 1, 1, 0},
+                {0, 0, 0, 0, 0},
+                {0, 1, 1, 1, 1},
+                {2, 0, 0, 0, 0}};
 
   maze.RememberPosition(MazePoint(1, 1));
   maze.RememberPosition(MazePoint(1, 2));
@@ -4749,13 +4738,11 @@ TEST(AlgoMaze, ExerciseInterfaces)
 TEST(DISABLED_AlgoMaze, Array5x5)
 {
   Maze maze(5, 5);
-  maze.input = {
-    {0,0,0,0,0},
-    {1,1,1,1,0},
-    {0,0,0,0,0},
-    {0,1,1,1,1},
-    {2,0,0,0,0}
-  };
+  maze.input = {{0, 0, 0, 0, 0},
+                {1, 1, 1, 1, 0},
+                {0, 0, 0, 0, 0},
+                {0, 1, 1, 1, 1},
+                {2, 0, 0, 0, 0}};
 
   // use start point (0, 0) rather then (1, 1).
   find_path(maze, 0, 0);
@@ -4781,19 +4768,17 @@ TEST(AlgoMaze, Array10x10)
   // };
 
   Maze maze(10, 10);
-  maze.input = {
-    {0,1,0,1,0,1,0,0,0,1},
-    {0,1,0,1,0,1,1,1,0,1},
-    {0,0,0,0,0,1,0,0,0,1},
-    {0,1,0,1,1,1,0,1,1,1},
-    {0,1,2,1,0,0,0,0,0,1},
-    {1,1,0,1,0,1,1,1,1,1},
-    {0,1,0,0,0,0,0,1,0,1},
-    {0,1,1,1,0,1,1,1,0,1},
-    {0,0,0,0,0,0,0,0,0,1},
-    {1,1,1,1,1,1,1,1,1,0}
-  };
- 
+  maze.input = {{0, 1, 0, 1, 0, 1, 0, 0, 0, 1},
+                {0, 1, 0, 1, 0, 1, 1, 1, 0, 1},
+                {0, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+                {0, 1, 0, 1, 1, 1, 0, 1, 1, 1},
+                {0, 1, 2, 1, 0, 0, 0, 0, 0, 1},
+                {1, 1, 0, 1, 0, 1, 1, 1, 1, 1},
+                {0, 1, 0, 0, 0, 0, 0, 1, 0, 1},
+                {0, 1, 1, 1, 0, 1, 1, 1, 0, 1},
+                {0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+                {1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+
   find_path(maze, 0, 0);
   PRINT_M_ELEMENTS(maze.path_points);
 }
@@ -4801,24 +4786,22 @@ TEST(AlgoMaze, Array10x10)
 TEST(DISABLED_AlgoMaze, Array15x15)
 {
   Maze maze(15, 15);
-  maze.input = {
-    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},  
-    {0,1,0,1,0,0,0,1,0,1,0,1,0,1,0},
-    {0,1,0,0,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,0,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
-    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-    {2,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
-  };
- 
+  maze.input = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+                {0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+                {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+                {2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+
   find_path(maze, 0, 0);
   PRINT_M_ELEMENTS(maze.path_points);
 }
@@ -4833,38 +4816,35 @@ TEST(DISABLED_AlgoMaze, Array15x15)
 // * changed the end condition to see if the traveled path has the "2". if not
 // return false so that can try other paths.
 
-
 TEST(DISABLED_AlgoMaze, Array20x20)
 {
   Maze maze(20, 20);
   maze.input = {
 
-    {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}, 
-    {0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
-    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,1},
-    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1},
-    {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1},
-    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1},
-    {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1},
-    {0,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1},
-    {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1},
-    {0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1},
-    {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1},
-    {0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1},
-    {0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
-    {0,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1},
-    {0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
-    {0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
-    {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
-    {0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
-    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0}
-  };
- 
+    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+    {0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+
   find_path(maze, 0, 0);
   PRINT_M_ELEMENTS(maze.path_points);
 }
-
 
 // ={=========================================================================
 // algo-count-bits count same bits between two integers
@@ -4875,17 +4855,16 @@ TEST(DISABLED_AlgoMaze, Array20x20)
 // Ans = 2 because only counts bit positions which are valid position in both
 // integers.
 //
-// From ansic, p50. 
-// The function counts the number of 1 bits in its integer argument. 
+// From ansic, p50.
+// The function counts the number of 1 bits in its integer argument.
 //
 // 1. The key is not to use sizeof operator
 // 2. unsigned int
 //
 // *cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
-// guaranteed 0 values. 
+// guaranteed 0 values.
 //
 // 3. use independent of type.
-
 
 /* 191. Number of 1 Bits, Easy
 
@@ -4980,14 +4959,14 @@ namespace algo_bit
   // a 'faster' version of bitcount.
   //
   // Answer:
-  // 
+  //
   // If x is odd, then (x-1) has the same bit representation as x except that the
   // rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
-  // 
+  //
   // x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
-  // 
+  //
   // If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
-  // 
+  //
   // x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
   //          ^ rightmost 1
   //
@@ -4995,7 +4974,7 @@ namespace algo_bit
   //           ^ rightmost 1
   //
   // x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
-  // 
+  //
   // 000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
   // 001   1
   // 010   2
@@ -5005,12 +4984,12 @@ namespace algo_bit
   // 110   6
   // 111   7
   // ...
-  // 
+  //
   // note: This is about careful observation but not a mechanism of borrowing a
   // carry for example. For both odd and even case, has the effect of having
   // rightmost 1 to 0. So clear 1 from x one by one and no need to check on if
   // to count bits.
-  // 
+  //
   // note: And(&) is faster than shift operation? Yes and also there is no `if`
   // in the loop.
 
@@ -5018,15 +4997,15 @@ namespace algo_bit
   {
     int count{};
 
-    for (; n; n &= (n-1))
+    for (; n; n &= (n - 1))
       count++;
 
     return count;
   }
 
-} // namespace
+} // namespace algo_bit
 
-TEST(AlgoBit, CountBits)
+TEST(AlgoBit, bit_CountBits)
 {
   using namespace algo_bit;
 
@@ -5034,40 +5013,52 @@ TEST(AlgoBit, CountBits)
     auto func = hammingWeight_1;
 
     // Input: 00000000000000000000000000001011, 11
-    EXPECT_THAT(func(11), 3); 
+    EXPECT_THAT(func(11), 3);
 
     // Input: 00000000000000000000000010000000, 128
-    EXPECT_THAT(func(128), 1); 
+    EXPECT_THAT(func(128), 1);
 
     // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(func(4294967293), 31); 
+    EXPECT_THAT(func(4294967293), 31);
   }
+
   {
     auto func = hammingWeight_2;
 
     // Input: 00000000000000000000000000001011, 11
-    EXPECT_THAT(func(11), 3); 
+    EXPECT_THAT(func(11), 3);
 
     // Input: 00000000000000000000000010000000, 128
-    EXPECT_THAT(func(128), 1); 
+    EXPECT_THAT(func(128), 1);
 
     // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(func(4294967293), 31); 
+    EXPECT_THAT(func(4294967293), 31);
   }
+
   {
     auto func = count_bit;
 
     // Input: 00000000000000000000000000001011, 11
-    EXPECT_THAT(func(11), 3); 
+    EXPECT_THAT(func(11), 3);
 
     // Input: 00000000000000000000000010000000, 128
-    EXPECT_THAT(func(128), 1); 
+    EXPECT_THAT(func(128), 1);
 
     // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(func(4294967293), 31); 
+    EXPECT_THAT(func(4294967293), 31);
+  }
+
+  {
+    // Input: 00000000000000000000000000001011, 11
+    EXPECT_THAT(__builtin_popcount(11), 3);
+
+    // Input: 00000000000000000000000010000000, 128
+    EXPECT_THAT(__builtin_popcount(128), 1);
+
+    // Input: 11111111111111111111111111111101, 4294967293
+    EXPECT_THAT(__builtin_popcount(4294967293), 31);
   }
 }
-
 
 namespace algo_bit
 {
@@ -5084,15 +5075,14 @@ namespace algo_bit
     uint32_t input = value;
 
     // do not need to check like: if (input &1) to increase count for every
-    // interation since when runs out 1, input becomes 0 and the loop ends. 
+    // interation since when runs out 1, input becomes 0 and the loop ends.
     for (; input != 0; input >>= 1)
       ++count;
 
     return count;
   }
 
-} // namespace
-
+} // namespace algo_bit
 
 TEST(AlgoBit, GetMSBPosition)
 {
@@ -5109,7 +5099,6 @@ TEST(AlgoBit, GetMSBPosition)
   EXPECT_THAT(count_bit(9), 2);
 }
 
-
 namespace algo_bit
 {
   // 2018.0619
@@ -5124,7 +5113,7 @@ namespace algo_bit
     unsigned int max = input.second;
 
     // get position of the pivot
-    unsigned int num_of_bits = sizeof(min)*8;
+    unsigned int num_of_bits = sizeof(min) * 8;
     unsigned int pos_of_msb{};
     unsigned int pivot = min;
 
@@ -5144,7 +5133,7 @@ namespace algo_bit
 
     // max = max & mask_value;
 
-    unsigned int calculated_input = max^min;
+    unsigned int calculated_input = max ^ min;
 
     // get num of common bits
     unsigned int num_of_common_bits{};
@@ -5176,7 +5165,7 @@ namespace algo_bit
     for (; min; min >>= 1, max >>= 1)
     {
       // same bit, 0 or 1 between two numbers
-      if ((min & 0x1) == (max &0x1u))
+      if ((min & 0x1) == (max & 0x1u))
         ++num_of_common_bits;
     }
 
@@ -5197,7 +5186,7 @@ namespace algo_bit
     return count;
   }
 
-} // namespce
+} // namespace algo_bit
 
 TEST(AlgoBit, CommonBits)
 {
@@ -5214,7 +5203,7 @@ TEST(AlgoBit, CommonBits)
     // 55 = 100111,  mask, 7 (0111),   max, 7(0111)
     //                                    5,    101
     //                                  xor, 2( 010)
-    //                                  ans, 2 
+    //                                  ans, 2
     EXPECT_THAT(count_bits_18_0717(55, 5), 2);
   }
   {
@@ -5223,7 +5212,6 @@ TEST(AlgoBit, CommonBits)
     EXPECT_THAT(func(55, 5), 2);
   }
 }
-
 
 // ={=========================================================================
 // algo-reverse-bit
@@ -5271,9 +5259,9 @@ namespace algo_bit
   // Memory Usage: 8 MB, less than 79.46% of C++ online submissions for Reverse
   // Bits.
 
-  uint32_t reverseBits(uint32_t n) 
+  uint32_t reverseBits(uint32_t n)
   {
-    // abcdefgh -> efghabcd 
+    // abcdefgh -> efghabcd
     n = (n >> 16) | (n << 16);
 
     // efghabcd -> ghefcdab
@@ -5289,7 +5277,7 @@ namespace algo_bit
     return n;
   }
 
-} // namespace
+} // namespace algo_bit
 
 TEST(AlgoBit, ReverseBits)
 {
@@ -5298,7 +5286,6 @@ TEST(AlgoBit, ReverseBits)
   EXPECT_THAT(reverseBits(43261596), 964176192);
   EXPECT_THAT(reverseBits(4294967293), 3221225471);
 }
-
 
 // ={=========================================================================
 // algo-equi
@@ -5318,7 +5305,7 @@ namespace algo_equi
       for (start = 0; start < index; ++start)
         left_sum += A[start];
 
-      for (start = index+1; start < n; ++start)
+      for (start = index + 1; start < n; ++start)
         right_sum += A[start];
 
       if (left_sum == right_sum)
@@ -5343,8 +5330,8 @@ namespace algo_equi
 
     for (index = 0; index < n; ++index)
     {
-      if (index-1 >= 0)
-        left_sum += A[index-1];
+      if (index - 1 >= 0)
+        left_sum += A[index - 1];
 
       right_sum = total_sum - left_sum - A[index];
 
@@ -5384,23 +5371,23 @@ namespace algo_equi
     return -1;
   }
 
-  // do not use total_sum variable since rsum is total 
+  // do not use total_sum variable since rsum is total
 
-  int equi_4( int A[], int n )
+  int equi_4(int A[], int n)
   {
-    if( !n || !A )
+    if (!n || !A)
       return -1;
 
     long long rsum = 0, lsum = 0;
 
-    for(int i=0; i<n; i++)
+    for (int i = 0; i < n; i++)
       rsum += A[i];
 
-    for(int i=0; i<n; i++)
+    for (int i = 0; i < n; i++)
     {
       rsum -= A[i];
 
-      if( lsum == rsum )
+      if (lsum == rsum)
         return i;
 
       lsum += A[i];
@@ -5409,7 +5396,7 @@ namespace algo_equi
     return -1;
   }
 
-} // namespace
+} // namespace algo_equi
 
 TEST(AlgoEquilbrium, Equi)
 {
@@ -5435,7 +5422,6 @@ TEST(AlgoEquilbrium, Equi)
   }
 }
 
-
 // ={=========================================================================
 // algo-equi-tape
 
@@ -5448,9 +5434,9 @@ namespace algo_equi
     long long right_sum{}, left_sum{};
 
     for (unsigned int i = 0; i < A.size(); ++i)
-      right_sum += A[i]; 
+      right_sum += A[i];
 
-    for (unsigned int i = 0; i < A.size()-1; ++i)
+    for (unsigned int i = 0; i < A.size() - 1; ++i)
     {
       left_sum += A[i];
       right_sum -= A[i];
@@ -5465,30 +5451,29 @@ namespace algo_equi
     return saved_diff;
   }
 
-
   int equi_tape_2(vector<int> &A)
   {
-    if(!A.size())
+    if (!A.size())
       return -1;
 
     // note:
     long long tsum = 0;
 
     // size N, [0, N-1]
-    for(unsigned int i=0; i < A.size(); i++)
+    for (unsigned int i = 0; i < A.size(); i++)
       tsum += A[i];
 
     long long rsum = 0, lsum = 0;
     int runabs = INT_MAX, curabs = 0;
 
-    for(unsigned int i=0; i < A.size()-1; i++)
+    for (unsigned int i = 0; i < A.size() - 1; i++)
     {
       lsum += A[i];
       rsum = tsum - lsum;
 
-      curabs = abs(lsum-rsum);
+      curabs = abs(lsum - rsum);
 
-      if(runabs > curabs)
+      if (runabs > curabs)
         runabs = curabs;
     }
 
@@ -5497,28 +5482,28 @@ namespace algo_equi
 
   int equi_tape_3(vector<int> &A)
   {
-    if(!A.size())
+    if (!A.size())
       return -1;
 
     // note:
     long long rsum = 0;
 
     // size N, [0, N-1]
-    for(unsigned int i=0; i < A.size(); i++)
+    for (unsigned int i = 0; i < A.size(); i++)
       rsum += A[i];
 
     long long lsum = 0;
     int runabs = INT_MAX, curabs = 0;
 
     // [0, N-2] since no need to process the last element
-    for(unsigned int i=0; i < A.size()-1; i++)
+    for (unsigned int i = 0; i < A.size() - 1; i++)
     {
       lsum += A[i];
       rsum -= A[i];
 
-      curabs = abs(lsum-rsum);
+      curabs = abs(lsum - rsum);
 
-      if(runabs > curabs)
+      if (runabs > curabs)
         runabs = curabs;
     }
 
@@ -5527,29 +5512,29 @@ namespace algo_equi
 
   // model answer
 
-  int equi_tape_4(vector<int> &A) 
+  int equi_tape_4(vector<int> &A)
   {
     // write your code in C++98
-    if( !A.size() )
+    if (!A.size())
       return -1;
 
     long long sum = 0, rsum = 0, lsum = 0;
     int cmin = INT_MAX;
 
-    for(size_t i=0; i<A.size(); i++)
+    for (size_t i = 0; i < A.size(); i++)
       sum += A[i];
 
     lsum = A[0];
 
-    // note: 
+    // note:
     // it is okay to use (n-1)th to calc lsum since not used anyway. WHY?
-    for(size_t i=1; i<A.size(); i++)
+    for (size_t i = 1; i < A.size(); i++)
     {
       rsum = sum - lsum;
 
       // cmin = abs cause warning of possible loss since assign from long long to int.
-      if( abs(lsum-rsum) < cmin )
-        cmin = abs(lsum-rsum);
+      if (abs(lsum - rsum) < cmin)
+        cmin = abs(lsum - rsum);
 
       lsum += A[i];
     }
@@ -5557,7 +5542,7 @@ namespace algo_equi
     return cmin;
   }
 
-} // namespace
+} // namespace algo_equi
 
 TEST(AlgoEquilbrium, EquiTape)
 {
@@ -5571,31 +5556,24 @@ TEST(AlgoEquilbrium, EquiTape)
   EXPECT_THAT(equi_tape_4(coll), 1);
 }
 
-
 // ={=========================================================================
 // algo-unique-distinct-count
 
 namespace algo_unique
 {
-  bool absLessThan(int a, int b)
-  {
-    return abs(a) < abs(b);
-  }
+  bool absLessThan(int a, int b) { return abs(a) < abs(b); }
 
-  bool absEqual(int a, int b)
-  {
-    return abs(a) == abs(b);
-  }
+  bool absEqual(int a, int b) { return abs(a) == abs(b); }
 
   int distinct_count_1(const vector<int> &A)
   {
-    if(!A.size())
+    if (!A.size())
       return -1;
 
     vector<int> ivec;
     int count = 0;
 
-    for(size_t i = 0; i < A.size(); ++i)
+    for (size_t i = 0; i < A.size(); ++i)
       ivec.push_back(A[i]);
 
     sort(ivec.begin(), ivec.end(), absLessThan);
@@ -5603,7 +5581,7 @@ namespace algo_unique
 
     auto it_begin = ivec.begin();
 
-    while( it_begin != it_end_unique )
+    while (it_begin != it_end_unique)
     {
       ++it_begin;
       ++count;
@@ -5612,17 +5590,18 @@ namespace algo_unique
     return count;
   }
 
-  int distinct_count_2(const vector<int> &A) {
+  int distinct_count_2(const vector<int> &A)
+  {
     // write your code in C++98
     int size = A.size();
 
-    if( !size )
+    if (!size)
       return -1;
 
     std::set<int> iset;
 
-    for( int i = 0; i <  size; i++ )
-      iset.insert( abs(A[i]) );
+    for (int i = 0; i < size; i++)
+      iset.insert(abs(A[i]));
 
     return iset.size();
   }
@@ -5637,7 +5616,7 @@ namespace algo_unique
     return coll.size();
   }
 
-} // namespace
+} // namespace algo_unique
 
 TEST(AlgoUnique, DistinctCount)
 {
@@ -5649,7 +5628,6 @@ TEST(AlgoUnique, DistinctCount)
   EXPECT_THAT(distinct_count_2(coll), 5);
   EXPECT_THAT(distinct_count_3(coll), 5);
 }
-
 
 // ={=========================================================================
 // algo-water-volume
@@ -5671,7 +5649,7 @@ namespace algo_water_volume
       {
         max_value = A[i];
         max_index = i;
-      } 
+      }
     }
 
     // from left to the max
@@ -5688,7 +5666,7 @@ namespace algo_water_volume
     // from right to the max
     max_current = std::numeric_limits<int>::min();
 
-    for (size_t i = A.size()-1; i > max_index; --i)
+    for (size_t i = A.size() - 1; i > max_index; --i)
     {
       if (max_current <= A[i])
         max_current = A[i];
@@ -5707,13 +5685,13 @@ namespace algo_water_volume
     int left_max{std::numeric_limits<int>::min()};
 
     size_t left_index{0};
-    size_t right_index{A.size()-1};
+    size_t right_index{A.size() - 1};
 
     size_t volume{};
 
     while (left_index < right_index)
     {
-      left_max = max(left_max, A[left_index]);
+      left_max  = max(left_max, A[left_index]);
       right_max = max(right_max, A[right_index]);
 
       // cout << "li: " << left_index << ", ri: " << right_index
@@ -5728,7 +5706,7 @@ namespace algo_water_volume
         if (A[left_index] < left_max)
         {
           volume += left_max - A[left_index];
-          // cout << "vol += " << left_max << " - " 
+          // cout << "vol += " << left_max << " - "
           //   << A[left_index] << endl;
         }
 
@@ -5741,9 +5719,9 @@ namespace algo_water_volume
         if (A[right_index] < right_max)
         {
           volume += right_max - A[right_index];
-          // cout << "vol += " << right_max << " - " 
+          // cout << "vol += " << right_max << " - "
           //   << A[right_index] << endl;
-        } 
+        }
 
         right_index--;
       }
@@ -5755,7 +5733,7 @@ namespace algo_water_volume
   int water_volume_3(vector<int> const &A)
   {
     size_t lindex{};
-    size_t rindex{A.size()-1};
+    size_t rindex{A.size() - 1};
     int lmax{};
     int rmax{};
     int volume{};
@@ -5778,24 +5756,24 @@ namespace algo_water_volume
 
     return volume;
   }
-} // namespace
+} // namespace algo_water_volume
 
 TEST(AlgoWaterVolume, TwoPass)
 {
   using namespace algo_water_volume;
 
-  auto func = water_volume_1; 
+  auto func = water_volume_1;
 
   {
-    vector<int> coll{2,5,1,2,3,4,7,7,6};
+    vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
     EXPECT_THAT(func(coll), 10);
   }
   {
-    vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+    vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
     EXPECT_THAT(func(coll), 17);
   }
   {
-    vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+    vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
     EXPECT_THAT(func(coll), 21);
   }
 }
@@ -5805,40 +5783,39 @@ TEST(AlgoWaterVolume, OnePass)
   using namespace algo_water_volume;
 
   {
-    auto func = water_volume_2; 
+    auto func = water_volume_2;
 
     {
-      vector<int> coll{2,5,1,2,3,4,7,7,6};
+      vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
       EXPECT_THAT(func(coll), 10);
     }
     {
-      vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+      vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
       EXPECT_THAT(func(coll), 17);
     }
     {
-      vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+      vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
       EXPECT_THAT(func(coll), 21);
     }
   }
 
   {
-    auto func = water_volume_3; 
+    auto func = water_volume_3;
 
     {
-      vector<int> coll{2,5,1,2,3,4,7,7,6};
+      vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
       EXPECT_THAT(func(coll), 10);
     }
     {
-      vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+      vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
       EXPECT_THAT(func(coll), 17);
     }
     {
-      vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+      vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
       EXPECT_THAT(func(coll), 21);
     }
   }
 }
-
 
 // ={=========================================================================
 // algo-frog-jump
@@ -5862,18 +5839,18 @@ namespace algo_frog_jump
 
   int frog_jump_2(int X, int Y, int D)
   {
-    int quotient = (Y-X)/D;
-    int remainder = (Y-X)%D;
+    int quotient  = (Y - X) / D;
+    int remainder = (Y - X) % D;
 
-    return remainder ? quotient+1 : quotient;
+    return remainder ? quotient + 1 : quotient;
   }
 
   // score: 100 of 100. Detected time complexity:O(1)
-  // 
+  //
   // X==Y : no jump
   // X<Y  : ----------------------
-  //         X         Y   D         
-  //         
+  //         X         Y   D
+  //
   //    (Y-X)/D == 0. needs one jump.
   //    (Y-X)/D > 0. needs more jump.
   //       -----------------------
@@ -5881,31 +5858,32 @@ namespace algo_frog_jump
   //              D   D
   //       (Y-X)%D == 0. fall exactly on Y.
   //       (Y-X)%D != 0. +1 jump.
-  // 
+  //
   // Lesson learned. Read the question carefully such as 'greater or equal', 'X <=
   // Y', and O(1).
 
   // There are three cases:
-  // 
+  //
   //                   Y    Y   Y
-  // -------------- | ----- | ----- | ---------------------- 
+  // -------------- | ----- | ----- | ----------------------
   //                       jumps == X + D*jump;
 
   // 2014.12
-  int frog_jump_3( int X, int Y, int D )
+  int frog_jump_3(int X, int Y, int D)
   {
-    if( X>Y || D==0 ) return -1;
+    if (X > Y || D == 0)
+      return -1;
 
-    int diff = (Y-X);
-    int jump = diff/D;
+    int diff = (Y - X);
+    int jump = diff / D;
 
-    if( (diff % D) == 0 )
+    if ((diff % D) == 0)
       return jump;
     else
-      return jump+1;
+      return jump + 1;
   }
 
-} // namespace
+} // namespace algo_frog_jump
 
 TEST(AlgoFrogJump, FrogJump)
 {
@@ -5921,15 +5899,13 @@ TEST(AlgoFrogJump, FrogJump)
   EXPECT_THAT(frog_jump_3(10, 10, 30), 0);
 }
 
-
 // ={=========================================================================
 // algo-minmax
 
-namespace algo_min_max {
+namespace algo_min_max
+{
 
-  bool AbsLess(int elem1, int elem2) {
-    return abs(elem1) < abs(elem2);
-  }
+  bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
 
   using ITERATOR = std::deque<int>::iterator;
 
@@ -5941,23 +5917,26 @@ namespace algo_min_max {
     ITERATOR min_iter = begin;
     ITERATOR max_iter = begin;
 
-    for(; begin != end; ++begin) {
+    for (; begin != end; ++begin)
+    {
 
-      if (*begin < min) {
-        min = *begin;
+      if (*begin < min)
+      {
+        min      = *begin;
         min_iter = begin;
       }
 
       // add '=' to support the last max as minmax_element()
-      if (max <= *begin) {
-        max = *begin;
+      if (max <= *begin)
+      {
+        max      = *begin;
         max_iter = begin;
       }
     }
 
     return make_pair(min_iter, max_iter);
   }
-}
+} // namespace algo_min_max
 
 TEST(AlgoMinMax, Stl)
 {
@@ -5973,23 +5952,22 @@ TEST(AlgoMinMax, Stl)
   EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
 
   EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
-  EXPECT_THAT(distance(coll.begin(),max_element(coll.begin(), coll.end())), 4);
- 
+  EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())), 4);
+
   // return iterator pair
   // Note also that minmax_element() yields `the last maximum`, so the distance
   // 9.
   auto minmax = minmax_element(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3);   // first minimum
-  EXPECT_THAT(*(minmax.second), 6);   // last maximum
+  EXPECT_THAT(*(minmax.first), -3); // first minimum
+  EXPECT_THAT(*(minmax.second), 6); // last maximum
 
   // last maximum is 6 which is the last element
-  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size()-1);
+  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
 
   EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-  EXPECT_THAT(distance(
-        min_element(coll.begin(), coll.end()),
-        max_element(coll.begin(), coll.end()))
-      , -1);
+  EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
+                       max_element(coll.begin(), coll.end())),
+              -1);
 
   // min/max of absolute values
   EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
@@ -6000,49 +5978,49 @@ namespace algo_min_max
 {
   struct _Iter_less
   {
-    template<typename _Iterator1, typename _Iterator2>
-      bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
-      { return *__it1 < *__it2; }
+    template <typename _Iterator1, typename _Iterator2>
+    bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
+    {
+      return *__it1 < *__it2;
+    }
   };
 
   template <typename _Iterator, typename _Compare>
-    _Iterator my_max_element(_Iterator __first, _Iterator __last, 
-        _Compare __comp)
-    {
-      // if thre is only one
-      if (__first == __last)
-        return __first;
+  _Iterator my_max_element(_Iterator __first, _Iterator __last, _Compare __comp)
+  {
+    // if thre is only one
+    if (__first == __last)
+      return __first;
 
-      _Iterator __result = __first;
+    _Iterator __result = __first;
 
-      // if *__result < *__first 
-      while (++__first != __last)
-        if (__comp(__result, __first))
-          __result = __first;
+    // if *__result < *__first
+    while (++__first != __last)
+      if (__comp(__result, __first))
+        __result = __first;
 
-      return __result;
-    }
+    return __result;
+  }
 
   // note: do by simply reversing comp()
 
   template <typename _Iterator, typename _Compare>
-    _Iterator my_min_element(_Iterator __first, _Iterator __last,
-        _Compare __comp)
-    {
-      if (__first == __last)
-        return __first;
+  _Iterator my_min_element(_Iterator __first, _Iterator __last, _Compare __comp)
+  {
+    if (__first == __last)
+      return __first;
 
-      _Iterator __result = __first;
+    _Iterator __result = __first;
 
-      while (++__first != __last)
-        // if (comp(__result, __first))
-        if (__comp(__first, __result))
-          __result = __first;
+    while (++__first != __last)
+      // if (comp(__result, __first))
+      if (__comp(__first, __result))
+        __result = __first;
 
-      return __result;
-    }
+    return __result;
+  }
 
-} // namespace
+} // namespace algo_min_max
 
 TEST(AlgoMinMax, UseOwn)
 {
@@ -6063,13 +6041,7 @@ TEST(AlgoMinMax, UseOwn)
   // on map
   {
     // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
+    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
     auto e = max_element(counts.begin(), counts.end());
     EXPECT_THAT(*e, make_pair(13, 1));
@@ -6082,9 +6054,11 @@ TEST(AlgoMinMax, UseOwn)
     // element.
 
     auto maxelem = std::max_element(
-        std::begin(counts), std::end(counts),
-        [](pair<int, size_t> const& e1, pair<int, size_t> const& e2)
-        { return e1.second < e2.second; });
+      std::begin(counts),
+      std::end(counts),
+      [](pair<int, size_t> const &e1, pair<int, size_t> const &e2) {
+        return e1.second < e2.second;
+      });
 
     EXPECT_THAT(*maxelem, make_pair(5, 3));
   }
@@ -6092,17 +6066,15 @@ TEST(AlgoMinMax, UseOwn)
   // multimap
   {
     // sorted by key and the order in the equal range are the order of input
-    std::multimap<int, size_t> counts{
-      {1, 2},
-        {3, 9},
-        {3, 8},
-        {5, 3},
-        {8, 3},
-        {13, 2},
-        {13, 4},
-        {13, 12},
-        {13, 1}
-    };
+    std::multimap<int, size_t> counts{{1, 2},
+                                      {3, 9},
+                                      {3, 8},
+                                      {5, 3},
+                                      {8, 3},
+                                      {13, 2},
+                                      {13, 4},
+                                      {13, 12},
+                                      {13, 1}};
 
     // for (auto &e : counts)
     //   cout << e.first << ", " << e.second << endl;
@@ -6117,16 +6089,9 @@ TEST(AlgoMinMax, UseOwn)
   // max_element
   {
     // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
+    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
-    auto pos = my_max_element(counts.begin(), counts.end(),
-        _Iter_less());
+    auto pos = my_max_element(counts.begin(), counts.end(), _Iter_less());
 
     EXPECT_THAT(*pos, make_pair(13, 1));
   }
@@ -6134,21 +6099,13 @@ TEST(AlgoMinMax, UseOwn)
   // min_element
   {
     // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
+    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
-    auto pos = my_min_element(counts.begin(), counts.end(),
-        _Iter_less());
+    auto pos = my_min_element(counts.begin(), counts.end(), _Iter_less());
 
     EXPECT_THAT(*pos, make_pair(1, 2));
   }
 }
-
 
 // ={=========================================================================
 // algo-find-missing
@@ -6157,7 +6114,7 @@ int find_missing_0623(const vector<int> &A)
 {
   int N = A.size();
   int total_sum{};
-  for (int i = 1; i <= N+1; ++i)
+  for (int i = 1; i <= N + 1; ++i)
     total_sum += i;
 
   int local_sum{};
@@ -6170,10 +6127,10 @@ int find_missing_0623(const vector<int> &A)
 
 TEST(AlgoFindMissing, 0623)
 {
-  EXPECT_THAT(find_missing_0623({2,3,1,5}), 4);
-  EXPECT_THAT(find_missing_0623({1,2,3,4}), 5);
-  EXPECT_THAT(find_missing_0623({2,3,4,5}), 1);
-  EXPECT_THAT(find_missing_0623({1,3,4,5}), 2);
+  EXPECT_THAT(find_missing_0623({2, 3, 1, 5}), 4);
+  EXPECT_THAT(find_missing_0623({1, 2, 3, 4}), 5);
+  EXPECT_THAT(find_missing_0623({2, 3, 4, 5}), 1);
+  EXPECT_THAT(find_missing_0623({1, 3, 4, 5}), 2);
   EXPECT_THAT(find_missing_0623({}), 1);
 }
 
@@ -6185,33 +6142,32 @@ TEST(AlgoFindMissing, 0623)
 // empty list and single element 	0.020 s. 	WRONG ANSWER got 0 expected 1
 //
 // This is about permutation. For example, {1,2,3,4,5} can have
-// 
+//
 // {1,2,3,4} is missing 5
 // {2,3,4,5} is missing 1
 // {1,3,4,5} is missing 2
-// 
-// Reversely, 
+//
+// Reversely,
 // if N==3 inputs are given, then it's one of permutation of 4. [1,4]
 // if N==2 inputs are given, then it's one of permutation of 3. [1,3]
 // if N==1 inputs are given, then it's one of permutation of 2. [1,2]
 // if N==0 inputs are given, then it's one of permutation of 1. [1] so the
 // missing is always 1.
 
-
-int find_missing_old(const vector<int> &A) 
+int find_missing_old(const vector<int> &A)
 {
   // write your code in C++98
-  if( !A.size() )
+  if (!A.size())
     return 0;
 
   long long isum = 0;
 
-  for( unsigned int i = 0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
     isum += A[i];
 
   long long csum = 0;
 
-  for( unsigned int i = 1; i <= A.size()+1; i++ )
+  for (unsigned int i = 1; i <= A.size() + 1; i++)
     csum += i;
 
   return csum - isum;
@@ -6219,25 +6175,25 @@ int find_missing_old(const vector<int> &A)
 
 TEST(AlgoFindMissing, find_missing_old)
 {
-  EXPECT_THAT(find_missing_old({2,3,1,5}), 4);
-  EXPECT_THAT(find_missing_old({1,2,3,4}), 5);
-  EXPECT_THAT(find_missing_old({2,3,4,5}), 1);
-  EXPECT_THAT(find_missing_old({1,3,4,5}), 2);
+  EXPECT_THAT(find_missing_old({2, 3, 1, 5}), 4);
+  EXPECT_THAT(find_missing_old({1, 2, 3, 4}), 5);
+  EXPECT_THAT(find_missing_old({2, 3, 4, 5}), 1);
+  EXPECT_THAT(find_missing_old({1, 3, 4, 5}), 2);
   // fails
   // EXPECT_THAT(find_missing_old({}), 1);
 }
 
-int find_missing_old_fix(const vector<int> &A) 
+int find_missing_old_fix(const vector<int> &A)
 {
   // write your code in C++98
   long long isum = 0;
 
-  for( unsigned int i = 0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
     isum += A[i];
 
   long long csum = 0;
 
-  for( unsigned int i = 1; i <= A.size()+1; i++ )
+  for (unsigned int i = 1; i <= A.size() + 1; i++)
     csum += i;
 
   return csum - isum;
@@ -6245,39 +6201,38 @@ int find_missing_old_fix(const vector<int> &A)
 
 TEST(AlgoFindMissing, find_missing_old_fix)
 {
-  EXPECT_THAT(find_missing_old_fix({2,3,1,5}), 4);
-  EXPECT_THAT(find_missing_old_fix({1,2,3,4}), 5);
-  EXPECT_THAT(find_missing_old_fix({2,3,4,5}), 1);
-  EXPECT_THAT(find_missing_old_fix({1,3,4,5}), 2);
+  EXPECT_THAT(find_missing_old_fix({2, 3, 1, 5}), 4);
+  EXPECT_THAT(find_missing_old_fix({1, 2, 3, 4}), 5);
+  EXPECT_THAT(find_missing_old_fix({2, 3, 4, 5}), 1);
+  EXPECT_THAT(find_missing_old_fix({1, 3, 4, 5}), 2);
   EXPECT_THAT(find_missing_old_fix({}), 1);
 }
 
-int find_missing_old_two(const vector<int> &A) 
+int find_missing_old_two(const vector<int> &A)
 {
   // write your code in C++98
   long long isum = 0;
 
-  for( unsigned int i = 0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
     isum += A[i];
 
   // use the fact that sum{1..N} is N(N+1)/2 and take cauiton on integer
   // division. so not n*((n+1)/2)
 
-  int n = A.size()+1;
-  long long csum = (n*(n+1))/2;
+  int n          = A.size() + 1;
+  long long csum = (n * (n + 1)) / 2;
 
   return csum - isum;
 }
 
 TEST(AlgoFindMissing, find_missing_old_two)
 {
-  EXPECT_THAT(find_missing_old_two({2,3,1,5}), 4);
-  EXPECT_THAT(find_missing_old_two({1,2,3,4}), 5);
-  EXPECT_THAT(find_missing_old_two({2,3,4,5}), 1);
-  EXPECT_THAT(find_missing_old_two({1,3,4,5}), 2);
+  EXPECT_THAT(find_missing_old_two({2, 3, 1, 5}), 4);
+  EXPECT_THAT(find_missing_old_two({1, 2, 3, 4}), 5);
+  EXPECT_THAT(find_missing_old_two({2, 3, 4, 5}), 1);
+  EXPECT_THAT(find_missing_old_two({1, 3, 4, 5}), 2);
   EXPECT_THAT(find_missing_old_two({}), 1);
 }
-
 
 // ={=========================================================================
 // algo-find-perm
@@ -6297,7 +6252,7 @@ int find_perm_0625(const vector<int> &A)
     total_sum += e;
   }
 
-  int perm_sum = (input_max*(input_max+1))/2;
+  int perm_sum = (input_max * (input_max + 1)) / 2;
 
   cout << "total: " << total_sum << ", perm: " << perm_sum << endl;
 
@@ -6306,20 +6261,20 @@ int find_perm_0625(const vector<int> &A)
 
 TEST(AlgoFindPerm, 0625)
 {
-  EXPECT_THAT(find_perm_0625({4,1,3,2,1}), 0);
-  EXPECT_THAT(find_perm_0625({1,4,1}), 0);
+  EXPECT_THAT(find_perm_0625({4, 1, 3, 2, 1}), 0);
+  EXPECT_THAT(find_perm_0625({1, 4, 1}), 0);
   // fails
   // EXPECT_THAT(find_perm_0625({9,5,7,3,2,7,3,1,10,8}),0);
 }
 
 // based on old tries. N's permutation and it downs to algo-unique in the end so
 // if don't need to be defensive about input value, can return false as soon as
-// see duplicates. 
+// see duplicates.
 //
 // fails on:
-// extreme_min_max 
+// extreme_min_max
 // single element with minimal/maximal value
-// large_range 
+// large_range
 // sequence 1, 2, ..., N, N = ~100,000
 
 int find_perm_0625_02(const vector<int> &A)
@@ -6327,7 +6282,7 @@ int find_perm_0625_02(const vector<int> &A)
   int count{};
   int input_max{};
 
-  vector<bool> lookup(A.size()+1);
+  vector<bool> lookup(A.size() + 1);
 
   for (auto e : A)
   {
@@ -6340,7 +6295,7 @@ int find_perm_0625_02(const vector<int> &A)
     {
       lookup[e] = true;
       ++count;
-    } 
+    }
   }
 
   // size_t perm_sum = (input_max*(input_max+1))/2;
@@ -6363,7 +6318,7 @@ int find_perm_0625_03(const vector<int> &A)
   int count{};
   int input_max = A.size();
 
-  vector<bool> lookup(input_max+1);
+  vector<bool> lookup(input_max + 1);
 
   for (auto e : A)
   {
@@ -6373,7 +6328,7 @@ int find_perm_0625_03(const vector<int> &A)
     {
       lookup[e] = true;
       ++count;
-    } 
+    }
   }
 
   // size_t perm_sum = (input_max*(input_max+1))/2;
@@ -6385,62 +6340,60 @@ int find_perm_0625_03(const vector<int> &A)
 
 TEST(AlgoFindPerm, 0625_02)
 {
-  EXPECT_THAT(find_perm_0625_03({4,1,3,2,1}), 0);
-  EXPECT_THAT(find_perm_0625_03({1,4,1}), 0);
-  EXPECT_THAT(find_perm_0625_03({9,5,7,3,2,7,3,1,10,8}),0);
+  EXPECT_THAT(find_perm_0625_03({4, 1, 3, 2, 1}), 0);
+  EXPECT_THAT(find_perm_0625_03({1, 4, 1}), 0);
+  EXPECT_THAT(find_perm_0625_03({9, 5, 7, 3, 2, 7, 3, 1, 10, 8}), 0);
 }
-
 
 // nov 2014. both are O(n)
 // 1. To get N, find the max value in the input and the sum of input in a single loop
-// 2. If the sum is different from sum[1,N] then return false. 
+// 2. If the sum is different from sum[1,N] then return false.
 // 3. If N is different from input size then return false.
 
 // 80% pass
-int find_perm_old_01( vector<int> &A )
+int find_perm_old_01(vector<int> &A)
 {
   int max = 0;
 
-  for( unsigned int i=0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
   {
-    if( max < A[i] )
+    if (max < A[i])
       max = A[i];
   }
 
   return max == (int)A.size();
 }
 
-
 // <key> The problem is to understand question which is confusing. The question
 // is that N is the size of array and also is the N for permutation. That is
 // there shall be [1,N] elements in the input. If not, not a permutation. This
 // becomes bit set problem to see if all elements are seen.
 
-int find_perm_old_02( vector<int> &A )
+int find_perm_old_02(vector<int> &A)
 {
-  if( !A.size() )
+  if (!A.size())
     return 0;
 
   // default is false
-  vector<bool> flag( A.size() );
+  vector<bool> flag(A.size());
 
-  for( unsigned int i=0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
   {
     // note: -1 since permutation starts from 1 but index starts from 0
     // note: 'unsigned' to handle possible negative input which will be caught
     // below if statement.
 
-    unsigned int value = A[i]-1;
+    unsigned int value = A[i] - 1;
 
     // note: this covers values which are not in [1, N]
-    if( value < A.size() )
+    if (value < A.size())
       flag[value] = true;
     else
       return 0;
   }
 
   // note: if it is permutation then there is no flase in flag set
-  return count( flag.cbegin(), flag.cend(), false ) == 0;
+  return count(flag.cbegin(), flag.cend(), false) == 0;
 }
 
 // The count() in the return which is a loop can be removed as below since can
@@ -6449,24 +6402,24 @@ int find_perm_old_02( vector<int> &A )
 // 100% pass
 // Detected time complexity: O(N * log(N)) or O(N)
 
-int find_perm_old_03( vector<int> &A )
+int find_perm_old_03(vector<int> &A)
 {
-  if( !A.size() )
+  if (!A.size())
     return 0;
 
   // default is false
-  vector<bool> flag( A.size() );
+  vector<bool> flag(A.size());
 
-  for( unsigned int i=0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
   {
     // note: -1 since permutation starts from 1 but index starts from 0
     // note: 'unsigned' to handle possible negative input which will be caught
     // below if statement.
-    
-    unsigned int value = A[i]-1;
+
+    unsigned int value = A[i] - 1;
 
     // note: this covers values which are not in [1, N]
-    if( value < A.size() && !flag[value])
+    if (value < A.size() && !flag[value])
       flag[value] = true;
     else
       return 0;
@@ -6474,7 +6427,6 @@ int find_perm_old_03( vector<int> &A )
 
   return 1;
 }
-
 
 // ={=========================================================================
 // algo-frog-river
@@ -6487,7 +6439,7 @@ int find_frog_river_0626(int X, const vector<int> &A)
     return -1;
 
   vector<bool> lookup(A.size());
-  int target_sum = (X*(X+1))/2;
+  int target_sum = (X * (X + 1)) / 2;
   int input_sum{};
 
   for (size_t i = 0; i < A.size(); ++i)
@@ -6507,7 +6459,7 @@ int find_frog_river_0626(int X, const vector<int> &A)
 
 TEST(AlgoFrogRiver, 0626_01)
 {
-  EXPECT_THAT(find_frog_river_0626(5, {1,3,1,4,2,3,5,4}), 6);
+  EXPECT_THAT(find_frog_river_0626(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
   // fails
   // EXPECT_THAT(find_frog_river_0626(1, {2,3,4,5,1,3,5,4}), 4);
 }
@@ -6519,7 +6471,7 @@ int find_frog_river_0626_02(int X, const vector<int> &A)
     return -1;
 
   vector<bool> lookup(A.size());
-  int target_sum = (X*(X+1))/2;
+  int target_sum = (X * (X + 1)) / 2;
   int input_sum{};
 
   for (size_t i = 0; i < A.size(); ++i)
@@ -6540,12 +6492,12 @@ int find_frog_river_0626_02(int X, const vector<int> &A)
 // although this version passed, it's wrong in size of lookup table.
 TEST(AlgoFrogRiver, 0626_02)
 {
-  EXPECT_THAT(find_frog_river_0626_02(5, {1,3,1,4,2,3,5,4}), 6);
-  EXPECT_THAT(find_frog_river_0626_02(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_0626_02(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
+  EXPECT_THAT(find_frog_river_0626_02(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
   EXPECT_THAT(find_frog_river_0626_02(5, {}), -1);
 
   // fails
-  // /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container 
+  // /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container
   //     with out-of-bounds index 1, but container only holds 1 elements.
 
   // Objects involved in the operation:
@@ -6563,8 +6515,8 @@ int find_frog_river_0626_03(int X, const vector<int> &A)
   if (A.empty())
     return -1;
 
-  vector<bool> lookup(A.size()+1);
-  int target_sum = (X*(X+1))/2;
+  vector<bool> lookup(A.size() + 1);
+  int target_sum = (X * (X + 1)) / 2;
   int input_sum{};
 
   for (size_t i = 0; i < A.size(); ++i)
@@ -6584,227 +6536,232 @@ int find_frog_river_0626_03(int X, const vector<int> &A)
 
 TEST(AlgoFrogRiver, 0626_03)
 {
-  EXPECT_THAT(find_frog_river_0626_03(5, {1,3,1,4,2,3,5,4}), 6);
-  EXPECT_THAT(find_frog_river_0626_03(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_0626_03(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
+  EXPECT_THAT(find_frog_river_0626_03(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
   EXPECT_THAT(find_frog_river_0626_03(5, {}), -1);
   EXPECT_THAT(find_frog_river_0626_03(5, {1}), -1);
   EXPECT_THAT(find_frog_river_0626_03(1, {2}), -1);
   EXPECT_THAT(find_frog_river_0626_03(1, {1}), 0);
 }
 
-
-int find_frog_river_old_01( int X, std::vector<int> &A )
+int find_frog_river_old_01(int X, std::vector<int> &A)
 {
-  if( A.empty() || X==1 )
+  if (A.empty() || X == 1)
     return -1;
 
   bool *pbitset = new bool(X);
- 
-  int idx;                        
-  int count=0;
+
+  int idx;
+  int count = 0;
 
   // bitset{0, X-1}
-  for(idx=0; idx < X; idx++)
+  for (idx = 0; idx < X; idx++)
     pbitset[idx] = false;
 
-  for(idx=0; idx < (int)A.size(); idx++)    // signed and unsigned warning.
+  for (idx = 0; idx < (int)A.size(); idx++) // signed and unsigned warning.
   {
     // wasn't set before?
-    if( pbitset[A[idx]-1] == false )
+    if (pbitset[A[idx] - 1] == false)
     {
       // set it and increase count
-      pbitset[A[idx]-1] = true;
+      pbitset[A[idx] - 1] = true;
       count++;
 
       // are all position set?
-      if( count == X )                 // signed and unsigned warning.
+      if (count == X) // signed and unsigned warning.
       {
-        delete pbitset; return idx;
+        delete pbitset;
+        return idx;
       }
     }
   }
 
-  delete pbitset; return -1;
+  delete pbitset;
+  return -1;
 }
 
 // Failed on 25%:
-// 
+//
 // small_random1 3 random permutation, X = 50     0.020 s.     RUNTIME ERROR
 // tested program terminated unexpectedly
 //
 // 1. signed and unsigned that complier warns mismatch between signed and
 // unsigned.  No such error when run with GCC 4.6.3.
-// 
+//
 // 2. this is wrong since it allocate a single bool but not array. Failed on
 // other many test cases with the same error. But why no such error on GCC
 // 4.6.3. This sites uses C++98 so may be new initialize way in C++11?
 
-
 // Still failed with the same error.
-int find_frog_river_old_02( int X, std::vector<int> &A )
+int find_frog_river_old_02(int X, std::vector<int> &A)
 {
-  if( A.empty() || X==1 )
+  if (A.empty() || X == 1)
     return -1;
 
   bool *pbitset = new bool(X);
- 
-  int idx;                        
-  int count=0;
 
-  for(idx=0; idx < X; idx++)
+  int idx;
+  int count = 0;
+
+  for (idx = 0; idx < X; idx++)
     pbitset[idx] = false;
 
-  for(idx=0; idx < (int)A.size(); idx++)
+  for (idx = 0; idx < (int)A.size(); idx++)
   {
-    if( pbitset[A[idx]-1] == false )
+    if (pbitset[A[idx] - 1] == false)
     {
-      pbitset[A[idx]-1] = true;
+      pbitset[A[idx] - 1] = true;
       count++;
 
-      if( count == X )
+      if (count == X)
       {
-        delete[] pbitset; return idx;  // diff
+        delete[] pbitset;
+        return idx; // diff
       }
     }
   }
 
-  delete[] pbitset; return -1;         // diff
+  delete[] pbitset;
+  return -1; // diff
 }
 
-
-int find_frog_river_old_03( int X, std::vector<int> &A )
+int find_frog_river_old_03(int X, std::vector<int> &A)
 {
-  if( A.empty() || X==1 )
+  if (A.empty() || X == 1)
     return -1;
 
-  bool *pbitset = new bool[X];   // diff
- 
-  int idx;                        
-  int count=0;
+  bool *pbitset = new bool[X]; // diff
 
-  for(idx=0; idx < X; idx++)
+  int idx;
+  int count = 0;
+
+  for (idx = 0; idx < X; idx++)
     pbitset[idx] = false;
 
-  for(idx=0; idx < (int)A.size(); idx++)
+  for (idx = 0; idx < (int)A.size(); idx++)
   {
-    if( pbitset[A[idx]-1] == false )
+    if (pbitset[A[idx] - 1] == false)
     {
-      pbitset[A[idx]-1] = true;
+      pbitset[A[idx] - 1] = true;
       count++;
 
-      if( count == X )
+      if (count == X)
       {
-        delete[] pbitset; return idx;
+        delete[] pbitset;
+        return idx;
       }
     }
   }
 
-  delete[] pbitset; return -1;
+  delete[] pbitset;
+  return -1;
 }
 
 // 90 out of 100 points. Detected time complexity: O(N). Failed on:
-// 
+//
 // single single element     0.020 s.     WRONG ANSWER got -1 expected 0
-// 
+//
 // note: think about when single element has big value(position)
 
-
-int find_frog_river_old_04( int X, std::vector<int> &A )
+int find_frog_river_old_04(int X, std::vector<int> &A)
 {
-  if( A.empty() || X==0 )           // diff
+  if (A.empty() || X == 0) // diff
     return -1;
 
   bool *pbitset = new bool[X];
- 
-  int idx;                        
-  int count=0;
+
+  int idx;
+  int count = 0;
 
   // bitset{0, X-1}
-  for(idx=0; idx < X; idx++)
+  for (idx = 0; idx < X; idx++)
     pbitset[idx] = false;
 
-  for(idx=0; idx < (int)A.size(); idx++)
+  for (idx = 0; idx < (int)A.size(); idx++)
   {
     // wasn't set before?
-    if( (A[idx]-1 < X) && pbitset[A[idx]-1] == false )   // diff
+    if ((A[idx] - 1 < X) && pbitset[A[idx] - 1] == false) // diff
     {
       // set it and increase count
-      pbitset[A[idx]-1] = true;
+      pbitset[A[idx] - 1] = true;
       count++;
 
       // are all position set?
-      if( count == X )
+      if (count == X)
       {
-        delete [] pbitset; return idx;
+        delete[] pbitset;
+        return idx;
       }
     }
   }
 
-  delete [] pbitset; return -1;
+  delete[] pbitset;
+  return -1;
 }
 
-// 100 out of 100 points. Detected time complexity: O(N) 
+// 100 out of 100 points. Detected time complexity: O(N)
 
-
-int find_frog_river_old_05( int X, std::vector<int> &A )
+int find_frog_river_old_05(int X, std::vector<int> &A)
 {
-  if( A.empty() || X==0 )           // diff
+  if (A.empty() || X == 0) // diff
     return -1;
 
   bool *pbitset = new bool[X];
- 
-  int idx;                        
-  int count=0;
+
+  int idx;
+  int count = 0;
 
   // bitset{0, X-1}
-  for(idx=0; idx < X; idx++)
+  for (idx = 0; idx < X; idx++)
     pbitset[idx] = false;
 
-  for(idx=0; idx < (int)A.size(); idx++)
+  for (idx = 0; idx < (int)A.size(); idx++)
   {
-    int value = A[idx]-1;
+    int value = A[idx] - 1;
 
     // wasn't set before?
-    if( (value < X) && pbitset[value] == false )   // diff
+    if ((value < X) && pbitset[value] == false) // diff
     {
       // set it and increase count
       pbitset[value] = true;
       count++;
 
       // are all position set?
-      if( count == X )
+      if (count == X)
       {
-        delete [] pbitset; return idx;
+        delete[] pbitset;
+        return idx;
       }
     }
   }
 
-  delete [] pbitset; return -1;
+  delete[] pbitset;
+  return -1;
 }
 
 // The key idea is that it is about counting and to use counter to check if
 // receives all inputs rather than using loops or function call like bitset.
 
-
-int find_frog_river_old_06(int X, const vector<int> &A) {
+int find_frog_river_old_06(int X, const vector<int> &A)
+{
   // write your code in C++11
-  if( A.empty() || !X )
+  if (A.empty() || !X)
     return -1;
 
   vector<bool> flags(X);
   int count = 0;
 
-  for(unsigned int i=0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
   {
-    int value = A[i]-1;
+    int value = A[i] - 1;
 
-    if( value < X && flags[value] == false )
+    if (value < X && flags[value] == false)
     {
       flags[value] = true;
       count++;
     }
 
-    if( count == X )
+    if (count == X)
       return i;
   }
 
@@ -6815,14 +6772,13 @@ int find_frog_river_old_06(int X, const vector<int> &A) {
 
 TEST(AlgoFrogRiver, OldAttempts)
 {
-  EXPECT_THAT(find_frog_river_old_06(5, {1,3,1,4,2,3,5,4}), 6);
-  EXPECT_THAT(find_frog_river_old_06(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_old_06(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
+  EXPECT_THAT(find_frog_river_old_06(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
   EXPECT_THAT(find_frog_river_old_06(5, {}), -1);
   EXPECT_THAT(find_frog_river_old_06(5, {1}), -1);
   EXPECT_THAT(find_frog_river_old_06(1, {2}), -1);
   EXPECT_THAT(find_frog_river_old_06(1, {1}), 0);
 }
-
 
 // ={=========================================================================
 // algo-find-missing-integer
@@ -6831,8 +6787,8 @@ TEST(AlgoFrogRiver, OldAttempts)
 // 1. do not say about return value for errors
 //
 // 2. Allocate lookup table for 2,147,xxx,xxx x 2? No and not meet O(n) space as
-// well. 
-//  
+// well.
+//
 // Since it's about `positive` minimal integer, inputs are 1..2,147,xxx,xxx.
 // Since N size array could have the max input value which is N.
 //
@@ -6841,7 +6797,6 @@ TEST(AlgoFrogRiver, OldAttempts)
 // What if input is not sequential such as "{100, 200, 300, 340}"? Not a valid
 // input since we are looking for `missing`, `not occurring` element. If that's
 // valid input then what are the missing element? So many and not a valid input.
-
 
 int find_missing_integer(const vector<int> &A)
 {
@@ -6853,34 +6808,33 @@ int find_missing_integer(const vector<int> &A)
 
   for (size_t i = 0; i < A.size(); ++i)
   {
-    if (A[i] > 0 && lookup[A[i]-1] == false)
-      lookup[A[i]-1] = true;
+    if (A[i] > 0 && lookup[A[i] - 1] == false)
+      lookup[A[i] - 1] = true;
   }
 
   for (size_t i = 0; i < lookup.size(); ++i)
     if (lookup[i] == false)
-      return i+1;
+      return i + 1;
 
   return -1;
 }
 
 TEST(AlgoFindMissingInteger, 0627_01)
 {
-  EXPECT_THAT(find_missing_integer({1,3,6,4,1,2}), 5);
+  EXPECT_THAT(find_missing_integer({1, 3, 6, 4, 1, 2}), 5);
 }
-
 
 // O(N), 100%
 //
 // Use bool vector approach? The input element can be negative so ignore
 // negegative inputs.  However, the problem is input value can be too big to
 // have bool vector. how to solve?
-// 
+//
 // The key is whatever the input value is the aim to find the minimum positive
 // value which is missed. So have bool vector(N) and only consider inputs in 0 <
 // x <= N. Since even if there is no input in the specificed range then it
 // simply means that it misses the whole value of the range and need to get the
-// first false in the bool vector. 
+// first false in the bool vector.
 //
 // If bool vector has all set then return N+1. ????
 
@@ -6888,34 +6842,33 @@ int find_missing_integer_old(const vector<int> &A)
 {
   vector<bool> flags(A.size());
 
-  for(unsigned int i=0; i < A.size(); i++)
+  for (unsigned int i = 0; i < A.size(); i++)
   {
     int value = A[i];
 
-    if( value > 0 && value <= (int)A.size() )
-      flags[value-1] = true;
+    if (value > 0 && value <= (int)A.size())
+      flags[value - 1] = true;
   }
 
-  for(unsigned int i=0; i < flags.size(); i++)
-    if( flags[i] == false )
-      return i+1;
+  for (unsigned int i = 0; i < flags.size(); i++)
+    if (flags[i] == false)
+      return i + 1;
 
-  return A.size()+1;
+  return A.size() + 1;
 }
 
 TEST(AlgoFindMissingInteger, OldTries)
 {
-  EXPECT_THAT(find_missing_integer_old({1,3,6,4,1,2}), 5);
+  EXPECT_THAT(find_missing_integer_old({1, 3, 6, 4, 1, 2}), 5);
 }
-
 
 // ={=========================================================================
 // algo-max-counters
 
 // 2018.06.27
-// 
+//
 // A[M] array, N counters
-// A[k], 1 =< A[k] =< N+1, 
+// A[k], 1 =< A[k] =< N+1,
 //  if A[k] =< N, increase(A[k]). if A[k] == N+1, max_counter
 // 1 =< N, M =< 100,000
 
@@ -6924,18 +6877,18 @@ vector<int> find_max_counters_0627(int N, vector<int> A)
   vector<int> result(N, 0);
   int max{};
 
-  for(size_t i = 0; i < A.size(); ++i)
+  for (size_t i = 0; i < A.size(); ++i)
   {
-    if (A[i] == N+1)
+    if (A[i] == N + 1)
     {
       // fill_n(result, N, max);
-      for(auto &e : result)
+      for (auto &e : result)
         e = max;
     }
     else if (A[i] >= 1 && A[i] <= N)
     {
-      if(++result[A[i]-1] > max)
-        max = result[A[i]-1];
+      if (++result[A[i] - 1] > max)
+        max = result[A[i] - 1];
     }
   }
 
@@ -6944,10 +6897,9 @@ vector<int> find_max_counters_0627(int N, vector<int> A)
 
 TEST(AlgoMaxCounters, 0627_01)
 {
-  EXPECT_THAT(find_max_counters_0627(5, {3,4,4,6,1,4,4}), 
-      ElementsAre(3,2,2,4,2));
+  EXPECT_THAT(find_max_counters_0627(5, {3, 4, 4, 6, 1, 4, 4}),
+              ElementsAre(3, 2, 2, 4, 2));
 }
-
 
 // when simply follows descriptions:
 //
@@ -6958,27 +6910,27 @@ TEST(AlgoMaxCounters, 0627_01)
 // O(M+N). So the key is to find a way to have max-all effect without doing a
 // loop. How?
 
-vector<int> find_max_counters_old_01(int N, const vector<int>& A)
+vector<int> find_max_counters_old_01(int N, const vector<int> &A)
 {
   vector<int> counters(N, 0);
 
   int current_max = 0;
 
-  for( size_t i=0; i < A.size(); i++ )
+  for (size_t i = 0; i < A.size(); i++)
   {
     // set current max to all
-    if( A[i] >= N+1 )
+    if (A[i] >= N + 1)
     {
-      for( size_t j=0; j < counters.size(); j++ )
-        if( counters[j] > current_max )
+      for (size_t j = 0; j < counters.size(); j++)
+        if (counters[j] > current_max)
           current_max = counters[j];
 
-      for( size_t j=0; j < counters.size(); j++ )
+      for (size_t j = 0; j < counters.size(); j++)
         counters[j] = current_max;
     }
     // increment a counter
     else
-      counters[A[i]-1] += 1;
+      counters[A[i] - 1] += 1;
   }
 
   return counters;
@@ -6986,8 +6938,8 @@ vector<int> find_max_counters_old_01(int N, const vector<int>& A)
 
 TEST(AlgoMaxCounters, OldTries)
 {
-  EXPECT_THAT(find_max_counters_old_01(5, {3,4,4,6,1,4,4}), 
-      ElementsAre(3,2,2,4,2));
+  EXPECT_THAT(find_max_counters_old_01(5, {3, 4, 4, 6, 1, 4, 4}),
+              ElementsAre(3, 2, 2, 4, 2));
 }
 
 // The above has time O(N*M) for worst cases such as when input has all 6, max
@@ -7017,19 +6969,19 @@ vector<int> find_max_counters_0627_02(int N, vector<int> A)
 
   for (size_t i = 0; i < A.size(); ++i)
   {
-    if (A[i] == N+1)
+    if (A[i] == N + 1)
     {
       operation_max = current_max;
     }
     else if (A[i] >= 1 && A[i] <= N)
     {
-      if (result[A[i]-1] < operation_max)
-        result[A[i]-1] = operation_max + 1;
-      else 
-        result[A[i]-1] += 1;
+      if (result[A[i] - 1] < operation_max)
+        result[A[i] - 1] = operation_max + 1;
+      else
+        result[A[i] - 1] += 1;
 
-      if(result[A[i]-1] > current_max)
-        current_max = result[A[i]-1];
+      if (result[A[i] - 1] > current_max)
+        current_max = result[A[i] - 1];
     }
   }
 
@@ -7044,18 +6996,17 @@ vector<int> find_max_counters_0627_02(int N, vector<int> A)
 
 TEST(AlgoMaxCounters, 0627_02)
 {
-  EXPECT_THAT(find_max_counters_0627_02(5, {3,4,4,6,1,4,4}), 
-      ElementsAre(3,2,2,4,2));
-  EXPECT_THAT(find_max_counters_0627_02(5, {3,4,4,6,1,4,6}), 
-      ElementsAre(3,3,3,3,3));
-  EXPECT_THAT(find_max_counters_0627_02(5, {3,6,6,6,6,6,6}), 
-      ElementsAre(1,1,1,1,1));
+  EXPECT_THAT(find_max_counters_0627_02(5, {3, 4, 4, 6, 1, 4, 4}),
+              ElementsAre(3, 2, 2, 4, 2));
+  EXPECT_THAT(find_max_counters_0627_02(5, {3, 4, 4, 6, 1, 4, 6}),
+              ElementsAre(3, 3, 3, 3, 3));
+  EXPECT_THAT(find_max_counters_0627_02(5, {3, 6, 6, 6, 6, 6, 6}),
+              ElementsAre(1, 1, 1, 1, 1));
 }
-
 
 // solution from online.
 // http://codility-lessons.blogspot.co.uk/2014/07/lesson-2maxcounters.html
-// 
+//
 //     (0, 0, 1, 0, 0)        (0, 0, 1, 0, 0)
 //     (0, 0, 1, 1, 0)        (0, 0, 1, 1, 0)
 //     (0, 0, 1, 2, 0)        (0, 0, 1, 2, 0)
@@ -7065,61 +7016,60 @@ TEST(AlgoMaxCounters, 0627_02)
 //     (3, 2, 2, 4, 2)        (3, 0, 1, 4, 0)
 //                            (3, 2, 2, 4, 2)   set maxLastMaxOp to all which are not increased since
 //                            last max-all operation.
-// 
+//
 // This approach use flags to know which is increased since the last max-all
 // operation and set maxLastMaxOp to all which are not increased since the last
 // max-all.
-// 
+//
 // The key 'observation' is that max-all sets the 'base' for following increase
-// operations. 
+// operations.
 //
 // This approach still however didn't meet performance goal. 88%. WHY? since do
 // memset on every max op.
 
-
 // comment out due to compile erros on Result struct
-// struct Results find_max_counters_old_02(int N, int A[], int M) 
+// struct Results find_max_counters_old_02(int N, int A[], int M)
 // {
 //   struct Results result;
 //   result.C = calloc(sizeof(int), N);
 //   result.L = N;
-// 
+//
 //   int* flg = alloca(sizeof(int) * N);
 //   memset(flg, 0x00, sizeof(int) * N);
-// 
+//
 //   int max = 0;
 //   int maxAtTheLastMaxCntOp = 0;
-// 
+//
 //   int i;
 //   for (i = 0; i < M; i++){
 //     int op = A[i];
 //     //if the op is max counter.
 //     if (op == N + 1){
 //       maxAtTheLastMaxCntOp = max;
-//       memset(flg, 0x00, sizeof(int) * N);    
+//       memset(flg, 0x00, sizeof(int) * N);
 //     }
 //     //if the op is increase(x)
 //     else {
-//       //op is beweetn 1 to N, but the index for the array C 
+//       //op is beweetn 1 to N, but the index for the array C
 //       //is between 0 and (N-1). Decrease op to adjust it.
-//       op--; 
+//       op--;
 //       if (flg[op] == 1){
 //         result.C[op]++;
 //       }
 //       else {
 //         result.C[op] = maxAtTheLastMaxCntOp + 1;
-//         flg[op] = 1;                
+//         flg[op] = 1;
 //       }
-// 
+//
 //       if (result.C[op] > max){
 //         max = result.C[op];
 //       }
 //     }
 //   }
-// 
+//
 //   //apply the 'max counter' operation
-//   //to the slot(s) where it should be applied. 
-//   int j;  
+//   //to the slot(s) where it should be applied.
+//   int j;
 //   for (j = 0; j < N; j++){
 //     if (flg[j] == 0){
 //       result.C[j] = maxAtTheLastMaxCntOp;
@@ -7129,49 +7079,48 @@ TEST(AlgoMaxCounters, 0627_02)
 // }
 
 // the final solution from online.
-// 
+//
 // This approach removes the use of flags. As with the above observation,
 // max-all set the base that means any following increase should be based on
 // 'hidden' base. So if result[op] < maxLastMaxOp then result[op] =
 // maxLastMaxOp+1. Once done a loop, handle all which are not increased since
-// the last max-all by checking less than maxLastMaxOp. 
+// the last max-all by checking less than maxLastMaxOp.
 //
 // Verified 100% peformance mark.
 
-vector<int> find_max_counters_old_03(int N, vector<int> &A) 
+vector<int> find_max_counters_old_03(int N, vector<int> &A)
 {
   // write your code in C++11
-  vector<int> result(N,0);
+  vector<int> result(N, 0);
 
-  int maxLast =0, maxCurrent = 0;
+  int maxLast = 0, maxCurrent = 0;
 
-  for(unsigned int i = 0; i < A.size(); i++ )
+  for (unsigned int i = 0; i < A.size(); i++)
   {
     int op = A[i];
 
-    if( op == N+1 )   // max-all op
+    if (op == N + 1) // max-all op
       maxLast = maxCurrent;
-    else              // inc op
+    else // inc op
     {
       op--;
 
-      if( result[op] < maxLast )
-        result[op] = maxLast+1;
+      if (result[op] < maxLast)
+        result[op] = maxLast + 1;
       else
         result[op]++;
 
-      if( result[op] > maxCurrent )
+      if (result[op] > maxCurrent)
         maxCurrent = result[op];
     }
   }
 
-  for( int i =0; i < N; i++ )
-    if( result[i] < maxLast )
+  for (int i = 0; i < N; i++)
+    if (result[i] < maxLast)
       result[i] = maxLast;
 
   return result;
 }
-
 
 // ={=========================================================================
 // algo-perfix-sum
@@ -7180,23 +7129,23 @@ vector<int> find_max_counters_old_03(int N, vector<int> &A)
 vector<int> make_prefix_sums(const vector<int> &A)
 {
   // +1 since prefix sum has one more
-  size_t size = A.size()+1;
+  size_t size = A.size() + 1;
 
   vector<int> prefix_sum(size);
 
   for (size_t i = 1; i < size; ++i)
-    prefix_sum[i] = prefix_sum[i-1] + A[i-1];
+    prefix_sum[i] = prefix_sum[i - 1] + A[i - 1];
 
   return prefix_sum;
 }
 
 TEST(AlgoPrefixSum, MakePrefixSum)
 {
-  EXPECT_THAT(make_prefix_sums({1,2,3,4,5,6}),
-      ElementsAre(0,1,3,6,10,15,21));
+  EXPECT_THAT(make_prefix_sums({1, 2, 3, 4, 5, 6}),
+              ElementsAre(0, 1, 3, 6, 10, 15, 21));
 
-  EXPECT_THAT(make_prefix_sums({2,3,7,5,1,3,9}),
-      ElementsAre(0,2,5,12,17,18,21,30));
+  EXPECT_THAT(make_prefix_sums({2, 3, 7, 5, 1, 3, 9}),
+              ElementsAre(0, 2, 5, 12, 17, 18, 21, 30));
 }
 
 // Using prefix (or suffix) sums allows us to calculate the total of any slice
@@ -7207,7 +7156,7 @@ TEST(AlgoPrefixSum, MakePrefixSum)
 int count_total(const vector<int> &P, int x, int y)
 {
   // since prefix sum index is +1 more then input index.
-  return P[y+1] - P[x];
+  return P[y + 1] - P[x];
 }
 
 TEST(AlgoPrefixSum, SumAnySlice)
@@ -7218,12 +7167,12 @@ TEST(AlgoPrefixSum, SumAnySlice)
   //
   // 15-3 = 12
 
-  EXPECT_THAT(count_total(make_prefix_sums({1,2,3,4,5,6}), 2, 4), 12);
+  EXPECT_THAT(count_total(make_prefix_sums({1, 2, 3, 4, 5, 6}), 2, 4), 12);
 
   // (0,2,5,[12,17,18],21,30)
   // 18-5 = 13
 
-  EXPECT_THAT(count_total(make_prefix_sums({2,3,7,5,1,3,9}), 2, 4), 13);
+  EXPECT_THAT(count_total(make_prefix_sums({2, 3, 7, 5, 1, 3, 9}), 2, 4), 13);
 }
 
 // start: 4, moves: 6
@@ -7232,7 +7181,7 @@ TEST(AlgoPrefixSum, SumAnySlice)
 // loop(2, 5), left:  2, shift:  2, right:  6 ->  6 ->  6, xresult: 25, result: 25
 // loop(3, 5), left:  1, shift:  0, right:  4 ->  4 ->  4, xresult: 16, result: 25
 // loop(4, 5), left:  0, shift: -2, right:  2 ->  4 ->  4, xresult: 18, result: 25
-// 
+//
 // when move window to the left
 //          0    1   2   3   4   5   6   7   8   9   10
 //          2    3   7   5  [1   3   9   X   X   X   X]
@@ -7257,7 +7206,7 @@ TEST(AlgoPrefixSum, SumAnySlice)
 //
 // from this observation, when shift to left to the start, right end get reduced
 // by 2 since uses "move" twice when goes to left and right again.
-// 
+//
 // After all, get possible max mushroom and moves windows which starts from
 // start pos and ends with start pos.
 //
@@ -7288,7 +7237,7 @@ TEST(AlgoPrefixSum, SumAnySlice)
 
 int mushroom_model(const vector<int> A, int start, int moves)
 {
-  int max_input_index = A.size()-1;
+  int max_input_index = A.size() - 1;
   int result{};
   auto prefix_sum = make_prefix_sums(A);
   int loop_max{};
@@ -7297,9 +7246,9 @@ int mushroom_model(const vector<int> A, int start, int moves)
   loop_max = min(start, moves) + 1;
   for (int prefix_index = 0; prefix_index < loop_max; ++prefix_index)
   {
-    int left_pos = start - prefix_index;
-    int shift_value = (moves-2*prefix_index);
-    int possible_right_pos = start+shift_value;
+    int left_pos           = start - prefix_index;
+    int shift_value        = (moves - 2 * prefix_index);
+    int possible_right_pos = start + shift_value;
 
     // max? since right end cannot be less than start
     int max_on_possible_right_pos = max(start, possible_right_pos);
@@ -7309,13 +7258,13 @@ int mushroom_model(const vector<int> A, int start, int moves)
 
     // collect mushroon only once? count_total use range and counts only once.
     auto xresult = count_total(prefix_sum, left_pos, right_pos);
-    result = max(result, xresult);
+    result       = max(result, xresult);
 
-    // cout << "loop(" << prefix_index << ", " << loop_max << ")" 
+    // cout << "loop(" << prefix_index << ", " << loop_max << ")"
     //   << ", left: " << setw(2) << left_pos
-    //   << ", shift: " << setw(2) << shift_value 
-    //   << ", right: " << setw(2) << possible_right_pos << " -> " 
-    //   << setw(2) << max_on_possible_right_pos << " -> " << setw(2) << right_pos 
+    //   << ", shift: " << setw(2) << shift_value
+    //   << ", right: " << setw(2) << possible_right_pos << " -> "
+    //   << setw(2) << max_on_possible_right_pos << " -> " << setw(2) << right_pos
     //   << ", xresult: " << xresult << ", result: " << result << endl;
   }
 
@@ -7323,13 +7272,13 @@ int mushroom_model(const vector<int> A, int start, int moves)
 
   // from codility code but looks wrong.
   // loop_max = min(moves+1, max_input_index-start);
-  loop_max = min(moves, max_input_index-start)+1;
+  loop_max = min(moves, max_input_index - start) + 1;
   for (int prefix_index = 0; prefix_index < loop_max; ++prefix_index)
   {
     int right_pos = start + prefix_index;
     // left_pos = max(0, min(K, K-(M-2*prefix_index)));
-    int shift_value = (moves-2*prefix_index);
-    int possible_left_pos = start-shift_value;
+    int shift_value       = (moves - 2 * prefix_index);
+    int possible_left_pos = start - shift_value;
 
     // min? left end should be less than the start
     int min_on_possible_left_pos = min(start, possible_left_pos);
@@ -7338,13 +7287,13 @@ int mushroom_model(const vector<int> A, int start, int moves)
     int left_pos = max(0, min_on_possible_left_pos);
 
     auto xresult = count_total(prefix_sum, left_pos, right_pos);
-    result = max(result, xresult);
+    result       = max(result, xresult);
 
-    // cout << "loop(" << prefix_index << ", " << loop_max << ")" 
-    //   << ", shift: " << setw(2) << shift_value 
-    //   << ", left: " << setw(2) << possible_left_pos << " -> " 
+    // cout << "loop(" << prefix_index << ", " << loop_max << ")"
+    //   << ", shift: " << setw(2) << shift_value
+    //   << ", left: " << setw(2) << possible_left_pos << " -> "
     //   << setw(2) << min_on_possible_left_pos << " -> " << setw(2) << left_pos
-    //   << ", right: " << setw(2) << right_pos 
+    //   << ", right: " << setw(2) << right_pos
     //   << ", xresult: " << xresult << ", result: " << result << endl;
   }
 
@@ -7353,14 +7302,15 @@ int mushroom_model(const vector<int> A, int start, int moves)
 
 TEST(AlgoPrefixSum, MushroomPicker)
 {
-  EXPECT_THAT(mushroom_model({2,3,7,5,1,3,9}, 4, 6), 25);
-  EXPECT_THAT(mushroom_model({13,12,11, 2, 4, 6, 8,10, 2, 3, 7, 5, 1, 3, 9}, 8, 5), 32);
+  EXPECT_THAT(mushroom_model({2, 3, 7, 5, 1, 3, 9}, 4, 6), 25);
+  EXPECT_THAT(
+    mushroom_model({13, 12, 11, 2, 4, 6, 8, 10, 2, 3, 7, 5, 1, 3, 9}, 8, 5),
+    32);
 }
-
 
 int mushroom_0704(const vector<int> A, int start, int moves)
 {
-  int max_input_index = A.size()-1;
+  int max_input_index = A.size() - 1;
   int num_loop{};
   int result{};
 
@@ -7369,53 +7319,56 @@ int mushroom_0704(const vector<int> A, int start, int moves)
   // moves a window to the left
   // since `start` is actually index, it's sure to have elements in [0,start] so
   // use it directly
-  num_loop = min(start, moves)+1;
+  num_loop = min(start, moves) + 1;
   for (int i = 0; i < num_loop; ++i)
   {
-    int left_end = start - i;
-    int shift_value = (moves - 2*i);
-    int right_end = start + shift_value;
+    int left_end    = start - i;
+    int shift_value = (moves - 2 * i);
+    int right_end   = start + shift_value;
 
     // right_end should be in [start, max input index]
-    int right_contained = min(max_input_index, right_end);
+    int right_contained      = min(max_input_index, right_end);
     int right_end_calculated = max(start, right_contained);
 
-    int prefix_sum_result = count_total(prefix_sum, left_end, right_end_calculated);
+    int prefix_sum_result =
+      count_total(prefix_sum, left_end, right_end_calculated);
     result = max(prefix_sum_result, result);
   }
 
   // moves a windows to the right
   // unlike `to the left` case, cannot use start and have to use max input
   // index.
-  num_loop = min(moves, max_input_index-start)+1;
+  num_loop = min(moves, max_input_index - start) + 1;
   for (int i = 0; i < num_loop; ++i)
   {
-    int right_end = start + i;
-    int shift_value = (moves - 2*i);
-    int left_end = start - shift_value;
+    int right_end   = start + i;
+    int shift_value = (moves - 2 * i);
+    int left_end    = start - shift_value;
 
     // left_end should be in [0, start]
-    int left_end_contained = max(0, left_end);
+    int left_end_contained  = max(0, left_end);
     int left_end_calculated = min(start, left_end_contained);
 
-    int prefix_sum_result = count_total(prefix_sum, left_end_calculated, right_end);
+    int prefix_sum_result =
+      count_total(prefix_sum, left_end_calculated, right_end);
     result = max(prefix_sum_result, result);
   }
 
-  return result; 
+  return result;
 }
 
 TEST(AlgoPrefixSum, MushroomPicker_0704)
 {
-  EXPECT_THAT(mushroom_0704({2,3,7,5,1,3,9}, 4, 6), 25);
-  EXPECT_THAT(mushroom_model({13,12,11, 2, 4, 6, 8,10, 2, 3, 7, 5, 1, 3, 9}, 8, 5), 32);
+  EXPECT_THAT(mushroom_0704({2, 3, 7, 5, 1, 3, 9}, 4, 6), 25);
+  EXPECT_THAT(
+    mushroom_model({13, 12, 11, 2, 4, 6, 8, 10, 2, 3, 7, 5, 1, 3, 9}, 8, 5),
+    32);
 }
-
 
 // ={=========================================================================
 // algo-passing-car
 
-// in sum, find (0, X) pair from the input. 
+// in sum, find (0, X) pair from the input.
 //
 // if loop on input to find each (0, X) pair then cannot meet O(N)
 //
@@ -7433,11 +7386,11 @@ int passing_car_0628_01(const vector<int> A)
 {
   int pair_count{}, zero_count{};
 
-  for(size_t i = 0; i < A.size(); ++i)
+  for (size_t i = 0; i < A.size(); ++i)
   {
     if (A[i] == 0)
       ++zero_count;
-    else 
+    else
     {
       pair_count += zero_count;
     }
@@ -7448,30 +7401,30 @@ int passing_car_0628_01(const vector<int> A)
 
 TEST(AlgoPassingCar, 0628_01)
 {
-  EXPECT_THAT(passing_car_0628_01({0,1,0,1,1}), 5); 
+  EXPECT_THAT(passing_car_0628_01({0, 1, 0, 1, 1}), 5);
 }
 
 // From http://codility-lessons.blogspot.co.uk/2014/07/lesson-3-passingcars.html.
-// 
+//
 // The idea is that
-// 
+//
 //    0 1 0 1 1
 //    *------->
 //        *--->
 
-int passing_car_old_01( vector<int> &A )
+int passing_car_old_01(vector<int> &A)
 {
   int count = 0, countEast = 0;
 
-  for( int i=0; i < (int)A.size(); i++ )
+  for (int i = 0; i < (int)A.size(); i++)
   {
-    if( A[i] == 0 )
+    if (A[i] == 0)
       countEast++;
     else
     {
       count += countEast;
 
-      if( count > 1000000000 )
+      if (count > 1000000000)
         return -1;
     }
   }
@@ -7479,11 +7432,10 @@ int passing_car_old_01( vector<int> &A )
   return count;
 }
 
-
 // ={=========================================================================
 // algo-count-div
 
-// Since time O(1), cannot use loop. 
+// Since time O(1), cannot use loop.
 //
 // How to solve?
 //
@@ -7506,68 +7458,65 @@ int count_div_0628_01(int A, int B, int K)
 {
   int start{}, result{};
 
-  if (A%K == 0)
+  if (A % K == 0)
     start = A;
   else
-    start = (A/K+1)*K;
+    start = (A / K + 1) * K;
 
-  return result = (B-start)/K + 1;
+  return result = (B - start) / K + 1;
 }
 
 TEST(AlgoCountDiv, 0628_01)
 {
-  EXPECT_THAT(count_div_0628_01(6, 11, 2), 3); 
+  EXPECT_THAT(count_div_0628_01(6, 11, 2), 3);
 }
 
-
 // failed from the report
-// EXPECT_THAT(count_div_0628_01(1, 1, 11), 0); 
-// 
+// EXPECT_THAT(count_div_0628_01(1, 1, 11), 0);
+//
 // failed from the report
-// EXPECT_THAT(count_div_0628_03(1, 1, 11), 0); 
-// 
+// EXPECT_THAT(count_div_0628_03(1, 1, 11), 0);
+//
 // fails since 0/K and 0%K are 0. WHY 1? Since 0 is still divisible.
-// EXPECT_THAT(count_div_0628_03(0, 1, 11), 1); 
+// EXPECT_THAT(count_div_0628_03(0, 1, 11), 1);
 //
 // why 1?
-// EXPECT_THAT(count_div_0628_03(0, 0, 11), 1); 
-// 
+// EXPECT_THAT(count_div_0628_03(0, 0, 11), 1);
+//
 // fails
-// EXPECT_THAT(count_div_0628_03(0, 14, 2), 8); 
+// EXPECT_THAT(count_div_0628_03(0, 14, 2), 8);
 //
 // after all, missed to handle:
 // 1. end case which is 0 on both A and B
 // 2. 0/K and 0%K are 0.
-
 
 // 100% pass
 int count_div_0628_03(int A, int B, int K)
 {
   int start{}, result{};
 
-  if (A%K == 0)
+  if (A % K == 0)
     start = A;
   else
-    start = (A/K+1)*K;
+    start = (A / K + 1) * K;
 
-  if (B-start >= 0)
-    result = (B-start)/K + 1;
-  
+  if (B - start >= 0)
+    result = (B - start) / K + 1;
+
   return result;
 }
 
 TEST(AlgoCountDiv, 0628_03)
 {
-  EXPECT_THAT(count_div_0628_03(6, 11, 2), 3); 
-  EXPECT_THAT(count_div_0628_03(1, 1, 11), 0); 
-  EXPECT_THAT(count_div_0628_03(0, 1, 11), 1); 
-  EXPECT_THAT(count_div_0628_03(10, 10, 5), 1); 
-  EXPECT_THAT(count_div_0628_03(10, 10, 7), 0); 
-  EXPECT_THAT(count_div_0628_03(10, 10, 20), 0); 
-  EXPECT_THAT(count_div_0628_03(0, 0, 11), 1); 
-  EXPECT_THAT(count_div_0628_03(0, 14, 2), 8); 
+  EXPECT_THAT(count_div_0628_03(6, 11, 2), 3);
+  EXPECT_THAT(count_div_0628_03(1, 1, 11), 0);
+  EXPECT_THAT(count_div_0628_03(0, 1, 11), 1);
+  EXPECT_THAT(count_div_0628_03(10, 10, 5), 1);
+  EXPECT_THAT(count_div_0628_03(10, 10, 7), 0);
+  EXPECT_THAT(count_div_0628_03(10, 10, 20), 0);
+  EXPECT_THAT(count_div_0628_03(0, 0, 11), 1);
+  EXPECT_THAT(count_div_0628_03(0, 14, 2), 8);
 }
-
 
 // ={=========================================================================
 // algo-count-identical-pairs
@@ -7604,9 +7553,8 @@ int count_identical_pairs_0629_01(const vector<int> &A)
 
 TEST(AlgoCountIdenticalPairs, 0629_01)
 {
-  EXPECT_THAT(count_identical_pairs_0629_01({3,5,6,3,3,5}), 4); 
+  EXPECT_THAT(count_identical_pairs_0629_01({3, 5, 6, 3, 3, 5}), 4);
 }
-
 
 // ={=========================================================================
 // algo-repairman
@@ -7617,10 +7565,13 @@ int g_points[1000];
 int g_weights[1000];
 
 // the order of arg do not matter since it's abs. for example, abs(s-e) or abs(e-s)
-#define ABS_DISTANCE(s,e) (abs(g_points[e] - g_points[s]))
+#define ABS_DISTANCE(s, e) (abs(g_points[e] - g_points[s]))
 
 lint sum_range(int start, int finish, lint start_distance = 0);
-lint sum_range_with_start(int start, int begin, int end, lint start_distance =0);
+lint sum_range_with_start(int start,
+                          int begin,
+                          int end,
+                          lint start_distance = 0);
 
 // get weighted sum in (begin, end] from start offset. note that do not
 // include start in its sum.
@@ -7633,8 +7584,8 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 // cause to miss out the last in add so wrong result.
 //
 // for (int i = begin + direction; i != (end+1); i += direction)
-// cause to seg fault when do the left direction, direction is -1. 
-// 
+// cause to seg fault when do the left direction, direction is -1.
+//
 // the proper is:
 //
 // for (int i = begin + direction; ; i += direction)
@@ -7652,20 +7603,20 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 //
 // sum_range(0,5)
 //  not include start, 0.
-//  direction = 1, i = 1, ABS(0,1), wi[1] 
-//  direction = 1, i = 2, ABS(1,2), wi[2] 
-//  direction = 1, i = 3, ABS(3,2), wi[3] 
-//  direction = 1, i = 4, ABS(4,3), wi[4] 
-//  direction = 1, i = 5, ABS(5,4), wi[5] 
+//  direction = 1, i = 1, ABS(0,1), wi[1]
+//  direction = 1, i = 2, ABS(1,2), wi[2]
+//  direction = 1, i = 3, ABS(3,2), wi[3]
+//  direction = 1, i = 4, ABS(4,3), wi[4]
+//  direction = 1, i = 5, ABS(5,4), wi[5]
 //  exit
 //
 // sum_range(5,0)
 //  not include start, 5.
-//  direction = -1, i = 4, ABS(5,4), wi[4] 
-//  direction = -1, i = 3, ABS(4,3), wi[3] 
-//  direction = -1, i = 2, ABS(3,2), wi[2] 
-//  direction = -1, i = 1, ABS(2,1), wi[1] 
-//  direction = -1, i = 0, ABS(1,0), wi[0] 
+//  direction = -1, i = 4, ABS(5,4), wi[4]
+//  direction = -1, i = 3, ABS(4,3), wi[3]
+//  direction = -1, i = 2, ABS(3,2), wi[2]
+//  direction = -1, i = 1, ABS(2,1), wi[1]
+//  direction = -1, i = 0, ABS(1,0), wi[0]
 //  exit
 //
 //
@@ -7697,111 +7648,111 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 //
 // # DURATION     TID     FUNCTION
 //             [   529] | search(0, 5) {
-// 
+//
 //                          /* starts from 0 to 5 */
 //                          /* sum(start, begin, end, dis); */
 //    0.665 us [   529] |   sum(0, 5, 0, 5) = 244;
-// 
+//
 //                          /* starts from 1 */
 //                          /* sum(begin, end, dis); */
 //             [   529] |   sum(1, 0, 5, 0) {
 //    0.443 us [   529] |     sum(1, 0, 0, 0) = 5;
 //    1.035 us [   529] |     sum(1, 5, 10, 5) = 329;
 //    1.219 ms [   529] |   } = 334; /* sum */
-// 
+//
 //                          /* starts from 2 */
 //             [   529] |   sum(2, 0, 5, 0) {
 //    0.514 us [   529] |     sum(2, 0, 0, 0) = 23;
 //    0.499 us [   529] |     sum(2, 5, 22, 5) = 223;
 //    1.225 ms [   529] |   } = 246; /* sum */
-// 
+//
 //                          /* starts from 3 */
 //             [   529] |   sum(3, 0, 5, 0) {
 //    0.554 us [   529] |     sum(3, 0, 0, 0) = 36;
 //    0.566 us [   529] |     sum(3, 5, 24, 5) = 160;
 //    1.078 ms [   529] |   } = 196; /* sum */
-// 
+//
 //                          /* update minimum sum and save start point */
-// 
+//
 //                          /* starts from 4 */
 //             [   529] |   sum(4, 0, 5, 0) {
 //    0.493 us [   529] |     sum(4, 0, 0, 0) = 52;
 //    0.431 us [   529] |     sum(4, 5, 26, 5) = 36;
 //  190.644 us [   529] |   } = 88; /* sum */
-// 
+//
 //                          /* update minimum sum and save start point */
-// 
+//
 //                          /* search [0,5] ends and there are updates so search again [4,0] */
-// 
+//
 //             [   529] |   search(4, 0) {
-// 
+//
 //                          /* starts from 4 to 0 */
 //    0.242 us [   529] |     sum(4, 0, 0, 0) = 52;
-// 
+//
 //             [   529] |     sum(3, 4, 0, 0) {
 //    0.202 us [   529] |       sum(3, 4, 0, 4) = 5;
 //    0.394 us [   529] |       sum(3, 0, 2, 0) = 62;
 //  280.063 us [   529] |     } = 67; /* sum */
-// 
+//
 //             [   529] |     sum(2, 4, 0, 0) {
 //    0.301 us [   529] |       sum(2, 4, 0, 4) = 13;
 //    0.220 us [   529] |       sum(2, 0, 4, 0) = 35;
 //   40.841 us [   529] |     } = 48; /* sum */
-// 
+//
 //                          /* update minimum sum and save start point */
-// 
+//
 //             [   529] |     sum(1, 4, 0, 0) {
 //    0.217 us [   529] |       sum(1, 4, 0, 4) = 121;
 //    0.211 us [   529] |       sum(1, 0, 16, 0) = 21;
 //   37.859 us [   529] |     } = 142; /* sum */
-// 
+//
 //                          /* search [4,0] ends and there are updates so search again [2,4] */
-// 
+//
 //             [   529] |     search(2, 4) {
 //    0.224 us [   529] |       sum(2, 4, 0, 4) = 13;
-// 
+//
 //             [   529] |       sum(3, 2, 4, 0) {
 //    3.156 us [   529] |         sum(3, 2, 0, 2) = 10;
 //    0.221 us [   529] |         sum(3, 4, 2, 4) = 15;
 //   44.632 us [   529] |       } = 25; /* sum */
-// 
+//
 //    0.208 us [   529] |       sum(2, 4, 0, 4) = 13;
-// 
+//
 //                              /* search [2,4] ends
 //                                 add time[2, end 4], time +=2, time 2
 //                                 <13, 2> = sum(ind:2, e:4, time:0)
 //                              */
 //
-//                              /* means that start = 2 for minimul sum ! */ 
+//                              /* means that start = 2 for minimul sum ! */
 //
 //   71.569 us [   529] |     } = 13; /* search */
-// 
+//
 //                            /* still in search [4,0]
-//                               ind was 2, add time[2, start 4], time +=2, time 4 
+//                               ind was 2, add time[2, start 4], time +=2, time 4
 //                             */
-// 
+//
 //    0.428 us [   529] |     sum(2, 0, 4, 0) = 35;
-// 
+//
 //                            /* search [4,0] ends
 //                               add time[2, start 0], time +=11, time 15
 //                               <48, 15> = sum(ind:2, e:0, time:4)
 //                            */
-// 
+//
 //  955.074 us [   529] |   } = 48; /* search */
-// 
+//
 //                            /* still in search [0,5]
-//                               ind was 4, add time[4, start 0], time +=13, time 28 
+//                               ind was 4, add time[4, start 0], time +=13, time 28
 //                             */
-// 
+//
 //    0.235 us [   529] |   sum(4, 5, 28, 5) = 38;
-// 
+//
 //                            /* search [0,5] ends
 //                               add time[4, end 5], time +=10, time 38
 //                               <86, 38> sum(ind:4, e:5, time:28)
 //                            */
-// 
+//
 //    6.085 ms [   529] | } = 86; /* search */
-// 
+//
 //             [   529] | search(5, 0) {
 //    0.239 us [   529] |   sum(5, 0, 0, 0) = 262;
 //             [   529] |   sum(4, 5, 0, 0) {
@@ -7843,21 +7794,20 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 // 2. Do not count point which are already counted.
 // 3. The start point do not included in the sum.
 
-
 lint sum_range(int begin, int end, lint start_distance)
 {
   if (begin == end)
     return 0;
 
   // forward or backward
-  int direction = ((end > begin) ? 1: -1);
+  int direction = ((end > begin) ? 1 : -1);
 
   lint weight_sum = 0;
 
-  for (int i = begin + direction; ; i += direction)
+  for (int i = begin + direction;; i += direction)
   {
-    start_distance += ABS_DISTANCE(i-direction, i);
-    weight_sum += start_distance*(lint)g_weights[i];
+    start_distance += ABS_DISTANCE(i - direction, i);
+    weight_sum += start_distance * (lint)g_weights[i];
 
     if (i == end)
       return weight_sum;
@@ -7866,45 +7816,45 @@ lint sum_range(int begin, int end, lint start_distance)
   return weight_sum;
 }
 
-
 lint sum_range_with_start(int start, int begin, int end, lint start_distance)
 {
-	lint d1 = sum_range(start, begin, start_distance);
+  lint d1 = sum_range(start, begin, start_distance);
 
-	// why 2? since used twice to make a turn
-	lint d3 = sum_range(start, end, start_distance + 2*ABS_DISTANCE(begin, start));
+  // why 2? since used twice to make a turn
+  lint d3 =
+    sum_range(start, end, start_distance + 2 * ABS_DISTANCE(begin, start));
 
-	return d1 + d3;
+  return d1 + d3;
 }
 
 // search(start index, end index)
 pair<lint, lint> search(int begin, int end)
 {
-  lint current_sum = sum_range(begin, end, 0);
+  lint current_sum  = sum_range(begin, end, 0);
   int current_start = begin;
 
-  if(begin == end)
+  if (begin == end)
     return make_pair(0, 0);
 
-  int direction = ((end > begin)? 1:-1);
+  int direction = ((end > begin) ? 1 : -1);
 
-  lint calculated_sum = 0;
+  lint calculated_sum      = 0;
   lint calculated_distance = 0;
 
   for (int start = begin + direction; start != end; start += direction)
   {
-    lint range_sum  = sum_range_with_start(start, begin, end);
+    lint range_sum = sum_range_with_start(start, begin, end);
 
     // found sum which is less than sum of [begin, end] and save start point.
     // so `ind` is saved start which shows the minimum sum so far.
-    // 
+    //
     // redundant check
     // if (range_sum < current_sum && abs(start - begin) > abs(current_start - begin))
 
     if (range_sum < current_sum)
     {
 
-      current_sum = range_sum;
+      current_sum   = range_sum;
       current_start = start;
     }
   }
@@ -7914,9 +7864,9 @@ pair<lint, lint> search(int begin, int end)
 
   if (current_start != begin)
   {
-    pair<lint, lint> result = search(current_start, begin);	
+    pair<lint, lint> result = search(current_start, begin);
     calculated_sum += result.first;
-    calculated_distance += result.second + ABS_DISTANCE(current_start, begin);		
+    calculated_distance += result.second + ABS_DISTANCE(current_start, begin);
   }
 
   calculated_sum += sum_range(current_start, end, calculated_distance);
@@ -7924,7 +7874,6 @@ pair<lint, lint> search(int begin, int end)
 
   return make_pair(calculated_sum, calculated_distance);
 }
-
 
 TEST(AlgoRapairman, 0704)
 {
@@ -7934,7 +7883,7 @@ TEST(AlgoRapairman, 0704)
 
     for (size_t i = 0; i < dcall.size(); ++i)
     {
-      g_points[i] = dcall[i];
+      g_points[i]  = dcall[i];
       g_weights[i] = wcall[i];
     }
 
@@ -7947,12 +7896,13 @@ TEST(AlgoRapairman, 0704)
   }
 
   {
-    vector<int> dcall{5, 34, 45, 49, 51, 52, 53, 56, 63, 81, 84, 88, 93, 99, 106};
+    vector<int>
+      dcall{5, 34, 45, 49, 51, 52, 53, 56, 63, 81, 84, 88, 93, 99, 106};
     vector<int> wcall{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
     for (size_t i = 0; i < dcall.size(); ++i)
     {
-      g_points[i] = dcall[i];
+      g_points[i]  = dcall[i];
       g_weights[i] = wcall[i];
     }
 
@@ -7965,14 +7915,13 @@ TEST(AlgoRapairman, 0704)
   }
 }
 
-
 // ={=========================================================================
 // algo-atoi
 //
 // * input type? digits only? no space?
 // * input size?
 // * what base? 10 or 2?
-// * sign support? 
+// * sign support?
 
 // from ansic, p43.
 //
@@ -7992,7 +7941,7 @@ namespace algo_conversion
 
     for (; str[i] >= '0' && str[i] <= '9'; ++i)
     {
-      value = value*10 + (str[i] - '0');
+      value = value * 10 + (str[i] - '0');
     }
 
     return value;
@@ -8006,7 +7955,7 @@ namespace algo_conversion
 
     for (; isdigit(str[i]); ++i)
     {
-      value = value*10 + (str[i] - '0');
+      value = value * 10 + (str[i] - '0');
     }
 
     return value;
@@ -8030,10 +7979,10 @@ namespace algo_conversion
 
     for (; isdigit(str[i]); ++i)
     {
-      value = value*10 + (str[i] - '0');
+      value = value * 10 + (str[i] - '0');
     }
 
-    return sign*value;
+    return sign * value;
   }
 
   // use base 2. value is right but not representation
@@ -8056,16 +8005,15 @@ namespace algo_conversion
 
     for (; str[i] >= '0' && str[i] <= '9'; ++i)
     {
-      value = value*2 + (str[i] - '0');
+      value = value * 2 + (str[i] - '0');
     }
 
     return value;
   }
 
-
   // use base 16. htoi
   //
-  // From ansic, exercise 2-3. 
+  // From ansic, exercise 2-3.
   //
   // Write the function htoi(s), which converts a string of hexadecimal digits
   // (including an 'optional' 0x or 0X) into its equivalent integer value. The
@@ -8080,27 +8028,27 @@ namespace algo_conversion
   // int htoi(char s[])
   // {
   //   int n, i = 0, v = 0;
-  // 
+  //
   //   // optional 0x or 0X
   //   if(s[0] == '0' && ( s[1] == 'x' || s[1] == 'X' ))
   //     i = 2;
-  // 
+  //
   //   // isxdigit()
-  //   // checks for a hexadecimal digits, that is, one of 
+  //   // checks for a hexadecimal digits, that is, one of
   //   // 0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F.
-  //    
+  //
   //   for(n = 0; isxdigit(s[i]); i++)
   //   {
   //     if( s[i] >= '0' && s[i] <= '9' )
   //       v = s[i] - '0';
   //     else if( s[i] >= 'a' && s[i] <= 'f' )
   //       v = s[i] - 'a' + 10;
-  //     else 
+  //     else
   //       v = s[i] - 'A' + 10;
-  // 
+  //
   //     n = n*16 + v;
   //   }
-  // 
+  //
   //   return n;
   // }
 
@@ -8111,12 +8059,12 @@ namespace algo_conversion
 
     for (; hex.find(std::tolower(str[i])) != std::string::npos; ++i)
     {
-      value = value*16 + hex.find(std::tolower(str[i]));
+      value = value * 16 + hex.find(std::tolower(str[i]));
     }
 
     return value;
   }
-} // namespace
+} // namespace algo_conversion
 
 TEST(AlgoConversion, StringToInteger)
 {
@@ -8134,12 +8082,11 @@ TEST(AlgoConversion, StringToInteger)
   EXPECT_THAT(atoi_hex("1A"), Eq(26));
 }
 
-
 // ={=========================================================================
 // algo-itoa
 //
 // * what base? 10 or 2?
-// * sign support? 
+// * sign support?
 
 // from ansic, p43.
 //
@@ -8176,17 +8123,17 @@ namespace algo_conversion
     char letter{0};
     int value{input};
 
-    for(; value;)
+    for (; value;)
     {
       letter = '0' + (value % 10);
-      result.insert( result.begin(), 1, letter );
+      result.insert(result.begin(), 1, letter);
       value /= 10;
     }
 
     return result;
   }
 
-} // namespace
+} // namespace algo_conversion
 
 TEST(AlgoConversion, IntegerToString)
 {
@@ -8195,7 +8142,6 @@ TEST(AlgoConversion, IntegerToString)
   EXPECT_THAT(itoa_navie(123), Eq("123"));
   EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
 }
-
 
 // ={=========================================================================
 // algo-list
@@ -8224,87 +8170,83 @@ namespace algo_list_contiguous
 {
   struct ListEntry
   {
-    explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col) {}
+    explicit ListEntry(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+    {}
 
     int row_{};
     int col_{};
   };
 
   // cxx-operator-overload
-  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
   {
     return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
   }
 
-  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
     return !(lhs == rhs);
   }
 
   class List
   {
-    public:
-      explicit List() : count_(0)
-      {}
+  public:
+    explicit List()
+        : count_(0)
+    {}
 
-      void clear() 
-      { count_ = 0;}
+    void clear() { count_ = 0; }
 
-      bool empty()
-      { return count_ == 0 ? true : false; }
+    bool empty() { return count_ == 0 ? true : false; }
 
-      bool full()
-      { return count_ >= MAX_ENTRY ? true : false; }
+    bool full() { return count_ >= MAX_ENTRY ? true : false; }
 
-      int size()
-      { return count_; }
+    int size() { return count_; }
 
-      // as push_back();
-      void push(ListEntry const& entry)
-      {
-        if (full())
-          throw runtime_error("list is full");
+    // as push_back();
+    void push(ListEntry const &entry)
+    {
+      if (full())
+        throw runtime_error("list is full");
 
-        coll_[count_++] = entry;
-      }
+      coll_[count_++] = entry;
+    }
 
-      std::vector<ListEntry> snap()
-      {
-        std::vector<ListEntry> coll;
+    std::vector<ListEntry> snap()
+    {
+      std::vector<ListEntry> coll;
 
-        for (int i = 0; i < count_; ++i)
-          coll.push_back(coll_[i]);
+      for (int i = 0; i < count_; ++i)
+        coll.push_back(coll_[i]);
 
-        return coll;
-      }
+      return coll;
+    }
 
-    private:
+  private:
+    // cxx-static
+    // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
+    // const int MAX_ENTRY{5};
 
-      // cxx-static
-      // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
-      // const int MAX_ENTRY{5};
+    static const int MAX_ENTRY{5};
 
-      static const int MAX_ENTRY{5};
+    // count_ should be [0, 4] or [1, 5]? choose [1,5]
+    int count_;
 
-      // count_ should be [0, 4] or [1, 5]? choose [1,5]
-      int count_;
-
-      ListEntry coll_[MAX_ENTRY];
+    ListEntry coll_[MAX_ENTRY];
   };
-}
+} // namespace algo_list_contiguous
 
 TEST(AlgoList, ContiguousSimple)
 {
   using namespace algo_list_contiguous;
 
-  std::vector<ListEntry> values{
-      ListEntry(1,2), 
-      ListEntry(2,3), 
-      ListEntry(3,4), 
-      ListEntry(4,5), 
-      ListEntry(5,6)
-  };
+  std::vector<ListEntry> values{ListEntry(1, 2),
+                                ListEntry(2, 3),
+                                ListEntry(3, 4),
+                                ListEntry(4, 5),
+                                ListEntry(5, 6)};
 
   List coll;
 
@@ -8316,9 +8258,8 @@ TEST(AlgoList, ContiguousSimple)
   // requires cxx-operator-overload
   EXPECT_THAT(coll.snap(), values);
 
-  EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+  EXPECT_THROW(coll.push(ListEntry(6, 7)), runtime_error);
 }
-
 
 namespace algo_list_linked
 {
@@ -8327,135 +8268,132 @@ namespace algo_list_linked
 
   struct ListEntry
   {
-    explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col), next_(nullptr) 
+    explicit ListEntry(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+        , next_(nullptr)
     {}
 
     int row_{};
     int col_{};
 
-    ListEntry* next_;
+    ListEntry *next_;
   };
 
   // cxx-operator-overload
-  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
   {
     return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
   }
 
-  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
     return !(lhs == rhs);
   }
 
   class List
   {
-    public:
-      explicit List() noexcept
+  public:
+    explicit List() noexcept
         : head_(nullptr)
-        {}
+    {}
 
-      bool emptry()
-      { return count_ == 0 ? true : false; }
+    bool emptry() { return count_ == 0 ? true : false; }
 
-      int size()
-      { return count_; }
+    int size() { return count_; }
 
-      // push_back()
-      void push_old(ListEntry const& entry)
+    // push_back()
+    void push_old(ListEntry const &entry)
+    {
+      if (!head_)
+        head_ = new ListEntry(entry);
+      else
       {
-        if (!head_)
-          head_ = new ListEntry(entry);
-        else
-        {
-          ListEntry* run = head_;
+        ListEntry *run = head_;
 
-          // unlike clear(), snap(), run shall be before end() so that can
-          // insert new one. Hence check run->next
+        // unlike clear(), snap(), run shall be before end() so that can
+        // insert new one. Hence check run->next
 
-          while (run->next_)
-            run = run->next_;
-
-          run->next_ = new ListEntry(entry);
-        }
-        
-        ++count_;
-      }
-
-      // push_back()
-      void push(ListEntry const& entry)
-      {
-        ListEntry* run{};
-
-        // find node for insertion *algo-list-find-end*
-        // works both when head_ is null and is not null
-
-        for (run = head_; run && run->next_; run = run->next_)
-          ;
-
-        // first item
-        if (!run)
-          head_ = new ListEntry(entry);
-        else
-          run->next_ = new ListEntry(entry);
-
-        ++count_;
-      }
-
-      void clear()
-      {
-        ListEntry* run = head_;
-        ListEntry* prev{};
-
-        while (run)
-        {
-          prev = run;
+        while (run->next_)
           run = run->next_;
-          free(prev);
-          --count_;
-        }
 
-        head_ = run;
+        run->next_ = new ListEntry(entry);
       }
 
-      std::vector<ListEntry> snap()
+      ++count_;
+    }
+
+    // push_back()
+    void push(ListEntry const &entry)
+    {
+      ListEntry *run{};
+
+      // find node for insertion *algo-list-find-end*
+      // works both when head_ is null and is not null
+
+      for (run = head_; run && run->next_; run = run->next_)
+        ;
+
+      // first item
+      if (!run)
+        head_ = new ListEntry(entry);
+      else
+        run->next_ = new ListEntry(entry);
+
+      ++count_;
+    }
+
+    void clear()
+    {
+      ListEntry *run = head_;
+      ListEntry *prev{};
+
+      while (run)
       {
-        ListEntry* run = head_;
-        std::vector<ListEntry> coll;
-
-        while (run)
-        {
-          // ok as well
-          // coll.push_back(ListEntry(*run));
-          coll.push_back(*run);
-          run = run->next_;
-        }
-
-        return coll;
+        prev = run;
+        run  = run->next_;
+        free(prev);
+        --count_;
       }
 
-    private:
-      int count_{};
+      head_ = run;
+    }
 
-      // can use ListEntry head_; which changes member implementation
+    std::vector<ListEntry> snap()
+    {
+      ListEntry *run = head_;
+      std::vector<ListEntry> coll;
 
-      ListEntry* head_;
+      while (run)
+      {
+        // ok as well
+        // coll.push_back(ListEntry(*run));
+        coll.push_back(*run);
+        run = run->next_;
+      }
+
+      return coll;
+    }
+
+  private:
+    int count_{};
+
+    // can use ListEntry head_; which changes member implementation
+
+    ListEntry *head_;
   };
 
-} // namespace
-
+} // namespace algo_list_linked
 
 TEST(AlgoList, LinkedSimple)
 {
   using namespace algo_list_linked;
 
-  std::vector<ListEntry> values{
-    ListEntry(1,2), 
-    ListEntry(2,3), 
-    ListEntry(3,4), 
-    ListEntry(4,5), 
-    ListEntry(5,6)
-  };
+  std::vector<ListEntry> values{ListEntry(1, 2),
+                                ListEntry(2, 3),
+                                ListEntry(3, 4),
+                                ListEntry(4, 5),
+                                ListEntry(5, 6)};
 
   List coll;
 
@@ -8464,18 +8402,16 @@ TEST(AlgoList, LinkedSimple)
 
   EXPECT_THAT(coll.size(), 5);
 
-  coll.push(ListEntry(6,7));
+  coll.push(ListEntry(6, 7));
   EXPECT_THAT(coll.size(), 6);
 
   // requires cxx-operator-overload
-  std::vector<ListEntry> expected{
-    ListEntry(1,2), 
-    ListEntry(2,3),
-    ListEntry(3,4),
-    ListEntry(4,5),
-    ListEntry(5,6),
-    ListEntry(6,7)
-  };
+  std::vector<ListEntry> expected{ListEntry(1, 2),
+                                  ListEntry(2, 3),
+                                  ListEntry(3, 4),
+                                  ListEntry(4, 5),
+                                  ListEntry(5, 6),
+                                  ListEntry(6, 7)};
 
   EXPECT_THAT(coll.snap(), expected);
 
@@ -8483,60 +8419,58 @@ TEST(AlgoList, LinkedSimple)
   EXPECT_THAT(coll.size(), 0);
 }
 
-
 // TEST(AlgoList, LinkedSimpleReverse)
 // {
 //   using namespace algo_list_linked;
-// 
+//
 //   {
 //     auto values{
-//       ListEntry(1,2), 
-//         ListEntry(2,3), 
-//         ListEntry(3,4), 
-//         ListEntry(4,5), 
+//       ListEntry(1,2),
+//         ListEntry(2,3),
+//         ListEntry(3,4),
+//         ListEntry(4,5),
 //         ListEntry(5,6)
 //     };
-// 
+//
 //     List coll;
-// 
+//
 //     for (auto &e : values)
 //       coll.push(e);
-// 
+//
 //     EXPECT_THAT(coll.size(), 5);
-// 
+//
 //     // now do not expect exception since there's no max
-//     // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
-// 
+//     // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error);
+//
 //     coll.push(ListEntry(6,7));
 //     EXPECT_THAT(coll.size(), 6);
-// 
-//     EXPECT_THAT(coll.snap(), 
+//
+//     EXPECT_THAT(coll.snap(),
 //         ElementsAre(
-//           make_pair(1,2), 
-//           make_pair(2,3), 
-//           make_pair(3,4), 
-//           make_pair(4,5), 
-//           make_pair(5,6), 
+//           make_pair(1,2),
+//           make_pair(2,3),
+//           make_pair(3,4),
+//           make_pair(4,5),
+//           make_pair(5,6),
 //           make_pair(6,7))
 //         );
-// 
+//
 //     coll.reverse();
-// 
-//     EXPECT_THAT(coll.snap(), 
+//
+//     EXPECT_THAT(coll.snap(),
 //         ElementsAre(
 //           make_pair(6,7),
-//           make_pair(5,6), 
-//           make_pair(4,5), 
-//           make_pair(3,4), 
-//           make_pair(2,3), 
-//           make_pair(1,2)) 
+//           make_pair(5,6),
+//           make_pair(4,5),
+//           make_pair(3,4),
+//           make_pair(2,3),
+//           make_pair(1,2))
 //         );
-// 
+//
 //     coll.clear();
 //     EXPECT_THAT(coll.size(), 0);
 //   }
 // }
-
 
 // In order to exercise Divide(), have to have access to list structure but do
 // not see any practical way to do it through class interface. so make `head_`
@@ -8549,120 +8483,119 @@ namespace algo_list_linked_divide
 
   struct ListEntry
   {
-    explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col), next_(nullptr) 
+    explicit ListEntry(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+        , next_(nullptr)
     {}
 
     int row_{};
     int col_{};
 
-    ListEntry* next_;
+    ListEntry *next_;
   };
 
   // cxx-operator-overload
-  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
   {
     return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
   }
 
-  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
     return !(lhs == rhs);
   }
 
   class List
   {
-    public:
-      explicit List() noexcept
+  public:
+    explicit List() noexcept
         : head_(nullptr)
-        {}
+    {}
 
-      bool emptry()
-      { return count_ == 0 ? true : false; }
+    bool emptry() { return count_ == 0 ? true : false; }
 
-      int size()
-      { return count_; }
+    int size() { return count_; }
 
-      // push_back()
-      void push_old(ListEntry const& entry)
+    // push_back()
+    void push_old(ListEntry const &entry)
+    {
+      if (!head_)
+        head_ = new ListEntry(entry);
+      else
       {
-        if (!head_)
-          head_ = new ListEntry(entry);
-        else
-        {
-          ListEntry* run = head_;
+        ListEntry *run = head_;
 
-          // unlike clear(), snap(), run shall be before end() so that can
-          // insert new one. Hence check run->next
+        // unlike clear(), snap(), run shall be before end() so that can
+        // insert new one. Hence check run->next
 
-          while (run->next_)
-            run = run->next_;
-
-          run->next_ = new ListEntry(entry);
-        }
-        
-        ++count_;
-      }
-
-      // push_back()
-      void push(ListEntry const& entry)
-      {
-        ListEntry* run{};
-
-        // find node for insertion *algo-list-find-end*
-        // works both when head_ is null and is not null
-
-        for (run = head_; run && run->next_; run = run->next_)
-          ;
-
-        // first item
-        if (!run)
-          head_ = new ListEntry(entry);
-        else
-          run->next_ = new ListEntry(entry);
-
-        ++count_;
-      }
-
-      void clear()
-      {
-        ListEntry* run = head_;
-        ListEntry* prev{};
-
-        while (run)
-        {
-          prev = run;
+        while (run->next_)
           run = run->next_;
-          free(prev);
-          --count_;
-        }
 
-        head_ = run;
+        run->next_ = new ListEntry(entry);
       }
 
-      std::vector<ListEntry> snap()
+      ++count_;
+    }
+
+    // push_back()
+    void push(ListEntry const &entry)
+    {
+      ListEntry *run{};
+
+      // find node for insertion *algo-list-find-end*
+      // works both when head_ is null and is not null
+
+      for (run = head_; run && run->next_; run = run->next_)
+        ;
+
+      // first item
+      if (!run)
+        head_ = new ListEntry(entry);
+      else
+        run->next_ = new ListEntry(entry);
+
+      ++count_;
+    }
+
+    void clear()
+    {
+      ListEntry *run = head_;
+      ListEntry *prev{};
+
+      while (run)
       {
-        ListEntry* run = head_;
-        std::vector<ListEntry> coll;
-
-        while (run)
-        {
-          // ok as well
-          // coll.push_back(ListEntry(*run));
-          coll.push_back(*run);
-          run = run->next_;
-        }
-
-        return coll;
+        prev = run;
+        run  = run->next_;
+        free(prev);
+        --count_;
       }
 
-    public:
-      int count_{};
+      head_ = run;
+    }
 
-      // can use ListEntry head_; which changes member implementation
-      ListEntry* head_;
+    std::vector<ListEntry> snap()
+    {
+      ListEntry *run = head_;
+      std::vector<ListEntry> coll;
+
+      while (run)
+      {
+        // ok as well
+        // coll.push_back(ListEntry(*run));
+        coll.push_back(*run);
+        run = run->next_;
+      }
+
+      return coll;
+    }
+
+  public:
+    int count_{};
+
+    // can use ListEntry head_; which changes member implementation
+    ListEntry *head_;
   };
-
 
   // o slow and ffast starts from same place, begin()
   // o slow goes 1 and ffast goes 2
@@ -8675,17 +8608,16 @@ namespace algo_list_linked_divide
     ListEntry *ffast;
 
     for (slow = fast = ffast = list.head_;
-        slow && (fast = ffast->next_) && (ffast = fast->next_);)
+         slow && (fast = ffast->next_) && (ffast = fast->next_);)
     {
       if (slow == fast || slow == ffast)
         return true;
 
       slow = slow->next_;
     }
-    
+
     return false;
   }
-
 
   // o use single fast
   // o see *cxx-for-while*
@@ -8706,14 +8638,14 @@ namespace algo_list_linked_divide
     ListEntry *fast;
 
     for (slow = fast = list.head_;
-        slow && (fast = fast->next_) && (fast = fast->next_);)
+         slow && (fast = fast->next_) && (fast = fast->next_);)
     {
       if (slow == fast)
         return true;
 
       slow = slow->next_;
     }
-    
+
     return false;
   }
 
@@ -8723,8 +8655,7 @@ namespace algo_list_linked_divide
     ListEntry *fast;
 
     // do not check when head_ is null
-    for (slow = list.head_, fast = slow->next_;
-        fast && slow != fast; )
+    for (slow = list.head_, fast = slow->next_; fast && slow != fast;)
     {
       fast = fast->next_;
 
@@ -8741,20 +8672,18 @@ namespace algo_list_linked_divide
     return fast != slow ? false : true;
   }
 
-} // namespace
+} // namespace algo_list_linked_divide
 
 TEST(AlgoList, DetectCycle)
 {
   using namespace algo_list_linked_divide;
 
   {
-    std::vector<ListEntry> values{
-      ListEntry(1,2), 
-        ListEntry(2,3), 
-        ListEntry(3,4), 
-        ListEntry(4,5), 
-        ListEntry(5,6)
-    };
+    std::vector<ListEntry> values{ListEntry(1, 2),
+                                  ListEntry(2, 3),
+                                  ListEntry(3, 4),
+                                  ListEntry(4, 5),
+                                  ListEntry(5, 6)};
 
     List coll;
 
@@ -8767,13 +8696,11 @@ TEST(AlgoList, DetectCycle)
   }
 
   {
-    std::vector<ListEntry> values{
-      ListEntry(1,2), 
-        ListEntry(2,3), 
-        ListEntry(3,4), 
-        ListEntry(4,5), 
-        ListEntry(5,6)
-    };
+    std::vector<ListEntry> values{ListEntry(1, 2),
+                                  ListEntry(2, 3),
+                                  ListEntry(3, 4),
+                                  ListEntry(4, 5),
+                                  ListEntry(5, 6)};
 
     List coll;
 
@@ -8807,7 +8734,7 @@ namespace algo_list_linked_divide
   // o when the size of the first is odd, the divided first will have one more
   //   than the second
   // o as with detect_cycle_03(), slow starts from 0 and fast starts from 1.
- 
+
   void divide_list_01(List &first, List &second)
   {
     ListEntry *slow;
@@ -8815,8 +8742,7 @@ namespace algo_list_linked_divide
 
     // do not check if slow is null or not
 
-    for (slow = first.head_, fast = slow->next_; 
-        fast; )
+    for (slow = first.head_, fast = slow->next_; fast;)
     {
       fast = fast->next_;
 
@@ -8829,7 +8755,7 @@ namespace algo_list_linked_divide
 
     // `slow` is the end of divided first list
     second.head_ = slow->next_;
-    slow->next_ = nullptr;
+    slow->next_  = nullptr;
   }
 
   // as with detect_cycle_01(), both starts from the same pos
@@ -8840,29 +8766,27 @@ namespace algo_list_linked_divide
     ListEntry *fast;
 
     for (slow = fast = first.head_;
-        slow && (fast = fast->next_) && (fast = fast->next_); )
+         slow && (fast = fast->next_) && (fast = fast->next_);)
     {
       slow = slow->next_;
     }
 
     // `slow` is the end of divided first list
     second.head_ = slow->next_;
-    slow->next_ = nullptr;
+    slow->next_  = nullptr;
   }
-} // namespace
+} // namespace algo_list_linked_divide
 
 TEST(AlgoList, Divide)
 {
   using namespace algo_list_linked_divide;
 
-  std::vector<ListEntry> values{
-    ListEntry(1,2), 
-    ListEntry(2,3), 
-    ListEntry(3,4), 
-    ListEntry(4,5), 
-    ListEntry(5,6),
-    ListEntry(6,7)
-  };
+  std::vector<ListEntry> values{ListEntry(1, 2),
+                                ListEntry(2, 3),
+                                ListEntry(3, 4),
+                                ListEntry(4, 5),
+                                ListEntry(5, 6),
+                                ListEntry(6, 7)};
 
   {
     const auto func = divide_list_01;
@@ -8873,17 +8797,13 @@ TEST(AlgoList, Divide)
       coll1.push(e);
 
     // requires cxx-operator-overload
-    std::vector<ListEntry> divided_first{
-      ListEntry(1,2), 
-      ListEntry(2,3),
-      ListEntry(3,4)
-    };
+    std::vector<ListEntry> divided_first{ListEntry(1, 2),
+                                         ListEntry(2, 3),
+                                         ListEntry(3, 4)};
 
-    std::vector<ListEntry> divided_second{
-      ListEntry(4,5),
-      ListEntry(5,6),
-      ListEntry(6,7)
-    };
+    std::vector<ListEntry> divided_second{ListEntry(4, 5),
+                                          ListEntry(5, 6),
+                                          ListEntry(6, 7)};
 
     // note:
     // since divide_list_01() do not change `count_`, count of simple_list,
@@ -8909,17 +8829,13 @@ TEST(AlgoList, Divide)
       coll1.push(e);
 
     // requires cxx-operator-overload
-    std::vector<ListEntry> divided_first{
-      ListEntry(1,2), 
-      ListEntry(2,3),
-      ListEntry(3,4)
-    };
+    std::vector<ListEntry> divided_first{ListEntry(1, 2),
+                                         ListEntry(2, 3),
+                                         ListEntry(3, 4)};
 
-    std::vector<ListEntry> divided_second{
-      ListEntry(4,5),
-      ListEntry(5,6),
-      ListEntry(6,7)
-    };
+    std::vector<ListEntry> divided_second{ListEntry(4, 5),
+                                          ListEntry(5, 6),
+                                          ListEntry(6, 7)};
 
     // note:
     // since divide_list_01() do not change `count_`, count of simple_list,
@@ -8942,7 +8858,7 @@ TEST(AlgoList, Divide)
     auto slow = coll.begin();
     auto fast = next(slow);
 
-    for(;fast != coll.end();)
+    for (; fast != coll.end();)
     {
       ++fast;
 
@@ -8960,35 +8876,34 @@ TEST(AlgoList, Divide)
     EXPECT_THAT(*slow, 29);
     ++slow;
 
-    // c.splice(pos,c2, c2beg,c2end) 
+    // c.splice(pos,c2, c2beg,c2end)
     // Moves all elements of the range [c2beg,c2end) in c2 in
     // front of pos of list c (c and c2 may be identical)
 
     coll1.splice(coll1.begin(), coll, coll.begin(), slow);
     coll2.splice(coll2.begin(), coll, slow, coll.end());
 
-    EXPECT_THAT(coll1, ElementsAre(26,33,35,29));
-    EXPECT_THAT(coll2, ElementsAre(19,12,22));
+    EXPECT_THAT(coll1, ElementsAre(26, 33, 35, 29));
+    EXPECT_THAT(coll2, ElementsAre(19, 12, 22));
   }
 }
-
 
 // namespace list_simple_linked_list_public_two
 // {
 //   // C version list from the reference
-// 
+//
 //   typedef int ListEntry;
-// 
+//
 //   typedef struct node {
 //     int       key;
 //     struct node *pnext;
 //   } ListNode;
-// 
+//
 //   typedef struct {
 //     ListNode *header;
 //     int count;
 //   } List;
-// 
+//
 //   void CombineList(List *first, List *last, List *result)
 //   {
 //     // handle when one of lists is empty
@@ -8997,16 +8912,16 @@ TEST(AlgoList, Divide)
 //       *result = *last;
 //       return;
 //     }
-//     else if ( !last->header ) 
+//     else if ( !last->header )
 //     {
 //       *result  = *first;
 //       return;
 //     }
-// 
+//
 //     // handle first comparison
 //     ListNode *pfirst = first->header, *psecond = last->header;
 //     ListNode *psorted;
-// 
+//
 //     if(pfirst->key < psecond->key)
 //     {
 //       result->header = pfirst;
@@ -9017,9 +8932,9 @@ TEST(AlgoList, Divide)
 //       result->header = psecond;
 //       psecond = psecond->pnext;
 //     }
-// 
+//
 //     psorted = result->header;
-// 
+//
 //     // sort until finish one of lists because first and second is alreay sorted itself
 //     while( pfirst && psecond )
 //     {
@@ -9036,7 +8951,7 @@ TEST(AlgoList, Divide)
 //         psecond = psecond->pnext;
 //       }
 //     }
-// 
+//
 //     // when one of lists are finished, simply append the other list to the sorted
 //     if(!pfirst)
 //       psorted->pnext = psecond;
@@ -9044,7 +8959,6 @@ TEST(AlgoList, Divide)
 //       psorted->pnext = pfirst;
 //   }
 // } // namespace
-
 
 // ={=========================================================================
 // algo-stack
@@ -9071,99 +8985,90 @@ namespace algo_stack_contiguous
 {
   struct ListEntry
   {
-    explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col) {}
+    explicit ListEntry(int row = 0, int col = 0) noexcept
+        : row_(row)
+        , col_(col)
+    {}
 
     int row_{};
     int col_{};
   };
 
-  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
   {
     return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
   }
 
-  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
     return !(lhs == rhs);
   }
 
   class Stack
   {
-    public:
-      void create()
-      { top_ = 0; }
+  public:
+    void create() { top_ = 0; }
 
-      void clear() 
-      { top_ = 0;}
+    void clear() { top_ = 0; }
 
-      bool empty()
-      { return top_ == 0 ? true : false; }
+    bool empty() { return top_ == 0 ? true : false; }
 
-      bool full()
-      { return top_ >= MAX_ENTRY ? true : false; }
+    bool full() { return top_ >= MAX_ENTRY ? true : false; }
 
-      int size()
-      { return top_; }
+    int size() { return top_; }
 
-      // as push_back();
-      void push(ListEntry const& entry)
-      {
-        if (full())
-          throw runtime_error("list is full");
+    // as push_back();
+    void push(ListEntry const &entry)
+    {
+      if (full())
+        throw runtime_error("list is full");
 
-        coll_[top_++] = entry;
-      }
+      coll_[top_++] = entry;
+    }
 
-      void pop()
-      {
-        --top_;
-      }
+    void pop() { --top_; }
 
-      ListEntry top()
-      {
-        if (empty())
-          throw runtime_error("list is empty");
+    ListEntry top()
+    {
+      if (empty())
+        throw runtime_error("list is empty");
 
-        return coll_[top_ - 1];
-      }
+      return coll_[top_ - 1];
+    }
 
-      std::vector<ListEntry> snap()
-      {
-        std::vector<ListEntry> coll;
+    std::vector<ListEntry> snap()
+    {
+      std::vector<ListEntry> coll;
 
-        for (int i = 0; i < top_; ++i)
-          coll.push_back(coll_[i]);
+      for (int i = 0; i < top_; ++i)
+        coll.push_back(coll_[i]);
 
-        return coll;
-      }
+      return coll;
+    }
 
-    private:
+  private:
+    // cxx-static
+    // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
+    // const int MAX_ENTRY{5};
 
-      // cxx-static
-      // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
-      // const int MAX_ENTRY{5};
+    static const int MAX_ENTRY{5};
 
-      static const int MAX_ENTRY{5};
+    // top_ is next positon to push
+    int top_;
 
-      // top_ is next positon to push
-      int top_;
-
-      ListEntry coll_[MAX_ENTRY];
+    ListEntry coll_[MAX_ENTRY];
   };
-}
+} // namespace algo_stack_contiguous
 
 TEST(AlgoStack, ContiguousSimple)
 {
   using namespace algo_stack_contiguous;
 
-  std::vector<ListEntry> values{
-      ListEntry(1,2), 
-      ListEntry(2,3), 
-      ListEntry(3,4), 
-      ListEntry(4,5), 
-      ListEntry(5,6)
-  };
+  std::vector<ListEntry> values{ListEntry(1, 2),
+                                ListEntry(2, 3),
+                                ListEntry(3, 4),
+                                ListEntry(4, 5),
+                                ListEntry(5, 6)};
 
   Stack coll;
   coll.create();
@@ -9172,9 +9077,9 @@ TEST(AlgoStack, ContiguousSimple)
     coll.push(e);
 
   EXPECT_THAT(coll.size(), 5);
-  EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+  EXPECT_THROW(coll.push(ListEntry(6, 7)), runtime_error);
 
-  EXPECT_THAT(coll.top(), ListEntry(5,6));
+  EXPECT_THAT(coll.top(), ListEntry(5, 6));
 
   coll.pop();
   coll.pop();
@@ -9183,14 +9088,10 @@ TEST(AlgoStack, ContiguousSimple)
   EXPECT_THAT(coll.size(), 2);
 
   // requires cxx-operator-overload
-  auto expected{
-    ListEntry(1,2), 
-    ListEntry(2,3)
-  };
+  auto expected = {ListEntry(1, 2), ListEntry(2, 3)};
 
   EXPECT_THAT(coll.snap(), expected);
 }
-
 
 // ={=========================================================================
 // algo-sort-insert
@@ -9199,22 +9100,22 @@ TEST(AlgoStack, ContiguousSimple)
 void sort_insertion_01(vector<int> &coll)
 {
   // start from 1 since one entry is always sorted.
-  int size = (int) coll.size(); 
+  int size = (int)coll.size();
 
   for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
   {
-    int sorted_index = unsorted_index-1;
+    int sorted_index = unsorted_index - 1;
 
     // pick the first from `unsorted` and that is less than the last of the
     // sorted. so have to place it in the sorted area.
-    
-    // if (coll[unsorted_index] < coll[sorted_index]) 
-    if (coll[sorted_index] > coll[unsorted_index]) 
-    { 
-      int unsorted_entry = coll[unsorted_index];
-      int current_index = sorted_index;
 
-      // find the place of picked unsorted in the sorted until see that 
+    // if (coll[unsorted_index] < coll[sorted_index])
+    if (coll[sorted_index] > coll[unsorted_index])
+    {
+      int unsorted_entry = coll[unsorted_index];
+      int current_index  = sorted_index;
+
+      // find the place of picked unsorted in the sorted until see that
       // sorted[current-1] < the entry in question by:
       //
       // move the last sorted down one which makes a space, and check the one
@@ -9226,33 +9127,32 @@ void sort_insertion_01(vector<int> &coll)
       for (; 0 <= current_index; --current_index)
       {
         // move one entry down
-        coll[current_index+1] = coll[current_index]; 
+        coll[current_index + 1] = coll[current_index];
 
-        if (current_index == 0 || coll[current_index-1] < unsorted_entry)
+        if (current_index == 0 || coll[current_index - 1] < unsorted_entry)
           break;
       }
 
       coll[current_index] = unsorted_entry;
-    } 
-  } 
+    }
+  }
 }
-
 
 // removes to check `current-1` from the current in searching the place in the
 // sorted and then no need to check on -1 index.
 
 void sort_insertion_02(vector<int> &coll)
 {
-  int size = (int) coll.size(); 
+  int size = (int)coll.size();
 
   for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
   {
-    int sorted_index = unsorted_index-1;
+    int sorted_index = unsorted_index - 1;
 
-    if (coll[unsorted_index] < coll[sorted_index]) 
-    { 
+    if (coll[unsorted_index] < coll[sorted_index])
+    {
       int unsorted_entry = coll[unsorted_index];
-      int current_index = sorted_index;
+      int current_index  = sorted_index;
 
       // diffs from 01
       for (; 0 <= current_index; --current_index)
@@ -9260,26 +9160,26 @@ void sort_insertion_02(vector<int> &coll)
         if (coll[current_index] < unsorted_entry)
           break;
 
-        coll[current_index+1] = coll[current_index]; 
+        coll[current_index + 1] = coll[current_index];
       }
 
-      coll[current_index+1] = unsorted_entry;
-    } 
-  } 
+      coll[current_index + 1] = unsorted_entry;
+    }
+  }
 }
 
 // `current` starts from the unsorted and uses swap
 void sort_insertion_03(vector<int> &coll)
 {
-  int size = (int) coll.size(); 
+  int size = (int)coll.size();
 
   for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     for (int current_index = unsorted_index;
-        0 < current_index && coll[current_index] < coll[current_index-1];
-        --current_index)
+         0 < current_index && coll[current_index] < coll[current_index - 1];
+         --current_index)
     {
       // swap current and current-1
-      swap(coll[current_index], coll[current_index-1]);
+      swap(coll[current_index], coll[current_index - 1]);
     }
 }
 
@@ -9304,19 +9204,19 @@ void sort_insertion_04(vector<int> &coll)
 
 void sort_insertion_05(vector<int> &coll)
 {
-  int size = (int) coll.size(); 
+  int size = (int)coll.size();
 
   for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
   {
-    int unsorted = coll[unsorted_index];
+    int unsorted      = coll[unsorted_index];
     int current_index = unsorted_index;
 
-    for (; 0 < current_index && unsorted < coll[current_index-1];
-        --current_index)
+    for (; 0 < current_index && unsorted < coll[current_index - 1];
+         --current_index)
     {
       // swap current and current-1
       // swap(coll[current_index], coll[current_index-1]);
-      coll[current_index] = coll[current_index-1];
+      coll[current_index] = coll[current_index - 1];
     }
 
     coll[current_index] = unsorted;
@@ -9338,7 +9238,7 @@ void sort_insertion_06(vector<int> &coll)
   size_t sorted{0}, unsorted{0};
   int target{0}, source{0};
 
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
   {
     for (target = sorted, source = unsorted; target >= 0; --target, --source)
     {
@@ -9358,11 +9258,12 @@ void sort_insertion_07(vector<int> &coll)
   size_t sorted{0}, unsorted{0};
   int target{0}, source{0};
 
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
   {
     // ascending order
-    for (target = sorted, source = unsorted; 
-        target >= 0 && coll[target] > coll[source]; --target, --source)
+    for (target = sorted, source = unsorted;
+         target >= 0 && coll[target] > coll[source];
+         --target, --source)
     {
       std::swap(coll[target], coll[source]);
     }
@@ -9375,11 +9276,12 @@ void sort_insertion_08(vector<T> &coll, F f)
   size_t sorted{0}, unsorted{0};
   int target{0}, source{0};
 
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
   {
     // ascending order
-    for (target = sorted, source = unsorted; 
-        target >= 0 && f(coll[target], coll[source]); --target, --source)
+    for (target = sorted, source = unsorted;
+         target >= 0 && f(coll[target], coll[source]);
+         --target, --source)
     {
       std::swap(coll[target], coll[source]);
     }
@@ -9389,55 +9291,62 @@ void sort_insertion_08(vector<T> &coll, F f)
 TEST(AlgoSort, Insertion)
 {
   {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
-    sort_insertion_01(coll); 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    sort_insertion_01(coll);
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_02(coll);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_03(coll);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_04(coll);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_05(coll);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_06(coll); 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    sort_insertion_06(coll);
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_07(coll); 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    sort_insertion_07(coll);
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_08(coll, std::less<int>()); 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({33, 31, 30, 29, 17, 15, 13, 12, 10, 6, 5, 3, 2}));
+    sort_insertion_08(coll, std::less<int>());
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({33, 31, 30, 29, 17, 15, 13, 12, 10, 6, 5, 3, 2}));
   }
 }
-
 
 // ={=========================================================================
 // algo-partition algo-sort-insert a
@@ -9453,36 +9362,38 @@ namespace algo_partition
 
   using PortfolioIterator = vector<unsigned int>::iterator;
 
-  // replace Stock to simple int 
+  // replace Stock to simple int
   // std::vector<Stock> PortfolioGreater, PortfolioLesser;
 
   // 2N space and 2N time(2 pass)
 
   PortfolioIterator rearrangeByQuantity_1(PortfolioIterator begin,
-      PortfolioIterator end,
-      unsigned int maxQuantity)
+                                          PortfolioIterator end,
+                                          unsigned int maxQuantity)
   {
     // implement me
     std::vector<unsigned int> PortfolioGreater, PortfolioLesser;
     PortfolioIterator run = begin;
 
-    for( ; run != end; ++run)
+    for (; run != end; ++run)
     {
       // greater
       // if( run->quantity > maxQuantity )
-      if( *run > maxQuantity )
+      if (*run > maxQuantity)
         PortfolioGreater.push_back(*run);
       else
         PortfolioLesser.push_back(*run);
     }
 
     run = begin;
-    for(const auto& elem : PortfolioLesser) {
+    for (const auto &elem : PortfolioLesser)
+    {
       *run++ = elem;
     }
     begin = run;
 
-    for(const auto& elem : PortfolioGreater) {
+    for (const auto &elem : PortfolioGreater)
+    {
       *run++ = elem;
     }
 
@@ -9492,7 +9403,8 @@ namespace algo_partition
   // less space but still 2 pass
 
   PortfolioIterator rearrangeByQuantity_2(PortfolioIterator begin,
-      PortfolioIterator end, unsigned int max_quanity)
+                                          PortfolioIterator end,
+                                          unsigned int max_quanity)
   {
     // how to get T of coll such as algo-remove? here, assumes that we know T
     vector<unsigned int> coll;
@@ -9528,10 +9440,10 @@ namespace algo_partition
     //
     // /usr/include/c++/6/debug/safe_iterator.h:298:
     // Error: attempt to increment a singular iterator.
-    // 
+    //
     // Objects involved in the operation:
     //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
-    //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
+    //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >,
     //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
     //       state = singular;
     //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
@@ -9562,85 +9474,86 @@ namespace algo_partition
      *  the relative ordering of elements in each group, use
      *  @p stable_partition() if this is needed.
      */
-    template<typename _ForwardIterator, typename _Predicate>
-      inline _ForwardIterator
-      partition(_ForwardIterator __first, _ForwardIterator __last,
-          _Predicate   __pred)
-      {
-        return std::__partition(__first, __last, __pred,
-            std::__iterator_category(__first));
-      }
+    template <typename _ForwardIterator, typename _Predicate>
+    inline _ForwardIterator partition(_ForwardIterator __first,
+                                      _ForwardIterator __last,
+                                      _Predicate __pred)
+    {
+      return std::__partition(__first,
+                              __last,
+                              __pred,
+                              std::__iterator_category(__first));
+    }
 
     /// This is a helper function...
-    template<typename _ForwardIterator, typename _Predicate>
-      _ForwardIterator
-      __partition(_ForwardIterator __first, _ForwardIterator __last,
-          _Predicate __pred, forward_iterator_tag)
-      {
-        if (__first == __last)
+    template <typename _ForwardIterator, typename _Predicate>
+    _ForwardIterator __partition(_ForwardIterator __first,
+                                 _ForwardIterator __last,
+                                 _Predicate __pred,
+                                 forward_iterator_tag)
+    {
+      if (__first == __last)
+        return __first;
+
+      while (__pred(*__first))
+        if (++__first == __last)
           return __first;
 
-        while (__pred(*__first))
-          if (++__first == __last)
-            return __first;
+      _ForwardIterator __next = __first;
 
-        _ForwardIterator __next = __first;
+      while (++__next != __last)
+        if (__pred(*__next))
+        {
+          std::iter_swap(__first, __next);
+          ++__first;
+        }
 
-        while (++__next != __last)
-          if (__pred(*__next))
-          {
-            std::iter_swap(__first, __next);
-            ++__first;
-          }
-
-        return __first;
-      }
-  } // namespace
-
+      return __first;
+    }
+  } // namespace algo_code
 
   // same as algo-partition in /usr/include/c++/4.9.2/bits/stl_algo.h
   //
   // o is to find the first unmatched
 
   template <typename _Iterator, typename _Compare>
-    _Iterator partition_1(_Iterator begin, _Iterator end, _Compare comp)
-    {
-      if (begin == end)
+  _Iterator partition_1(_Iterator begin, _Iterator end, _Compare comp)
+  {
+    if (begin == end)
+      return begin;
+
+    // skip matched elements and begin becomes the first unmatched item.
+    // begin is "start of the unmatched"
+    // note that begin is increased in "if"
+
+    while (comp(*begin))
+      if (++begin == end)
         return begin;
 
-      // skip matched elements and begin becomes the first unmatched item.
-      // begin is "start of the unmatched"
-      // note that begin is increased in "if"
- 
-      while (comp(*begin))
-        if (++begin == end)
-          return begin;
+    // do the same
+    // _Iterator first = begin;
+    // for (; first != end; ++first)
+    //   if (!comp(*first))
+    //     break;
 
-      // do the same
-      // _Iterator first = begin;
-      // for (; first != end; ++first)
-      //   if (!comp(*first))
-      //     break;
+    _Iterator run = begin;
 
-      _Iterator run = begin;
-
-      // increase first since knows *run is already unmatched.
-      while (++run != end)
+    // increase first since knows *run is already unmatched.
+    while (++run != end)
+    {
+      // see matched and move it to matched group
+      if (comp(*run))
       {
-        // see matched and move it to matched group
-        if (comp(*run))
-        {
-          // cannot use "=" since it's not algo-remove
-          std::iter_swap(run, begin);
-          ++begin;
-        }
+        // cannot use "=" since it's not algo-remove
+        std::iter_swap(run, begin);
+        ++begin;
       }
-
-      return begin;
     }
 
-} // namespace
+    return begin;
+  }
 
+} // namespace algo_partition
 
 TEST(AlgoPartition, Stl)
 {
@@ -9657,28 +9570,24 @@ TEST(AlgoPartition, Stl)
     vector<int> coll2;
 
     // INSERT_ELEMENTS(coll1, 1, 9);
-    coll1 = {1,2,3,4,5,6,7,8,9};
+    coll1 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    auto pos1 = partition(coll1.begin(), coll1.end(),    // range
-        [](int elem)
-        {
-        return elem %2 == 0;
-        });
+    auto pos1 = partition(coll1.begin(),
+                          coll1.end(), // range
+                          [](int elem) { return elem % 2 == 0; });
 
     EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
 
     EXPECT_EQ(*pos1, 5);
 
     // INSERT_ELEMENTS(coll2, 1, 9);
-    coll2 = {1,2,3,4,5,6,7,8,9};
+    coll2 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    auto pos2 = stable_partition(coll2.begin(), coll2.end(),
-        [](int elem)
-        {
-        return elem %2 == 0;
-        });
+    auto pos2 = stable_partition(coll2.begin(), coll2.end(), [](int elem) {
+      return elem % 2 == 0;
+    });
     EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
 
     // first odd element:
@@ -9687,7 +9596,8 @@ TEST(AlgoPartition, Stl)
 
   // works like algo-partition-stable_partition
   {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
 
     const auto func = rearrangeByQuantity_1;
 
@@ -9697,14 +9607,16 @@ TEST(AlgoPartition, Stl)
     // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
     //                                ^^
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
+                                  23, 43, 42, 29, 34, 37, 48, 26, 41, 30}));
 
     EXPECT_THAT(*it, 43);
   }
 
   {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
 
     const auto func = rearrangeByQuantity_2;
 
@@ -9714,8 +9626,9 @@ TEST(AlgoPartition, Stl)
     // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
     //                                ^^
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
+                                  23, 43, 42, 29, 34, 37, 48, 26, 41, 30}));
 
     // this now fails since `current` is iterator of internal coll but not input
     // coll. Have to work out one.
@@ -9723,39 +9636,40 @@ TEST(AlgoPartition, Stl)
   }
 
   {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
 
     // this prevents cxx-template-deduction
     // const auto func = partition_1;
 
-    auto it = partition_1(coll.begin(), coll.end(), 
-        [](unsigned int value)
-        { return value <= 25; }
-        );
+    auto it = partition_1(coll.begin(), coll.end(), [](unsigned int value) {
+      return value <= 25;
+    });
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
+                                  23, 43, 42, 29, 34, 26, 41, 30, 37, 48}));
     EXPECT_THAT(distance(coll.begin(), it), 11);
     EXPECT_THAT(*it, 43);
   }
-
 
   // Q: why partiton_xxx() make different order from partition() when use the
   // same logic? but distance is the same.
 
   {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
 
-    auto it = partition(coll.begin(), coll.end(), 
-        [](unsigned int value)
-        { return value <= 25; }
-        );
+    auto it = partition(coll.begin(), coll.end(), [](unsigned int value) {
+      return value <= 25;
+    });
 
-    // EXPECT_THAT(coll, 
+    // EXPECT_THAT(coll,
     //     ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({23, 6,  11, 6,  13, 23, 21, 19, 20, 15,
+                                  24, 48, 37, 34, 29, 26, 41, 30, 42, 43}));
 
     EXPECT_THAT(distance(coll.begin(), it), 11);
 
@@ -9764,38 +9678,39 @@ TEST(AlgoPartition, Stl)
   }
 }
 
-
 // ={=========================================================================
-// algo-remove algo-sort-insert 
+// algo-remove algo-sort-insert
 
 namespace algo_remove
 {
-  namespace algo_code 
+  namespace algo_code
   {
     // /usr/include/c++/4.9/bits/predefined_ops.h
 
     // check if when predicate is called, what arg iter refers to equals to the
     // value.
 
-    template<typename _Value>
-      struct _Iter_equals_val
-      {
-        _Value& _M_value;
+    template <typename _Value>
+    struct _Iter_equals_val
+    {
+      _Value &_M_value;
 
-        _Iter_equals_val(_Value& __value)
+      _Iter_equals_val(_Value &__value)
           : _M_value(__value)
-        { }
+      {}
 
-        template<typename _Iterator>
-          bool
-          operator()(_Iterator __it)
-          { return *__it == _M_value; }
-      };
+      template <typename _Iterator>
+      bool operator()(_Iterator __it)
+      {
+        return *__it == _M_value;
+      }
+    };
 
-    template<typename _Value>
-      inline _Iter_equals_val<_Value>
-      __iter_equals_val(_Value& __val)
-      { return _Iter_equals_val<_Value>(__val); }
+    template <typename _Value>
+    inline _Iter_equals_val<_Value> __iter_equals_val(_Value &__val)
+    {
+      return _Iter_equals_val<_Value>(__val);
+    }
 
     // /usr/include/c++/4.9/bits/stl_algo.h
 
@@ -9816,130 +9731,132 @@ namespace algo_remove
      *  Elements between the end of the resulting sequence and @p __last
      *  are still present, but their value is unspecified.
      */
-    template<typename _ForwardIterator, typename _Tp>
-      inline _ForwardIterator
-      remove(_ForwardIterator __first, _ForwardIterator __last,
-          const _Tp& __value)
-      {
-        return std::__remove_if(__first, __last,
-            __gnu_cxx::__ops::__iter_equals_val(__value));
-      }
+    template <typename _ForwardIterator, typename _Tp>
+    inline _ForwardIterator remove(_ForwardIterator __first,
+                                   _ForwardIterator __last,
+                                   const _Tp &__value)
+    {
+      return std::__remove_if(__first,
+                              __last,
+                              __gnu_cxx::__ops::__iter_equals_val(__value));
+    }
 
-    template<typename _ForwardIterator, typename _Predicate>
-      _ForwardIterator
-      __remove_if(_ForwardIterator __first, _ForwardIterator __last,
-          _Predicate __pred)
-      {
-        __first = std::__find_if(__first, __last, __pred);
-        if (__first == __last)
-          return __first;
+    template <typename _ForwardIterator, typename _Predicate>
+    _ForwardIterator __remove_if(_ForwardIterator __first,
+                                 _ForwardIterator __last,
+                                 _Predicate __pred)
+    {
+      __first = std::__find_if(__first, __last, __pred);
+      if (__first == __last)
+        return __first;
 
-        _ForwardIterator __result = __first;
-        ++__first;
-        for (; __first != __last; ++__first)
-          if (!__pred(__first))
-          {
-            // note
-            // this is `assign` but not `swap` which make a difference to own
-            // remove does.
+      _ForwardIterator __result = __first;
+      ++__first;
+      for (; __first != __last; ++__first)
+        if (!__pred(__first))
+        {
+          // note
+          // this is `assign` but not `swap` which make a difference to own
+          // remove does.
 
-            *__result = _GLIBCXX_MOVE(*__first);
-            ++__result;
-          }
-        return __result;
-      }
+          *__result = _GLIBCXX_MOVE(*__first);
+          ++__result;
+        }
+      return __result;
+    }
 
     // /usr/include/c++/4.9/bits/predefined_ops.h
-    template<typename _Predicate>
-      struct _Iter_pred
-      {
-        _Predicate _M_pred;
+    template <typename _Predicate>
+    struct _Iter_pred
+    {
+      _Predicate _M_pred;
 
-        _Iter_pred(_Predicate __pred)
+      _Iter_pred(_Predicate __pred)
           : _M_pred(__pred)
-        { }
+      {}
 
-        template<typename _Iterator>
-          bool
-          operator()(_Iterator __it)
-          { return bool(_M_pred(*__it)); }
-      };
-
-    template<typename _Predicate>
-      inline _Iter_pred<_Predicate>
-      __pred_iter(_Predicate __pred)
-      { return _Iter_pred<_Predicate>(__pred); }
-
-    template<typename _ForwardIterator, typename _Predicate>
-      inline _ForwardIterator
-      remove_if(_ForwardIterator __first, _ForwardIterator __last,
-          _Predicate __pred)
+      template <typename _Iterator>
+      bool operator()(_Iterator __it)
       {
-        return std::__remove_if(__first, __last,
-            __gnu_cxx::__ops::__pred_iter(__pred));
+        return bool(_M_pred(*__it));
       }
-  } // namespace
+    };
 
+    template <typename _Predicate>
+    inline _Iter_pred<_Predicate> __pred_iter(_Predicate __pred)
+    {
+      return _Iter_pred<_Predicate>(__pred);
+    }
+
+    template <typename _ForwardIterator, typename _Predicate>
+    inline _ForwardIterator remove_if(_ForwardIterator __first,
+                                      _ForwardIterator __last,
+                                      _Predicate __pred)
+    {
+      return std::__remove_if(__first,
+                              __last,
+                              __gnu_cxx::__ops::__pred_iter(__pred));
+    }
+  } // namespace algo_code
 
   // same as partition_1() but | unmatched | matched |
 
   template <typename _Iterator, typename _T>
-    _Iterator remove_1(_Iterator begin, _Iterator end, _T value)
-    {
-      if (begin == end)
+  _Iterator remove_1(_Iterator begin, _Iterator end, _T value)
+  {
+    if (begin == end)
+      return begin;
+
+    // skip *not* matched elements and begin becomes the first unmatched item.
+    // begin is "start of the unmatched"
+    // note that begin is increased in "if"
+
+    while (*begin != value)
+      if (++begin == end)
         return begin;
 
-      // skip *not* matched elements and begin becomes the first unmatched item.
-      // begin is "start of the unmatched"
-      // note that begin is increased in "if"
- 
-      while (*begin != value)
-        if (++begin == end)
-          return begin;
+    _Iterator run = begin;
 
-      _Iterator run = begin;
-
-      // increase first since knows *run is already unmatched.
-      while (++run != end)
+    // increase first since knows *run is already unmatched.
+    while (++run != end)
+    {
+      // see matched and move it to matched group
+      if (*run != value)
       {
-        // see matched and move it to matched group
-        if (*run != value)
-        {
-          // cannot use "=" since it's not algo-remove
-          // std::iter_swap(run, begin);
-          *begin = *run;
-          ++begin;
-        }
+        // cannot use "=" since it's not algo-remove
+        // std::iter_swap(run, begin);
+        *begin = *run;
+        ++begin;
       }
-
-      return begin;
     }
 
-  // 1. do the same as algo-partition but from the end. 
+    return begin;
+  }
+
+  // 1. do the same as algo-partition but from the end.
   // 2. therefore, do not care about the order of unmatched group.
 
   template <typename _Iterator, typename _T>
-    _Iterator remove_2(_Iterator __begin, _Iterator __end, _T __value)
+  _Iterator remove_2(_Iterator __begin, _Iterator __end, _T __value)
+  {
+    _Iterator run             = __end - 1;
+    _Iterator start_of_remove = __end;
+
+    for (; run > __begin; --run)
     {
-      _Iterator run = __end - 1;
-      _Iterator start_of_remove = __end;
-
-      for (; run > __begin; --run)
-      {
-        // swap only when element has the same value and swap is necessary
-        if ((*run == __value) && (run != start_of_remove-1))
-          swap(*run, *(--start_of_remove));
-      }
-
       // swap only when element has the same value and swap is necessary
-      if ((*run == __value) && (run != start_of_remove-1))
+      if ((*run == __value) && (run != start_of_remove - 1))
         swap(*run, *(--start_of_remove));
-
-      return start_of_remove;
     }
 
-} // namespace
+    // swap only when element has the same value and swap is necessary
+    if ((*run == __value) && (run != start_of_remove - 1))
+      swap(*run, *(--start_of_remove));
 
+    return start_of_remove;
+  }
+
+} // namespace algo_remove
 
 TEST(AlgoRemove, Stl)
 {
@@ -9947,10 +9864,10 @@ TEST(AlgoRemove, Stl)
 
   // algo-remove which is opposite from algo-partition
   // | unmatched | matched |
-  
+
   // coll.erase() delete elements but algo-remove do not.
   {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
     for (auto it = coll.begin(); it != coll.end(); ++it)
     {
@@ -9958,61 +9875,57 @@ TEST(AlgoRemove, Stl)
         it = coll.erase(it);
     }
 
-    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 
   {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
     auto end = remove(coll.begin(), coll.end(), 2);
 
     EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
 
     coll.erase(end, coll.end());
-    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 
   // show that algo-remove() do not remove elements
   {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
     remove(coll.begin(), coll.end(), 2);
 
     // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
-    //                                       ^^^^^^^ 
+    //                                       ^^^^^^^
 
-    EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
   }
 
   // show that remove_if() returns end if not found
   {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-    auto it = remove_if(coll.begin(), coll.end(), 
-        [](int value)
-        { return value == 10; }
-        );
+    auto it = remove_if(coll.begin(), coll.end(), [](int value) {
+      return value == 10;
+    });
 
     EXPECT_THAT(it, coll.end());
   }
 
   // own remove
   {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
     auto end = remove_1(coll.begin(), coll.end(), 2);
 
     EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
 
     coll.erase(end, coll.end());
-    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 }
-
 
 // ={=========================================================================
 // algo-unique
@@ -10022,7 +9935,7 @@ TEST(AlgoRemove, Stl)
 //
 // use the dest which is the end of the matched group
 
-namespace algo_unique 
+namespace algo_unique
 {
   using ITERATOR = vector<int>::iterator;
 
@@ -10065,30 +9978,30 @@ namespace algo_unique
   }
 
   template <typename _Iterator>
-    _Iterator unique_2(_Iterator first, _Iterator last)
+  _Iterator unique_2(_Iterator first, _Iterator last)
+  {
+    // first = adjacent_find(first, last);
+    // if (first == last)
+    //   return last;
+
+    _Iterator dest = first;
+    // ++first;
+    while (++first != last)
     {
-      // first = adjacent_find(first, last);
-      // if (first == last)
-      //   return last;
-
-      _Iterator dest = first;
-      // ++first;
-      while (++first != last)
-      {
-        // not equal and assign(overwrite). so if equals, keep increase first.
-        if (*dest != *first)
-          *++dest = *first;
-      }
-
-      // one after from the last unique
-      return ++dest;
+      // not equal and assign(overwrite). so if equals, keep increase first.
+      if (*dest != *first)
+        *++dest = *first;
     }
-} // namespace
+
+    // one after from the last unique
+    return ++dest;
+  }
+} // namespace algo_unique
 
 TEST(AlgoUnique, Unique)
 {
   using namespace algo_unique;
-  
+
   // o Both forms collapse `consecutive equal elements` by removing the
   // following duplicates.
   {
@@ -10106,41 +10019,39 @@ TEST(AlgoUnique, Unique)
 
   // o algo-unique() is not perferct
   // The first form removes from the range [beg,end) all elements that are equal
-  // to `the previous elements.` Thus, only when 
+  // to `the previous elements.` Thus, only when
   //
   // the elements in the sequence are sorted, or at least when all elements of
-  // the same value are adjacent, 
+  // the same value are adjacent,
   //
   // does it remove all duplicates.
   //
   // o sorted input is not assumed
 
   {
-    list<int> coll{1,2,3,1,2,3,4,4,6,1,2,2,3,1,6,6,6,4,4};
+    list<int> coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
 
     auto pos = unique(coll.begin(), coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray(
-          {1,2,3,1,2,3,4,6,1,2,3,1,6,4,6,6,6,4,4}));
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
 
     coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray(
-          {1,2,3,1,2,3,4,6,1,2,3,1,6,4}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4}));
   }
 
   {
-    list<int> coll{1,2,3,1,2,3,4,4,6,1,2,2,3,1,6,6,6,4,4};
+    list<int> coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
 
     auto pos = unique_2(coll.begin(), coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray(
-          {1,2,3,1,2,3,4,6,1,2,3,1,6,4,6,6,6,4,4}));
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
 
     coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray(
-          {1,2,3,1,2,3,4,6,1,2,3,1,6,4}));
+    EXPECT_THAT(coll,
+                ElementsAreArray({1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4}));
   }
 
   // o The second form removes all elements that follow an element e and for
@@ -10152,7 +10063,7 @@ TEST(AlgoUnique, Unique)
   // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
   // so all these elements are removed. In other words, the predicate is not
   // used to compare an element with its predecessor; the element is compared
-  // with the previous element that was not removed 
+  // with the previous element that was not removed
   {
     list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
 
@@ -10165,14 +10076,14 @@ TEST(AlgoUnique, Unique)
     string input{"1   2  3            4           "};
     EXPECT_THAT(input, "1   2  3            4           ");
 
-    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
-      return x == y and x == ' ';
-    });
+    auto new_end =
+      unique(input.begin(), input.end(), [](const char &x, const char &y) {
+        return x == y and x == ' ';
+      });
 
     input.erase(new_end, input.end());
     EXPECT_THAT(input, "1 2 3 4 ");
   }
-
 
   // o Both forms collapse `consecutive equal elements` by removing the
   // following duplicates.
@@ -10194,15 +10105,14 @@ TEST(AlgoUnique, Unique)
     vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
 
     auto pos = unique_1(coll.begin(), coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
 
     coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
   }
 }
-
 
 // ={=========================================================================
 // algo-remove algo-leetcode-8
@@ -10272,14 +10182,14 @@ namespace leetcode_easy_008
     {
       int run = nums[i];
 
-      // cout << "for i: " << i << ", run: " << run 
+      // cout << "for i: " << i << ", run: " << run
       //   << ", value: " << value << endl;
 
       // update current max when current value is bigger
       if (run > value)
         value = run;
       // ends when see smaller and means reaches the the new end
-      else if(run < value)
+      else if (run < value)
       {
         // cout << "break i: " << i << endl;
         break;
@@ -10287,8 +10197,8 @@ namespace leetcode_easy_008
       // when run == value, swap it to tne end.
       else
       {
-        for (size_t s = i; s < nums.size()-1; ++s)
-          swap(nums[s], nums[s+1]);
+        for (size_t s = i; s < nums.size() - 1; ++s)
+          swap(nums[s], nums[s + 1]);
 
         // since nums[i] is swapped, it may be bigger
 
@@ -10303,7 +10213,7 @@ namespace leetcode_easy_008
   }
 
   // o the key idea is to swap to the left
-  // o no repeated swap until see the new end. single swap is enough 
+  // o no repeated swap until see the new end. single swap is enough
   // o swap() should be done after updating current_max
   //
   // o end is index but shold return len so +1 -> revised. As algo-partition,
@@ -10342,7 +10252,7 @@ namespace leetcode_easy_008
 
     return end;
   }
-  
+
   using ITERATOR = vector<int>::iterator;
 
   ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
@@ -10371,7 +10281,7 @@ namespace leetcode_easy_008
   int RemoveDuplicates_03(vector<int> &nums)
   {
     auto first = nums.begin();
-    auto last = nums.end();
+    auto last  = nums.end();
 
     auto end = adjacent_find(first, last);
 
@@ -10422,7 +10332,7 @@ namespace leetcode_easy_008
     return unique_end + 1;
   }
 
-} // namespace
+} // namespace leetcode_easy_008
 
 TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
 {
@@ -10432,7 +10342,7 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
   {
     const auto func = RemoveDuplicates_01;
 
-    vector<int> coll{1,1,2};
+    vector<int> coll{1, 1, 2};
     auto len = func(coll);
 
     EXPECT_THAT(len, 2);
@@ -10442,14 +10352,14 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,2));
+    EXPECT_THAT(result, ElementsAre(1, 2));
   }
 
   // fails
   {
     const auto func = RemoveDuplicates_01;
 
-    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
     auto len = func(coll);
 
     EXPECT_THAT(len, Not(5));
@@ -10459,13 +10369,13 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, Not(ElementsAre(0,1,2,3,4)));
+    EXPECT_THAT(result, Not(ElementsAre(0, 1, 2, 3, 4)));
   }
 
   {
     const auto func = RemoveDuplicates_02;
 
-    vector<int> coll{1,1,2};
+    vector<int> coll{1, 1, 2};
     auto len = func(coll);
 
     EXPECT_THAT(len, 2);
@@ -10475,13 +10385,13 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,2));
+    EXPECT_THAT(result, ElementsAre(1, 2));
   }
 
   {
     const auto func = RemoveDuplicates_02;
 
-    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
     auto len = func(coll);
 
     EXPECT_THAT(len, 5);
@@ -10491,7 +10401,7 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(0,1,2,3,4));
+    EXPECT_THAT(result, ElementsAre(0, 1, 2, 3, 4));
   }
 
   // same ex as AlgoUnique
@@ -10508,7 +10418,7 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,4,6));
+    EXPECT_THAT(result, ElementsAre(1, 4, 6));
   }
   {
     const auto func = RemoveDuplicates_03;
@@ -10523,7 +10433,7 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(1,4,6));
+    EXPECT_THAT(result, ElementsAre(1, 4, 6));
   }
   {
     const auto func = RemoveDuplicates_03;
@@ -10532,8 +10442,9 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
 
     auto len = func(coll);
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4,5,7,5,4,4}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
     EXPECT_THAT(len, 12);
 
     vector<int> result{};
@@ -10541,11 +10452,9 @@ TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, 
-        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4}));
+    EXPECT_THAT(result, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
   }
 }
-
 
 // ={=========================================================================
 // algo-remove algo-leetcode-9
@@ -10632,7 +10541,7 @@ namespace leetcode_easy_009
     return end;
   }
 
-} // namespace
+} // namespace leetcode_easy_009
 
 TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
 {
@@ -10641,7 +10550,7 @@ TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
   {
     const auto func = RemoveIf_01;
 
-    vector<int> coll{3,2,2,3};
+    vector<int> coll{3, 2, 2, 3};
     auto len = func(coll, 3);
 
     EXPECT_THAT(len, 2);
@@ -10651,13 +10560,13 @@ TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(2,2));
+    EXPECT_THAT(result, ElementsAre(2, 2));
   }
 
   {
     const auto func = RemoveIf_01;
 
-    vector<int> coll{0,1,2,2,3,0,4,2};
+    vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
     auto len = func(coll, 2);
 
     EXPECT_THAT(len, 5);
@@ -10667,54 +10576,43 @@ TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
     for (int i = 0; i < len; ++i)
       result.push_back(coll[i]);
 
-    EXPECT_THAT(result, ElementsAre(0,1,3,0,4));
+    EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
   }
 }
-
 
 // ={=========================================================================
 // algo-rotate, algo-slide, algo-reverse
 
 TEST(AlgoRotate, Rotate)
 {
-  vector<int> coll{1,2,3,4,5,6,7,8};
+  vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
   // rotate one to the left
-  // before *cxx-11* void rotate() so comment out 
+  // before *cxx-11* void rotate() so comment out
   // auto pos = rotate(
 
-  rotate(
-    coll.begin(),     // begin  
-    coll.begin()+1,   // new begin
-    coll.end()        // end
+  rotate(coll.begin(),     // begin
+         coll.begin() + 1, // new begin
+         coll.end()        // end
   );
-  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+  EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
   // return the new position of the (pervious) first element.
   // EXPECT_THAT(*pos, 1);
 
   // pos = rotate(
 
-  rotate(
-    coll.begin(),
-    coll.end()-2,
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+  rotate(coll.begin(), coll.end() - 2, coll.end());
+  EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
   // EXPECT_THAT(*pos, 2);
 
   // rotate so that 4 is the beginning
   // pos = rotate(
 
-  rotate(
-    coll.begin(),
-    find(coll.begin(), coll.end(), 4),
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  rotate(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+  EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   // EXPECT_THAT(*pos, 8);
 }
-
 
 // 1. do not use additional space
 // 2. slide down sub group, [ne, e}
@@ -10740,110 +10638,90 @@ TEST(AlgoRotate, Rotate)
 //    ne[4  5  6  7] 3      #2 move
 //   [4  5  6  7] 2  3      #3 move
 // 4  5  6  7] 1  2  3
-// 
+//
 // use reverse:
 //
 // 1  2  3 [4  5  6  7]
 // 3  2  1 [7  6  5  4]
 // 4  5  6  7  1  2  3
 
-
-namespace algo_rotate 
+namespace algo_rotate
 {
   template <typename _Iterator>
-    void rotate_1(_Iterator __begin, _Iterator __new_begin, _Iterator __end)
+  void rotate_1(_Iterator __begin, _Iterator __new_begin, _Iterator __end)
+  {
+    if ((__begin == __new_begin) || (__end == __new_begin))
+      return;
+
+    auto num_swap = std::distance(__new_begin, __end);
+
+    for (; __new_begin != __begin; --__new_begin)
     {
-      if ((__begin == __new_begin) || (__end == __new_begin))
-        return;
+      _Iterator start = __new_begin;
 
-      auto num_swap = std::distance(__new_begin, __end);
-
-      for (;__new_begin != __begin; --__new_begin)
+      for (int i = 0; i < num_swap; ++i)
       {
-        _Iterator start = __new_begin;
-
-        for (int i = 0; i < num_swap; ++i)
-        {
-          swap(*start, *(start-1));
-          ++start;
-        }
+        swap(*start, *(start - 1));
+        ++start;
       }
     }
+  }
 
   // algo-rotate that use algo-reverse()
   // void
   // reverse (BidirectionalIterator beg, BidirectionalIterator end)
 
   template <typename _Iterator>
-    void rotate_2(_Iterator begin, _Iterator new_begin, _Iterator end)
-    {
-      std::reverse(begin, new_begin);
-      std::reverse(new_begin, end);
-      std::reverse(begin, end);
-    }
-} // namespace
+  void rotate_2(_Iterator begin, _Iterator new_begin, _Iterator end)
+  {
+    std::reverse(begin, new_begin);
+    std::reverse(new_begin, end);
+    std::reverse(begin, end);
+  }
+} // namespace algo_rotate
 
 TEST(AlgoRotate, Rotate_1)
 {
-  using namespace algo_rotate; 
+  using namespace algo_rotate;
 
   {
-    vector<int> coll{1,2,3,4,5,6,7,8};
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
     // cannot use this since it's template
     // auto func = rotate_1;
 
     // rotate one to the left
-    rotate_1(
-        coll.begin(),     // begin  
-        coll.begin()+1,   // new begin
-        coll.end()        // end
-        );
-    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+    rotate_1(coll.begin(),     // begin
+             coll.begin() + 1, // new begin
+             coll.end()        // end
+    );
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-    rotate_1(
-        coll.begin(),
-        coll.end()-2,
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+    rotate_1(coll.begin(), coll.end() - 2, coll.end());
+    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
-    rotate_1(
-        coll.begin(),
-        find(coll.begin(), coll.end(), 4),
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+    rotate_1(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   }
 
   {
-    vector<int> coll{1,2,3,4,5,6,7,8};
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     // auto func = rotate_2;
 
     // rotate one to the left
-    rotate_2(
-        coll.begin(),     // begin  
-        coll.begin()+1,   // new begin
-        coll.end()        // end
-        );
-    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+    rotate_2(coll.begin(),     // begin
+             coll.begin() + 1, // new begin
+             coll.end()        // end
+    );
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-    rotate_2(
-        coll.begin(),
-        coll.end()-2,
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+    rotate_2(coll.begin(), coll.end() - 2, coll.end());
+    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
-    rotate_2(
-        coll.begin(),
-        find(coll.begin(), coll.end(), 4),
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+    rotate_2(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   }
 }
-
 
 // algo-leetcode-189
 /* 189. Rotate Array, Easy
@@ -10880,15 +10758,15 @@ namespace leetcode_easy_189
 {
   // k poins to new end which is size()-k in pos
 
-  void rotate(vector<int>& nums, int k) 
+  void rotate(vector<int> &nums, int k)
   {
     int new_begin = nums.size() - k;
 
     // note that must be > 0 but not >= 0
-    for(; new_begin > 0; --new_begin)
+    for (; new_begin > 0; --new_begin)
     {
-      for(int index = new_begin, i = 0; i < k; ++i, ++index)
-        swap(nums[index-1], nums[index]);
+      for (int index = new_begin, i = 0; i < k; ++i, ++index)
+        swap(nums[index - 1], nums[index]);
     }
   }
 
@@ -10900,10 +10778,10 @@ namespace leetcode_easy_189
   //
   // so except cases that falls to index 0 (% makes 0), others works with "%
   // size"
-  // 
+  //
   // However, it's too slow
 
-  void rotate_1(vector<int>& nums, int k) 
+  void rotate_1(vector<int> &nums, int k)
   {
     // as with condition check in algo-rotate, no need to when it rotates to
     // itself.
@@ -10916,10 +10794,10 @@ namespace leetcode_easy_189
     int new_begin = nums.size() - count;
 
     // note that must be > 0 but not >= 0
-    for(; new_begin > 0; --new_begin)
+    for (; new_begin > 0; --new_begin)
     {
-      for(int index = new_begin, i = 0; i < count; ++i, ++index)
-        swap(nums[index-1], nums[index]);
+      for (int index = new_begin, i = 0; i < count; ++i, ++index)
+        swap(nums[index - 1], nums[index]);
     }
   }
 
@@ -10931,7 +10809,7 @@ namespace leetcode_easy_189
   // Memory Usage: 9.6 MB, less than 35.88% of C++ online submissions for Rotate
   // Array.
 
-  void rotate_2(vector<int>& nums, int k) 
+  void rotate_2(vector<int> &nums, int k)
   {
     // as with condition check in algo-rotate, no need to when it rotates to
     // itself.
@@ -10943,31 +10821,30 @@ namespace leetcode_easy_189
 
     int new_begin = nums.size() - count;
 
-    std::reverse(nums.begin(), nums.begin()+new_begin);
-    std::reverse(nums.begin()+new_begin, nums.end());
+    std::reverse(nums.begin(), nums.begin() + new_begin);
+    std::reverse(nums.begin() + new_begin, nums.end());
     std::reverse(nums.begin(), nums.end());
   }
-} // namespace
-
+} // namespace leetcode_easy_189
 
 TEST(AlgoRotate, LeetCode_Easy_189)
 {
   using namespace leetcode_easy_189;
 
   {
-    vector<int> coll{1,2,3,4,5,6,7,8};
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
     // cannot use this since it's template
     // auto func = rotate_1;
 
     // rotate one to the left
-    // rotate( 
-    //     coll.begin(),     // begin  
+    // rotate(
+    //     coll.begin(),     // begin
     //     coll.begin()+1,   // new begin
     //     coll.end()        // end
     //     );
-    rotate(coll, 7); 
-    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+    rotate(coll, 7);
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
     // rotate(
     //     coll.begin(),
@@ -10975,7 +10852,7 @@ TEST(AlgoRotate, LeetCode_Easy_189)
     //     coll.end()
     //     );
     rotate(coll, 2);
-    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
     // rotate(
     //     coll.begin(),
@@ -10983,44 +10860,43 @@ TEST(AlgoRotate, LeetCode_Easy_189)
     //     coll.end()
     //     );
     rotate(coll, 4);
-    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   }
 
   {
-    vector<int> coll{1,2,3,4,5,6,7};
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7};
     rotate(coll, 3);
-    EXPECT_THAT(coll, ElementsAre(5,6,7,1,2,3,4));
+    EXPECT_THAT(coll, ElementsAre(5, 6, 7, 1, 2, 3, 4));
   }
   {
-    vector<int> coll{-1,-100,3,99};
+    vector<int> coll{-1, -100, 3, 99};
     rotate(coll, 2);
-    EXPECT_THAT(coll, ElementsAre(3,99,-1,-100));
+    EXPECT_THAT(coll, ElementsAre(3, 99, -1, -100));
   }
 
   // fails since assumes new begin is within [begin, end)
   {
-    vector<int> coll{1,2};
+    vector<int> coll{1, 2};
     rotate(coll, 3);
-    EXPECT_THAT(coll, Not(ElementsAre(2,1)));
+    EXPECT_THAT(coll, Not(ElementsAre(2, 1)));
   }
   {
-    vector<int> coll{1,2};
+    vector<int> coll{1, 2};
     rotate_1(coll, 3);
-    EXPECT_THAT(coll, ElementsAre(2,1));
+    EXPECT_THAT(coll, ElementsAre(2, 1));
   }
   {
-    vector<int> coll{1,2};
+    vector<int> coll{1, 2};
     rotate_1(coll, 99);
-    EXPECT_THAT(coll, ElementsAre(2,1));
+    EXPECT_THAT(coll, ElementsAre(2, 1));
   }
 
   {
-    vector<int> coll{1,2,3,4,5,6,7,8};
-    rotate_2(coll, 7); 
-    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    rotate_2(coll, 7);
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
   }
 }
-
 
 // ={=========================================================================
 // algo-sort-quick
@@ -11028,15 +10904,16 @@ TEST(AlgoRotate, LeetCode_Easy_189)
 namespace algo_sort_quick
 {
 
-// #define SORT_QUICK_DEBUG
+  // #define SORT_QUICK_DEBUG
 
-int build_partition(vector<int> &coll, int first, int last)
-{
-  int pivot_pos = (first + last) / 2;
-  int pivot_value = coll[pivot_pos];
+  int build_partition(vector<int> &coll, int first, int last)
+  {
+    int pivot_pos   = (first + last) / 2;
+    int pivot_value = coll[pivot_pos];
 
 #ifdef SORT_QUICK_DEBUG
-    cout << "pivot_pos(" << pivot_pos << ") build before(" << first << ", " << last << "): ";
+    cout << "pivot_pos(" << pivot_pos << ") build before(" << first << ", "
+         << last << "): ";
 
     for (int i = first; i <= last; ++i)
       cout << coll[i] << ", ";
@@ -11044,34 +10921,36 @@ int build_partition(vector<int> &coll, int first, int last)
     cout << endl;
 #endif // SORT_QUICK_DEBUG
 
-  // move the pivot to the first pos
-  swap(coll[first], coll[pivot_pos]);
+    // move the pivot to the first pos
+    swap(coll[first], coll[pivot_pos]);
 
-  int last_small = first;
+    int last_small = first;
 
-  for (int inspect = first + 1; inspect <= last; ++inspect)
-  {
-    // *cxx-less*
-    if (coll[inspect] < pivot_value)
+    for (int inspect = first + 1; inspect <= last; ++inspect)
     {
-      ++last_small;
-
-      // last_small == inspect case does happens and it is enhancement from the
-      // previous code
-
-      if (last_small != inspect)
+      // *cxx-less*
+      if (coll[inspect] < pivot_value)
       {
-        cout << "swap(coll[" << coll[last_small] << "], coll[" << coll[inspect] << "]);" << endl;
-        swap(coll[last_small], coll[inspect]);
+        ++last_small;
+
+        // last_small == inspect case does happens and it is enhancement from the
+        // previous code
+
+        if (last_small != inspect)
+        {
+          cout << "swap(coll[" << coll[last_small] << "], coll["
+               << coll[inspect] << "]);" << endl;
+          swap(coll[last_small], coll[inspect]);
+        }
       }
     }
-  }
 
-  // move the pivot back
-  swap(coll[first], coll[last_small]);
+    // move the pivot back
+    swap(coll[first], coll[last_small]);
 
 #ifdef SORT_QUICK_DEBUG
-    cout << "pivot_pos(" << pivot_pos << ") build after (" << first << ", " << last << "): ";
+    cout << "pivot_pos(" << pivot_pos << ") build after (" << first << ", "
+         << last << "): ";
 
     for (int i = first; i <= last; ++i)
       cout << coll[i] << ", ";
@@ -11079,98 +10958,98 @@ int build_partition(vector<int> &coll, int first, int last)
     cout << endl;
 #endif // SORT_QUICK_DEBUG
 
-  return last_small;
-}
+    return last_small;
+  }
 
-int build_partition_descending(vector<int> &coll, int first, int last)
-{
-  int pivot_pos = (first + last) / 2;
-  int pivot_value = coll[pivot_pos];
-
-  // move the pivot to the first pos
-  swap(coll[first], coll[pivot_pos]);
-
-  int last_small = first;
-
-  for (int inspect = first + 1; inspect <= last; ++inspect)
+  int build_partition_descending(vector<int> &coll, int first, int last)
   {
-    // *cxx-greater*
-    if (coll[inspect] > pivot_value)
+    int pivot_pos   = (first + last) / 2;
+    int pivot_value = coll[pivot_pos];
+
+    // move the pivot to the first pos
+    swap(coll[first], coll[pivot_pos]);
+
+    int last_small = first;
+
+    for (int inspect = first + 1; inspect <= last; ++inspect)
     {
-      ++last_small;
-
-      // last_small == inspect case does happens and it is enhancement from the
-      // previous code
-
-      if (last_small != inspect)
+      // *cxx-greater*
+      if (coll[inspect] > pivot_value)
       {
-        swap(coll[last_small], coll[inspect]);
+        ++last_small;
+
+        // last_small == inspect case does happens and it is enhancement from the
+        // previous code
+
+        if (last_small != inspect)
+        {
+          swap(coll[last_small], coll[inspect]);
+        }
       }
     }
+
+    // move the pivot back
+    swap(coll[first], coll[last_small]);
+
+    return last_small;
   }
 
-  // move the pivot back
-  swap(coll[first], coll[last_small]);
-
-  return last_small;
-}
-
-void sort_quick_01(vector<int> &coll, int first, int last)
-{
-  int last_small{};
-
-  if (first < last)
+  void sort_quick_01(vector<int> &coll, int first, int last)
   {
-    last_small = build_partition(coll, first, last); 
-    sort_quick_01(coll, first, last_small-1);
-    sort_quick_01(coll, last_small+1, last);
-  }
-}
+    int last_small{};
 
-void sort_quick_01_descending(vector<int> &coll, int first, int last)
-{
-  int last_small{};
-
-  if (first < last)
-  {
-    last_small = build_partition_descending(coll, first, last); 
-    sort_quick_01_descending(coll, first, last_small-1);
-    sort_quick_01_descending(coll, last_small+1, last);
-  }
-}
-
-// from ansic, p87. exactly same way.
-void sort_quick_02(vector<int> &v, int left, int right)
-{
-  int i, last;
-
-  // do nothing if array contains fewer than two elements
-  if( left >= right )
-    return;
-
-  // move partition elem
-  // swap( v, left, (left+right)/2 );
-  swap( v[left], v[(left+right)/2]);
-
-  last = left;  // to v[0]
-
-  // partition
-  for(i = left+1; i <= right; i++)
-    if( v[i] < v[left] )
+    if (first < last)
     {
-      // swap( v, ++last, i );   // shall ++last
-      swap(v[++last], v[i]);   // shall ++last
+      last_small = build_partition(coll, first, last);
+      sort_quick_01(coll, first, last_small - 1);
+      sort_quick_01(coll, last_small + 1, last);
     }
+  }
 
-  // restore partition elem
-  // swap(v, left, last);
-  swap(v[left], v[last]);
+  void sort_quick_01_descending(vector<int> &coll, int first, int last)
+  {
+    int last_small{};
 
-  sort_quick_02( v, left, last-1 );
-  sort_quick_02( v, last+1, right );
-}
+    if (first < last)
+    {
+      last_small = build_partition_descending(coll, first, last);
+      sort_quick_01_descending(coll, first, last_small - 1);
+      sort_quick_01_descending(coll, last_small + 1, last);
+    }
+  }
 
-} // namespace
+  // from ansic, p87. exactly same way.
+  void sort_quick_02(vector<int> &v, int left, int right)
+  {
+    int i, last;
+
+    // do nothing if array contains fewer than two elements
+    if (left >= right)
+      return;
+
+    // move partition elem
+    // swap( v, left, (left+right)/2 );
+    swap(v[left], v[(left + right) / 2]);
+
+    last = left; // to v[0]
+
+    // partition
+    for (i = left + 1; i <= right; i++)
+      if (v[i] < v[left])
+      {
+        // swap( v, ++last, i );   // shall ++last
+        swap(v[++last], v[i]); // shall ++last
+      }
+
+    // restore partition elem
+    // swap(v, left, last);
+    swap(v[left], v[last]);
+
+    sort_quick_02(v, left, last - 1);
+    sort_quick_02(v, last + 1, right);
+  }
+
+} // namespace algo_sort_quick
 
 TEST(AlgoSort, Quick)
 {
@@ -11189,19 +11068,17 @@ TEST(AlgoSort, Quick)
   {
     vector<int> coll{29, 33, 35, 26, 19, 12, 22};
 
-    sort_quick_01(coll, 0, coll.size()-1);
+    sort_quick_01(coll, 0, coll.size() - 1);
 
-    EXPECT_THAT(coll, 
-        ElementsAre(12, 19, 22, 26, 29, 33, 35));
+    EXPECT_THAT(coll, ElementsAre(12, 19, 22, 26, 29, 33, 35));
   }
 
   {
     vector<int> coll{29, 33, 35, 26, 19, 12, 22};
 
-    sort_quick_01_descending(coll, 0, coll.size()-1);
+    sort_quick_01_descending(coll, 0, coll.size() - 1);
 
-    EXPECT_THAT(coll, 
-        ElementsAre(35, 33, 29, 26, 22, 19, 12));
+    EXPECT_THAT(coll, ElementsAre(35, 33, 29, 26, 22, 19, 12));
   }
 
   // build i(0, 12): 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6,
@@ -11224,10 +11101,11 @@ TEST(AlgoSort, Quick)
   {
     vector<int> coll{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
 
-    sort_quick_01(coll, 0, coll.size()-1);
+    sort_quick_01(coll, 0, coll.size() - 1);
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
 
   // when input is already sorted
@@ -11250,13 +11128,13 @@ TEST(AlgoSort, Quick)
   {
     vector<int> coll{2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
 
-    sort_quick_01(coll, 0, coll.size()-1);
+    sort_quick_01(coll, 0, coll.size() - 1);
 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
 }
-
 
 // ={=========================================================================
 // algo-sort-heap
@@ -11267,14 +11145,14 @@ namespace algo_sort_heap
   //
   // pre  : heap(1, n-1)
   // post : heap(1, n)
-  // 
+  //
   // void siftup(n)
   // {
   //   int i = n;
-  // 
+  //
   // loop:
   //   // invariant: heap(1, n) except between i and its parent
-  //   
+  //
   //   // terminates when reaches the root
   //   if (i == 1)
   //     break;
@@ -11284,12 +11162,11 @@ namespace algo_sort_heap
   //   // terminates when it meets heap property
   //   if (x[i] >= x[p])
   //     break;
-  // 
+  //
   //   swap(i, p);
-  // 
+  //
   //   i = p;
   // }
-
 
   // while version
   void siftup_01(vector<int> &coll, int n)
@@ -11318,18 +11195,18 @@ namespace algo_sort_heap
     }
   }
 
-  // // for version, (cxx-error) 
+  // // for version, (cxx-error)
   // void siftup_01(vector<int> &coll, int n)
   // {
   //   int i = n;
   //   int p = i / 2;
-  // 
+  //
   //   for (; (i != 1) && (coll[i] <= coll[p]); i = p)
   //   {
   //     swap(coll[i], coll[p]);
   //     p = i / 2;
   //   }
-  // 
+  //
   //   // effectively this and should update p after i so this is an error
   //   //
   //   // for (; (i != 1) && (coll[i] <= coll[p]);)
@@ -11340,18 +11217,18 @@ namespace algo_sort_heap
   //   // }
   // }
 
-  // // for version, (cxx-error) 
+  // // for version, (cxx-error)
   // void siftup_01_error(vector<int> &coll, int n)
   // {
   //   int i = n;
   //   int p = i / 2;
-  // 
+  //
   //   // for (; (i != 1) && (coll[i] <= coll[p]); i = p)
   //   // {
   //   //   p = i / 2;
   //   //   swap(coll[i], coll[p]);
   //   // }
-  // 
+  //
   //   // effectively this and cause error since has different pair of i and p in
   //   // check of the lopp.
   //   for (; (i != 1) && (coll[i] <= coll[p]);)
@@ -11366,28 +11243,27 @@ namespace algo_sort_heap
   void siftup_min_text(vector<int> &coll, int n)
   {
     int i, p;
-    for (i = n; i > 1 && coll[p = i/2] > coll[i]; i = p)
+    for (i = n; i > 1 && coll[p = i / 2] > coll[i]; i = p)
       swap(coll[i], coll[p]);
   }
 
-
   // pre  : heap(2, n)
   // post : heap(1, n)
-  // 
+  //
   // void siftdown(n)
   // {
   //   int i = 1;
-  // 
+  //
   // loop:
   //   // invariant: heap(1, n) except between i and its children(0, 1, or 2)
-  //   
+  //
   //   // c is index of the left child
   //   c = i * 2;
   //
   //   // terminates when no children
   //   if (c > n)
   //     break;
-  // 
+  //
   //   // when the right child is lesser
   //   if (c+1 <= n)
   //    if (x[c] > x[c+1])
@@ -11396,9 +11272,9 @@ namespace algo_sort_heap
   //   // terminates when it meets heap property
   //   if (x[i] <= x[c])
   //     break;
-  // 
+  //
   //   swap(i, c);
-  // 
+  //
   //   i = c;
   // }
 
@@ -11407,8 +11283,8 @@ namespace algo_sort_heap
     int i = 1;
     int c = i * 2;
 
-    if (c+1 <= n)
-      if (coll[c] > coll[c+1])
+    if (c + 1 <= n)
+      if (coll[c] > coll[c + 1])
         c++;
 
     while ((c < n) && (coll[i] > coll[c]))
@@ -11419,8 +11295,8 @@ namespace algo_sort_heap
 
       c = i * 2;
 
-      if (c+1 <= n)
-        if (coll[c] > coll[c+1])
+      if (c + 1 <= n)
+        if (coll[c] > coll[c + 1])
           c++;
     }
   }
@@ -11429,31 +11305,30 @@ namespace algo_sort_heap
   // {
   //   int i = 1;
   //   int c = i * 2;
-  // 
+  //
   //   if (c+1 <= n)
   //     if (coll[c] > coll[c+1])
   //       c++;
-  // 
+  //
   //   for (; (c < n) && (coll[i] > coll[c]); i = c)
   //   {
   //     swap(coll[i], coll[c]);
-  // 
+  //
   //     if (c+1 <= n)
   //       if (coll[c] > coll[c+1])
   //         c++;
-  // 
+  //
   //     c = i * 2;
   //   }
   // }
-
 
   void siftdown_min_text(vector<int> &coll, int n)
   {
     int c;
 
-    for (int i = 1; (c = i*2) <= n; i = c)
+    for (int i = 1; (c = i * 2) <= n; i = c)
     {
-      if (c+1 <= n && coll[c] > coll[c+1])
+      if (c + 1 <= n && coll[c] > coll[c + 1])
         c++;
 
       if (coll[i] <= coll[c])
@@ -11462,14 +11337,14 @@ namespace algo_sort_heap
       swap(coll[i], coll[c]);
     }
   }
-} // namespace
+} // namespace algo_sort_heap
 
 TEST(AlgoSort, HeapSiftUp)
 {
   using namespace algo_sort_heap;
 
   {
-    // not use coll[0], 13 elements 
+    // not use coll[0], 13 elements
     vector<int> coll{0, 12, 20, 15, 29, 23, 17, 22, 35, 40, 26, 51, 19};
     // +1, 14 elements
     coll.push_back(13);
@@ -11478,12 +11353,13 @@ TEST(AlgoSort, HeapSiftUp)
     siftup_01(coll, 13);
 
     //                   {0, 12,/20, 13,/29, 23, 15, 22,/35, 40, 26, 51, 19, 17}
-    EXPECT_THAT(coll, 
-        ElementsAreArray({0, 12, 20, 13, 29, 23, 15, 22, 35, 40, 26, 51, 19, 17}));
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {0, 12, 20, 13, 29, 23, 15, 22, 35, 40, 26, 51, 19, 17}));
   }
 
   {
-    // not use coll[0], 13 elements 
+    // not use coll[0], 13 elements
     vector<int> coll{0, 12, 20, 15, 29, 23, 17, 22, 35, 40, 26, 51, 19};
     // +1, 14 elements
     coll.push_back(13);
@@ -11491,8 +11367,9 @@ TEST(AlgoSort, HeapSiftUp)
     siftup_min_text(coll, 13);
 
     //                   {0, 12,/20, 13,/29, 23, 15, 22,/35, 40, 26, 51, 19, 17}
-    EXPECT_THAT(coll, 
-        ElementsAreArray({0, 12, 20, 13, 29, 23, 15, 22, 35, 40, 26, 51, 19, 17}));
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {0, 12, 20, 13, 29, 23, 15, 22, 35, 40, 26, 51, 19, 17}));
   }
 }
 
@@ -11503,16 +11380,18 @@ TEST(AlgoSort, HeapSiftDown)
   {
     // when did x[1] = 18
     vector<int> coll{0, 18, 20, 15, 29, 23, 17, 22, 35, 40, 26, 51, 19};
-    siftdown_01(coll, coll.size()-1);
-    EXPECT_THAT(coll,
-        ElementsAreArray({0,15,20,17,29,23,18,22,35,40,26,51,19}));
+    siftdown_01(coll, coll.size() - 1);
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({0, 15, 20, 17, 29, 23, 18, 22, 35, 40, 26, 51, 19}));
   }
   {
     // when did x[1] = 18
     vector<int> coll{0, 18, 20, 15, 29, 23, 17, 22, 35, 40, 26, 51, 19};
-    siftdown_min_text(coll, coll.size()-1);
-    EXPECT_THAT(coll,
-        ElementsAreArray({0,15,20,17,29,23,18,22,35,40,26,51,19}));
+    siftdown_min_text(coll, coll.size() - 1);
+    EXPECT_THAT(
+      coll,
+      ElementsAreArray({0, 15, 20, 17, 29, 23, 18, 22, 35, 40, 26, 51, 19}));
   }
 }
 
@@ -11527,259 +11406,259 @@ namespace algo_sort_heap
   //       x_ = new T[maxsize_ +1];
   //       n_ = 0;
   //     }
-  // 
+  //
   //     void insert(T t)
   //     {
   //       if (n_ >= maxsize_)
   //         error;
-  // 
+  //
   //       x_[++n] = t;
-  // 
+  //
   //       // pre : heap(1, n-1)
   //       siftup();
   //       // post: heap(1, n)
   //     }
-  // 
+  //
   //     int extractmin()
   //     {
   //       T t;
-  // 
+  //
   //       if (n_ < 1)
   //         error;
-  // 
+  //
   //       t = x_[1];
-  // 
+  //
   //       x_[1] = x[n--];
-  // 
+  //
   //       // pre : heap(2, n)
   //       siftdown();
   //       // post: heap(1, n)
-  // 
+  //
   //       return t;
   //     }
-  // 
+  //
   //   private:
   //     int n_, maxsize_;
   //     T *x_;
   // };
 
   template <typename T>
-    class PriQueue {
-      public:
-        PriQueue(int size)
-        {
-          maxsize_ = size;
-          coll_ = new T[maxsize_ +1];
-          n_ = 0;
-        }
-        ~PriQueue()
-        {
-          if (coll_)
-            delete coll_;
-          n_ = 0;
-        }
+  class PriQueue
+  {
+  public:
+    PriQueue(int size)
+    {
+      maxsize_ = size;
+      coll_    = new T[maxsize_ + 1];
+      n_       = 0;
+    }
+    ~PriQueue()
+    {
+      if (coll_)
+        delete coll_;
+      n_ = 0;
+    }
 
-        void insert(T value)
-        {
-          int parent{};
+    void insert(T value)
+    {
+      int parent{};
 
-          // error
-          if (n_ >= maxsize_)
-            return;
+      // error
+      if (n_ >= maxsize_)
+        return;
 
-          coll_[++n_] = value;
+      coll_[++n_] = value;
 
-          // heap(1, n-1)
-          // siftup()
-          // heap(1, n)
-          // siftup(n) 
-          for (int i = n_; i > 1 && coll_[i] < coll_[parent = i/2]; i = parent) 
-            swap(coll_[i], coll_[parent]);
-        }
+      // heap(1, n-1)
+      // siftup()
+      // heap(1, n)
+      // siftup(n)
+      for (int i = n_; i > 1 && coll_[i] < coll_[parent = i / 2]; i = parent)
+        swap(coll_[i], coll_[parent]);
+    }
 
-        int extractmin()
-        {
-          T min_value{};
-          int child{};
+    int extractmin()
+    {
+      T min_value{};
+      int child{};
 
-          // error
-          if (n_ < 1)
-            return -1;
+      // error
+      if (n_ < 1)
+        return -1;
 
-          min_value = coll_[1];
+      min_value = coll_[1];
 
-          coll_[1] = coll_[n_--];
+      coll_[1] = coll_[n_--];
 
-          // heap(2, n)
-          // siftdown(n)
-          // heap(1,n)
+      // heap(2, n)
+      // siftdown(n)
+      // heap(1,n)
 
-          for (int i = 1; (child = i*2) <= n_; i = child)
-          {
-            if (child+1 <= n_ && coll_[child] > coll_[child+1])
-              child++;
+      for (int i = 1; (child = i * 2) <= n_; i = child)
+      {
+        if (child + 1 <= n_ && coll_[child] > coll_[child + 1])
+          child++;
 
-            if (coll_[i] <= coll_[child])
-              break;
+        if (coll_[i] <= coll_[child])
+          break;
 
-            swap(coll_[i], coll_[child]);
-          }
+        swap(coll_[i], coll_[child]);
+      }
 
-          return min_value;
-        }
+      return min_value;
+    }
 
-      private:
-        int n_, maxsize_;
-        T *coll_;
-    };
-
+  private:
+    int n_, maxsize_;
+    T *coll_;
+  };
 
   // simply use `opposite` comparisons
   template <typename T>
-    class PriQueueMax {
-      public:
-        PriQueueMax(int size)
-        {
-          maxsize_ = size;
-          coll_ = new T[maxsize_ +1];
-          n_ = 0;
-        }
-        ~PriQueueMax()
-        {
-          if (coll_)
-            delete coll_;
-          n_ = 0;
-        }
+  class PriQueueMax
+  {
+  public:
+    PriQueueMax(int size)
+    {
+      maxsize_ = size;
+      coll_    = new T[maxsize_ + 1];
+      n_       = 0;
+    }
+    ~PriQueueMax()
+    {
+      if (coll_)
+        delete coll_;
+      n_ = 0;
+    }
 
-        void insert(T value)
-        {
-          int parent{};
+    void insert(T value)
+    {
+      int parent{};
 
-          // error
-          if (n_ >= maxsize_)
-            return;
+      // error
+      if (n_ >= maxsize_)
+        return;
 
-          coll_[++n_] = value;
+      coll_[++n_] = value;
 
-          // heap(1, n-1)
-          // siftup()
-          // heap(1, n)
-          // siftup(n) 
-          for (int i = n_; i > 1 && coll_[i] > coll_[parent = i/2]; i = parent) 
-            swap(coll_[i], coll_[parent]);
-        }
+      // heap(1, n-1)
+      // siftup()
+      // heap(1, n)
+      // siftup(n)
+      for (int i = n_; i > 1 && coll_[i] > coll_[parent = i / 2]; i = parent)
+        swap(coll_[i], coll_[parent]);
+    }
 
-        int extractmin()
-        {
-          T min_value{};
-          int child{};
+    int extractmin()
+    {
+      T min_value{};
+      int child{};
 
-          // error
-          if (n_ < 1)
-            return -1;
+      // error
+      if (n_ < 1)
+        return -1;
 
-          min_value = coll_[1];
+      min_value = coll_[1];
 
-          coll_[1] = coll_[n_--];
+      coll_[1] = coll_[n_--];
 
-          // heap(2, n)
-          // siftdown(n)
-          // heap(1,n)
+      // heap(2, n)
+      // siftdown(n)
+      // heap(1,n)
 
-          for (int i = 1; (child = i*2) <= n_; i = child)
-          {
-            if (child+1 <= n_ && coll_[child] < coll_[child+1])
-              child++;
+      for (int i = 1; (child = i * 2) <= n_; i = child)
+      {
+        if (child + 1 <= n_ && coll_[child] < coll_[child + 1])
+          child++;
 
-            if (coll_[i] >= coll_[child])
-              break;
+        if (coll_[i] >= coll_[child])
+          break;
 
-            swap(coll_[i], coll_[child]);
-          }
+        swap(coll_[i], coll_[child]);
+      }
 
-          return min_value;
-        }
+      return min_value;
+    }
 
-      private:
-        int n_, maxsize_;
-        T *coll_;
-    };
-
+  private:
+    int n_, maxsize_;
+    T *coll_;
+  };
 
   template <typename T, typename F = std::less<T>>
-    class PriQueueTemplate {
-      public:
-        PriQueueTemplate(int size)
-        {
-          maxsize_ = size;
-          coll_ = new T[maxsize_ +1];
-          n_ = 0;
-          f_ = F();
-        }
-        ~PriQueueTemplate()
-        {
-          if (coll_)
-            delete coll_;
-          n_ = 0;
-        }
+  class PriQueueTemplate
+  {
+  public:
+    PriQueueTemplate(int size)
+    {
+      maxsize_ = size;
+      coll_    = new T[maxsize_ + 1];
+      n_       = 0;
+      f_       = F();
+    }
+    ~PriQueueTemplate()
+    {
+      if (coll_)
+        delete coll_;
+      n_ = 0;
+    }
 
-        void insert(T value)
-        {
-          int parent{};
+    void insert(T value)
+    {
+      int parent{};
 
-          // error
-          if (n_ >= maxsize_)
-            return;
+      // error
+      if (n_ >= maxsize_)
+        return;
 
-          coll_[++n_] = value;
+      coll_[++n_] = value;
 
-          // heap(1, n-1)
-          // siftup()
-          // heap(1, n)
-          // siftup(n) 
-          for (int i = n_; i > 1 && f_(coll_[i], coll_[parent = i/2]); i = parent) 
-            swap(coll_[i], coll_[parent]);
-        }
+      // heap(1, n-1)
+      // siftup()
+      // heap(1, n)
+      // siftup(n)
+      for (int i = n_; i > 1 && f_(coll_[i], coll_[parent = i / 2]); i = parent)
+        swap(coll_[i], coll_[parent]);
+    }
 
-        int extractmin()
-        {
-          T min_value{};
-          int child{};
+    int extractmin()
+    {
+      T min_value{};
+      int child{};
 
-          // error
-          if (n_ < 1)
-            return -1;
+      // error
+      if (n_ < 1)
+        return -1;
 
-          min_value = coll_[1];
+      min_value = coll_[1];
 
-          coll_[1] = coll_[n_--];
+      coll_[1] = coll_[n_--];
 
-          // heap(2, n)
-          // siftdown(n)
-          // heap(1,n)
+      // heap(2, n)
+      // siftdown(n)
+      // heap(1,n)
 
-          for (int i = 1; (child = i*2) <= n_; i = child)
-          {
-            if (child+1 <= n_ && !f_(coll_[child], coll_[child+1]))
-              child++;
+      for (int i = 1; (child = i * 2) <= n_; i = child)
+      {
+        if (child + 1 <= n_ && !f_(coll_[child], coll_[child + 1]))
+          child++;
 
-            if (f_(coll_[i], coll_[child]) || coll_[i] == coll_[child])
-              break;
+        if (f_(coll_[i], coll_[child]) || coll_[i] == coll_[child])
+          break;
 
-            swap(coll_[i], coll_[child]);
-          }
+        swap(coll_[i], coll_[child]);
+      }
 
-          return min_value;
-        }
+      return min_value;
+    }
 
-      private:
-        int n_, maxsize_;
-        T *coll_;
-        F f_;
-    };
+  private:
+    int n_, maxsize_;
+    T *coll_;
+    F f_;
+  };
 
-} // namespace
-
+} // namespace algo_sort_heap
 
 TEST(AlgoSort, HeapPriQueue)
 {
@@ -11798,10 +11677,10 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       coll.push_back(pq.extractmin());
 
-    EXPECT_THAT(coll, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+    EXPECT_THAT(coll, ElementsAreArray({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
   {
-    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> coll{4, 5, 6, 7, 8, 9, 1, 2, 3, 0};
     vector<int> collo;
 
     int n = 10;
@@ -11813,7 +11692,7 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       collo.push_back(pq.extractmin());
 
-    EXPECT_THAT(collo, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+    EXPECT_THAT(collo, ElementsAreArray({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
 
   // max
@@ -11829,10 +11708,10 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       coll.push_back(pq.extractmin());
 
-    EXPECT_THAT(coll, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+    EXPECT_THAT(coll, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}));
   }
   {
-    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> coll{4, 5, 6, 7, 8, 9, 1, 2, 3, 0};
     vector<int> collo;
 
     int n = 10;
@@ -11844,7 +11723,7 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       collo.push_back(pq.extractmin());
 
-    EXPECT_THAT(collo, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+    EXPECT_THAT(collo, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}));
   }
 
   // min, template
@@ -11860,10 +11739,10 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       coll.push_back(pq.extractmin());
 
-    EXPECT_THAT(coll, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+    EXPECT_THAT(coll, ElementsAreArray({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
   {
-    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> coll{4, 5, 6, 7, 8, 9, 1, 2, 3, 0};
     vector<int> collo;
 
     int n = 10;
@@ -11875,7 +11754,7 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       collo.push_back(pq.extractmin());
 
-    EXPECT_THAT(collo, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+    EXPECT_THAT(collo, ElementsAreArray({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
 
   // max, template
@@ -11891,10 +11770,10 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       coll.push_back(pq.extractmin());
 
-    EXPECT_THAT(coll, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+    EXPECT_THAT(coll, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}));
   }
   {
-    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> coll{4, 5, 6, 7, 8, 9, 1, 2, 3, 0};
     vector<int> collo;
 
     int n = 10;
@@ -11906,10 +11785,9 @@ TEST(AlgoSort, HeapPriQueue)
     for (int i = 0; i < n; ++i)
       collo.push_back(pq.extractmin());
 
-    EXPECT_THAT(collo, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+    EXPECT_THAT(collo, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1, 0}));
   }
 }
-
 
 /*
 
@@ -11964,7 +11842,7 @@ namespace algo_sort_heap
       siftdown_min_text(coll, --i);
     }
   }
-} // namespace
+} // namespace algo_sort_heap
 
 TEST(AlgoSort, HeapSort)
 {
@@ -11972,14 +11850,14 @@ TEST(AlgoSort, HeapSort)
 
   {
     // add the dummpy at 0 to make heap
-    vector<int> coll{0,4,5,6,7,8,9,1,2,3,0};
+    vector<int> coll{0, 4, 5, 6, 7, 8, 9, 1, 2, 3, 0};
 
     sort_heap_min(coll);
 
     // descending order
-    EXPECT_THAT(coll, ElementsAreArray({0,9,8,7,6,5,4,3,2,1,0}));
+    EXPECT_THAT(coll, ElementsAreArray({0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}));
   }
-  
+
   // max verison will make ascending order
   //
   // {
@@ -11992,12 +11870,11 @@ TEST(AlgoSort, HeapSort)
   // }
   // {
   //   vector<int> coll{ 0, 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
-  //   sort_heap_02(coll); 
-  //   EXPECT_THAT(coll, 
+  //   sort_heap_02(coll);
+  //   EXPECT_THAT(coll,
   //       ElementsAreArray({0, 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
   // }
 }
-
 
 // ={=========================================================================
 // algo-sort-merge
@@ -12010,7 +11887,7 @@ TEST(AlgoSort, MergeSortedList)
   std::list<int> coll2{9, 12, 22};
   std::list<int> result{};
 
-  auto first = coll1.begin();
+  auto first  = coll1.begin();
   auto second = coll2.begin();
 
   for (; first != coll1.end() && (second != coll2.end());)
@@ -12043,7 +11920,6 @@ TEST(AlgoSort, MergeSortedList)
   EXPECT_THAT(result, ElementsAre(9, 12, 22, 26, 33, 35, 29));
 }
 
-
 // ={=========================================================================
 // algo-search-binary-search
 
@@ -12056,109 +11932,106 @@ namespace algo_binary_search
   //
   // o since there is no match check in the loop, have to check if it found the
   //   match and return index or iterator found or return something to mean `not
-  //   found`. 
+  //   found`.
   //
-  // o iterator or index? 
+  // o iterator or index?
   //
   // When use iterator, there's no more element when first and last are the
   // same. When use array index, there is one element and (last-first) == -1
-  // when express there is no element. 
+  // when express there is no element.
   //
   // Whether or not use iterator or array, have the same number of comparison
   // tree and exit the loop when there is no more comparison to do.
   //
   // o end while loop when begin == end or begin > end
-  
-  template <typename _Iterator, typename _T> 
-    _Iterator binary_search_1(_Iterator begin, _Iterator end, _T const key) 
-    { 
-      _Iterator result = end;
 
-      while (begin < end)
-      {
-        auto middle = std::distance(begin, end)/2;
+  template <typename _Iterator, typename _T>
+  _Iterator binary_search_1(_Iterator begin, _Iterator end, _T const key)
+  {
+    _Iterator result = end;
 
-        // cout << "while: middle : " << middle << endl;
+    while (begin < end)
+    {
+      auto middle = std::distance(begin, end) / 2;
 
-        if (key > *(begin + middle))
-          begin = begin + middle + 1;
-        else
-          end = begin + middle;
-      }
+      // cout << "while: middle : " << middle << endl;
 
-      // cout << "while: distance : " << std::distance(begin, end) << endl;
-
-      return key == *begin ? begin : result;
+      if (key > *(begin + middle))
+        begin = begin + middle + 1;
+      else
+        end = begin + middle;
     }
 
+    // cout << "while: distance : " << std::distance(begin, end) << endl;
+
+    return key == *begin ? begin : result;
+  }
 
   // returns index either found or to insert than boolean
   // must use `begin` to the right return value
 
-  template <typename _Iterator, typename _T> 
-    _T binary_search_2(_Iterator begin, _Iterator end, _T const key) 
-    { 
-      _Iterator result = begin;
+  template <typename _Iterator, typename _T>
+  _T binary_search_2(_Iterator begin, _Iterator end, _T const key)
+  {
+    _Iterator result = begin;
 
-      while (begin < end)
-      {
-        auto middle = std::distance(begin, end)/2;
+    while (begin < end)
+    {
+      auto middle = std::distance(begin, end) / 2;
 
-        if (key > *(begin + middle))
-          begin = begin + middle + 1;
-        else
-          end = begin + middle;
-      }
-
-      return std::distance(result, begin);
+      if (key > *(begin + middle))
+        begin = begin + middle + 1;
+      else
+        end = begin + middle;
     }
 
-  template <typename _Coll, typename _T> 
-    _T binary_search_3(_Coll coll, _T const key) 
-    { 
-      auto begin = coll.begin();
-      auto end = coll.end();
+    return std::distance(result, begin);
+  }
 
-      while (begin < end)
-      {
-        auto middle = std::distance(begin, end)/2;
+  template <typename _Coll, typename _T>
+  _T binary_search_3(_Coll coll, _T const key)
+  {
+    auto begin = coll.begin();
+    auto end   = coll.end();
 
-        if (key > *(begin + middle))
-          begin = begin + middle + 1;
-        else
-          end = begin + middle;
-      }
+    while (begin < end)
+    {
+      auto middle = std::distance(begin, end) / 2;
 
-      return std::distance(coll.begin(), begin);
+      if (key > *(begin + middle))
+        begin = begin + middle + 1;
+      else
+        end = begin + middle;
     }
 
+    return std::distance(coll.begin(), begin);
+  }
 
   // `equality-version`
   // note that while loop has `=` now
 
-  template <typename _Iterator, typename _T> 
-    _Iterator binary_search_4(_Iterator begin, _Iterator end, _T const key) 
-    { 
-      _Iterator result = end;
+  template <typename _Iterator, typename _T>
+  _Iterator binary_search_4(_Iterator begin, _Iterator end, _T const key)
+  {
+    _Iterator result = end;
 
-      while (begin <= end)
-      {
-        auto middle = std::distance(begin, end)/2;
+    while (begin <= end)
+    {
+      auto middle = std::distance(begin, end) / 2;
 
-        // cout << "while: middle : " << middle << endl;
+      // cout << "while: middle : " << middle << endl;
 
-        if (key == *(begin + middle))
-          return begin + middle;
-        else if (key > *(begin + middle))
-          begin = begin + middle + 1;
-        else
-          end = begin + middle -1;
-      }
-
-      // when not found only
-      return result;
+      if (key == *(begin + middle))
+        return begin + middle;
+      else if (key > *(begin + middle))
+        begin = begin + middle + 1;
+      else
+        end = begin + middle - 1;
     }
 
+    // when not found only
+    return result;
+  }
 
   // note: do not work as expected for:
   //
@@ -12170,29 +12043,29 @@ namespace algo_binary_search
   // why gt-version works? since gt-version do not have "begin == end" case in
   // the loop so do not go past
 
-  template <typename _Iterator, typename _T> 
-    _T binary_search_5(_Iterator begin, _Iterator end, _T const key) 
-    { 
-      _Iterator saved_begin = begin;
-      _Iterator saved_end = end;
+  template <typename _Iterator, typename _T>
+  _T binary_search_5(_Iterator begin, _Iterator end, _T const key)
+  {
+    _Iterator saved_begin = begin;
+    _Iterator saved_end   = end;
 
-      while (begin <= end)
-      {
-        auto middle = std::distance(begin, end)/2;
+    while (begin <= end)
+    {
+      auto middle = std::distance(begin, end) / 2;
 
-        // cout << "while: middle : " << middle << endl;
+      // cout << "while: middle : " << middle << endl;
 
-        if (key == *(begin + middle))
-          return std::distance(saved_begin, begin + middle);
-        else if (key > *(begin + middle))
-          begin = begin + middle + 1;
-        else
-          end = begin + middle -1;
-      }
-
-      // when not found only
-      return std::distance(saved_begin, begin);
+      if (key == *(begin + middle))
+        return std::distance(saved_begin, begin + middle);
+      else if (key > *(begin + middle))
+        begin = begin + middle + 1;
+      else
+        end = begin + middle - 1;
     }
+
+    // when not found only
+    return std::distance(saved_begin, begin);
+  }
 
   // ansic, p58 `equality-version`
   // cracking the coding interview, p120
@@ -12201,12 +12074,12 @@ namespace algo_binary_search
   // note:
   //
   // it can cause `overflow` when array is huge so can use:
-  // 
+  //
   // mid = (high-low)/2 + low;
-  // 
+  //
   // it has the same as distance() in iterator version or can use
   // length approach as stl version.
-  
+
   int binary_search_6(vector<int> &coll, int key)
   {
     // *cxx-undefined* since can be negative
@@ -12216,12 +12089,12 @@ namespace algo_binary_search
     int high{};
     int mid{};
 
-    low = 0;
-    high = coll.size()-1;
+    low  = 0;
+    high = coll.size() - 1;
 
     while (low <= high)
     {
-      mid = (low + high)/2;
+      mid = (low + high) / 2;
 
       if (key == coll[mid])
         return mid;
@@ -12230,7 +12103,7 @@ namespace algo_binary_search
       else
         low = mid + 1;
     }
-   
+
     // to return index
     return low;
 
@@ -12282,7 +12155,7 @@ namespace algo_binary_search
   //  *  The comparison function should have the same effects on ordering as
   //  *  the function used for the initial sort.
   // */
-  // 
+  //
   // template<typename _ForwardIterator, typename _Tp>
   //   inline _ForwardIterator
   //   lower_bound(_ForwardIterator __first, _ForwardIterator __last,
@@ -12310,64 +12183,65 @@ namespace algo_binary_search
   namespace algo_code
   {
     // /usr/include/c++/4.9/bits/stl_algobase.h
-    template<typename _ForwardIterator, typename _Tp, typename _Compare>
-      _ForwardIterator
-      __lower_bound(_ForwardIterator __first, _ForwardIterator __last,
-          const _Tp& __val, _Compare __comp)
-      {
-        typedef typename iterator_traits<_ForwardIterator>::difference_type
-          _DistanceType;
-
-        _DistanceType __len = std::distance(__first, __last);
-
-        while (__len > 0)
-        {
-          _DistanceType __half = __len >> 1;
-          _ForwardIterator __middle = __first;
-          std::advance(__middle, __half);
-          if (__comp(__middle, __val))
-          {
-            __first = __middle;
-            ++__first;
-            __len = __len - __half - 1;
-          }
-          else
-            __len = __half;
-        }
-        return __first;
-      }
-  } // namespace
-
-  template <typename _Iterator, typename _T> 
-    _T binary_search_7(_Iterator begin, _Iterator end, _T const key) 
+    template <typename _ForwardIterator, typename _Tp, typename _Compare>
+    _ForwardIterator __lower_bound(_ForwardIterator __first,
+                                   _ForwardIterator __last,
+                                   const _Tp &__val,
+                                   _Compare __comp)
     {
-      auto saved_begin = begin;
-      auto length  = std::distance(begin, end);
+      typedef typename iterator_traits<_ForwardIterator>::difference_type
+        _DistanceType;
 
-      while (0 < length)
+      _DistanceType __len = std::distance(__first, __last);
+
+      while (__len > 0)
       {
-        auto half = length >> 1;
-
-        // cxx-advance
-        _Iterator middle = begin;
-        std::advance(middle, half);
-
-        // error since: void advance().
-        // ITERATOR middle = advance(first, half);
-
-        if (*middle < key)
+        _DistanceType __half      = __len >> 1;
+        _ForwardIterator __middle = __first;
+        std::advance(__middle, __half);
+        if (__comp(__middle, __val))
         {
-          begin = ++middle;
-          length = length - half - 1;
+          __first = __middle;
+          ++__first;
+          __len = __len - __half - 1;
         }
         else
-        {
-          length = half;
-        }
+          __len = __half;
       }
-
-      return std::distance(saved_begin, begin);
+      return __first;
     }
+  } // namespace algo_code
+
+  template <typename _Iterator, typename _T>
+  _T binary_search_7(_Iterator begin, _Iterator end, _T const key)
+  {
+    auto saved_begin = begin;
+    auto length      = std::distance(begin, end);
+
+    while (0 < length)
+    {
+      auto half = length >> 1;
+
+      // cxx-advance
+      _Iterator middle = begin;
+      std::advance(middle, half);
+
+      // error since: void advance().
+      // ITERATOR middle = advance(first, half);
+
+      if (*middle < key)
+      {
+        begin  = ++middle;
+        length = length - half - 1;
+      }
+      else
+      {
+        length = half;
+      }
+    }
+
+    return std::distance(saved_begin, begin);
+  }
 
   int binary_search_8(std::vector<int> &coll, int key)
   {
@@ -12376,16 +12250,16 @@ namespace algo_binary_search
 
     while (0 < length)
     {
-      auto half = length >> 1;
+      auto half   = length >> 1;
       auto middle = begin + half;
 
       if (key > coll[middle])
-      { 
+      {
         // update begin and work towards the right
         begin = ++middle;
 
         // note that length is length but not index
-        length = length - half -1;
+        length = length - half - 1;
       }
       else
       {
@@ -12397,7 +12271,7 @@ namespace algo_binary_search
     return begin;
   }
 
-} // namespace
+} // namespace algo_binary_search
 
 TEST(AlgoSearch, BinarySearch)
 {
@@ -12423,7 +12297,6 @@ TEST(AlgoSearch, BinarySearch)
     EXPECT_THAT(binary_search(coll.begin(), coll.end(), 32), false);
   }
 
-
   // gt-version
   {
     //               0  1  2  3   4   5   6   7   8   9  10  11  12
@@ -12432,22 +12305,20 @@ TEST(AlgoSearch, BinarySearch)
     auto it = binary_search_1(coll.begin(), coll.end(), 15);
     EXPECT_THAT(std::distance(coll.begin(), it), 7);
 
-    EXPECT_THAT(binary_search_1(coll.begin(), coll.end(), 32), 
-        coll.end());
+    EXPECT_THAT(binary_search_1(coll.begin(), coll.end(), 32), coll.end());
   }
 
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
 
-    EXPECT_THAT(binary_search_1(coll.begin(), coll.end(), 2), 
-        coll.end());
+    EXPECT_THAT(binary_search_1(coll.begin(), coll.end(), 2), coll.end());
   }
 
   // gt-version that return index
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_2(coll.begin(), coll.end(), 5), 2);
     EXPECT_THAT(binary_search_2(coll.begin(), coll.end(), 2), 1);
     EXPECT_THAT(binary_search_2(coll.begin(), coll.end(), 7), 4);
@@ -12455,7 +12326,7 @@ TEST(AlgoSearch, BinarySearch)
   }
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_3(coll, 5), 2);
     EXPECT_THAT(binary_search_3(coll, 2), 1);
     EXPECT_THAT(binary_search_3(coll, 7), 4);
@@ -12470,23 +12341,22 @@ TEST(AlgoSearch, BinarySearch)
     auto it = binary_search_4(coll.begin(), coll.end(), 15);
     EXPECT_THAT(std::distance(coll.begin(), it), 7);
 
-    EXPECT_THAT(binary_search_4(coll.begin(), coll.end(), 32), 
-        coll.end());
+    EXPECT_THAT(binary_search_4(coll.begin(), coll.end(), 32), coll.end());
   }
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_5(coll.begin(), coll.end(), 5), 2);
     EXPECT_THAT(binary_search_5(coll.begin(), coll.end(), 2), 1);
   }
 
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_6(coll, 5), 2);
     EXPECT_THAT(binary_search_6(coll, 2), 1);
     EXPECT_THAT(binary_search_6(coll, 7), 4);
-    
+
     // when use size_t
     // /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container
     //     with out-of-bounds index 9223372036854775807, but container only holds 4
@@ -12512,7 +12382,7 @@ TEST(AlgoSearch, BinarySearchStl)
     // element with value could get inserted without breaking the sorting of the
     // range [beg,end).
 
-    // : error: no matching function for call to 
+    // : error: no matching function for call to
     // ‘distance(std::vector<int>::iterator, __gnu_cxx::__normal_iterator<const int*, std::vector<int> >&)’
     // since lower_bound() uses cbegin().
     // EXPECT_THAT(distance(coll.begin(), first), 8);
@@ -12534,7 +12404,7 @@ TEST(AlgoSearch, BinarySearchStl)
   }
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_7(coll.begin(), coll.end(), 5), 2);
     EXPECT_THAT(binary_search_7(coll.begin(), coll.end(), 2), 1);
     EXPECT_THAT(binary_search_7(coll.begin(), coll.end(), 7), 4);
@@ -12542,14 +12412,13 @@ TEST(AlgoSearch, BinarySearchStl)
   }
   {
     //               0 1 2 3
-    vector<int> coll{1,3,5,6};
+    vector<int> coll{1, 3, 5, 6};
     EXPECT_THAT(binary_search_8(coll, 5), 2);
     EXPECT_THAT(binary_search_8(coll, 2), 1);
     EXPECT_THAT(binary_search_8(coll, 7), 4);
     EXPECT_THAT(binary_search_8(coll, 0), 0);
   }
 }
-
 
 // algo-binary-search algo-leetcode-17
 /*
@@ -12576,220 +12445,218 @@ Explanation: The square root of 8 is 2.82842..., and since
 
 namespace algo_binary_search
 {
-namespace leetcode_easy_017
-{
-
-  // https://www.geeksforgeeks.org/square-root-of-an-integer/
-  // binary search version
-  //
-  // O(Log x)
-  //
-  //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
-  //  |---|--------|-------|--------------------|
-  //
-  //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
-  //  value but used 
-
-  int floor_sqrt_1(int x)
+  namespace leetcode_easy_017
   {
-    // base cases
-    if (x == 0 || x == 1)
-      return x;
 
-    // starts from 1 since it's covered in base cases
-    int start{1};
-    int end{x-1};
-    int ans{};
+    // https://www.geeksforgeeks.org/square-root-of-an-integer/
+    // binary search version
+    //
+    // O(Log x)
+    //
+    //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
+    //  |---|--------|-------|--------------------|
+    //
+    //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
+    //  value but used
 
-    while (start <= end)
+    int floor_sqrt_1(int x)
     {
-      int mid = (start + end) / 2;
+      // base cases
+      if (x == 0 || x == 1)
+        return x;
 
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
+      // starts from 1 since it's covered in base cases
+      int start{1};
+      int end{x - 1};
+      int ans{};
+
+      while (start <= end)
       {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
+        int mid = (start + end) / 2;
 
-        // we need floor answer so update ans  
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
-  // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
-  // 1.
-  //
-  // cxx-error-overflow
-  // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
-  // 536848899 cannot be represented in type 'int' (solution.cpp)
-
-  int floor_sqrt_2(int x)
-  {
-    // // base cases
-    // if (x == 0 || x == 1)
-    //   return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x/2};
-    int ans{};
-
-    while (start <= end)
-    {
-      int mid = (start + end) / 2;
-
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans  
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_3(int x)
-  {
-    // // base cases
-    if (x == 0 || x == 1)
-      return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x/2};
-    int ans{};
-
-    while (start <= end)
-    {
-      long long mid = (start + end) / 2;
-      long long sqare = mid * mid;
-
-      // equality; perfect square
-      if (sqare == x)
-        return mid;
-      else if (sqare < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans  
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-
-  // having square variable for mid * mid causes performance penalty?
-  //
-  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_4(int x)
-  {
-    // // base cases
-    if (x == 0 || x == 1)
-      return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x/2};
-    int ans{};
-
-    long long mid{};
-
-    while (start <= end)
-    {
-      mid = (start + end) / 2;
-
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans  
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // code discussion forum
-  //
-  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_5(int x)
-  {
-    long long l=1,r=x,mid;
-
-    if(x==0)
-      return 0;
-
-    while(l<=r)
-    {
-      mid = l+(r-l)/2;
-
-      if( mid*mid==x)
-        return mid;
-      else if( mid*mid>x)
-        r=mid-1;
-      else
-      {
-        l=mid+1;
-        if(l*l>x)
+        // equality; perfect square
+        if (mid * mid == x)
           return mid;
+        else if (mid * mid < x)
+        {
+          // so discard [1, mid], update start and move closer to sqrt(x)
+          start = mid + 1;
+
+          // we need floor answer so update ans
+          ans = mid;
+        }
+        // discard [mid, x]
+        else
+          end = mid - 1;
       }
+
+      // return floor value rather than `not found`
+      return ans;
     }
 
-    // just to avoid warning
-    return mid;
-  }
-} // namespace
-} // namespace
+    // Note: The Binary Search can be further optimized to start with ‘start’ = 0
+    // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
+    // 1.
+    //
+    // cxx-error-overflow
+    // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
+    // 536848899 cannot be represented in type 'int' (solution.cpp)
 
+    int floor_sqrt_2(int x)
+    {
+      // // base cases
+      // if (x == 0 || x == 1)
+      //   return x;
+
+      // starts from 1 since it's covered in base cases
+      int start{0};
+      int end{x / 2};
+      int ans{};
+
+      while (start <= end)
+      {
+        int mid = (start + end) / 2;
+
+        // equality; perfect square
+        if (mid * mid == x)
+          return mid;
+        else if (mid * mid < x)
+        {
+          // so discard [1, mid], update start and move closer to sqrt(x)
+          start = mid + 1;
+
+          // we need floor answer so update ans
+          ans = mid;
+        }
+        // discard [mid, x]
+        else
+          end = mid - 1;
+      }
+
+      // return floor value rather than `not found`
+      return ans;
+    }
+
+    // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
+    //
+    // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
+    // Sqrt(x).
+
+    int floor_sqrt_3(int x)
+    {
+      // // base cases
+      if (x == 0 || x == 1)
+        return x;
+
+      // starts from 1 since it's covered in base cases
+      int start{0};
+      int end{x / 2};
+      int ans{};
+
+      while (start <= end)
+      {
+        long long mid   = (start + end) / 2;
+        long long sqare = mid * mid;
+
+        // equality; perfect square
+        if (sqare == x)
+          return mid;
+        else if (sqare < x)
+        {
+          // so discard [1, mid], update start and move closer to sqrt(x)
+          start = mid + 1;
+
+          // we need floor answer so update ans
+          ans = mid;
+        }
+        // discard [mid, x]
+        else
+          end = mid - 1;
+      }
+
+      // return floor value rather than `not found`
+      return ans;
+    }
+
+    // having square variable for mid * mid causes performance penalty?
+    //
+    // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+    //
+    // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
+    // Sqrt(x).
+
+    int floor_sqrt_4(int x)
+    {
+      // // base cases
+      if (x == 0 || x == 1)
+        return x;
+
+      // starts from 1 since it's covered in base cases
+      int start{0};
+      int end{x / 2};
+      int ans{};
+
+      long long mid{};
+
+      while (start <= end)
+      {
+        mid = (start + end) / 2;
+
+        // equality; perfect square
+        if (mid * mid == x)
+          return mid;
+        else if (mid * mid < x)
+        {
+          // so discard [1, mid], update start and move closer to sqrt(x)
+          start = mid + 1;
+
+          // we need floor answer so update ans
+          ans = mid;
+        }
+        // discard [mid, x]
+        else
+          end = mid - 1;
+      }
+
+      // return floor value rather than `not found`
+      return ans;
+    }
+
+    // code discussion forum
+    //
+    // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+    //
+    // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
+    // Sqrt(x).
+
+    int floor_sqrt_5(int x)
+    {
+      long long l = 1, r = x, mid;
+
+      if (x == 0)
+        return 0;
+
+      while (l <= r)
+      {
+        mid = l + (r - l) / 2;
+
+        if (mid * mid == x)
+          return mid;
+        else if (mid * mid > x)
+          r = mid - 1;
+        else
+        {
+          l = mid + 1;
+          if (l * l > x)
+            return mid;
+        }
+      }
+
+      // just to avoid warning
+      return mid;
+    }
+  } // namespace leetcode_easy_017
+} // namespace algo_binary_search
 
 TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
 {
@@ -12843,7 +12710,7 @@ TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
     //
     // >>> 46340*46340, ceiling
     // 2,147,395,600
-    
+
     auto func = floor_sqrt_3;
     EXPECT_THAT(func(2147395599), 46339);
     EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
@@ -12857,14 +12724,13 @@ TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
     //
     // >>> 46340*46340, ceiling
     // 2,147,395,600
-    
+
     auto func = floor_sqrt_4;
     EXPECT_THAT(func(1), 1);
     EXPECT_THAT(func(2147395599), 46339);
     EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
   }
 }
-
 
 // ={=========================================================================
 // algo-queue
@@ -12873,93 +12739,92 @@ namespace queue_circular_vacant
 {
   class CircularQueue
   {
-    public:
+  public:
+    // *cxx-vector-ctor*
+    // CircularQueue() : coll_(MAX_SIZE, 0) {}
 
-      // *cxx-vector-ctor*
-      // CircularQueue() : coll_(MAX_SIZE, 0) {}
+    CircularQueue() {}
 
-      CircularQueue() {}
+    bool empty() { return head_ == tail_; }
 
-      bool empty() { return head_ == tail_; }
+    bool full() { return (head_ + 1) % MAX_SIZE == tail_; }
 
-      bool full() { return (head_ + 1) % MAX_SIZE == tail_; }
+    size_t size() { return (head_ - tail_ + MAX_SIZE) % MAX_SIZE; }
 
-      size_t size() { return (head_ - tail_ + MAX_SIZE) % MAX_SIZE; }
+    void push(int value)
+    {
+      if (full())
+        throw std::runtime_error("queue is full");
 
-      void push(int value)
+      // to see where exception happens since gmock do not show where it
+      // throws
+      //
+      // if (full())
+      // {
+      //   cout << "queue is full, value = " << value << endl;
+      //   return;
+      // }
+
+      head_        = (head_ + 1) % MAX_SIZE;
+      coll_[head_] = value;
+    }
+
+    int pop()
+    {
+      if (empty())
+        throw std::runtime_error("queue is empty");
+
+      tail_ = (tail_ + 1) % MAX_SIZE;
+      return coll_[tail_];
+    }
+
+    std::vector<int> snap()
+    {
+      std::vector<int> result{};
+
+      // do not work like this
+      //
+      // for (auto run = tail_ + 1; run <= head_; ++run)
+      //   result.push_back(coll_[run]);
+      //
+      // care about start value and <= condition. However, cannot use comparison
+      // on head and tail since it warps around after all.
+      //
+      // for (int i = tail_ + 1; i <= head_; i = (i + 1) % MAX_SIZE)
+      //     coll.push_back(coll_[i]);
+
+      auto run = (tail_ + 1) % MAX_SIZE;
+      for (size_t i = 0; i < size(); ++i)
       {
-        if (full())
-          throw std::runtime_error("queue is full");
-
-        // to see where exception happens since gmock do not show where it
-        // throws
-        //
-        // if (full())
-        // {
-        //   cout << "queue is full, value = " << value << endl;
-        //   return;
-        // }
-
-        head_ = (head_ + 1) % MAX_SIZE;
-        coll_[head_] = value;
+        result.push_back(coll_[run]);
+        run = (run + 1) % MAX_SIZE;
       }
 
-      int pop()
-      {
-        if (empty())
-          throw std::runtime_error("queue is empty");
+      return result;
+    }
 
-        tail_ = (tail_ + 1) % MAX_SIZE;
-        return coll_[tail_];
-      }
+  private:
+    static size_t const MAX_SIZE{10};
 
-      std::vector<int> snap()
-      {
-        std::vector<int> result{};
+    // if MAX_SIZE is not static
+    // std::vector<int> coll_;
+    // and use ctor
 
-        // do not work like this
-        //
-        // for (auto run = tail_ + 1; run <= head_; ++run)
-        //   result.push_back(coll_[run]);
-        //
-        // care about start value and <= condition. However, cannot use comparison
-        // on head and tail since it warps around after all.
-        //
-        // for (int i = tail_ + 1; i <= head_; i = (i + 1) % MAX_SIZE)
-        //     coll.push_back(coll_[i]);
+    // if MAX_SIZE is not static
+    // std::array<int, 10> coll_;
 
-        auto run = (tail_ + 1) % MAX_SIZE;
-        for (size_t i = 0; i < size(); ++i)
-        {
-          result.push_back(coll_[run]);
-          run = (run + 1) % MAX_SIZE;
-        }
+    // if MAX_SIZE is static
+    std::array<int, MAX_SIZE> coll_;
 
-        return result;
-      }
+    // if MAX_SIZE is static but still error
+    // std::vector<int> coll_(MAX_SIZE, 0);
 
-    private:
-      static size_t const MAX_SIZE{10};
-
-      // if MAX_SIZE is not static
-      // std::vector<int> coll_;
-      // and use ctor
-      
-      // if MAX_SIZE is not static
-      // std::array<int, 10> coll_;
-      
-      // if MAX_SIZE is static
-      std::array<int, MAX_SIZE> coll_;
-
-      // if MAX_SIZE is static but still error
-      // std::vector<int> coll_(MAX_SIZE, 0);
-
-      // they are indexes
-      size_t head_{};
-      size_t tail_{};
+    // they are indexes
+    size_t head_{};
+    size_t tail_{};
   };
 
-} // namespace
+} // namespace queue_circular_vacant
 
 TEST(AlgoQueue, CircularVacant)
 {
@@ -13006,9 +12871,9 @@ TEST(AlgoQueue, CircularVacant)
 
   cq.push(400);
   cq.push(401);
-  EXPECT_THROW(cq.push(402), std::runtime_error);   // full, exception
-  EXPECT_THROW(cq.push(403), std::runtime_error);   // full, exception
-  EXPECT_THROW(cq.push(404), std::runtime_error);   // full, exception
+  EXPECT_THROW(cq.push(402), std::runtime_error); // full, exception
+  EXPECT_THROW(cq.push(403), std::runtime_error); // full, exception
+  EXPECT_THROW(cq.push(404), std::runtime_error); // full, exception
 
   // since it is vacant version
   EXPECT_THAT(cq.size(), 9);
@@ -13025,39 +12890,34 @@ TEST(AlgoQueue, CircularVacant)
   EXPECT_THAT(cq.full(), false);
 }
 
-
 namespace queue_circular_count
 {
 
-class CircularQueue
-{
+  class CircularQueue
+  {
   public:
     // *cxx-vector-ctor*
-    CircularQueue() 
-      : coll_(MAX_SIZE, 0)
-    {
-    }
+    CircularQueue()
+        : coll_(MAX_SIZE, 0)
+    {}
 
-    bool empty() const 
-    { return count_ == 0; }
+    bool empty() const { return count_ == 0; }
 
-    bool full() const
-    { return count_ >= MAX_SIZE; }
+    bool full() const { return count_ >= MAX_SIZE; }
 
-    int size() const 
-    { return count_; }
+    int size() const { return count_; }
 
-    void push(int value) 
+    void push(int value)
     {
       if (full())
         return;
 
-      head_ = head_ % MAX_SIZE;
+      head_          = head_ % MAX_SIZE;
       coll_[head_++] = value;
       count_++;
     }
 
-    int pop() 
+    int pop()
     {
       int value{};
 
@@ -13080,7 +12940,7 @@ class CircularQueue
       for (int i = 0; i < size(); ++i)
       {
         coll.push_back(coll_[start]);
-        start = (start+1) % MAX_SIZE;
+        start = (start + 1) % MAX_SIZE;
       }
 
       return coll;
@@ -13092,9 +12952,9 @@ class CircularQueue
     int tail_{};
     int count_{};
     std::vector<int> coll_; // {MAX_SIZE, 0};
-}; 
+  };
 
-} // namespace
+} // namespace queue_circular_count
 
 TEST(AlgoQueue, CircularCount)
 {
@@ -13158,7 +13018,6 @@ TEST(AlgoQueue, CircularCount)
   EXPECT_THAT(cq.full(), false);
 }
 
-
 // from Problem 46, circular buffer, the modern c++ challenge
 // 1. use size(count) and head only
 // 2. in push, no full check since it overwrites and in pop, it simply
@@ -13171,212 +13030,207 @@ TEST(AlgoQueue, CircularCount)
 namespace queue_circular_count_iterator
 {
   template <typename T>
-    class circular_buffer_iterator;
+  class circular_buffer_iterator;
 
   template <typename T>
-    class circular_buffer
+  class circular_buffer
+  {
+    typedef circular_buffer_iterator<T> const_iterator;
+    friend class circular_buffer_iterator<T>;
+
+  public:
+    circular_buffer() = delete;
+    explicit circular_buffer(size_t const size)
+        : coll_(size)
+    {}
+
+    bool empty() const noexcept { return size_ == 0; }
+
+    bool full() const noexcept { return size_ >= coll_.size(); }
+
+    size_t capacity() const noexcept { return size_; }
+
+    void clear() noexcept { head_ = -1, size_ = 0; }
+
+    T pop()
     {
-      typedef circular_buffer_iterator<T> const_iterator;
-      friend class circular_buffer_iterator<T>;
+      if (empty())
+        throw std::runtime_error("buffer is empty");
 
-      public:
-      circular_buffer() = delete;
-      explicit circular_buffer(size_t const size) : coll_(size) {}
+      auto pos = first_pos();
 
-      bool empty() const noexcept
-      { return size_ == 0; }
+#ifdef QUEUE_CIRCULAR_DEBUG
+      cout << "pop: pos: " << pos << ", coll_[]: " << coll_[pos] << endl;
+#endif // QUEUE_CIRCULAR_DEBUG
 
-      bool full() const noexcept
-      { return size_ >= coll_.size(); }
-
-      size_t capacity() const noexcept
-      { return size_; }
-
-      void clear() noexcept
-      { head_ = -1, size_ = 0; }
-
-      T pop()
-      {
-        if (empty())
-          throw std::runtime_error("buffer is empty");
-
-        auto pos = first_pos();
-
-        #ifdef QUEUE_CIRCULAR_DEBUG
-        cout << "pop: pos: " << pos 
-          << ", coll_[]: " << coll_[pos] << endl;
-        #endif // QUEUE_CIRCULAR_DEBUG
-
-        size_--;
-        return coll_[pos];
-      }
-
-      void push(T const item)
-      {
-        // this is how the text is implemented and this allows overwrites
-        // this make head and tail changed
-        //
-        // if (full())
-        //   throw std::runtime_error("buffer is full");
-
-        head_ = next_pos();
-        coll_[head_] = item;
-
-        #ifdef QUEUE_CIRCULAR_DEBUG
-        cout << "push: head_: " << head_ 
-          << ", coll_[]: " << coll_[head_] << endl;
-        #endif // QUEUE_CIRCULAR_DEBUG
-
-        // due to overwrite feature
-        if (size_ < coll_.size())
-          size_++;
-      }
-
-      // iterators
-      const_iterator begin() const
-      { return const_iterator(*this, first_pos(), empty()); }
-
-      const_iterator end() const
-      { return const_iterator(*this, next_pos(), true); }
-
-      private:
-      // same as `count`
-      size_t size_{};
-
-      // ?, set max value
-      // size_t head_{-1};
-
-      // to aviod narrowing warning
-      int head_{-1};
-
-      std::vector<T> coll_;
-
-      // return `head` pos to push and the reason of having size_t == 0 is
-      // that `head` starts from -1.
-
-      size_t next_pos() const noexcept
-      {
-        return size_ == 0 ? 0 
-          : ((head_ + 1 ) % coll_.size());
-      }
-
-      // return `tail` pos to pop and get tail from head and size
-      // as with vacant case, normalise and +1 since no vacant item.
-
-      size_t first_pos() const noexcept
-      {
-        return size_ == 0 ? 0 
-          : (head_ - size_ + 1 + coll_.size()) % coll_.size();
-      }
-    };
-
-  template <typename T>
-    class circular_buffer_iterator
-    {
-      typedef circular_buffer_iterator    self_type;
-      typedef T const&                    const_reference;
-
-      public:
-      explicit circular_buffer_iterator(circular_buffer<T> const& buffer,
-          size_t position, bool is_last)
-        : buffer_(buffer), position_(position), is_last_(is_last)
-      {}
-
-      // cxx-operator-prefix
-      self_type& operator++()
-      {
-        if (is_last_)
-          throw std::out_of_range("past the end");
-
-        position_ = (position_ + 1) % buffer_.coll_.size();
-
-        // although it's circular queue which wraps around, iterator moves
-        // around [tail, head] range. If increased pos is the same as head
-        // then it reaches to the end.
-        //
-        // is_last_ get set either from ctor or ++()
-
-        is_last_ = (position_ == buffer_.next_pos());
-
-        return *this;
-      }
-
-      // cxx-operator-postfix which use prefix version
-      self_type& operator++(int)
-      {
-        auto temp = *this;
-        ++*this();
-        return temp;
-      }
-
-      bool operator==(self_type const& other) const
-      {
-        // & address? since buffer do not support operator==() 
-        return &buffer_ == &other.buffer_
-          && position_ == other.position_
-          && is_last_ == other.is_last_;
-      }
-
-      bool operator!=(self_type const& other) const
-      { return !(*this == other); }
-
-      const_reference operator*() const
-      {
-        return buffer_.coll_[position_];
-      }
-
-      private:
-      circular_buffer<T> const& buffer_;
-      size_t position_;
-      bool is_last_;
-    };
-
-  template <typename T>
-    std::vector<T> print(circular_buffer<T> & buf)
-    {
-      std::vector<T> coll{};
-
-      for (auto & e : buf)
-        coll.push_back(e);
-
-      return coll;
+      size_--;
+      return coll_[pos];
     }
 
-} // namespace
+    void push(T const item)
+    {
+      // this is how the text is implemented and this allows overwrites
+      // this make head and tail changed
+      //
+      // if (full())
+      //   throw std::runtime_error("buffer is full");
 
+      head_        = next_pos();
+      coll_[head_] = item;
+
+#ifdef QUEUE_CIRCULAR_DEBUG
+      cout << "push: head_: " << head_ << ", coll_[]: " << coll_[head_] << endl;
+#endif // QUEUE_CIRCULAR_DEBUG
+
+      // due to overwrite feature
+      if (size_ < coll_.size())
+        size_++;
+    }
+
+    // iterators
+    const_iterator begin() const
+    {
+      return const_iterator(*this, first_pos(), empty());
+    }
+
+    const_iterator end() const
+    {
+      return const_iterator(*this, next_pos(), true);
+    }
+
+  private:
+    // same as `count`
+    size_t size_{};
+
+    // ?, set max value
+    // size_t head_{-1};
+
+    // to aviod narrowing warning
+    int head_{-1};
+
+    std::vector<T> coll_;
+
+    // return `head` pos to push and the reason of having size_t == 0 is
+    // that `head` starts from -1.
+
+    size_t next_pos() const noexcept
+    {
+      return size_ == 0 ? 0 : ((head_ + 1) % coll_.size());
+    }
+
+    // return `tail` pos to pop and get tail from head and size
+    // as with vacant case, normalise and +1 since no vacant item.
+
+    size_t first_pos() const noexcept
+    {
+      return size_ == 0 ? 0 : (head_ - size_ + 1 + coll_.size()) % coll_.size();
+    }
+  };
+
+  template <typename T>
+  class circular_buffer_iterator
+  {
+    typedef circular_buffer_iterator self_type;
+    typedef T const &const_reference;
+
+  public:
+    explicit circular_buffer_iterator(circular_buffer<T> const &buffer,
+                                      size_t position,
+                                      bool is_last)
+        : buffer_(buffer)
+        , position_(position)
+        , is_last_(is_last)
+    {}
+
+    // cxx-operator-prefix
+    self_type &operator++()
+    {
+      if (is_last_)
+        throw std::out_of_range("past the end");
+
+      position_ = (position_ + 1) % buffer_.coll_.size();
+
+      // although it's circular queue which wraps around, iterator moves
+      // around [tail, head] range. If increased pos is the same as head
+      // then it reaches to the end.
+      //
+      // is_last_ get set either from ctor or ++()
+
+      is_last_ = (position_ == buffer_.next_pos());
+
+      return *this;
+    }
+
+    // cxx-operator-postfix which use prefix version
+    self_type &operator++(int)
+    {
+      auto temp = *this;
+      ++*this();
+      return temp;
+    }
+
+    bool operator==(self_type const &other) const
+    {
+      // & address? since buffer do not support operator==()
+      return &buffer_ == &other.buffer_ && position_ == other.position_ &&
+             is_last_ == other.is_last_;
+    }
+
+    bool operator!=(self_type const &other) const { return !(*this == other); }
+
+    const_reference operator*() const { return buffer_.coll_[position_]; }
+
+  private:
+    circular_buffer<T> const &buffer_;
+    size_t position_;
+    bool is_last_;
+  };
+
+  template <typename T>
+  std::vector<T> print(circular_buffer<T> &buf)
+  {
+    std::vector<T> coll{};
+
+    for (auto &e : buf)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+} // namespace queue_circular_count_iterator
 
 TEST(AlgoQueue, CircularCountIterator)
 {
   using namespace queue_circular_count_iterator;
 
   {
-    circular_buffer<int> cbuf(5);   // {0, 0, 0, 0, 0} -> {}
+    circular_buffer<int> cbuf(5); // {0, 0, 0, 0, 0} -> {}
 
-    cbuf.push(1);                   // {1, 0, 0, 0, 0} -> {1}
-    cbuf.push(2);                   // {1, 2, 0, 0, 0} -> {1, 2}
-    cbuf.push(3);                   // {1, 2, 3, 0, 0} -> {1, 2, 3}
+    cbuf.push(1); // {1, 0, 0, 0, 0} -> {1}
+    cbuf.push(2); // {1, 2, 0, 0, 0} -> {1, 2}
+    cbuf.push(3); // {1, 2, 3, 0, 0} -> {1, 2, 3}
 
-    auto item = cbuf.pop();         // {1, 2, 3, 0, 0} -> {X, 2, 3}
+    auto item = cbuf.pop(); // {1, 2, 3, 0, 0} -> {X, 2, 3}
     EXPECT_THAT(item, 1);
 
-    cbuf.push(4);                   // {1, 2, 3, 4, 0} -> {X, 2, 3, 4}
-    cbuf.push(5);                   // {1, 2, 3, 4, (5)} -> {X, 2, 3, 4, 5}
+    cbuf.push(4); // {1, 2, 3, 4, 0} -> {X, 2, 3, 4}
+    cbuf.push(5); // {1, 2, 3, 4, (5)} -> {X, 2, 3, 4, 5}
 
     // see that it overwrites
-    cbuf.push(6);                   // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
-    cbuf.push(7);                   // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
-    cbuf.push(8);                   // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
+    cbuf.push(6); // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
+    cbuf.push(7); // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
+    cbuf.push(8); // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
 
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
     EXPECT_THAT(item, 4);
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {6, 7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {6, 7, 8}
     EXPECT_THAT(item, 5);
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {7, 8}
     EXPECT_THAT(item, 6);
 
-    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {8}
-    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {}
-    cbuf.push(9);                   // {6, 7, 8, 9, 5} -> {9}
+    cbuf.pop();   // {6, 7, 8, 4, 5} -> {8}
+    cbuf.pop();   // {6, 7, 8, 4, 5} -> {}
+    cbuf.push(9); // {6, 7, 8, 9, 5} -> {9}
   }
 
   // to exercise iterator feature
@@ -13390,14 +13244,13 @@ TEST(AlgoQueue, CircularCountIterator)
     cbuf.push(5);
     cbuf.push(6);
     cbuf.push(7);
-    EXPECT_THAT(print(cbuf), ElementsAre(3,4,5,6,7));
+    EXPECT_THAT(print(cbuf), ElementsAre(3, 4, 5, 6, 7));
   }
 }
 
-
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
   return RUN_ALL_TESTS();

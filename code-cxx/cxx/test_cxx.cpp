@@ -8402,7 +8402,7 @@ TEST(CxxRegex, MatchResult)
 // This means abs() has no effect when fed the largest negative number. So bit
 // representation is 'agnostic' to whether it's signed or unsigned.
 
-TEST(Bit, BitSetCtor)
+TEST(CxxBit, bitset)
 {
   // cxx-bitset-code
   //
@@ -8439,11 +8439,58 @@ TEST(Bit, BitSetCtor)
     bitset<x> coll(1U);
     EXPECT_THAT(coll.size(), 40);
   }
+
+  {
+    bitset<32> bitvec(1U);
+    EXPECT_EQ(bitvec.to_string(), "00000000000000000000000000000001");
+
+    EXPECT_EQ(bitvec.any(), true);
+    EXPECT_EQ(bitvec.none(), false);
+    EXPECT_EQ(bitvec.all(), false);
+    EXPECT_EQ(bitvec.count(), 1);
+    EXPECT_EQ(bitvec.size(), 32);
+
+    bitvec.flip();
+    EXPECT_EQ(bitvec.count(), 31);
+    bitvec.reset();
+    EXPECT_EQ(bitvec.count(), 0);
+    bitvec.set();
+    EXPECT_EQ(bitvec.count(), 32);
+
+    bitset<16> bitvec2("01011001011");
+    EXPECT_EQ(bitvec2.to_string(), "0000001011001011");
+  }
+
+  // see the use of bitset and bitset only supports fixed size.
+  //
+  // How can use bitset with dynamic size since the size is constant expression?
+  // Options are:
+  //
+  // o. vector<bool>
+  // o. boost has a dynamic_bitset you can use.
+
+  {
+    unsigned short short11 = 1024;
+    bitset<16> bitset11{short11};
+    EXPECT_EQ(bitset11.to_string(), "0000010000000000");
+
+    unsigned short short12 = short11 >> 1; // 512
+    bitset<16> bitset12{short12};
+    EXPECT_EQ(bitset12.to_string(), "0000001000000000");
+
+    unsigned short short13 = short11 >> 10; // 1
+    bitset<16> bitset13{short13};
+    EXPECT_EQ(bitset13.to_string(), "0000000000000001");
+
+    unsigned short short14 = short11 >> 11; // 0
+    bitset<16> bitset14{short14};
+    EXPECT_EQ(bitset14.to_string(), "0000000000000000");
+  }
 }
 
 // bool vector < bitset and bit array < bool array
 
-TEST(Bit, SizeConsideration)
+TEST(CxxBit, bit_SizeConsideration)
 {
   const int size{1000};
 
@@ -8473,7 +8520,7 @@ TEST(Bit, SizeConsideration)
   EXPECT_THAT(sizeof(coll_bool_array), size);
 }
 
-TEST(Bit, RightShift)
+TEST(CxxBit, bit_RightShift)
 {
   // fail
   {
@@ -8593,7 +8640,7 @@ TEST(Bit, RightShift)
 }
 
 // *cxx-twos-complement*
-TEST(Bit, MaxNegagiveIsSpecial)
+TEST(CxxBit, bit_MaxNegagiveIsSpecial)
 {
   // get max negative, ???_MIN
   int int_min = (~((unsigned int)0) >> 1) + 1;
@@ -8656,7 +8703,7 @@ namespace bit_set_array
   }
 } // namespace bit_set_array
 
-TEST(Bit, BitVectors)
+TEST(CxxBit, bit_BitVectors)
 {
   using namespace bit_set_array;
 
@@ -8691,55 +8738,6 @@ TEST(Bit, BitVectors)
   // cout << endl;
 }
 
-TEST(Bit, BitSet)
-{
-  {
-    bitset<32> bitvec(1U);
-    EXPECT_EQ(bitvec.to_string(), "00000000000000000000000000000001");
-
-    EXPECT_EQ(bitvec.any(), true);
-    EXPECT_EQ(bitvec.none(), false);
-    EXPECT_EQ(bitvec.all(), false);
-    EXPECT_EQ(bitvec.count(), 1);
-    EXPECT_EQ(bitvec.size(), 32);
-
-    bitvec.flip();
-    EXPECT_EQ(bitvec.count(), 31);
-    bitvec.reset();
-    EXPECT_EQ(bitvec.count(), 0);
-    bitvec.set();
-    EXPECT_EQ(bitvec.count(), 32);
-
-    bitset<16> bitvec2("01011001011");
-    EXPECT_EQ(bitvec2.to_string(), "0000001011001011");
-  }
-
-  // see the use of bitset and bitset only supports fixed size.
-  //
-  // How can use bitset with dynamic size since the size is constant expression?
-  // Options are:
-  //
-  // o. vector<bool>
-  // o. boost has a dynamic_bitset you can use.
-
-  {
-    unsigned short short11 = 1024;
-    bitset<16> bitset11{short11};
-    EXPECT_EQ(bitset11.to_string(), "0000010000000000");
-
-    unsigned short short12 = short11 >> 1; // 512
-    bitset<16> bitset12{short12};
-    EXPECT_EQ(bitset12.to_string(), "0000001000000000");
-
-    unsigned short short13 = short11 >> 10; // 1
-    bitset<16> bitset13{short13};
-    EXPECT_EQ(bitset13.to_string(), "0000000000000001");
-
-    unsigned short short14 = short11 >> 11; // 0
-    bitset<16> bitset14{short14};
-    EXPECT_EQ(bitset14.to_string(), "0000000000000000");
-  }
-}
 
 // Why '%' produce negative value?
 //
@@ -8769,7 +8767,7 @@ namespace bit_overflow
   int bigrand() { return RAND_MAX * rand() + rand(); }
 } // namespace bit_overflow
 
-TEST(Bit, Overflow)
+TEST(CxxBit, bit_Overflow)
 {
   using namespace bit_overflow;
 
