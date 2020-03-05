@@ -737,7 +737,7 @@ TEST(String, OutputCstring)
 // ={=========================================================================
 // string-conversion
 
-TEST(StringConverison, Functions)
+TEST(StringConverison, functions)
 {
   // to string
   {
@@ -745,6 +745,15 @@ TEST(StringConverison, Functions)
     EXPECT_THAT(to_string(3301), "3301");
   }
 
+  // to string in hex
+  {
+    char buf[10];
+    int value{16};
+    snprintf(buf, sizeof(buf), "0x%x", value);
+    EXPECT_THAT(std::string(buf), "0x10");
+  }
+
+  // from string to x
   {
     // stl functions
     EXPECT_EQ(std::stoi("  77"), 77);
@@ -776,13 +785,17 @@ TEST(StringConverison, Functions)
     // mined by isspace(3)) followed by a single optional '+' or '-' sign.
 
     // If base is zero or 16, the string may then include a "0x" prefix, and
-    // the number  will  be read in base 16; otherwise, a zero base is taken
-    // as 10 (decimal) unless the next character is '0', in which case it  is
-    // taken as 8 (octal).
+    // the number will  be read in base 16;
+    //
+    // otherwise, a zero base is taken as 10 (decimal) unless the next character
+    // is '0', in which case it  is taken as 8 (octal).
 
     EXPECT_EQ(std::stol("0x12AB", nullptr, 0), 4779);
     EXPECT_EQ(std::stol("12AB", nullptr, 16), 4779);
+  }
 
+  // limits
+  {
     // *cxx-string-convert-to-string* *cxx-limits*
     long long ll = std::numeric_limits<long long>::max();
     EXPECT_EQ(std::to_string(ll), "9223372036854775807");
@@ -792,14 +805,14 @@ TEST(StringConverison, Functions)
   }
 }
 
-TEST(StringConverison, StringStream)
+TEST(StringConverison, stringstream)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.
   // *cxx-string-convert-to-string*
 
   // to string
   {
-    ostringstream os;
+    std::ostringstream os;
 
     os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
     EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
@@ -817,10 +830,27 @@ TEST(StringConverison, StringStream)
       "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
   }
 
+  // to string in hex
+  {
+    std::ostringstream os;
+    // os << "0x" << hex << 16;
+    os << std::hex << 16;
+    EXPECT_THAT(os.str(), "10");
+  }
+
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << hex << value;
+    EXPECT_THAT(os.str(), "3ad0");
+  }
+
   // to string
   {
-    stringstream ss;
-    vector<string> string_vector{};
+    std::stringstream ss;
+    std::vector<string> string_vector{};
 
     for (int i = 0; i < 4; ++i)
     {
@@ -908,10 +938,11 @@ TEST(StringConverison, StringStream)
   }
 }
 
-TEST(StringConverison, BooxtLexicalCast)
+TEST(StringConverison, boost_lexicalcast)
 {
   EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
   EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
+  EXPECT_THAT(boost::lexical_cast<std::string>(0x10), "16");
 
   EXPECT_THAT(boost::lexical_cast<int>("11"), 11);
   EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
