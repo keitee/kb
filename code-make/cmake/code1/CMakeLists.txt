@@ -80,3 +80,29 @@ if(TARGET_REGION STREQUAL "XI")
 else()
   message("TARGET_REGION is not defined")
 endif()
+
+# https://cmake.org/cmake/help/v3.17/command/find_path.html?highlight=find_path
+#
+# find_path (<VAR> name1 [path1 path2 ...])
+#
+# This command is used to find a directory containing the named file. A cache
+# entry named by <VAR> is created to store the result of this command. If the
+# file in a directory is found the result is stored in the variable and the
+# search will not be repeated unless the variable is cleared. If nothing is
+# found, the result will be <VAR>-NOTFOUND, and the search will be attempted
+# again the next time find_path is invoked with the same variable.
+#
+# PATH_SUFFIXES
+# Specify additional subdirectories to check below each directory location
+# otherwise considered.
+#
+# If NO_DEFAULT_PATH is specified, then no additional paths are added to the
+# search. If NO_DEFAULT_PATH is not specified, the search process is as follows:
+
+find_path(GLIB_INCLUDE_DIR NAMES glib.h PATH_SUFFIXES glib-2.0)
+
+if(NOT DEFINED GLIB_INCLUDE_DIR)
+  message("GLIB_INCLUDE_DIR is not defined : ${GLIB_INCLUDE_DIR}")
+else()
+  message("GLIB_INCLUDE_DIR is defined : ${GLIB_INCLUDE_DIR}")
+endif()
