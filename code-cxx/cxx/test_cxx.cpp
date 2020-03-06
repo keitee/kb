@@ -4084,18 +4084,17 @@ TEST(CxxFeaturesTest, UseIsspace)
 
 namespace cxx_function
 {
-
-  typedef bool (*UPDATEFUNC)(int);
+  // typedef bool (*UPDATEFUNC)(int);
+  using UPDATEFUNC = bool (*)(int);
 
   bool updateProgress(int percent)
   {
     std::cout << std::flush << "\r" << percent << "% complete...";
     return true;
   }
-
 } // namespace cxx_function
 
-TEST(CxxFunctionObject, FunctionPointer)
+TEST(CxxCallable, function_pointer)
 {
   using namespace cxx_function;
 
@@ -4133,7 +4132,7 @@ res = (*funcp)(somearg);
 
 */
 
-TEST(CxxFunctionObject, FunctionPointerVoidCast)
+TEST(CxxCallable, function_pointer_cast)
 {
   using namespace cxx_function;
 
@@ -4182,7 +4181,7 @@ namespace cxx_function
 
 } // namespace cxx_function
 
-TEST(CxxFunctionObject, Function)
+TEST(CxxCallable, std_function)
 {
   using namespace cxx_function;
 
@@ -4284,7 +4283,7 @@ namespace cxx_function
   void increase(int &i) { ++i; }
 } // namespace cxx_function
 
-TEST(CxxCallable, callable_bind)
+TEST(CxxCallable, std_bind)
 {
   using namespace cxx_function;
 
@@ -4482,7 +4481,8 @@ TEST(CxxCallable, callable_bind)
   }
 }
 
-TEST(CxxFunctionObject, BindAndFunction)
+// on member functions
+TEST(CxxCallable, std_bind_and_function)
 {
   using namespace cxx_function;
 
@@ -4618,10 +4618,12 @@ TEST(CxxFunctionObject, BindAndFunction)
 // called on either an object or a pointer.
 //
 // mem_fn() needs target but not flexible as std::bind().
+//
 // std::bind(&foo::closeConsole, this, std::placeholders::_1);
+//
 // the point is std::bind() is more flexible.
 
-TEST(CxxFunctionObject, memfn)
+TEST(CxxCallable, std_memfn)
 {
   using namespace cxx_function;
 

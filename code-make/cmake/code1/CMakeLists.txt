@@ -81,28 +81,27 @@ else()
   message("TARGET_REGION is not defined")
 endif()
 
-# https://cmake.org/cmake/help/v3.17/command/find_path.html?highlight=find_path
-#
-# find_path (<VAR> name1 [path1 path2 ...])
-#
-# This command is used to find a directory containing the named file. A cache
-# entry named by <VAR> is created to store the result of this command. If the
-# file in a directory is found the result is stored in the variable and the
-# search will not be repeated unless the variable is cleared. If nothing is
-# found, the result will be <VAR>-NOTFOUND, and the search will be attempted
-# again the next time find_path is invoked with the same variable.
-#
-# PATH_SUFFIXES
-# Specify additional subdirectories to check below each directory location
-# otherwise considered.
-#
-# If NO_DEFAULT_PATH is specified, then no additional paths are added to the
-# search. If NO_DEFAULT_PATH is not specified, the search process is as follows:
+# Add our local cmake directory to search for components
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-find_path(GLIB_INCLUDE_DIR NAMES glib.h PATH_SUFFIXES glib-2.0)
+# will find cmake/Findglib-2.0.cmake
+find_package(glib-2.0 REQUIRED)
 
-if(NOT DEFINED GLIB_INCLUDE_DIR)
-  message("GLIB_INCLUDE_DIR is not defined : ${GLIB_INCLUDE_DIR}")
+if(NOT DEFINED GLIB_FOUND)
+  message("GLIB_FOUND is not defined : ${GLIB_FOUND}")
 else()
-  message("GLIB_INCLUDE_DIR is defined : ${GLIB_INCLUDE_DIR}")
+  message("GLIB_FOUND is defined : ${GLIB_FOUND}")
 endif()
+
+# when found, the user uses variable like:
+#
+# include_directories( ${GLIB_INCLUDE_DIRS} )
+# target_link_libraries(
+#         ${GST_LIBRARIES}
+#         )
+
+# CMAKE_CURRENT_LIST_FILE:/home/keitee/git/kb/code-make/cmake/code1/CMakeLists.txt
+# CMAKE_DIR: /home/keitee/git/kb/code-make/cmake/code1
+get_filename_component(CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+message("CMAKE_CURRENT_LIST_FILE:" ${CMAKE_CURRENT_LIST_FILE})
+message("CMAKE_DIR: ${CMAKE_DIR}")
