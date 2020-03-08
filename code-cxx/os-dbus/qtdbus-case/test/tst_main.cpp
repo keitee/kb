@@ -41,9 +41,9 @@ int main(int argc, char **argv)
   // testing::InitGoogleMock(&argc, argv);
   // RUN_ALL_TESTS();
 
-	// Disable sigpipe as we run a few tests that deliberately close remote
-	// ends of pipes / sockets.
-	signal(SIGPIPE, SIG_IGN);
+  // Disable sigpipe as we run a few tests that deliberately close remote
+  // ends of pipes / sockets.
+  signal(SIGPIPE, SIG_IGN);
 
   // This will run the functor from the application event loop.
   QTimer::singleShot(0, &app, std::bind(&GoogleTestRunner, argc, argv));

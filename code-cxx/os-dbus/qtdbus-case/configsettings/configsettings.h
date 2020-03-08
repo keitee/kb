@@ -44,6 +44,13 @@ public:
   static QSharedPointer<ConfigSettings> defaults();
   static QSharedPointer<ConfigSettings> fromJsonFile_(const QString &path);
   static QSharedPointer<ConfigSettings> fromJsonFile_(QIODevice *file);
+
+public:
+  // NOTE: return QList and is that cheap?
+  QList<ConfigModelSettings> modelSettings() const;
+
+  // public getters to get timeout values. for example:
+  int discoveryTimeout() const;
 };
 
 #endif // CONFIGSETTINGS_H

@@ -4181,6 +4181,14 @@ namespace cxx_function
 
 } // namespace cxx_function
 
+// on member function. 
+//
+// NOTE on syntax since "has to specify the target". For example, update_10()
+// takes no argument but has to say:  
+//
+// std::function<void(Foo &)> op = &Foo::update_10;
+//                    ^^^^^
+
 TEST(CxxCallable, std_function)
 {
   using namespace cxx_function;

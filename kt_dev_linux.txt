@@ -64555,7 +64555,7 @@ typedef enum {
 		unsigned char	buf[] = {(char)FORWARD_STATUS,(char)0xff};
 
 
-<gcc-option-warning-unused-parameter> -Wunused-parameter
+<gcc-warning-unused-parameter> -Wunused-parameter
 
 // $ g++ -std=c++11 -Werror -Wall -Wextra t_cxx.cpp 
 // t_cxx.cpp:13:39: error: unused parameter ‘arg3’ [-Werror=unused-parameter]
@@ -64592,6 +64592,46 @@ void t_cxx_03(int arg1, int arg2, int arg3)
     std::cout << "args: arg1: " << arg1 
         << ", arg2: " << arg2 << endl;
 }
+
+
+3.5 Options Controlling C++ Dialect
+
+-Wnon-virtual-dtor (C++ and Objective-C++ only)
+
+Warn when a class has virtual functions and an accessible non-virtual
+destructor itself or in an accessible polymorphic base class, in which case it
+is possible but unsafe to delete an instance of a derived class through a
+pointer to the class itself or base class. This warning is automatically
+enabled if -Weffc++ is specified.
+
+
+The following -W… options are not affected by -Wall.
+
+-Weffc++ (C++ and Objective-C++ only)
+
+Warn about violations of the following style guidelines from Scott Meyers’
+Effective C++ series of books:
+
+Define a copy constructor and an assignment operator for classes with
+dynamically-allocated memory.
+
+Prefer initialization to assignment in constructors.
+
+Have operator= return a reference to *this.
+
+Don’t try to return a reference when you must return an object.
+
+Distinguish between prefix and postfix forms of increment and decrement operators.
+
+Never overload &&, ||, or ,.
+
+This option also enables -Wnon-virtual-dtor, which is also one of the
+effective C++ recommendations. However, the check is extended to warn about
+the lack of virtual destructor in accessible non-polymorphic bases classes
+too.
+
+When selecting this option, be aware that the standard library headers do not
+obey all of these guidelines; use ‘grep -v’ to filter out those warnings.
 
 
 ={============================================================================
@@ -88244,13 +88284,13 @@ Returns library handle on success, or NULL on error
 
 The dlopen() opens a shared library, returning a handle used by sub-sequent
 calls. Loads the shared library named in libfilename into the calling process's
-virtual address space and increments the count of open references to the
+virtual address space and increments `the count of open references` to the
 library.
 
 If the shared library specified by libfilename contains dependencies on other
 shared libraries, `dlopen() also automatically loads those libraries.` This
 procedure occurs recursively if necessary. We refer to the set of such loaded
-libraries as this library's dependency tree.
+libraries as this library'`s dependency tree.`
 
 RTLD_LAZY
 
@@ -88262,14 +88302,51 @@ the RTLD_LAZY flag provides behavior that corresponds to the normal operation of
 the dynamic linker when loading the shared libraries identified in an
 executable's dynamic dependency list.
 
+RTLD_NOW
+
+All undefined symbols in the library should be immediately resolved before
+dlopen() completes, regardless of whether they will ever be required. As a
+consequence, opening the library is slower, but any potential undefined
+function symbol errors are detected immediately instead of at some later time.
+`This can be useful when debugging an application`, or simply to ensure that
+an application fails immediately on an unresolved symbol, rather than doing so
+only after executing for a long time.
+
+
 It is also possible to include further values in flags. The following flags are
 specified in SUSv3:
 
 RTLD_GLOBAL
 
-Symbols in this library and its dependency tree are made available for resolving
-references in other libraries loaded by this process and also for lookups via
-dlsym().
+Symbols in this library and its dependency tree are made available for
+resolving references in other libraries loaded by this process and also for
+lookups via dlsym().
+
+
+RTLD_LOCAL
+
+This is the converse of RTLD_GLOBAL and `the default` if neither constant is
+specified. It specifies that symbols in this library and its dependency tree
+are not available to resolve references in subsequently loaded libraries.
+
+
+SUSv3 doesn’t specify a default if neither RTLD_GLOBAL nor RTLD_LOCAL is
+specified. Most UNIX implementations assume the same default (RTLD_LOCAL) as
+Linux, but a few assume a default of RTLD_GLOBAL.
+
+NOTE: what global/local really means?
+
+
+Linux also supports a number of flags that are not specified in SUSv3:
+TODO:
+
+
+As a special case, we can specify libfilename as NULL. This causes dlopen() to
+return a handle for the main program. (SUSv3 refers to this as a handle for
+the “global symbol object.”) Specifying this handle in a subsequent call
+to dlsym() causes the requested symbol to be sought in the main program,
+followed by all shared libraries loaded at program startup, and then all
+libraries dynamically loaded with the RTLD_GLOBAL flag.
 
 
 *call-dlerror*
@@ -88277,27 +88354,20 @@ If we receive an error return from dlopen() or one of the other functions in the
 dlopen API, we can use dlerror() to obtain a pointer to a string that indicates
 the cause of the error.
 
-#include <dlfcn.h>
 const char *dlerror(void);
 
 Returns pointer to error-diagnostic string, or `NULL if no error has occurred`
 since previous call to dlerror()
 
-The dlerror() function returns NULL if no error has occurred since the last call
-to dlerror(). We'll see how this is useful in the next section.
-
-<ex>
-(void) dlerror(); /* Clear dlerror() */
+note that dlerror() before calling any dlapi will clear error message
 
 
 *call-dlsym*
 42.1.3 Obtaining the Address of a Symbol: dlsym()
 
 The dlsym() function searches for the named symbol (a function or variable) in
-`the library referred to by handle` and 
-in `the libraries in that library’s dependency tree.`
+`the library referred to by handle` and in `the library’s dependency tree.`
 
-#include <dlfcn.h>
 void *dlsym(void *handle, char *symbol);
 
 Returns address of symbol, or NULL if symbol is not found
@@ -88308,6 +88378,8 @@ If symbol is found, dlsym() returns its address; otherwise, dlsym() returns
 NULL. The handle argument is normally a library handle returned by a previous
 call to dlopen().
 
+
+<ex>
 The value of a symbol returned by dlsym() `may be NULL`, which is
 `indistinguishable from NULL for the "symbol not found" return.` 
 
@@ -88316,35 +88388,36 @@ beforehand (to make sure that any previously held error string is cleared) and
 then if, after the call to dlsym(), dlerror() returns a non-NULL value, we
 know that an error occurred.
 
-<ex>
-From dlsym(3):
+that is, how distinguishs when symbol value is NULL and when symbol is not
+found. When symbol value itself is null, dlerror() should be null.
 
-`Since the value of the symbol could actually be NULL` (so that a NULL return
-from dlsym() need not indicate an error), the correct way to test for an error
-is to call dlerror(3) to clear any old error conditions, then call dlsym(),
-and then call dlerror(3) again, saving its return value into a variable, and
-check whether this saved value is not NULL.
+dlsym() return null and dlerror() returns not-null : symbol itself is null
+dlsym() return null and dlerror() returns null     : symbol not found
 
 typedef bool (*BcmInit)(void);
 BcmInit bcmInit = (BcmInit)dlsym(nexusSharedLibHandle, "BcmNexus_Platform_Init");
 const char* err = dlerror();
 
-// This assumes that when `dlsym` is NULL, `dlerror` should return some value so
-// err should not be NULL. However, dlerror can return NULL when dlsym return
-// NULL and this code runs to else-if and can crash since bcmInit() is a call.
+This assumes that when dlsym is NULL, dlerror should return some value so err
+should not be NULL. However, dlerror can return NULL when dlsym return NULL
+and this code runs to else-if and can crash since bcmInit() is a call.
 
 if (!bcmInit && err) {
     NICKEL_ERROR("dlsym failed: " << err);
 } else if (!bcmInit()) { 
-    ...
+  ...
 }
 
-Should be:
+the fix:
 
 if (!bcmInit) {
     const char* const err = dlerror();
     ERROR("dlsym failed: " << (err ? err : "(unknown error)"));
 } else if (!bcmInit()) {
+  ...
+}
+
+the point is that the return of dlsym() must not be null no matter what.
 
 
 Using library pseudohandles with dlsym()
@@ -88360,11 +88433,12 @@ RTLD_DEFAULT
 The former will find the first occurrence of the desired symbol using the
 default library search order.  
 
-RTLD_NEXT
+
+RTLD_NEXT *os-ld-plugin*
 
 Search for symbol in shared libraries loaded after the one invoking dlsym().
 
-This is useful when creating a wrapper function with the same name as a
+This is useful when creating a `wrapper function` with the same name as a
 function defined elsewhere. 
 
 For example, in our main program, we may define our own version of malloc()
@@ -88375,6 +88449,11 @@ func = dlsym(RTLD_NEXT, “malloc”).
 
 *call-dlclose*
 The dlclose() function closes a library previously opened by dlopen().
+
+The dlclose() function decrements the system’s counter of open references to
+the library referred to by handle. If this reference count falls to 0, and no
+symbols in the library are required by other libraries, then the library is
+unloaded.
 
 
 <dl-iterate>
@@ -88544,7 +88623,7 @@ int main(int argc, const char* argv[])
 }
 
 
-<dl-link>
+<os-dl-link>
 To build programs that use the dlopen API on Linux, we must specify the -ldl
 option, in order to link against the libdl library.
 
@@ -93446,6 +93525,124 @@ NS_ZINC_DBUS_BINDING_CLOSE
 *kt_linux_core_700* os-dbus-sdbus os-sdbus
 
 http://0pointer.net/blog/the-new-sd-bus-api-of-systemd.html
+
+
+={============================================================================
+*kt_linux_core_700* win-wayland
+
+WPE is the reference WebKit port for embedded and low-consumption computer
+devices. It has been designed from the ground-up with performance, small
+footprint, accelerated content rendering, and simplicity of deployment in
+mind, bringing the excellence of the WebKit engine to countless platforms and
+target devices.
+
+
+Mesa, also called Mesa3D and The Mesa 3D Graphics Library, is an open source
+software implementation of OpenGL, Vulkan, and other graphics API
+specifications. Mesa translates these specifications to vendor-specific
+graphics hardware drivers.
+
+Besides 3D applications such as games, modern display servers (X.org's Glamor
+or Wayland's Weston) use OpenGL/EGL; therefore all graphics typically go
+through Mesa.
+
+
+<EGL>
+https://www.khronos.org/registry/EGL/sdk/docs/man/html/eglIntro.xhtml
+
+EGL is an interface between Khronos rendering APIs such as OpenGL ES or OpenVG
+and the underlying native platform window system. It handles graphics context
+management, surface/buffer binding, and rendering synchronization and enables
+high-performance, accelerated, mixed-mode 2D and 3D rendering using other
+Khronos APIs.
+
+The Khronos Native Platform Graphics Interface (EGL) provides a means for
+rendering using a client API such as OpenGL ES (a 3D renderer for embedded
+systems), OpenGL (a functional superset of OpenGL ES for desktop systems),
+and OpenVG (a 2D vector graphics renderer) together with a platform, such as
+Microsoft Windows or the X Window System.
+
+Depending on its implementation EGL might be more or less tightly integrated
+into the platform. Most EGL functions require an EGL display connection, which
+can be obtained by calling eglGetPlatformDisplay or eglGetDisplay. To
+initialize and query what EGL version is supported on the display connection,
+call eglInitialize.
+
+
+https://jan.newmarch.name/Wayland/EGL/
+Creating an EGL drawing surface
+
+An EGL window needs to be created from a Wayland surface, by the Wayland call
+wl_egl_window_create. This is then turned into an EGL drawing surface by the
+EGL call eglCreateWindowSurface. Drawing into this surface is generally done
+by an API such as OpenGL, and the choice of this has been set in the
+egl_context. This is set for the drawing surfaces by eglMakeCurrent.
+
+Following this, drawing can take place. For now, we don't draw but leave some
+simple drawing code in place but commented out.
+
+Once drawing is complete, the EGL layer renders the surface by swapping the
+drawing buffer using eglSwapBuffers.
+
+This code looks like
+
+
+https://wiki.rdkcentral.com/display/RDK/Graphics+With+Wayland
+
+
+https://wiki.rdkcentral.com/display/RDK/WPE
+Wayland is not an implementation but a protocol specification between a
+display server and its clients
+
+
+“Wayland is a protocol for a compositor to talk to its client as well as a C
+lib implementation of that protocol”. `Weston` is the reference implementation
+for wayland. `Westeros is a compositor, a replacement of Weston.` This
+provides clear interface towards graphics and input.
+
+
+https://wiki.rdkcentral.com/display/RDK/Westeros
+
+
+// on debian
+
+You can test weston directly from a regular X session with the following
+commands:
+
+sudo apt install weston
+weston
+
+This will start a Wayland window in your regular X session where you can test
+things.
+
+
+The Wayland route is: an application uses EGL to write content to a
+framebuffer, and the framebuffer is managed by DRM. Wayland has calls to talk
+to EGL, and EGL in turn uses the DRM API to manipulate the buffers.
+
+
+={============================================================================
+*kt_linux_core_700* os-virtual-terminal
+
+Virtual terminals
+
+Linux has had virtual terminals almost from the beginning. These allow you to
+have multiple login sessions, each basically independent of the others. By
+default, Linux has seven of these, so you can have upto seven login sessions
+running. Note that this is not the same as using multiple terminal windows
+under X: this is a separate mechanism.
+
+You switch between virtual terminals by the key sequence CTL-ALT-F<n> where n
+is 1-7. If you are running X as in a normal user distro, then that is usually
+running in virtual terminal 7. So if you press the keys CTL-ALT-F4 you will
+get a login prompt for virtual terminal 4. When you want to return to your GUI
+environment, just press CTL-ALT-F7.
+
+Virtual terminals and X 
+
+This is easy: when you switch to another virtual terminal, the X server
+releases control of the hardware. That means you can do whatever you want,
+including starting up another X session!
 
 
 ={============================================================================

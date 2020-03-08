@@ -139,6 +139,9 @@ void BleRcuController1Adaptor::StartPairing(uchar pairing_code,
   //                           "StartPairing",
   //                           Q_ARG(uchar, pairing_code));
 
+  // calls parent's one
+  m_controller->startPairing(pairing_code);
+
   // TODO: reply
   // BleRcuError::errorString(BleRcuError::General) do:
   // return QStringLiteral("com.sky.Error.Failed");
