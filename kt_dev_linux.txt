@@ -351,7 +351,7 @@
 #{ gcc
 *kt_linux_gcc_400* gcc-doc
 *kt_linux_gcc_400* gcc-ld gcc-linker
-*kt_linux_gcc_400* gcc-ld-linker-script
+*kt_linux_gcc_400* gcc-ld-linker-script os-lib-script
 *kt_linux_gcc_400* gcc-asm
 *kt_linux_gcc_400* gcc-libgcc gcc-ucmpdi2-error
 *kt_linux_gcc_400* gcc-option-output gcc-option-verbose
@@ -431,9 +431,10 @@
 *kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
 *kt_linux_core_412* os-lib-search
 *kt_linux_core_402* os-lib-resolve-order os-lib-preload
-*kt_linux_core_400* os-lib-ld-debug os-ld-glibc
+*kt_linux_core_400* os-lib-debug os-ld-glibc
 *kt_linux_core_405* os-lib-api os-dl-api
-*kt_linux_core_400* linux-lib-shared-visibility
+*kt_linux_core_400* os-lib-visibility
+*kt_linux_core_400* os-lib-symbol-version
 *kt_linux_core_406* lib-shared-elf-edit 
 *kt_linux_core_410* lib-shared: check libraries that process uses
 *kt_linux_core_411* lib-shared: case problem in open failure
@@ -62726,7 +62727,7 @@ once.
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-ld-linker-script
+*kt_linux_gcc_400* gcc-ld-linker-script os-lib-script
 
 3 Linker Scripts
 
@@ -87751,6 +87752,11 @@ within a shared library should be preferentially bound to definitions (if they
 xyz() from the main program would always invoke the version of xyz() defined
 in the main program.
 
+*cxx-static*
+This effect of the static keyword is similar to the –Bsymbolic linker option described in Section
+41.12, with the difference that the static keyword affects a single symbol within a single source
+file.
+
 
 <lib-resolve-use-name> *ld-so-runtime-resolve*
 o So always picks up the main version and runtime resolution use `name.`
@@ -88040,6 +88046,8 @@ $ nm -D libc.so.0 | ag pthread
 
 *os-lib-preload* *os-lib-resolve-override*
 
+42.5 Preloading Shared Libraries
+
 For testing purposes, it can sometimes be useful to `selectively override`
 functions and other symbols that would normally be found by the dynamic linker
 using the search rules. 
@@ -88090,7 +88098,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64234
 
 
 ={============================================================================
-*kt_linux_core_400* os-lib-ld-debug os-ld-glibc
+*kt_linux_core_400* os-lib-debug os-ld-glibc
 
 the dynamic loader is not part of GCC and is part of c library.
 
@@ -88125,7 +88133,7 @@ ENVIRONMENT
               libraries at execution-time.  Similar to the PATH environment
               variable.
 
-       *linux-ld-load-rule*                
+       *os-lib-preload*                
        LD_PRELOAD
               A whitespace-separated list of additional, user-specified, ELF
               shared libraries to be loaded before all others.  This can be
@@ -88151,16 +88159,19 @@ ENVIRONMENT
               glibc 2.3.4, LD_DEBUG is ignored for set-user-ID/set-group-ID
               binaries.
 
-Sometimes, it is useful to monitor the operation of the dynamic linker in
-order to know, for example, where it is searching for libraries. We can use
-the LD_DEBUG environment variable to do this. By setting this variable to one
-(or more) of a set of standard keywords, we can obtain various kinds of
-tracing information from the dynamic linker.
+
+42.6 Monitoring the Dynamic Linker: LD_DEBUG
+
+Sometimes, it is useful to monitor the operation of the dynamic linker in order
+to know, for example, where it is searching for libraries. We can use the
+LD_DEBUG environment variable to do this. By setting this variable to one (or
+    more) of a set of standard keywords, we can obtain various kinds of tracing
+information from the dynamic linker.
 
 If we assign the value help to LD_DEBUG, the dynamic linker displays help
 information about LD_DEBUG, and the specified command is not executed:
 
-note: can be any command other 
+$ LD_DEBUG=help x   // can be any command
 $ LD_DEBUG=help ls  
 Valid options for the LD_DEBUG environment variable are:
 
@@ -88311,30 +88322,6 @@ function symbol errors are detected immediately instead of at some later time.
 `This can be useful when debugging an application`, or simply to ensure that
 an application fails immediately on an unresolved symbol, rather than doing so
 only after executing for a long time.
-
-
-It is also possible to include further values in flags. The following flags are
-specified in SUSv3:
-
-RTLD_GLOBAL
-
-Symbols in this library and its dependency tree are made available for
-resolving references in other libraries loaded by this process and also for
-lookups via dlsym().
-
-
-RTLD_LOCAL
-
-This is the converse of RTLD_GLOBAL and `the default` if neither constant is
-specified. It specifies that symbols in this library and its dependency tree
-are not available to resolve references in subsequently loaded libraries.
-
-
-SUSv3 doesn’t specify a default if neither RTLD_GLOBAL nor RTLD_LOCAL is
-specified. Most UNIX implementations assume the same default (RTLD_LOCAL) as
-Linux, but a few assume a default of RTLD_GLOBAL.
-
-NOTE: what global/local really means?
 
 
 Linux also supports a number of flags that are not specified in SUSv3:
@@ -88628,48 +88615,30 @@ To build programs that use the dlopen API on Linux, we must specify the -ldl
 option, in order to link against the libdl library.
 
 
-{access-symbols-in-main}
-Sometimes, it is desirable instead to have x() in shared library invoke an
-implementation of y() in the main program. In order to do this, we must make the
-(global-scope) symbols in the main program available to the dynamic linker, by
-linking the program using the --export-dynamic linker option:
-
-$ gcc -Wl,--export-dynamic main.c (plus further options and arguments)
-
-Equivalently, we can write the following:
-
-$ gcc -export-dynamic main.c
-
-Using either of these options allows a dynamically loaded library to access
-global symbols in the main program.
-
-
 ={============================================================================
-*kt_linux_core_400* linux-lib-shared-visibility
+*kt_linux_core_400* os-lib-visibility
 
-*term-abi*
+42.2 Controlling Symbol Visibility *os-abi*
 
 A well-designed shared library should make visible only those symbols (functions
-        and variables) that form part of its specified application binary
-interface (ABI). The reasons for this are as follows:
+    and variables) that form part of its specified application binary interface
+(ABI). The reasons for this are as follows:
 
-* If the shared library designer accidentally exports unspecified interfaces,
+o If the shared library designer accidentally exports unspecified interfaces,
   then authors of applications that use the library may choose to employ these
-  interfaces. This creates a 'compatibility' problem for future upgrades of the
+  interfaces. This creates a `compatibility problem` for future upgrades of the
   shared library.
 
   The library developer expects to be able to change or remove any interfaces
-  'other' than those in the documented ABI, while the library user expects to
+  other than those in the documented ABI, while the library user expects to
   continue using the same interfaces (with the same semantics) that they
   currently employ.
 
-* During run-time symbol resolution, any symbols that are exported by a shared
+o During run-time symbol resolution, any symbols that are exported by a shared
   library might interpose definitions that are provided in other shared
-  libraries.
+  libraries. *os-lib-resolve-order*
 
-  // this is a problem as <resolve-real-problem>?
-
-* Exporting unnecessary symbols increases the size of the dynamic symbol table
+o Exporting unnecessary symbols increases the size of the dynamic symbol table
   that must be loaded at runtime. 
   
   // also means 'faster' loading time?
@@ -88684,21 +88653,22 @@ In a C program, we can use the static keyword to make a symbol private to a
 source-code module, thus rendering it unavailable for binding by other object
 files.
 
-// why converse? anyway, *cxx-static* make bind local so those references
-// won't be subject to runtime interposition.
-
 As well as making a symbol private to a source-code module, the static keyword
 also has a converse effect. If a symbol is marked as static, then all references
-to the symbol 'in' the same source file will be bound to that definition of the
+to the symbol in the same source file will be bound to that definition of the
 symbol. Consequently, these references won't be subject to run-time
 interposition by definitions from other shared libraries in the manner described
 in Section 41.12. 
 
+*cxx-static* 
+the point it it won't be subject to runtime interposition.
+
+
 This effect of the static keyword is similar to the `-Bsymbolic` linker option
 described in Section 41.12, with the difference that the static keyword affects
-a 'single' symbol within a single source file.
+a single symbol within a single source file.
 
-@ The GNU C complier, gcc, provides a compiler-specific attribute declaration
+o The GNU C complier, gcc, provides a compiler-specific attribute declaration
 that performs a similar task to the static keyword:
 
 void __attribute__ ((visibility("hidden")))
@@ -88722,17 +88692,296 @@ bound.
 
 o When dynamically loading a shared library (Section 42.1.1), the dlopen()
   RTLD_GLOBAL flag can be used to specify that the symbols defined by the
-  library should be made available for binding by subsequently loaded
-  libraries, and the ––export–dynamic linker option (Section 42.1.6) can be
-  used to make the global symbols of the main program available to dynamically
-  loaded libraries.
+  library `should be made available for binding` by subsequently loaded
+  libraries, 
+
+  // make it subject to runtime interposition.
+
+  and the ––export–dynamic linker option (Section 42.1.6) can be used to make
+  the global symbols of the main program available to dynamically loaded
+  libraries.
 
 For further details on the topic of symbol visibility, see [Drepper, 2004 (b)].
 
-<elf-weak-symbol>
+
+RTLD_GLOBAL
+
+Symbols in this library and its dependency tree are made available for
+resolving references in other libraries loaded by this process and also for
+lookups via dlsym().
+
+
+RTLD_LOCAL
+
+This is the converse of RTLD_GLOBAL and `the default` if neither constant is
+specified. It specifies that symbols in this library and its dependency tree
+are not available to resolve references in subsequently loaded libraries.
+
+
+SUSv3 doesn’t specify a default if neither RTLD_GLOBAL nor RTLD_LOCAL is
+specified. Most UNIX implementations assume the same default (RTLD_LOCAL) as
+Linux, but a few assume a default of RTLD_GLOBAL.
+
+
+*symbols-in-main*
+Sometimes, it is desirable instead to have x() in shared library invoke an
+implementation of y() in the main program. In order to do this, we must make the
+(global-scope) symbols in the main program `available to the dynamic linker`, by
+linking the program using the --export-dynamic linker option:
+
+$ gcc -Wl,--export-dynamic main.c (plus further options and arguments)
+
+Equivalently, we can write the following:
+
+$ gcc -export-dynamic main.c
+
+Using either of these options allows a dynamically loaded library to access
+global symbols in the main program.
+
+
+-E
+--export-dynamic
+--no-export-dynamic
+
+When creating a dynamically linked executable, using the -E option or the
+--export-dynamic option causes the linker to add all symbols to the dynamic
+symbol table. The dynamic symbol table is the set of symbols which are visible
+from dynamic objects at run time. 
+
+If you do not use either of these options (or use the --no-export-dynamic option
+    to restore the default behavior), the dynamic symbol table will normally
+contain only those symbols which are referenced by some dynamic object mentioned
+in the link.
+
+If you use "dlopen" to load a dynamic object which needs to refer back to the
+symbols defined by the program, rather than some other dynamic object, then you
+will probably need to use this option when linking the program itself.
+
+You can also use the dynamic list to control what symbols should be added to the
+dynamic symbol table if the output format supports it. See the description of
+--dynamic-list.
+
+Note that this option is specific to ELF targeted ports. PE targets support a
+similar function to export all symbols from a DLL or EXE ; see the description
+of --export-all-symbols below.
+
+
+# The following is used to export the functions from the executable so
+# that plugins can use them (the correct way to add this is with
+# target_link_options() but that's only supported on newer cmake)
+-Wl,--dynamic-list=${CMAKE_CURRENT_LIST_DIR}/exported.syms
+
+--dynamic-list=dynamic-list-file
+
+Specify the name of a dynamic list file to the linker. This is typically used
+when creating shared libraries to specify a list of global symbols whose
+references shouldn't be bound to the definition within the shared library, or
+creating dynamically linked executables to specify a list of symbols which
+should be added to the symbol table in the executable. This option is only
+meaningful on ELF platforms which support shared libraries.  The format of the
+dynamic list is the same as the version node without scope and node name. See
+VERSION for more information.
+
+
+<os-lib-weak-symbol>
 A weak symbol is a half-hearted global symbol: if a definition is available
 for an undefined weak symbol, the linker will use it, but if not the value
 defaults to zero.
+
+
+42.3.1 Controlling Symbol Visibility with Version Scripts
+
+$ gcc -g -c -fPIC -Wall vis_comm.c vis_f1.c vis_f2.c
+$ g++ -g -c -fPIC -Wall vis_comm.c vis_f1.c vis_f2.c
+
+$ gcc -g -shared -o vis.so vis_comm.o vis_f1.o vis_f2.o
+$ g++ -g -shared -o vis.so vis_comm.o vis_f1.o vis_f2.o
+
+If we use the following readelf command to list the dynamic symbols exported
+by the library, we see the following:
+
+$ readelf --syms --use-dynamic vis.so | grep vis_
+
+use gcc to see symbol names which is not mangled.
+
+This shared library exported three symbols: vis_comm(), vis_f1(), and vis_f2().
+However, we would like to ensure that only the symbols vis_f1() and vis_f2() are
+exported by the library. We can achieve this result using the following version
+script:
+
+$ cat vis.map
+VER_1 {
+global:
+  vis_f1;
+  vis_f2;
+local:
+  *;
+};
+
+$ readelf --syms --use-dynamic vis.so | grep vis_
+    7   0: 00000000000006aa    29 FUNC    GLOBAL DEFAULT  12 vis_f2
+    9   0: 000000000000067a    19 FUNC    GLOBAL DEFAULT  12 vis_comm
+   13   2: 000000000000068d    29 FUNC    GLOBAL DEFAULT  12 vis_f1
+
+
+$ gcc -g -c -fPIC -Wall vis_comm.c vis_f1.c vis_f2.c
+$ gcc -g -shared -o vis.so vis_comm.o vis_f1.o vis_f2.o -Wl,--version-script,vis.map
+
+$ readelf --syms --use-dynamic vis.so | grep vis_
+    6   0: 000000000000060a    29 FUNC    GLOBAL DEFAULT  13 vis_f2
+    8   2: 00000000000005ed    29 FUNC    GLOBAL DEFAULT  13 vis_f1
+
+// vis_comm.c
+//
+// #include <iostream>
+#include <stdio.h>
+
+void vis_comm()
+{
+  // std::cout << "this is vis_comm" << std::endl;
+  printf("this is vis_comm\n");
+}
+
+
+={============================================================================
+*kt_linux_core_400* os-lib-symbol-version
+
+42.3.2 Symbol Versioning
+
+Symbol versioning allows a single shared library to provide multiple versions of
+the same function. Each program uses the version of the function that was
+current when the program was (statically) linked against the shared library. As
+a result, we can make an incompatible change to a shared library without needing
+to increase the library’s major version number. symbol versioning can replace
+the traditional shared library major and minor versioning scheme.
+
+
+gcc -g -c -fPIC -Wall sv_lib_v1.c
+gcc -g -shared -o libsv.so sv_lib_v1.o -Wl,--version-script,sv_v1.map
+
+$ cat sv_v1.map
+VER_1 {
+global: xyz;
+local: *;
+# Hide all other symbols
+};
+
+gcc -g -o p1 sv_prog.c libsv.so
+
+p1 uses xyz() from sv_lib_v1.c
+
+Now, suppose that we want to modify the definition of xyz() within our
+library, while still ensuring that program p1 continues to use the old
+version of this function.
+
+build new so with new map
+
+VER_1 {
+  global: xyz;
+  local: *;
+  # Hide all other symbols
+};
+
+VER_2 {
+  global: pqr;
+} VER_1;
+
+This version script provides a new version tag, VER_2, which depends on the tag
+VER_1. This dependency is indicated by the following line: "} VER_1;"
+
+
+#include <stdio.h>
+
+__asm__(".symver xyz_old,xyz@VER_1");
+__asm__(".symver xyz_new,xyz@@VER_2");
+
+void xyz_old(void) { printf("v1 xyz\n"); }
+void xyz_new(void) { printf("v2 xyz\n"); }
+void pqr(void) { printf("v2 pqr\n"); }
+
+The use of @@ rather than @ in the second .symver directive indicates that this
+is the default definition of xyz() to which applications should bind when
+statically linked against this shared library. Exactly one of the .symver
+directives for a symbol should be marked using @@ .
+
+TODO: HOW TO SPECIFY IT IN BUILDS?
+The first of these directives says that xyz_old() is the implementation of xyz()
+to be used for applications linked against version tag VER_1 (i.e., program p1
+in our example)
+
+
+gcc -g -c -fPIC -Wall sv_lib_v2.c
+gcc -g -shared -o libsv.so sv_lib_v2.o -Wl,--version-script,sv_v2.map
+
+build p2
+gcc -g -o p2 sv_prog.c libsv.so
+
+NOTE that if build p2 before new libsv.so, then it still has link to VER_1
+since it's get this info at link time.
+
+Here do not build p1 again.
+
+Now we can create a new program, p2, which uses the new definition of xyz(),
+while program p1 uses the old version of xyz().
+
+LD_LIBRARY_PATH=. ./p2
+v2 xyz
+
+LD_LIBRARY_PATH=. ./p1
+v1 xyz
+
+objdump -t p1 | ag xyz
+0000000000000000       F *UND*  0000000000000000              xyz@@VER_1
+
+objdump -t p2 | ag xyz
+0000000000000000       F *UND*  0000000000000000              xyz@@VER_2
+
+readelf -s p1 | ag xyz
+     4: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND xyz@VER_1 (3)
+    58: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND xyz@@VER_1
+
+readelf -s p2 | ag xyz
+     1: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND xyz@VER_2 (2)
+    49: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND xyz@@VER_2
+
+
+see https://akkadia.org/drepper/
+
+
+={============================================================================
+*kt_linux_core_400* os-lib-initialzation-finalization
+
+42.4 Initialization and Finalization Functions
+
+It is possible to define one or more functions that are executed automatically
+when a shared library is loaded and unloaded. This allows us to perform
+initialization and finalization actions when working with shared libraries.
+
+Initialization and finalization functions are defined using the gcc constructor
+and destructor attributes. Each function that is to be executed when the library
+is loaded should be defined as follows:
+
+void __attribute__ ((constructor)) some_name_load(void)
+{
+/* Initialization code */
+}
+
+Unload functions are similarly defined:
+
+void __attribute__ ((destructor)) some_name_unload(void)
+{
+/* Finalization code */
+}
+
+
+The _init() and _fini() functions
+
+An older technique for shared library initialization and finalization is to
+create two functions, _init() and _fini(), as part of the library. 
+
+Use of _init() and _fini() is now considered obsolete in favor of the gcc
+constructor and destructor attributes, which, among other advantages, allow us
+to define multiple initialization and finalization functions.
 
 
 ={============================================================================

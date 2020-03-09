@@ -52,7 +52,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-llama
 *kt_dev_skymw_0000* skymw-rdk-as
 *kt_dev_skymw_0000* skymw-rdk-dtt
-*kt_dev_skymw_0000* skymw-rdk-as-windowmanager
+*kt_dev_skymw_0000* skymw-rdk-as-appmanager as-windowmanager
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -10560,180 +10560,6 @@ BROADCOM_SDK_GIT ?= "git://${RDK_GIT}/sdk/broadcom"
 
 
 <path1>
-// WindowManager/source/WesterosWindowManager.cpp
-
-std::shared_ptr<IWindowManagerClient> 
-WesterosWindowManager::createClient(const std::string &name,
-  uid_t userId,
-  ClientState initialState,
-  int width, int height)
-{
-  std::shared_ptr<WesterosClient> client =
-    std::make_shared<WesterosClient>(mEventLoop, shared_from_this(),
-      name, userId, width, height);
-}
-
-WesterosClient::WesterosClient()
-{
-    // create the compositor
-    mCompositor = WstCompositorCreate();
-
-    setupRenderer();
-}
-
-// uses it to send output
-{
-  if (!WstCompositorComposeEmbedded(mCompositor, mX, mY, mWidth, mHeight,
-        mMatrix, 1.0f,
-        hints,
-        &needHolePunch, holeRects))
-  {
-    AI_LOG_ERROR("failed to compose embedded");
-  }
-}
-
-
-bool WesterosClient::setupRenderer()
-{
-  const std::string renderModule("/usr/lib/plugins/westeros/libwesteros_render_sky.so");
-
-  // westeros-compositor.cpp
-  WstCompositorSetRendererModule(mCompositor, renderModule.c_str());
-}
-
-
-// renderers/SkyRenderer/source/SkyRenderer.cpp
-
-int renderer_init(WstRenderer *renderer, int argc, char **argv)
-{
-  // create the sky 'renderer' wrapper
-  SkyRenderer *skyRenderer = new SkyRenderer(renderer, argc, argv, client);
-
-  renderer->renderTerm = skyRendererTerm;
-  ...
-}
-
-SkyRenderer::SkyRenderer(WstRenderer *renderer, int argc, char **argv,
-                         const std::shared_ptr<IWesterosClient> &client)
-{
-    // the platform determines the 'real' renderer to use
-#if (RDK_PLATFORM == XI6)
-    // const std::string rendererPath("libwesteros_render_nexus.so.0.0.0");
-    const std::string rendererPath("`libwesteros_render_embedded.so.0.0.0`");
-#elif (RDK_PLATFORM == AMLOGIC)
-    const std::string rendererPath("/usr/lib/libwesteros_render_embedded.so.0.0.0");
-#else
-#   error "unknown RDK platform type"
-#endif
-
-    // set the args for the 'real' renderer
-    char arg0[] = "--width";
-    char arg1[] = "1920";
-    char arg2[] = "--height";
-    char arg3[] = "1080";
-    char *realArgv[4] = { arg0, arg1, arg2, arg3 };
-
-    // now try and create the 'real' renderer
-    //
-    // calls `renderer_init` by init= dlsym( module, RENDERER_MODULE_INIT );
-
-    `mRealRenderer` = WstRendererCreate(rendererPath.c_str(), 4, realArgv);
-}
-
-
-
-// build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+790df67969-r0/git
-// -c ../git/westeros-compositor.cpp -o libwesteros_compositor_la-westeros-compositor.o
-// libwesteros_compositor.so.0.0.0
-
-westeros/westeros-compositor.cpp
-
-WstCompositor* WstCompositorCreate()
-{
-}
-
-bool WstCompositorSetRendererModule( WstCompositor *ctx, const char *rendererModule )
-{
-  `ctx->rendererModule`= strdup( rendererModule );
-}
-
-// westeros-compositor.h
-
-/**
- * WstCompositorComposeEmbedded
- *
- * Requests that the current scene be composed as part of the configured embedded environment.  This
- * should be called with the environment setup for offscreen rendering.  For example, if OpenGL is
- * being used for rendering, WstCompositorComposeEmbedded should be called with an FBO set as the
- * current render target.
- *
- * The x, y, width and height give the desired composition rectangle.  The matrix and alpha
- * values are what the caller intends to apply when the composited scene is subsequently rendered
- * from the offscreen target to the callers scene.  Based on the hinting provided, the compositor will
- * either render to the offscreen target or use an available fast path to render to a separate 
- * plane.  If no fast path is available it will render to the offscreen target without the transform
- * and alpha.  If it renders to a separate plane it will apply the provide transformation matrix and alpha
- * and will set needHolePunch to true.  Upon return, if needHolePunch is true, the caller should 
- * render a hole punch for each rectangle returned in rects, otherwise it should render the offscreen 
- * target to its scene while applying the transformation matrix and alpha.
- *
- * This should only be called while the compositor is running.
- */
-
-// westeros-compositor.cpp
-
-bool WstCompositorComposeEmbedded( WstCompositor *ctx, ...)
-{
-  WstRendererUpdateScene( ctx->renderer );
-}
-
-void WstRendererUpdateScene( WstRenderer *renderer )
-{
-  renderer->updateScene( renderer );
-}
-
-
-westeros/westeros-compositor.cpp
-
-bool WstCompositorStart( WstCompositor *ctx )
-
-static bool wstCompositorCreateRenderer( WstCompositor *ctx )
-{
-  ctx->renderer= WstRendererCreate( `ctx->rendererModule`, argc, (char **)argv, ctx->display, ctx->nc );
-}
-
-
-westeros/westeros-render.cpp
-
-WstRenderer* WstRendererCreate(const char *moduleName, int argc, char **argv,
-    struct wl_display *display, WstNestedConnection *nc )
-{
-  WstRenderer *renderer= (WstRenderer*)calloc( 1, sizeof(WstRenderer) );
-
-  module= dlopen(`moduleName`, RTLD_NOW );
-
-  init= dlsym( module, RENDERER_MODULE_INIT );
-
-  rc= ((WSTMethodRenderInit)init)( renderer, argc, argv );
-}
-
-
-// -c ../git/westeros-render-embedded.cpp -o westeros-render-embedded.o
-// .libs/libwesteros_render_embedded.so.0.0.0
-// -DWESTEROS_PLATFORM_EMBEDDED -DWESTEROS_HAVE_WAYLAND_EGL -DENABLE_SBPROTOCOL
-
-// westeros-render-embedded.cpp
-
-static WstRendererEMB* wstRendererEMBCreate( WstRenderer *renderer )
-{
-  #if defined (WESTEROS_PLATFORM_EMBEDDED)
-  rendererEMB->glCtx= WstGLInit();
-  #endif
-
-  rendererEMB->eglDisplay= eglGetDisplay(EGL_DEFAULT_DISPLAY);
-}
-
-
 // build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros-soc/1.0+gitrAUTOINC+790df67969-r0/git
 // ../git/brcm/westeros-gl/westeros-gl.cpp
 
@@ -10746,47 +10572,12 @@ WstGLCtx* WstGLInit()
   rc= NxClient_SetDisplaySettings( &displaySettings );
 }
 
-
 // westeros-render-nexus/1.0+gitrAUTOINC+acb5172a2e-r0/git/
 // drm/westeros-gl/westeros-gl.c
 // westeros-compositor.cpp
 
 1765:      moduleNew->module= dlopen( moduleName, RTLD_NOW );
 4044:   module= dlopen( "libwayland-egl.so.0", RTLD_NOW );
-
-
-arm-rdk-linux-gnueabi-libtool: link: arm-rdk-linux-gnueabi-g++  -march=armv7ve
--mthumb -mfpu=neon  -mfloat-abi=hard -mcpu=cortex-a15 -fno-omit-frame-pointer
--fno-optimize-sibling-calls
---sysroot=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty
--fPIC -DPIC -shared -nostdlib
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/crti.o
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0/crtbeginS.o
-.libs/westeros-render-embedded.o
--L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib
--lGLESv2
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/`libwesteros_gl.so`
--L=/../../work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/bin
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/`libwayland-egl.so`
--lEGL -lpthread -lnexus -lnxclient
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwesteros_simplebuffer_server.so
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwayland-client.so
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwayland-server.so
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libffi.so
--lrt
--L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/x86_64-linux/usr/lib/arm-rdk-linux-gnueabi/gcc/arm-rdk-linux-gnueabi/6.4.0
--L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/lib
--L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libstdc++.so
--lm -lc -lgcc_s
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0/crtendS.o
-/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/crtn.o
--march=armv7ve -mthumb -mfpu=neon -mfloat-abi=hard -mcpu=cortex-a15
---sysroot=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty
--Os -g -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed   -pthread -Wl,-soname
--Wl,libwesteros_render_embedded.so.0 -o
-.libs/libwesteros_render_embedded.so.0.0.0
-
 
 /media/keitee/ssd2/direct_build/generic/wayland-egl-bnxs/refsw17.3/vc5/nexus/display_nexus.c
 
@@ -11832,17 +11623,23 @@ ServiceScanController::ServiceScanController
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-as-windowmanager
+*kt_dev_skymw_0000* skymw-rdk-as-appmanager as-windowmanager
+
+// appinfrastructure-rdk/RDK/AppManager/Main.cpp
 
 int main(int argc, char *argv[])
 {
+    // ensure the XDG_RUNTIME_DIR environment variable is set, Westeros has
+    // issues if it's not available
+    setenv("XDG_RUNTIME_DIR", "/tmp", 0);
+
     // create and start the window manager
     std::shared_ptr<IWindowManager> windowMgr =
         WindowManagerFactory::create(eventLoop);
     windowMgr->start();
 }
 
-// asappsserviced/RDK/AppManager/WindowManager/source/WindowManagerFactory.cpp
+// RDK/AppManager/WindowManager/source/WindowManagerFactory.cpp
 
 std::shared_ptr<IWindowManager> WindowManagerFactory::create(const sky::EventLoop &eventLoop)
 {
@@ -11850,23 +11647,35 @@ std::shared_ptr<IWindowManager> WindowManagerFactory::create(const sky::EventLoo
     return std::make_shared<WesterosWindowManager>(eventLoop);
 }
 
-// asappsserviced/RDK/AppManager/WindowManager/source/WesterosWindowManager.h
+// RDK/AppManager/WindowManager/source/WesterosWindowManager.h
 
 class WesterosWindowManager : public std::enable_shared_from_this<WesterosWindowManager>
                             , public IWindowManager
-{}
+{
 
-*player-client*
+  WesterosWindowManager(const sky::EventLoop &eventLoop)
+  {
+    // create the render loop
+    mRenderLoop = std::make_shared<GlRenderLoop>();
+  }
+}
+
+
+// 
+
 void WesterosWindowManager::start()
 {
     if (!mPlayerClient)
     {
-        mPlayerClient = std::make_shared<WesterosPlayerClient>(mEventLoop, shared_from_this());
+        mPlayerClient = 
+          std::make_shared<WesterosPlayerClient>(mEventLoop, shared_from_this());
         if (!mPlayerClient || !mPlayerClient->start())
         {
             AI_LOG_ERROR("failed to start AS player client compositor");
         }
     }
+
+    // std::shared_ptr<GlRenderLoop> mRenderLoop;
 
     if (!mRenderLoop->start())
     {
@@ -11874,33 +11683,72 @@ void WesterosWindowManager::start()
     }
 }
 
-*client*
+// *client* EPG uses it and set size?
+// AppManager/WindowManager/source/WesterosClient.cpp
+
+WesterosClient::WesterosClient(const sky::EventLoop &eventLoop)
+{
+  // create the compositor
+  mCompositor = WstCompositorCreate();
+
+  WstCompositorAddModule(mCompositor, 
+      "/usr/lib/plugins/westeros/libwesteros_plugin_sky_shell.so");
+  WstCompositorAddModule(mCompositor, 
+      "/usr/lib/plugins/westeros/libwesteros_plugin_sky_input.so");
+  WstCompositorAddModule(mCompositor, 
+      "/usr/lib/plugins/westeros/libwesteros_plugin_sky_player.so");
+
+  // use "XDG_RUNTIME_DIR"
+  WstCompositorSetDisplayName(mCompositor, mDisplayName.second.c_str());
+
+  const std::string 
+    renderModule("/usr/lib/plugins/westeros/libwesteros_render_sky.so");
+
+  WstCompositorSetRendererModule(mCompositor, renderModule.c_str());
+}
+
 std::shared_ptr<IWindowManagerClient> WesterosWindowManager::createClient(const std::string &name,
                                                                           uid_t userId,
                                                                           ClientState initialState)
 {
-    (void) initialState;
+  (void) initialState;
 
-    std::shared_ptr<WesterosClient> client =
-        std::make_shared<WesterosClient>(mEventLoop, shared_from_this(), name, userId);
+  std::shared_ptr<WesterosClient> client =
+    std::make_shared<WesterosClient>(mEventLoop, shared_from_this(), name, userId);
 
-    client->inheritVideoSurface(mPlayerClient->getSurface());
-    client->start();
+  client->inheritVideoSurface(mPlayerClient->getSurface());
+  client->start();
 
-    std::lock_guard<std::mutex> locker(mClientLock);
-    mClients.emplace_back(RenderClient{ client, nullptr });
+  std::lock_guard<std::mutex> locker(mClientLock);
+  mClients.emplace_back(RenderClient{ client, nullptr });
 
-    return client;
+  return client;
 }
 
 
-// asappsserviced/RDK/AppManager/WindowManager/source/WesterosPlayerClient.h
+*player-client*
+// AppManager/WindowManager/source/WesterosPlayerClient.h
+
 class WesterosPlayerClient : public std::enable_shared_from_this<WesterosPlayerClient>
+{
+  WstCompositor *mCompositor;
+}
 
 WesterosPlayerClient::WesterosPlayerClient()
 {
   // create the compositor
   mCompositor = WstCompositorCreate();
+
+  // use "XDG_RUNTIME_DIR"
+  WstCompositorSetDisplayName(mCompositor, mDisplayName.second.c_str());
+
+#if (RDK_PLATFORM == XI6)
+    const std::string renderModule("libwesteros_render_nexus.so.0.0.0");
+#else
+    const std::string renderModule("libwesteros_render_embedded.so.0.0.0");
+#endif
+
+  WstCompositorSetRendererModule(mCompositor, renderModule.c_str());
 }
 
 bool WesterosPlayerClient::start()
@@ -11934,6 +11782,9 @@ bool WesterosPlayerClient::start()
 
 *westeros-compositor-llama*
 
+AppManager/CMake/FindWesteros.cmake
+10:find_library( WESTEROS_COMPOSITOR_LIBRARY NAMES libwesteros_compositor westeros_compositor )
+
 // NOTE: cannot find sources here but `bitbake westeros -c compile` will make them.
 
 /tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+88abed1807-r0
@@ -11943,7 +11794,11 @@ WESTEROS_COMPOSITOR_LIBRARY lib = /media/keitee/ssd2/rdk/2.0/sysroots/cortexa15t
 WESTEROS_GL_LIBRARY lib = /media/keitee/ssd2/rdk/2.0/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/lib/libwesteros_gl.so
 PROJECT_SOURCE_DIR: /media/keitee/ssd2/as/asappsserviced/RDK/AppManager
 
-westeros-compositor.h
+westeros-compositor.h, cpp
+
+// build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+790df67969-r0/git
+// -c ../git/westeros-compositor.cpp -o libwesteros_compositor_la-westeros-compositor.o
+// libwesteros_compositor.so.0.0.0
 
 /**
  * WestCompositorCreate
@@ -11954,6 +11809,242 @@ westeros-compositor.h
  */
 WstCompositor* WstCompositorCreate();
 
+WstCompositor* WstCompositorCreate()
+{
+}
+
+/**
+ * WstCompositorSetIsEmbedded
+ *
+ * Specify if the compositor is to act as an embedded compositor.  When acting
+ * as an embedded compositor, the compositor will create a wayland display that
+ * clients can connect and render to, but the compositor will only compose
+ * its scene when WstCompositorComposeEmbedded is called.  An embedded
+ * compositor should use libwesteros_render_embedded.so.0 as its
+ * renderer module (or some other module that supports embedded composition).
+ * Note that multi-threaded applications that use embedded composition must
+ * call WstCompositorStart and WstCompositorComposeEmbedded on the same thread.
+ */
+
+/**
+ * WstCompositorComposeEmbedded
+ *
+ * Requests that the current scene be composed as part of the configured
+ * embedded environment.  This should be called with the environment setup for
+ * offscreen rendering.  For example, if OpenGL is being used for rendering,
+ * WstCompositorComposeEmbedded should be called with an FBO set as the current
+ * render target.
+ *
+ * The x, y, width and height give the desired composition rectangle.  The
+ * matrix and alpha values are what the caller intends to apply when the
+ * composited scene is subsequently rendered from the offscreen target to the
+ * callers scene.  Based on the hinting provided, the compositor will either
+ * render to the offscreen target or use an available fast path to render to a
+ * separate plane.  If no fast path is available it will render to the offscreen
+ * target without the transform and alpha.  If it renders to a separate plane it
+ * will apply the provide transformation matrix and alpha and will set
+ * needHolePunch to true.  Upon return, if needHolePunch is true, the caller
+ * should render a hole punch for each rectangle returned in rects, otherwise it
+ * should render the offscreen target to its scene while applying the
+ * transformation matrix and alpha.
+ *
+ * This should only be called while the compositor is running.
+ */
+
+bool WstCompositorSetIsEmbedded( WstCompositor *wctx, bool isEmbedded );
+
+/**
+ * WstCompositorAddModule
+ *
+ * Specify the name of a module the compositor will load.  This
+ * will be a shared library file name without path.  Modules can be used
+ * to add new protocols or other functionality to the compositor instance.
+ * The module name will be added to a list of modules to load and initialize
+ * when the comnpositor starts. The module needs to supply module
+ * initialization and termination entry points:
+ *
+ * bool moduleInit( WstCompositor *wctx, struct wl_display );
+ * void moduleTerm( WstCompositor *wctx );
+ *
+ * This API must be called prior to WstCompositorStart.
+ *
+ */
+bool WstCompositorAddModule( WstCompositor *wctx, const char *moduleName );
+
+/**
+ * WstCompositorSetDisplayName
+ *
+ * Specify the name of the wayland display that this instance will
+ * create.  This must be called prior to WstCompositorStart.  If not
+ * called, the behaviour is as follows: for a nested compositor a
+ * display name will be generated, for a non-nested compositor the
+ * default display name of 'wayland-0' will be used.  The display
+ * name of a compositor can be obtained using WstCompositorGetDisplayName.
+ */
+bool WstCompositorSetDisplayName( WstCompositor *wctx, const char *displayName );
+
+/**
+ * WstCompositorSetRendererModule
+ *
+ * Specify the name of the module the compositor will use for rendering.  This
+ * will be a shared library file name without path.  An example module 
+ * name might be libwesteros_render_gl.so.0.  This must be called prior
+ * to WstCompositorStart.
+ */
+bool WstCompositorSetRendererModule( WstCompositor *wctx, const char *rendererModule );
+
+bool WstCompositorSetRendererModule( WstCompositor *ctx, const char *rendererModule )
+{
+  `ctx->rendererModule`= strdup( rendererModule );
+}
+
+// stripped
+typedef struct _WstCompositor
+{
+   const char *displayName;
+   const char *rendererModule;
+   bool isEmbedded;
+   int outputWidth;
+   int outputHeight;
+
+   WstOutput *output;
+   WstRenderer *renderer;
+
+   struct wl_display *display;
+   struct wl_simple_shell *simpleShell;
+   struct wl_event_source *displayTimer;
+
+   int nextSurfaceId;
+   std::vector<WstSurface*> surfaces;
+   std::map<int32_t, WstSurface*> surfaceMap;
+   
+} WstCompositor;
+
+
+bool WstCompositorStart( WstCompositor *wctx )
+{
+  rc= pthread_create( &ctx->compositorThreadId, NULL, wstCompositorThread, wctx );
+
+  wstCompositorCreateRenderer( ctx )
+  {
+   ctx->renderer
+    = WstRendererCreate( `ctx->rendererModule`, argc, (char **)argv, ctx->display, ctx->nc );
+  }
+}
+
+
+// westeros-render.h (stripped)
+typedef struct _WstRenderer
+{
+  int outputWidth;
+  int outputHeight;
+  void *nativeWindow;
+  struct wl_display *display;
+
+  // set to point renderer from so
+  `void *renderer;`
+  // set to function pointers from so
+  `function pointers`;
+
+  // For embedded composition
+  int outputX;
+  int outputY;
+  `float *matrix;`    // set when WstCompositorComposeEmbedded()
+  `int hints;`
+  float alpha;
+  bool fastHint;
+  bool needHolePunch;
+  std::vector<WstRect> rects;
+} WstRenderer;
+
+
+// westeros/westeros-render.cpp
+
+WstRenderer* WstRendererCreate(const char *moduleName, int argc, char **argv,
+    struct wl_display *display, WstNestedConnection *nc )
+{
+  WstRenderer *renderer= (WstRenderer*)calloc( 1, sizeof(WstRenderer) );
+
+  module= dlopen(`moduleName`, RTLD_NOW );
+
+  init= dlsym( module, RENDERER_MODULE_INIT );
+
+  rc= ((WSTMethodRenderInit)init)( renderer, argc, argv );
+}
+
+
+// westeros-render-embedded.cpp
+// tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi$/westeros/1.0+gitrAUTOINC+acb5172a2e-r0/
+// -c ../git/westeros-render-embedded.cpp -o westeros-render-embedded.o
+// .libs/libwesteros_render_embedded.so.0.0.0
+// -DWESTEROS_PLATFORM_EMBEDDED -DWESTEROS_HAVE_WAYLAND_EGL -DENABLE_SBPROTOCOL
+
+// stripped
+typedef struct _WstRendererEMB
+{
+  `WstRenderer *renderer;`
+  int outputWidth;
+  int outputHeight;
+
+  EGLDisplay eglDisplay;
+  EGLContext eglContext;   
+
+  // NOTE: in zoder order from low to big value
+  std::vector<WstRenderSurface*> surfaces;
+
+} WstRendererEMB;
+
+static WstRendererEMB* wstRendererEMBCreate( WstRenderer *renderer )
+{
+  #if defined (WESTEROS_PLATFORM_EMBEDDED)
+  rendererEMB->glCtx= WstGLInit();
+  #endif
+
+  rendererEMB->eglDisplay= eglGetDisplay(EGL_DEFAULT_DISPLAY);
+}
+
+
+// renderers/SkyRenderer/source/SkyRenderer.cpp
+
+int renderer_init(WstRenderer *renderer, int argc, char **argv)
+{
+  // create the sky renderer wrapper
+  SkyRenderer *skyRenderer = new SkyRenderer(renderer, argc, argv, client);
+
+  renderer->renderTerm = skyRendererTerm;
+  ...
+}
+
+SkyRenderer::SkyRenderer(WstRenderer *renderer, int argc, char **argv,
+                         const std::shared_ptr<IWesterosClient> &client)
+{
+    // the platform determines the real renderer to use
+
+#if (RDK_PLATFORM == XI6)
+    // const std::string rendererPath("libwesteros_render_nexus.so.0.0.0");
+    const std::string rendererPath("`libwesteros_render_embedded.so.0.0.0`");
+#elif (RDK_PLATFORM == AMLOGIC)
+    const std::string rendererPath("/usr/lib/libwesteros_render_embedded.so.0.0.0");
+#else
+#   error "unknown RDK platform type"
+#endif
+
+    // set the args for the 'real' renderer
+    char arg0[] = "--width";
+    char arg1[] = "1920";
+    char arg2[] = "--height";
+    char arg3[] = "1080";
+    char *realArgv[4] = { arg0, arg1, arg2, arg3 };
+
+    // now try and create the 'real' renderer
+    //
+    // calls `renderer_init` by init= dlsym( module, RENDERER_MODULE_INIT );
+
+    `mRealRenderer` = WstRendererCreate(rendererPath.c_str(), 4, realArgv);
+}
+
+
+*westeros-render-operation*
 
 void WesterosPlayerClient::setSurface(const WesterosPlayerSurfaceConfig &config)
 {
@@ -11964,9 +12055,40 @@ void WesterosPlayerClient::setSurface(const WesterosPlayerSurfaceConfig &config)
   mMatrix[13] = static_cast<float>(mConfig.outputRect.y);
 }
 
-void WesterosPlayerClient::render()
+// uses to send output
+
+void `WesterosClient::render`()
 {
-  WstCompositorComposeEmbedded(mCompositor, 0, 0, 1920, 1080);
+  // The alpha value is implicitly 255 (no transparency). 
+  // NOTE: since it's graphic from EPG
+
+  if (!WstCompositorComposeEmbedded(mCompositor, mX, mY, mWidth, mHeight,
+        mMatrix, `1.0f`,
+        hints,
+        &needHolePunch, holeRects))
+  {
+    AI_LOG_ERROR("failed to compose embedded");
+  }
+}
+
+void `WesterosPlayerClient::render`()
+{
+
+#if defined(ENABLE_WESTEROS_720_WORKAROUND)
+    // the nexus render assumes everything is 720, so we have to tell it it is
+    // 720 scene even though it's 1080
+    const int width = 1280;
+    const int height = 720;
+#else
+    const int width = 1920;
+    const int height = 1080;
+#endif
+
+  WstCompositorComposeEmbedded(mCompositor, 0, 0, width, height,
+                                      matrix, alpha,
+                                      hints,
+                                      &needHolePunch, holeRects);
+
 
   /**
    * WstCompositorComposeEmbedded
@@ -11975,8 +12097,11 @@ void WesterosPlayerClient::render()
    * configured embedded environment.  This should only be called
    * while the compositor is running.
    */
-  bool WstCompositorComposeEmbedded(
-      WstCompositor *ctx, int x, int y, int width, int height, float *matrix, float alpha )
+  bool WstCompositorComposeEmbedded( WstCompositor *wctx,
+                                   int x, int y, int width, int height,
+                                   float *matrix, float alpha, 
+                                   unsigned int hints, 
+                                   bool *needHolePunch, std::vector<WstRect> &rects )
   {
     `ctx->renderer->outputWidth= width;`
     `ctx->renderer->outputHeight= height;`
@@ -11987,7 +12112,7 @@ void WesterosPlayerClient::render()
 
     ctx->renderer->alpha= alpha;
     ctx->renderer->fastHint= (hints & WstHints_noRotation);
-    ctx->renderer->hints= hints;
+    `ctx->renderer->hints= hints;`
     ctx->renderer->needHolePunch= false;
     ctx->renderer->rects.clear();
 
@@ -12045,36 +12170,7 @@ void WesterosPlayerClient::render()
   }
 }
 
-// westeros-render.h (stripped)
 
-typedef struct _WstRenderer
-{
-   int outputWidth;
-   int outputHeight;
-   void *nativeWindow;
-   struct wl_display *display;
-
-   `void *renderer;`
-   
-   // For embedded composition
-   int outputX;
-   int outputY;
-   float *matrix;
-   float alpha;
-   bool fastHint;
-   int hints;
-   bool needHolePunch;
-   std::vector<WstRect> rects;
-} WstRenderer;
-
-// stripped
-typedef struct _WstRendererEMB
-{
-   `WstRenderer *renderer;`
-   int outputWidth;
-   int outputHeight;
-
-} WstRendererEMB;
 
 // log
 
@@ -12118,28 +12214,6 @@ PARK: westeros-render-embedded: fast is false
 PARK: westeros-render-embedded: EMBRenderSurface
 
 
-// stripped
-
-typedef struct _WstCompositor
-{
-   const char *displayName;
-   const char *rendererModule;
-   bool isEmbedded;
-   int outputWidth;
-   int outputHeight;
-
-   WstOutput *output;
-   WstRenderer *renderer;
-
-   struct wl_display *display;
-   struct wl_simple_shell *simpleShell;
-   struct wl_event_source *displayTimer;
-
-   int nextSurfaceId;
-   std::vector<WstSurface*> surfaces;
-   std::map<int32_t, WstSurface*> surfaceMap;
-   
-} WstCompositor;
 
 // log from console
 
@@ -12163,18 +12237,6 @@ have dmabuf import: 0
 have external image: 0
 WstRendererCreate: module (libwesteros_render_embedded.so.0.0.0) loaded and intialized
 Westeros Info: compositor westeros-asplayer is started
-
-
-*as-appsserviced-run*
-
-scp -P 10022 appsservice root@192.168.0.103:
-
-dropbearkey -t rsa -f /home/root/sky-ssh-hostkey
-dropbear -p :10022 -P /var/run/dropbear2.pid -r /home/root/sky-ssh-hostkey -B
-
-// check status
-systemctl status sky-asplayer
-systemctl status sky-appsservice
 
 
 // stop player
@@ -12204,6 +12266,19 @@ echo $WESTEROS_GL_USE_BEST_MODE
 echo $WESTEROS_SINK_USE_GFX
 
 asrdkplayer -v
+
+
+
+*as-appsserviced-run*
+
+scp -P 10022 appsservice root@192.168.0.103:
+
+dropbearkey -t rsa -f /home/root/sky-ssh-hostkey
+dropbear -p :10022 -P /var/run/dropbear2.pid -r /home/root/sky-ssh-hostkey -B
+
+// check status
+systemctl status sky-asplayer
+systemctl status sky-appsservice
 
 
 systemctl status sky-appsservice
