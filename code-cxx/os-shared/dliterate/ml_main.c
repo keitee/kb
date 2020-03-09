@@ -33,6 +33,7 @@ Disassembly of section .text.__x86.get_pc_thunk.ax:
 00000000 <__x86.get_pc_thunk.ax>:
    0:   8b 04 24                mov    (%esp),%eax
    3:   c3                      ret
+
 kyoupark@kt-office-debian:~/works$ objdump -d -Mintel ml_reloc.o
 
 ml_reloc.o:     file format elf32-i386
@@ -60,7 +61,7 @@ Disassembly of section .text.__x86.get_pc_thunk.ax:
 00000000 <__x86.get_pc_thunk.ax>:
    0:   8b 04 24                mov    eax,DWORD PTR [esp]
    3:   c3                      ret
-kyoupark@kt-office-debian:~/works$
+
 */
 
 int myglob = 42;

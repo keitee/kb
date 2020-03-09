@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// kyoupark@kit-debian64:~/git/kb/code-linux/ex_shared/dl-iterate$ LD_LIBRARY_PATH=. ./driver_out
+// LD_LIBRARY_PATH=. ./driver_out
 //
 // name= (8 segments) address=(nil)
 //                  header  0: address=  0x400040 type=6, flags=0x5
@@ -49,6 +49,57 @@
 //                  header  4: address=0x7f72377f5680 type=1685382480, flags=0x4
 //                  header  5: address=0x7f72377d8000 type=1685382481, flags=0x6
 //                  header  6: address=0x7f72379f8c00 type=1685382482, flags=0x4
+
+
+// when use static link:
+//
+// ./test_dliterate 
+// name= (9 segments) address=0x55e77c557000
+// 		 header  0: address=0x55e77c557040 type=6, flags=0x5
+// 		 header  1: address=0x55e77c557238 type=3, flags=0x4
+// 		 header  2: address=0x55e77c557000 type=1, flags=0x5
+// 		 header  3: address=0x55e77c757db8 type=1, flags=0x6
+// 		 header  4: address=0x55e77c757dd0 type=2, flags=0x6
+// 		 header  5: address=0x55e77c557254 type=4, flags=0x4
+// 		 header  6: address=0x55e77c557c04 type=1685382480, flags=0x4
+// 		 header  7: address=0x55e77c557000 type=1685382481, flags=0x6
+// 		 header  8: address=0x55e77c757db8 type=1685382482, flags=0x4
+// 
+// name=linux-vdso.so.1 (4 segments) address=0x7ffeb6bc9000
+// 		 header  0: address=0x7ffeb6bc9000 type=1, flags=0x5
+// 		 header  1: address=0x7ffeb6bc9348 type=2, flags=0x4
+// 		 header  2: address=0x7ffeb6bc97a8 type=4, flags=0x4
+// 		 header  3: address=0x7ffeb6bc97e4 type=1685382480, flags=0x4
+// 
+// name=/lib/x86_64-linux-gnu/libdl.so.2 (7 segments) address=0x7ff013614000
+// 		 header  0: address=0x7ff013614000 type=1, flags=0x5
+// 		 header  1: address=0x7ff013816d60 type=1, flags=0x6
+// 		 header  2: address=0x7ff013816d88 type=2, flags=0x6
+// 		 header  3: address=0x7ff0136141c8 type=4, flags=0x4
+// 		 header  4: address=0x7ff013615a00 type=1685382480, flags=0x4
+// 		 header  5: address=0x7ff013614000 type=1685382481, flags=0x6
+// 		 header  6: address=0x7ff013816d60 type=1685382482, flags=0x4
+// 
+// name=/lib/x86_64-linux-gnu/libc.so.6 (10 segments) address=0x7ff013275000
+// 		 header  0: address=0x7ff013275040 type=6, flags=0x5
+// 		 header  1: address=0x7ff0133e0060 type=3, flags=0x4
+// 		 header  2: address=0x7ff013275000 type=1, flags=0x5
+// 		 header  3: address=0x7ff01360a7c8 type=1, flags=0x6
+// 		 header  4: address=0x7ff01360dba0 type=2, flags=0x6
+// 		 header  5: address=0x7ff013275270 type=4, flags=0x4
+// 		 header  6: address=0x7ff01360a7c8 type=7, flags=0x4
+// 		 header  7: address=0x7ff0133e007c type=1685382480, flags=0x4
+// 		 header  8: address=0x7ff013275000 type=1685382481, flags=0x6
+// 		 header  9: address=0x7ff01360a7c8 type=1685382482, flags=0x4
+// 
+// name=/lib64/ld-linux-x86-64.so.2 (7 segments) address=0x7ff013818000
+// 		 header  0: address=0x7ff013818000 type=1, flags=0x5
+// 		 header  1: address=0x7ff013a3bbc0 type=1, flags=0x6
+// 		 header  2: address=0x7ff013a3be80 type=2, flags=0x6
+// 		 header  3: address=0x7ff0138181c8 type=4, flags=0x4
+// 		 header  4: address=0x7ff013838000 type=1685382480, flags=0x4
+// 		 header  5: address=0x7ff013818000 type=1685382481, flags=0x6
+// 		 header  6: address=0x7ff013a3bbc0 type=1685382482, flags=0x4
 
 // /usr/include/link.h
 //
