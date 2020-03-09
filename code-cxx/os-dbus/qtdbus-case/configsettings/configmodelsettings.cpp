@@ -232,3 +232,18 @@ bool ConfigModelSettings::isValid() const
 {
   return m_data && m_data->m_valid;
 }
+
+QString ConfigModelSettings::manufacturer() const
+{
+  return m_data->m_manufacturer;
+}
+
+QString ConfigModelSettings::name() const
+{
+  return m_data->m_name;
+}
+
+quint32 ConfigModelSettings::oui() const
+{
+  return m_data->m_oui;
+}

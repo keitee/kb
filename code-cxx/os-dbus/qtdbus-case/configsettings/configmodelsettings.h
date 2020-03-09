@@ -53,6 +53,10 @@ public:
 
 public:
   bool isValid() const;
+
+  QString manufacturer() const;
+  QString name() const;
+  quint32 oui() const;
 };
 
 struct ConfigModelSettingsData

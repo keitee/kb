@@ -84,17 +84,26 @@ member variable to set.
     }                                                                          \
   } while (0)
 
-TEST(OsShared, Dlapi)
+TEST(OsShared, dlapi)
 {
   {
     void *handle = dlopen("libreadline.so", RTLD_NOW);
     EXPECT_THAT(handle, Ne(nullptr));
 
+    // However, we can’t simply assign the result of dlsym() to such a pointer,
+    // as in the fol- lowing example:
+    //
+    // funcp = dlsym(handle, symbol);
+    //
+    // The reason is that the C99 standard forbids assignment between a function
+    // pointer and void *.
+    //
     // error: invalid conversion from ‘void*’ to ‘rl_on_new_line_t {aka int
     // (*)()}’ [-fpermissive]
     //
     // rl_on_new_line_t f_on_new_line = dlsym(handle, "rl_on_new_line");
 
+    // clear error message
     dlerror();
 
     rl_on_new_line_t f_on_new_line =
@@ -111,6 +120,7 @@ TEST(OsShared, Dlapi)
     dlclose(handle);
   }
 
+  // use macro instead which set variable automatically
   {
     void *handle = dlopen("libreadline.so", RTLD_NOW);
     EXPECT_THAT(handle, Ne(nullptr));
@@ -128,6 +138,78 @@ TEST(OsShared, Dlapi)
 
     auto ret = m_rl_on_new_line();
     LOG_MSG("return from rl_on_new_line_t (%d)", ret);
+
+    dlclose(handle);
+  }
+}
+
+/*
+42.1.5 Obtaining Information About Loaded Symbols: dladdr()
+
+Given an address in addr (typically, one obtained by an earlier call to
+dlsym()), dladdr() returns a structure containing information about that
+address.
+
+#define _GNU_SOURCE
+#include <dlfcn.h>
+int dladdr(const void *addr, Dl_info *info);
+
+Returns nonzero value if addr was found in a shared library, otherwise 0
+
+The info argument is a pointer to a caller-allocated structure that has the
+following form:
+
+typedef struct {
+
+  // Pathname of shared library containing 'addr'
+  const char *dli_fname;
+  
+  // Base address at which shared library is loaded
+  void *dli_fbase;
+  
+  // Name of nearest run-time symbol with an address <= 'addr'
+  const char *dli_sname;
+  
+  // Actual value of the symbol returned in 'dli_sname'
+  void *dli_saddr;
+
+} Dl_info;
+
+
+The first two fields of the Dl_info structure specify the pathname and run-time
+base address of the shared library containing the address specified in addr. The
+last two fields return information about that address. Assuming that addr points
+to the exact address of a symbol in the shared library, then dli_saddr returns
+the same value as was passed in addr.
+
+SUSv3 doesn’t specify dladdr(), and this function is not available on all UNIX
+implementations.
+
+*/
+
+TEST(OsShared, dlapi_dladdr)
+{
+  {
+    void *handle = dlopen("libreadline.so", RTLD_NOW);
+    EXPECT_THAT(handle, Ne(nullptr));
+
+    // clear error message
+    dlerror();
+
+    auto add = dlsym(handle, "rl_on_new_line");
+
+    if (!add)
+      LOG_MSG("failed to find symbol rl_on_new_line_t (%s)", dlerror());
+
+    EXPECT_THAT(add, Ne(nullptr));
+
+    Dl_info info;
+    auto ret = dladdr(add, &info); 
+
+    if (ret)
+    {
+      LOG_MSG("info.dli_fname (%s)", info.dli_fname);
+    }
 
     dlclose(handle);
   }

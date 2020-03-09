@@ -3560,7 +3560,7 @@ TEST(AlgoAccumulate, Map)
 }
 
 // ={=========================================================================
-// cxx-algo-for-each cxx-algo-transform
+// cxx-for-each cxx-transform
 
 namespace algo_code
 {
@@ -3608,18 +3608,18 @@ void square_refer_no_return(int &value)
   value = value * value;
 }
 
-TEST(AlgoForEach, Transform)
+TEST(StlForEach, use_function)
 {
   // value
   {
-    set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
-    for_each(coll.begin(), coll.end(), square_value_no_return);
+    std::set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    std::for_each(coll.begin(), coll.end(), square_value_no_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
   }
 
   // value with return? same since do not use return value
   {
-    set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    std::set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     for_each(coll.begin(), coll.end(), square_value_with_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
   }
@@ -3629,19 +3629,21 @@ TEST(AlgoForEach, Transform)
     // compile error since key in set are const if use set
     // set<int> coll{1,2,3,4,5,6,7,8};
 
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     for_each(coll.begin(), coll.end(), square_refer_no_return);
     EXPECT_THAT(coll, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
 
-  // algo-transform() differs in that it uses `dest` and use return
+  // but algo-transform() differs since it uses `dest` and use return
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
-    vector<int> result;
-    transform(coll.begin(),
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    std::vector<int> result;
+
+    std::transform(coll.begin(),
               coll.end(),
               back_inserter(result),
               square_value_with_return);
+
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
     EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }

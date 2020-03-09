@@ -195,9 +195,10 @@ void CmdLineOptions::setNetworkNamespace(const QString)
   qDebug() << "handler: setNetworkNamespace called";
 }
 
-void CmdLineOptions::setAudioFifoDirectory(const QString)
+void CmdLineOptions::setAudioFifoDirectory(const QString value)
 {
-  qDebug() << "handler: setAudioFifoDirectory called";
+  qDebug() << "handler: setAudioFifoDirectory(" << qPrintable(value)
+           << ") called";
 }
 
 // debug. to see if options is set

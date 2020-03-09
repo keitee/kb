@@ -184,3 +184,13 @@ ConfigSettings::ConfigSettings(const TimeOuts &timeout,
 // {
 //   qDebug() << "configsettings is constructed";
 // }
+
+QList<ConfigModelSettings> ConfigSettings::modelSettings() const
+{
+  return m_modelDetails;
+}
+
+int ConfigSettings::discoveryTimeout() const
+{
+  return m_timeout.discoveryMSecs;
+}

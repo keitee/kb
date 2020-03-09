@@ -129,7 +129,14 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # NOTE:
 # Qt5::Test is needed for QSignalSpy.h
 
-add_executable(test "tst_main.cpp" "tst_configsettings.cpp")
+# add_executable(test "tst_main.cpp" 
+#   "tst_configsettings.cpp"
+#   "tst_blercucontrolleradaptor.cpp"
+#   )
+
+add_executable(test "tst_main.cpp" 
+  "tst_configsettings.cpp"
+  )
 
 # NOTE: don't need to do this since uses "target_include_directories" in
 # configsettings.
