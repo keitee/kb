@@ -132,6 +132,11 @@ TEST(SimpleCli, runLoop)
   } // while
 }
 
+TEST(SimpleCli, xx)
+{
+  EXPECT_THAT(true, true);
+}
+
 // ={=========================================================================
 
 int main(int argc, char **argv)

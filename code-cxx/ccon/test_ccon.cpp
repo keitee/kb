@@ -2333,7 +2333,7 @@ TEST(DISABLED_CConCondition, ProducerAndConsumerError2)
 //   std::thread c1(&consumer, q);
 // }
 
-TEST(CConCondition, WaitFor)
+TEST(CConCondition, cond_wait_for)
 {
   std::mutex m;
   std::unique_lock<std::mutex> lock(m);
@@ -2346,6 +2346,81 @@ TEST(CConCondition, WaitFor)
 
   // okay, it's done.
   EXPECT_THAT(true, true);
+}
+
+TEST(CConCondition, eventfd)
+{
+  std::string result{};
+
+  int efd = eventfd(0, EFD_CLOEXEC);
+  if (efd < 0)
+  {
+    std::cout << "failed to create eventFd" << std::endl;
+    ASSERT_THAT(true, false);
+  }
+
+  // cxx-eventfd
+  //
+  // int eventfd(unsigned int initval, int flags);
+  //
+  // RETURN VALUE
+  //
+  // On success, eventfd() returns a new eventfd file descriptor. On error, -1
+  // is returned and errno is set to indicate the error.
+  //
+  // read(2)
+  //
+  // Each successful read(2) returns an 8-byte integer. A read(2) will fail with
+  // the error EINVAL if the size of the supplied buffer is less than 8 bytes.
+  //
+  //  The semantics of read(2) depend on whether the eventfd counter currently
+  //  has a nonzero value and whether the EFD_SEMAPHORE flag was specified when
+  //  creating the eventfd file descriptor:
+  //
+  //  * If EFD_SEMAPHORE was not specified and the eventfd counter has a nonzero
+  //  value, then a read(2) returns 8 bytes containing that value, and the
+  //  counter's value is "reset to zero."
+  //
+  //  *  If the eventfd counter is zero at the time of the call to read(2), then
+  //  the call either *blocks until* the counter becomes nonzero (at which time,
+  //  the read(2) proceeds as described  above)  or  fails  with  the  error
+  //  EAGAIN if the file descriptor has been made nonblocking.
+
+  auto f1 = std::async(std::launch::async, [&] {
+    uint64_t read_value{};
+    if (sizeof(uint64_t) !=
+        TEMP_FAILURE_RETRY(read(efd, &read_value, sizeof(uint64_t))))
+    {
+      std::cout << "errno: " << errno << ", failed on read(eventfd)"
+                << std::endl;
+    }
+
+    result += "-READ";
+    // std::cout << "f1 writes " << result << std::endl;
+    return true;
+  });
+
+  auto f2 = std::async(std::launch::async, [&] {
+    this_thread::sleep_for(chrono::milliseconds(3000));
+
+    uint64_t write_value{100};
+    if (sizeof(uint64_t) !=
+        TEMP_FAILURE_RETRY(write(efd, &write_value, sizeof(uint64_t))))
+    {
+      std::cout << "errno: " << errno << ", failed on write(eventfd)"
+                << std::endl;
+    }
+
+    result += "WRITE";
+    // std::cout << "f2 writes " << result << std::endl;
+    return true;
+  });
+
+  f1.get();
+  f2.get();
+
+  // since reads wait for write done
+  EXPECT_THAT(result, "WRITE-READ");
 }
 
 // from CPP challenge which solves the issue when there are multiple consumers.
@@ -2428,77 +2503,6 @@ namespace U66_Text
   }
 
 } // namespace U66_Text
-
-TEST(CConCondition, Eventfd)
-{
-  std::string result{};
-
-  int efd = eventfd(0, EFD_CLOEXEC);
-  if (efd < 0)
-  {
-    std::cout << "failed to create eventFd" << std::endl;
-    ASSERT_THAT(true, false);
-  }
-
-  // cxx-eventfd
-  //
-  // int eventfd(unsigned int initval, int flags);
-  //
-  // read(2)
-  //
-  // Each successful read(2) returns an 8-byte integer. A read(2) will fail with
-  // the error EINVAL if the size of the supplied buffer is less than 8 bytes.
-  //
-  //  The semantics of read(2) depend on whether the eventfd counter currently
-  //  has a nonzero value and whether the EFD_SEMAPHORE flag was specified when
-  //  creating the eventfd file descriptor:
-  //
-  //  * If EFD_SEMAPHORE was not specified and the eventfd counter has a nonzero
-  //  value, then a read(2) returns 8 bytes containing that value, and the
-  //  counter's value is "reset to zero."
-  //
-  //  *  If the eventfd counter is zero at the time of the call to read(2), then
-  //  the call either *blocks until* the counter becomes nonzero (at which time,
-  //  the read(2) proceeds as described  above)  or  fails  with  the  error
-  //  EAGAIN if the file descriptor has been made nonblocking.
-
-  auto f1 = std::async(std::launch::async, [&] {
-    uint64_t read_value{};
-    if (sizeof(uint64_t) !=
-        TEMP_FAILURE_RETRY(read(efd, &read_value, sizeof(uint64_t))))
-    {
-      std::cout << "errno: " << errno << ", failed on read(eventfd)"
-                << std::endl;
-    }
-
-    result += "-READ";
-    // std::cout << "f1 writes " << result << std::endl;
-    return true;
-  });
-
-  auto f2 = std::async(std::launch::async, [&] {
-    this_thread::sleep_for(chrono::milliseconds(3000));
-
-    uint64_t write_value{100};
-    if (sizeof(uint64_t) !=
-        TEMP_FAILURE_RETRY(write(efd, &write_value, sizeof(uint64_t))))
-    {
-      std::cout << "errno: " << errno << ", failed on write(eventfd)"
-                << std::endl;
-    }
-
-    // note: WHY result is not "READ-WRITE"?
-    result += "WRITE";
-    // std::cout << "f2 writes " << result << std::endl;
-    return true;
-  });
-
-  f1.get();
-  f2.get();
-
-  // since reads wait for write done
-  EXPECT_THAT(result, "WRITE-READ");
-}
 
 TEST(CConCondition, U66_Text)
 {

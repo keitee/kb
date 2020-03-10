@@ -13,6 +13,7 @@
 23.7 Timers That Notify via File Descriptors: the timerfd API
 
 Starting with kernel 2.6.25, Linux provides another API for creating timers.
+
 The Linux-specific timerfd API creates a timer whose expiration notifications
 `can be read from a file descriptor.` This is useful because the file descriptor
 can be monitored along with other descriptors using select(), poll(), and epoll
@@ -323,7 +324,7 @@ void TimerQueue::timerThread_()
           LOG_MSG("failed to read from eventfd");
         }
 
-        // break out of the poll loop.  ends thread
+        // break out of the poll loop. END thread
         break;
       }
 

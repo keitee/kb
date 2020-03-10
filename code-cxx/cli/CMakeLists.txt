@@ -100,7 +100,7 @@ include_directories(${LIBS_DIR})
 # most UNIX machines.
 
 # simple cli
-add_executable(test_scli scli.cpp test_cli.cpp)
+add_executable(test_scli scli.cpp test_scli.cpp)
 target_link_libraries(test_scli gmock_main ${LIBS} ${CMAKE_DL_LIBS})
 
 # scli standalone

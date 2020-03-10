@@ -456,6 +456,8 @@ TEST(PatternComposite, PasswordGenerator_2)
 
 cxx_pattern_template
 
+The-Modern-Cpp-Challenge/Chapter08/problem_69
+
 The Morden C++ Challenge, Design Pattern
 
 69. Generating social security numbers
@@ -570,6 +572,7 @@ namespace cxx_pattern_template
   class southeria_social_number_generator final : public social_number_generator
   {
   public:
+    // 4 digit.
     southeria_social_number_generator()
         : social_number_generator(1000, 9999)
     {}
@@ -580,7 +583,6 @@ namespace cxx_pattern_template
       return sex == sex_type::female ? 1 : 2;
     }
 
-    // 4 digit.
     // cxx-algo-unique use cache to have unique number?
     virtual int
     next_random(unsigned year, unsigned month, unsigned day) override
@@ -590,7 +592,7 @@ namespace cxx_pattern_template
       {
         auto number = ud(eng);
 
-        // when not found
+        // when not found *cxx-cache*
         auto pos = cache.find(number);
         if (pos == std::end(cache))
         {
@@ -600,14 +602,15 @@ namespace cxx_pattern_template
       }
     }
 
-    virtual int modulo_value() const noexcept override { return 11; }
+    virtual int modulo_value() const noexcept override { return 10; }
   };
 
   class northeria_social_number_generator final : public social_number_generator
   {
   public:
+    // 5 digit
     northeria_social_number_generator()
-        : social_number_generator(1000, 9999)
+        : social_number_generator(10000, 99999)
     {}
 
   protected:
@@ -616,7 +619,6 @@ namespace cxx_pattern_template
       return sex == sex_type::female ? 9 : 7;
     }
 
-    // 5 digit. why are these two functions same as southeria?
 
     virtual int
     next_random(unsigned year, unsigned month, unsigned day) override
