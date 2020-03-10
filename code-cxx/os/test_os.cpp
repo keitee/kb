@@ -1049,11 +1049,21 @@ TEST(OsGlibc, glibc_SingleArgSanitizerSyscall)
 ={=============================================================================
 glibc-env
 
+#include <stdlib.h>
+
 GETENV(3)  
 
 RETURN VALUE
        The getenv() function returns a pointer to the value in the environment,
        or NULL if there is no match.
+
+char *getenv(const char *name);
+
+note:
+"no match" means when there is no env variable set so when "SAMPLE_ENV=" and it
+has null but is set, getenv returns "\0" null string but not null pointer. So
+need to use strcmp to check if env variable is set or unset since check on NULL
+means that env not defined but not set. 
 
 SETENV(3) 
 

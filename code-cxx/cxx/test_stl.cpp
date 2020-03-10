@@ -3640,9 +3640,9 @@ TEST(StlForEach, use_function)
     std::vector<int> result;
 
     std::transform(coll.begin(),
-              coll.end(),
-              back_inserter(result),
-              square_value_with_return);
+                   coll.end(),
+                   back_inserter(result),
+                   square_value_with_return);
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
     EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
@@ -3740,7 +3740,7 @@ TEST(AlgoForEach, GetMean)
 namespace stl_min_max
 {
   bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
-} // namespace algo_min_max
+} // namespace stl_min_max
 
 TEST(StlMinMax, stl_min_max)
 {
@@ -3751,8 +3751,8 @@ TEST(StlMinMax, stl_min_max)
     INSERT_ELEMENTS(coll, 2, 6);
     INSERT_ELEMENTS(coll, -3, 6);
     EXPECT_THAT(
-        coll,
-        ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
+      coll,
+      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
 
     // https://en.cppreference.com/w/cpp/algorithm/max
     // template< class T >
@@ -3767,8 +3767,8 @@ TEST(StlMinMax, stl_min_max)
     INSERT_ELEMENTS(coll, 2, 6);
     INSERT_ELEMENTS(coll, -3, 6);
     EXPECT_THAT(
-        coll,
-        ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
+      coll,
+      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
 
     // If more than one minimum or maximum element exists, min_element() and
     // max_element() return `the first` found; minmax_element() returns the first
@@ -3778,7 +3778,8 @@ TEST(StlMinMax, stl_min_max)
     EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
 
     EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
-    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())), 4);
+    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())),
+                4);
 
     // return iterator pair
     // Note also that minmax_element() yields `the last maximum`, so the distance
@@ -3792,8 +3793,8 @@ TEST(StlMinMax, stl_min_max)
 
     EXPECT_THAT(distance(minmax.first, minmax.second), 9);
     EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
-          max_element(coll.begin(), coll.end())),
-        -1);
+                         max_element(coll.begin(), coll.end())),
+                -1);
 
     // min/max of absolute values
     EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);

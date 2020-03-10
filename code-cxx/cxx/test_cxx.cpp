@@ -644,37 +644,47 @@ namespace cxx_variant
     std::map<std::string, Variant> m_map;
 
   public:
-    VariantMap() = default;
+    VariantMap()                   = default;
     VariantMap(const VariantMap &) = default;
-    VariantMap(VariantMap &&) = default;
+    VariantMap(VariantMap &&)      = default;
 
     // insert for bool values
     void insert(const std::string &key, bool value)
-    { m_map.emplace(key, value); }
+    {
+      m_map.emplace(key, value);
+    }
 
     void insert(std::string &&key, bool value)
-    { m_map.emplace(std::move(key), value); }
+    {
+      m_map.emplace(std::move(key), value);
+    }
 
     // insert for int values
     void insert(const std::string &key, int value)
-    { m_map.emplace(key, value); }
+    {
+      m_map.emplace(key, value);
+    }
 
     void insert(std::string &&key, int value)
-    { m_map.emplace(std::move(key), value); }
+    {
+      m_map.emplace(std::move(key), value);
+    }
 
     // insert for string values
     void insert(const std::string &key, const std::string &value)
-    { m_map.emplace(key, value); }
+    {
+      m_map.emplace(key, value);
+    }
 
     void insert(std::string &&key, std::string &&value)
-    { m_map.emplace(std::move(key), std::move(value)); }
-    
-    void clear()
-    { m_map.clear(); }
+    {
+      m_map.emplace(std::move(key), std::move(value));
+    }
 
-    bool empty() const
-    { return m_map.empty(); }
-  
+    void clear() { m_map.clear(); }
+
+    bool empty() const { return m_map.empty(); }
+
   public:
     struct Visitor
     {
@@ -692,7 +702,7 @@ namespace cxx_variant
     // variantMap.visit(VariantVisitor(msg));
     //
     // instead, use msg and populate variant map contents into it. visitor
-    // struct can have a pointer to real object and populate maps into it. 
+    // struct can have a pointer to real object and populate maps into it.
     //
     // struct VariantVisitor : ASVariantMap::Visitor
     // {
@@ -705,7 +715,7 @@ namespace cxx_variant
       for (const auto &e : m_map)
       {
         const std::string &key = e.first;
-        const Variant &value = e.second;
+        const Variant &value   = e.second;
 
         switch (value.m_type)
         {
@@ -752,7 +762,7 @@ TEST(CxxType, type_variantMap)
       coll.emplace_back("{" + key + ":b}");
     }
 
-    virtual void operator()(const std::string &key, int value) override 
+    virtual void operator()(const std::string &key, int value) override
     {
       coll.emplace_back("{" + key + ":i}");
     }
@@ -762,7 +772,8 @@ TEST(CxxType, type_variantMap)
       coll.emplace_back("{" + key + ":d}");
     }
 
-    virtual void operator()(const std::string &key, const std::string &value) override
+    virtual void operator()(const std::string &key,
+                            const std::string &value) override
     {
       coll.emplace_back("{" + key + ":" + value + "}");
     }
@@ -4181,10 +4192,10 @@ namespace cxx_function
 
 } // namespace cxx_function
 
-// on member function. 
+// on member function.
 //
 // NOTE on syntax since "has to specify the target". For example, update_10()
-// takes no argument but has to say:  
+// takes no argument but has to say:
 //
 // std::function<void(Foo &)> op = &Foo::update_10;
 //                    ^^^^^
@@ -4870,7 +4881,7 @@ TEST(CxxFunctionObject, Pointer)
   }
 }
 
-TEST(CxxFunctionObject, LambdaCaptureAndReturn)
+TEST(CxxCallable, lambda_CaptureAndReturn)
 {
   {
     auto func = []() {
@@ -5051,7 +5062,7 @@ namespace cxx_function_lambda
   }
 } // namespace cxx_function_lambda
 
-TEST(CxxFunctionObject, LambdaBiggies)
+TEST(CxxCallable, lambda_Biggies)
 {
   using namespace cxx_function_lambda;
 
@@ -5079,7 +5090,7 @@ TEST(CxxFunctionObject, LambdaBiggies)
 // local variables. For example, find_if takes unary predicate and see how to
 // pass more than one as this example.
 
-TEST(CxxFunctionObject, LambdaCompare)
+TEST(CxxCallable, lambda_Compare)
 {
   deque<int> coll = {1, 3, 19, 5, 13, 7, 11, 2, 17};
 
@@ -5137,6 +5148,128 @@ TEST(CxxFunctionObject, LambdaCompare)
     auto pos = find_if(coll.begin(), coll.end(), Pred(x, y));
 
     EXPECT_THAT(*pos, 7);
+  }
+}
+
+// Passing C++ captureless lambda as function pointer to C API
+//
+// The function-call operator is const unless the lambda is declared mutable. A
+// capture-less lambda also has a similar closure type except that there are no
+// nonstatic data members in it. However, a capture-less lambda has an
+// additional function-pointer conversion operator declared in it. It is that
+// function-pointer conversion operator that makes a capture-less lambda
+// convertible to a function pointer. The cppreference describes it as:
+//
+// This user-defined conversion function is only defined if the capture list of
+// the lambda-expression is empty. It is a public, constexpr, (since C++17)
+// non-virtual, non-explicit, const noexcept (since C++14) member function of
+// the closure object.
+// Therefore, the closure type of a capture-less lambda that takes only one
+// void* parameter and returns void* could be imagined as:
+
+// copied from test_ccon.cpp
+namespace
+{
+
+  // int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void
+  // *(*start_routine) (void *), void *arg);
+
+  static void *thread_func(void *arg)
+  {
+    const char *s = (char *)arg;
+    // cout << "thread id: " << std::this_thread::get_id() << endl;
+    printf("%s, sleeps for 10s, getpid=%ld\n", s, getpid());
+    sleep(10);
+
+    // return the length of input message
+    return (void *)strlen(s);
+  }
+} // namespace
+
+// shows the same pid but not tid
+TEST(CxxCallable, lambda_c_interface)
+{
+  // static function works
+  {
+    char coll[] = "Hello world";
+    pthread_t t;
+    void *res;
+    int s;
+
+    EXPECT_THAT(strlen(coll), 11);
+
+    // this works since it's static
+    s = pthread_create(&t, NULL, thread_func, (void *)coll);
+    if (s != 0)
+    {
+      printf("pthread_create failed");
+      exit(EXIT_FAILURE);
+    }
+
+    printf("main pid = %ld\n", getpid());
+
+    s = pthread_join(t, &res);
+    if (s != 0)
+    {
+      printf("pthread_join failed");
+      exit(EXIT_FAILURE);
+    }
+
+    // get return
+    EXPECT_THAT((long)res, 11);
+  }
+
+  // use lambda
+  {
+    char coll[] = "Hello world";
+    pthread_t t;
+    void *res;
+    int s;
+
+    EXPECT_THAT(strlen(coll), 11);
+
+    // can pass any through "arg"
+    // int Worker::start() {
+    //  return
+    //  pthread_create(&threadId_,nullptr,
+    //   [](void* self) -> void* { // capture-less lambda
+    //      static_cast<Worker*>(self)->run();
+    //      return nullptr;
+    //   }, 
+    //   this);  // 'this' as argument to lambda
+    // }
+
+    s = pthread_create(
+      &t,
+      nullptr,
+      [](void *arg) -> void * {
+        const char *s = (char *)arg;
+        // cout << "thread id: " << std::this_thread::get_id() << endl;
+        printf("%s, sleeps for 10s, getpid=%ld\n", s, getpid());
+        sleep(10);
+
+        // return the length of input message
+        return (void *)strlen(s);
+      },
+      (void *)coll);
+
+    if (s != 0)
+    {
+      printf("pthread_create failed");
+      exit(EXIT_FAILURE);
+    }
+
+    printf("main pid = %ld\n", getpid());
+
+    s = pthread_join(t, &res);
+    if (s != 0)
+    {
+      printf("pthread_join failed");
+      exit(EXIT_FAILURE);
+    }
+
+    // get return
+    EXPECT_THAT((long)res, 11);
   }
 }
 
@@ -8747,7 +8880,6 @@ TEST(CxxBit, bit_BitVectors)
   // }
   // cout << endl;
 }
-
 
 // Why '%' produce negative value?
 //

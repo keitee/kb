@@ -87,7 +87,7 @@ namespace cxx_thread
 
 // thread id: 139805217429248
 
-TEST(CCon, thread_id)
+TEST(CConThread, thread_id)
 {
   using namespace cxx_thread;
 
@@ -131,7 +131,7 @@ TEST(CCon, thread_id)
   }
 }
 
-TEST(CCon, thread_run)
+TEST(CConThread, thread_run)
 {
   using namespace cxx_thread;
 
@@ -158,7 +158,7 @@ TEST(CCon, thread_run)
 // true if the thread object identifies an active thread of execution, false
 // otherwise
 
-TEST(CCon, thread_joinable)
+TEST(CConThread, thread_joinable)
 {
   std::thread t([] { doSomething('+'); });
 
@@ -208,7 +208,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CCon, thread_name)
+TEST(CConThread, thread_name)
 {
   using namespace cxx_thread;
 
@@ -240,7 +240,7 @@ namespace cxx_thread
 
 // show how arg and return value from thread are used
 
-TEST(CCon, thread_ArgumentAndReturn)
+TEST(CConThread, thread_ArgumentAndReturn)
 {
   using namespace cxx_thread;
 
@@ -299,6 +299,7 @@ TEST(CCon, thread_ArgumentAndReturn)
     EXPECT_THAT(value, 201);
   }
 
+  // cxx-lambda
   {
     int value{1};
 
@@ -336,7 +337,7 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
-TEST(CCon, thread_MemberFunction)
+TEST(CConThread, thread_MemberFunction)
 {
   using namespace cxx_thread;
 
