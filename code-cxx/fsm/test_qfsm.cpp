@@ -505,13 +505,9 @@ TEST_F(StateMachineTest, postEventError)
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state) {
-    enters[state]++;
-  };
+  auto entered = [&](int state) { enters[state]++; };
 
-  auto exited = [&](int state) {
-    exits[state]++;
-  };
+  auto exited = [&](int state) { exits[state]++; };
 
   EXPECT_THAT(fsm.connect(entered, exited), true);
 
@@ -535,13 +531,13 @@ TEST_F(StateMachineTest, postEventError)
   EXPECT_THAT(fsm.state(), s1);
 
   // expect no state change since event 2 is not in the transition.
-  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00293 : 
+  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00293 :
   // not found event 2 transition from current state 0
   EXPECT_THAT(fsm.postEvent(2), false);
   EXPECT_THAT(fsm.state(), s1);
 }
 
-// starts fsm again. stop() or use final state. 
+// starts fsm again. stop() or use final state.
 TEST_F(StateMachineTest, startFsmAgain1)
 {
   // state
@@ -566,13 +562,9 @@ TEST_F(StateMachineTest, startFsmAgain1)
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state) {
-    enters[state]++;
-  };
+  auto entered = [&](int state) { enters[state]++; };
 
-  auto exited = [&](int state) {
-    exits[state]++;
-  };
+  auto exited = [&](int state) { exits[state]++; };
 
   EXPECT_THAT(fsm.connect(entered, exited), true);
 
@@ -632,13 +624,9 @@ TEST_F(StateMachineTest, startFsmAgain2)
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
-  auto entered = [&](int state) {
-    enters[state]++;
-  };
+  auto entered = [&](int state) { enters[state]++; };
 
-  auto exited = [&](int state) {
-    exits[state]++;
-  };
+  auto exited = [&](int state) { exits[state]++; };
 
   EXPECT_THAT(fsm.connect(entered, exited), true);
 
@@ -671,6 +659,149 @@ TEST_F(StateMachineTest, startFsmAgain2)
 
   EXPECT_THAT(enters.size(), 3);
   EXPECT_THAT(exits.size(), 2);
+}
+
+// whenever creates FooFsm, it creates fsm and threads with runs on it. So want
+// to see it deletes thread and fsm when done and can create it again.
+TEST_F(StateMachineTest, useFsmWithThread)
+{
+  class FooFsm
+  {
+  private:
+    StateMachine m_fsm;
+    std::deque<int> m_q;
+    std::condition_variable m_cv;
+    std::mutex m_m;
+    std::thread m_t;
+    bool m_running;
+
+    std::map<int, unsigned> enters;
+    std::map<int, unsigned> exits;
+
+  public:
+    // state
+    enum
+    {
+      s1,
+      s2,
+      s3
+    };
+
+  public:
+    explicit FooFsm()
+        : m_running(true)
+        , m_t(std::thread(&FooFsm::run_, this))
+    {
+      m_fsm.setName("FooFsm");
+      m_fsm.addState(s1);
+      m_fsm.addState(s2);
+      m_fsm.addState(s3);
+
+      m_fsm.setInitialState(s1);
+      m_fsm.setFinalState(s3);
+
+      m_fsm.addTransition(s1, 1, s2);
+      m_fsm.addTransition(s2, 1, s3);
+
+      auto entered = [&](int state) {
+        enters[state]++;
+        // std::cout << "enters (" << state << ")" << std::endl;
+      };
+
+      auto exited = [&](int state) {
+        exits[state]++;
+        // std::cout << "exits (" << state << ")" << std::endl;
+      };
+
+      m_fsm.connect(entered, exited);
+
+      m_fsm.start();
+      m_fsm.isRunning();
+    }
+
+    ~FooFsm()
+    {
+      // it is still running
+      if (m_running)
+      {
+        std::unique_lock<std::mutex> lock(m_m);
+        m_running = false;
+        lock.unlock();
+
+        m_cv.notify_one();
+        m_t.join();
+        // std::cout << "thread joined" << std::endl;
+      }
+    }
+
+    void post(int event)
+    {
+      std::lock_guard<std::mutex> lock(m_m);
+
+      if (m_running)
+      {
+        m_q.push_back(event);
+        m_cv.notify_one();
+      }
+    }
+
+    size_t enter_size() { return enters.size(); }
+
+    size_t exit_size() { return exits.size(); }
+
+  private:
+    void run_()
+    {
+      std::unique_lock<std::mutex> lock(m_m);
+
+      while (m_running)
+      {
+        // wakes up when there is item in a queue or m_running changes
+        m_cv.wait(lock, [&] { return !m_q.empty() || !m_running; });
+
+        if (!m_q.empty())
+        {
+          // get an item(event)
+          auto event = m_q.front();
+          m_q.pop_front();
+
+          // std::cout << "post evnet(" << event << ")" << std::endl;
+
+          m_fsm.postEvent(event);
+        }
+      } // while
+
+      // std::cout << "thread ends" << std::endl;
+    }
+  };
+
+  {
+    FooFsm foo;
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+    foo.post(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    foo.post(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    EXPECT_THAT(foo.enter_size(), 3);
+    EXPECT_THAT(foo.exit_size(), 2);
+  }
+
+  {
+    FooFsm foo;
+    std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+    foo.post(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    foo.post(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    EXPECT_THAT(foo.enter_size(), 3);
+    EXPECT_THAT(foo.exit_size(), 2);
+  }
 }
 
 // start the state fsm but stops right away since it's stopped in `enter`
@@ -1003,7 +1134,7 @@ TEST_F(StateMachineTest, handleFinishedState1)
   EXPECT_THAT(enters.size(), 2);
 
   // reached the final state and get `finished` and isRunning() is false
-  // NOTE: since qfsm do not support `finished` callback 
+  // NOTE: since qfsm do not support `finished` callback
   // EXPECT_EQ(finisheddSpy.count(), 1);
   EXPECT_THAT(false, fsm.isRunning());
 
@@ -1084,7 +1215,7 @@ TEST_F(StateMachineTest, handleFinishedState2)
   EXPECT_THAT(enters.size(), 2);
 
   // reached the final state and get `finished` and isRunning() is false
-  // NOTE: since qfsm do not support `finished` callback 
+  // NOTE: since qfsm do not support `finished` callback
   // EXPECT_EQ(finisheddSpy.count(), 1);
   EXPECT_THAT(false, fsm.isRunning());
 

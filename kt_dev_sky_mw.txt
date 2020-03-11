@@ -1124,6 +1124,126 @@ void bindMethods( AS_WORKER::UrlMap *map )
     map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",                        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
 }
 
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+
+namespace AS_MAIN
+{
+  class ProxyUrlMap : public AS_WORKER::UrlMap
+  {
+    void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
+        const std::string &url,
+        AS_WORKER::Factory *factory,
+        const std::string &threadName )
+    {
+      pthread_rwlock_wrlock(&mRwLock);
+
+      // for some reason the RegisterUrl methods take a non-const char pointer, so
+      // copy the url into a mutable buffer
+      static char urlBuf[256];
+      strncpy(urlBuf, url.c_str(), sizeof(urlBuf));
+      urlBuf[sizeof(urlBuf) - 1] = '\0';
+
+      // create the thread params if a name was given
+      AS_WORKER::ThreadParams *threadParams = nullptr;
+      if (!threadName.empty())
+      {
+        threadParams = new AS_WORKER::ThreadParams(threadName.c_str());
+      }
+
+      // call the original methods to register the url
+      AS_WORKER::UrlMap::RegisterUrl(method, urlBuf, factory, nullptr, threadParams);
+
+      pthread_rwlock_unlock(&mRwLock);
+
+      // can now add the url and method to the allowed ones for CORS
+      mCorsExecutor->add(method, url);
+    }
+  }
+}
+
+// ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
+0000149570.661152 MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
+0000149570.661168 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
+0000149570.661234 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
+0000149570.661297 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
+0000149570.661351 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
+0000149570.661406 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
+0000149570.661466 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
+0000149570.661520 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
+0000149570.661574 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
+0000149570.661628 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
+0000149570.661689 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
+
+0000149568.659294 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
+0000149568.659381 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
+0000149568.659457 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
+0000149568.659508 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
+0000149568.659558 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
+0000149568.659611 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
+0000149568.659663 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
+0000149568.991743 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
+0000149568.991804 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
+0000149568.991861 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
+
+
+*as-player-watchlive*
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/players/<vwid>/action/watchlive",       watchliveExecutor,                new PlayersVwidParamValidator() );
+
+// Components/AS/Services/Executors/Players/WatchLive/source/AS_PLAYER_WatchLiveExecutor.cpp
+WatchLiveExecutor::WatchLiveExecutor( AS_WORKER::Environment *env, AS_WORKER::Params *params ){}
+
+
+*rdk-as-executor*
+
+class ASRequesthandler
+{
+  public :
+    ASRequesthandler()
+    {}
+
+    void executeFactory(const ASRequest &request)
+    {
+      //request is made to copy by value to ensure instance is not being deleted
+      std::thread threadObj = std::thread([this,request] { `this->execute(request);` });
+      threadObj.detach();
+    }
+
+    virtual void execute(const ASRequest & request) = 0;
+};
+
+class ServicesFavouritesExecutor : public ASRequesthandler
+{
+  // overrides
+  execute( const ASRequest &request )
+  {
+    AS_LOG_ENTRY( "%s", __func__ );
+
+#ifdef SKY_AS_EE_DE
+
+    ASRequest::Method method = request.method();
+
+    if ( method == ASRequest::HttpPost )
+    {
+      handlePostRequest( request );
+    }
+    else if ( method == ASRequest::HttpGet )
+    {
+      handleGetRequest( request );
+    }
+    else
+    {
+      request.sendErrorReply( ASRequest::NotSupportedError );
+    }
+
+#else
+    request.sendErrorReply( ASRequest::NotSupportedError );
+#endif
+    AS_LOG_EXIT( "%s", __func__ );
+  }
+}
+
+
 *as-services*
 as-api:/as/services/0/0
 
@@ -10884,69 +11004,6 @@ Restart=on-failure
 LimitNPROC=1
 ProtectHome=true
 ProtectSystem=full
-
-
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-
-namespace AS_MAIN
-{
-  class ProxyUrlMap : public AS_WORKER::UrlMap
-  {
-    void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
-        const std::string &url,
-        AS_WORKER::Factory *factory,
-        const std::string &threadName )
-    {
-      pthread_rwlock_wrlock(&mRwLock);
-
-      // for some reason the RegisterUrl methods take a non-const char pointer, so
-      // copy the url into a mutable buffer
-      static char urlBuf[256];
-      strncpy(urlBuf, url.c_str(), sizeof(urlBuf));
-      urlBuf[sizeof(urlBuf) - 1] = '\0';
-
-      // create the thread params if a name was given
-      AS_WORKER::ThreadParams *threadParams = nullptr;
-      if (!threadName.empty())
-      {
-        threadParams = new AS_WORKER::ThreadParams(threadName.c_str());
-      }
-
-      // call the original methods to register the url
-      AS_WORKER::UrlMap::RegisterUrl(method, urlBuf, factory, nullptr, threadParams);
-
-      pthread_rwlock_unlock(&mRwLock);
-
-      // can now add the url and method to the allowed ones for CORS
-      mCorsExecutor->add(method, url);
-    }
-  }
-}
-
-// ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
-0000149570.661152 MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
-0000149570.661168 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
-0000149570.661234 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
-0000149570.661297 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
-0000149570.661351 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
-0000149570.661406 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
-0000149570.661466 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
-0000149570.661520 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
-0000149570.661574 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
-0000149570.661628 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
-0000149570.661689 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
-
-0000149568.659294 MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
-0000149568.659381 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
-0000149568.659457 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
-0000149568.659508 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
-0000149568.659558 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
-0000149568.659611 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
-0000149568.659663 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
-0000149568.991743 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
-0000149568.991804 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
-0000149568.991861 MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h

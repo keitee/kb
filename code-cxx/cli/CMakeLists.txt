@@ -17,7 +17,16 @@ enable_testing()
 # $ENV{FOO}
 
 # to gnerate signal/slot codes
-set(CMAKE_AUTOMOC ON)
+# set(CMAKE_AUTOMOC ON)
+# This warning is for project developers.  Use -Wno-dev to suppress it.
+# 
+# CMake Warning (dev) in /home/keitee/works/googletest/googletest/CMakeLists.txt:
+#   AUTOGEN: No valid Qt version found for target gtest.  AUTOMOC disabled.
+#   Consider adding:
+# 
+#     find_package(Qt<QTVERSION> COMPONENTS Core)
+# 
+#   to your CMakeLists.txt file.
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
@@ -94,6 +103,9 @@ set(LIBS_DIR "../libs")
 set(LIBS libcxx.a)
 link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
+
+# to gnerate signal/slot codes
+set(CMAKE_AUTOMOC ON)
 
 # CMAKE_DL_LIBS
 # The name of the library that has dlopen and dlclose in it, usually -ldl on

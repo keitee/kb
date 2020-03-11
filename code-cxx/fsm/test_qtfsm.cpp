@@ -630,59 +630,57 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 
   // add all the states
   fsm.addState(ServiceUnavailableState,
-                   QStringLiteral("ServiceUnavailableState"));
+               QStringLiteral("ServiceUnavailableState"));
   fsm.addState(ServiceAvailableSuperState,
-                   QStringLiteral("ServiceAvailableSuperState"));
+               QStringLiteral("ServiceAvailableSuperState"));
 
   fsm.addState(ServiceAvailableSuperState,
-                   AdapterUnavailableState,
-                   QStringLiteral("AdapterUnavailableState"));
+               AdapterUnavailableState,
+               QStringLiteral("AdapterUnavailableState"));
   fsm.addState(ServiceAvailableSuperState,
-                   AdapterAvailableSuperState,
-                   QStringLiteral("AdapterAvailableSuperState"));
+               AdapterAvailableSuperState,
+               QStringLiteral("AdapterAvailableSuperState"));
 
   fsm.addState(AdapterAvailableSuperState,
-                   AdapterPoweredOffState,
-                   QStringLiteral("AdapterPoweredOffState"));
+               AdapterPoweredOffState,
+               QStringLiteral("AdapterPoweredOffState"));
   fsm.addState(AdapterAvailableSuperState,
-                   AdapterPoweredOnState,
-                   QStringLiteral("AdapterPoweredOnState"));
+               AdapterPoweredOnState,
+               QStringLiteral("AdapterPoweredOnState"));
 
   fsm.addState(ShutdownState, QStringLiteral("ShutdownState"));
 
   // add the transitions       From State	              ->    Event                  ->  To State
   fsm.addTransition(ServiceUnavailableState,
-                        ServiceAvailableEvent,
-                        AdapterUnavailableState);
+                    ServiceAvailableEvent,
+                    AdapterUnavailableState);
   fsm.addTransition(ServiceUnavailableState,
-                        ServiceRetryEvent,
-                        ServiceUnavailableState);
+                    ServiceRetryEvent,
+                    ServiceUnavailableState);
   fsm.addTransition(ServiceAvailableSuperState,
-                        ServiceUnavailableEvent,
-                        ServiceUnavailableState);
-  fsm.addTransition(ServiceAvailableSuperState,
-                        ShutdownEvent,
-                        ShutdownState);
+                    ServiceUnavailableEvent,
+                    ServiceUnavailableState);
+  fsm.addTransition(ServiceAvailableSuperState, ShutdownEvent, ShutdownState);
 
   fsm.addTransition(AdapterUnavailableState,
-                        AdapterAvailableEvent,
-                        AdapterPoweredOffState);
+                    AdapterAvailableEvent,
+                    AdapterPoweredOffState);
   fsm.addTransition(AdapterUnavailableState,
-                        AdapterRetryAttachEvent,
-                        AdapterUnavailableState);
+                    AdapterRetryAttachEvent,
+                    AdapterUnavailableState);
   fsm.addTransition(AdapterAvailableSuperState,
-                        AdapterUnavailableEvent,
-                        AdapterUnavailableState);
+                    AdapterUnavailableEvent,
+                    AdapterUnavailableState);
 
   fsm.addTransition(AdapterPoweredOffState,
-                        AdapterPoweredOnEvent,
-                        AdapterPoweredOnState);
+                    AdapterPoweredOnEvent,
+                    AdapterPoweredOnState);
   fsm.addTransition(AdapterPoweredOffState,
-                        AdapterRetryPowerOnEvent,
-                        AdapterPoweredOffState);
+                    AdapterRetryPowerOnEvent,
+                    AdapterPoweredOffState);
   fsm.addTransition(AdapterPoweredOnState,
-                        AdapterPoweredOffEvent,
-                        AdapterPoweredOffState);
+                    AdapterPoweredOffEvent,
+                    AdapterPoweredOffState);
 
   // to print out
   // // connect to the state entry and exit signals

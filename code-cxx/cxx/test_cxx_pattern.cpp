@@ -2196,10 +2196,10 @@ namespace cxx_dispatcher_ex_2019_12
 
     while (running_)
     {
-      // wait until q is not empty or running is true
+      // wait until q is not empty or running is false
       cv_.wait(lock, [&] { return !q_.empty() || !running_; });
 
-      // check again for sure
+      // check if wakes up due to q entry
       if (!q_.empty())
       {
         auto work = next_();

@@ -144,7 +144,8 @@ add_compile_options("-g")
 # add_library(Boost::regex UNKNOWN IMPORTED)
 
 
-find_package(Boost 1.70.0 COMPONENTS system thread)
+#find_package(Boost 1.70.0 COMPONENTS system thread)
+find_package(Boost 1.70.0 COMPONENTS system)
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
@@ -169,27 +170,33 @@ add_executable(${PROJECT_NAME} "test_cxx.cpp")
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 
-target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
+# target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME} gmock_main)
 
 # _ex.cpp
 add_executable(${PROJECT_NAME}_ex "test_cxx_ex.cpp")
-target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
+# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
 # _pattern.cpp
 add_executable(${PROJECT_NAME}_pattern "test_cxx_pattern.cpp")
-target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
+#target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME}_pattern gmock_main)
 
 # _case.cpp
 add_executable(${PROJECT_NAME}_case "test_cxx_case.cpp")
-target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
+# target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME}_case gmock_main)
 
 # _boost.cpp
 add_executable(test_boost "test_boost.cpp")
-target_link_libraries(test_boost gmock_main Boost::thread)
+# target_link_libraries(test_boost gmock_main Boost::thread)
+target_link_libraries(test_boost gmock_main)
 
 # test_stl.cpp
 add_executable(test_stl "test_stl.cpp")
-target_link_libraries(test_stl gmock_main Boost::thread)
+# target_link_libraries(test_stl gmock_main Boost::thread)
+target_link_libraries(test_stl gmock_main)
 
 # # cxx_xx.cpp
 # add_executable(${PROJECT_NAME}_xx "cxx_xx.cpp")

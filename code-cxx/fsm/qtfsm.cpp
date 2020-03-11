@@ -213,8 +213,7 @@ void StateMachine::moveToState(int newState)
     }
 
     // *call eafs*
-    int oldState   = m_currentState;
-
+    int oldState = m_currentState;
 
     // NOTE: set current state with new state to move
     m_currentState = newState;
@@ -253,9 +252,9 @@ void StateMachine::moveToState(int newState)
   // post a FinishedEvent to the message loop
   if (m_states[newState].isFinal)
   {
-//#ifdef DEBUG
+    //#ifdef DEBUG
     qWarning("KT: isFinal is set and postEvent(FinishedEvent)");
-//#endif
+    //#endif
     postEvent(FinishedEvent);
   }
 
