@@ -619,7 +619,6 @@ namespace cxx_pattern_template
       return sex == sex_type::female ? 9 : 7;
     }
 
-
     virtual int
     next_random(unsigned year, unsigned month, unsigned day) override
     {

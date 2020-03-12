@@ -5235,7 +5235,7 @@ TEST(CxxCallable, lambda_c_interface)
     //   [](void* self) -> void* { // capture-less lambda
     //      static_cast<Worker*>(self)->run();
     //      return nullptr;
-    //   }, 
+    //   },
     //   this);  // 'this' as argument to lambda
     // }
 

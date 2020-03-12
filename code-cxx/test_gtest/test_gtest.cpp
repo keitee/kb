@@ -2,200 +2,537 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 using namespace std;
-
-class WeatherException : public exception
-{
-public:
-  const char *what() const throw() { return "weather exception"; }
-};
-
-class WeatherStation
-{
-public:
-  virtual ~WeatherStation(){};
-
-  // typedef enum
-  // {
-  //     North, South, East, West
-  // } Direction;
-
-  // typedef enum
-  // {
-  //     Optimistic, Pessimistic
-  // } Outlook;
-
-  enum Direction
-  {
-    North,
-    South,
-    East,
-    West
-  };
-
-  enum Outlook
-  {
-    Optimistic,
-    Pessimistic
-  };
-
-  // NB Semantics on wind deliberately ugly to show a neat feature in gmock
-  virtual void wind(Direction *pDirection, double *strength) const = 0;
-  virtual double rainfall() const                                  = 0;
-  virtual std::string prediction(Outlook outlook) const            = 0;
-  virtual std::string snow(Outlook outlook) const                  = 0;
-  virtual std::string sample(std::string) const                    = 0;
-};
-
-class UserInterface
-{
-public:
-  UserInterface(const std::shared_ptr<WeatherStation> &weather_station)
-      : weather_station_(weather_station)
-  {}
-
-  typedef enum
-  {
-    Heavy,
-    Medium,
-    Light
-  } Range;
-
-  Range rain()
-  {
-    auto rainfall = weather_station_->rainfall();
-    if (0.0 <= rainfall && rainfall < 2.0)
-      return Light;
-    else if (2.0 <= rainfall && rainfall < 4.0)
-      return Medium;
-    else
-      return Heavy;
-  }
-
-  Range wind()
-  {
-    WeatherStation::Direction direction;
-    double strength;
-    weather_station_->wind(&direction, &strength);
-
-    if (0.0 <= strength && strength < 5.0)
-      return Light;
-    else if (5.0 <= strength && strength < 10.0)
-      return Medium;
-    else
-      return Heavy;
-  }
-
-  std::pair<std::string, std::string> predict_range()
-  {
-    return std::make_pair(
-      weather_station_->prediction(WeatherStation::Optimistic),
-      weather_station_->prediction(WeatherStation::Pessimistic));
-  }
-
-  std::string snow()
-  {
-    try
-    {
-      return weather_station_->snow(WeatherStation::Pessimistic);
-      // return weather_station_->snow(WeatherStation::Optimistic);
-    } catch (WeatherException &e)
-    {
-      cout << "snow: exception: " << e.what() << endl;
-      return "snow exception";
-    }
-  }
-
-  std::string test_sample()
-  {
-    return weather_station_->sample("this is sample");
-  }
-
-private:
-  std::shared_ptr<WeatherStation> weather_station_;
-};
-
 using namespace testing;
 
-class MockWeatherStation : public WeatherStation
-{
-public:
-  MOCK_CONST_METHOD0(rainfall, double());
-  MOCK_CONST_METHOD2(wind, void(WeatherStation::Direction *, double *));
-  MOCK_CONST_METHOD1(prediction, std::string(WeatherStation::Outlook));
-  MOCK_CONST_METHOD1(snow, std::string(WeatherStation::Outlook));
-  MOCK_CONST_METHOD1(sample, std::string(std::string));
-};
+// ={=========================================================================
+// gtest-basic
 
-TEST(WeatherStationUserInterface, rain_should_be_heavy)
-{
-  auto weather_station = std::make_shared<MockWeatherStation>();
-  // GMock: specify a simple return value using Return(x)
-  EXPECT_CALL(*weather_station, rainfall()).WillRepeatedly(Return(5.0));
-  UserInterface ui(weather_station);
-  EXPECT_EQ(UserInterface::Heavy, ui.rain());
+/*
+https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
+
+FAIL();
+ADD_FAILURE();
+ADD_FAILURE_AT("file_path", line_number);
+
+FAIL() generates a fatal failure, while ADD_FAILURE() and ADD_FAILURE_AT()
+generate a nonfatal failure. These are useful when control flow, rather than a
+Boolean expression, determines the test's success or failure. For example, you
+might want to write something like:
+
+switch(expression) {
+  case 1:
+     ... some checks ...
+  case 2:
+     ... some other checks ...
+  default:
+     FAIL() << "We shouldn't get here.";
 }
 
-TEST(WeatherStationUserInterface, wind_should_be_light)
+NOTE: you can only use FAIL() in functions that return void. See the Assertion
+Placement section for more information.
+
+[ RUN      ] Gtest.FailAssertion
+/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:293: Failure
+Failed
+should generate a fatal failure
+[  FAILED  ] Gtest.FailAssertion (0 ms)
+[ RUN      ] Gtest.Message
+/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:299: Failure
+Value of: false
+  Actual: false
+Expected: true
+expected true but false
+[  FAILED  ] Gtest.Message (0 ms)
+
+*/
+
+// "DISABLED" works for both case
+TEST(DISABLED_GtestAssert, fail1)
 {
-  auto weather_station = std::make_shared<MockWeatherStation>();
-  // GMock: specify out parameter values using SetArgPointee
-  EXPECT_CALL(*weather_station, wind(_, _))
-    .WillRepeatedly(
-      DoAll(SetArgPointee<0>(WeatherStation::North), SetArgPointee<1>(0.5)));
-  UserInterface ui(weather_station);
-  EXPECT_EQ(UserInterface::Light, ui.wind());
+  FAIL() << "should generate a fatal failure";
 }
 
-TEST(WeatherStationUserInterface, predictions_are_displayed)
+TEST(GtestAssert, DISABLED_fail2)
 {
-  auto weather_station = std::make_shared<MockWeatherStation>();
+  FAIL() << "should generate a fatal failure";
+}
 
-  // GMock: inject more complex logic using C++11 lambdas,
-  // and pattern match on the input value
-  EXPECT_CALL(*weather_station, prediction(WeatherStation::Optimistic))
-    .WillRepeatedly(
+TEST(GtestAssert, DISABLED_add_message)
+{
+  // do print message but make a test failed
+  EXPECT_TRUE(false) << "expected true but false";
+
+  // do not print message
+  EXPECT_TRUE(true) << "expected true but true";
+}
+
+// OUT(object under test)
+//
+// Which way of displays is preferable??
+//
+// [ RUN      ] GtestAssert.shows_argument_order1
+//
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:93: Failure
+// Value of: OUT
+// Expected: is equal to 100
+//   Actual: 101 (of type int)
+//
+// NOTE: GMOCK use the second below
+// 
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:94: Failure
+// Value of: 100
+// Expected: is equal to 101
+//   Actual: 100 (of type int)
+// [  FAILED  ] GtestAssert.shows_argument_order1 (0 ms)
+
+TEST(GtestAssert, DISABLED_shows_argument_order1)
+{
+  int OUT{101};
+
+  EXPECT_THAT(OUT, 100);
+  EXPECT_THAT(100, OUT);
+}
+
+// [ RUN      ] GtestAssert.shows_argument_order2
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:103: Failure
+// Expected equality of these values:
+//   value
+//     Which is: 101
+//   100
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:104: Failure
+// Expected equality of these values:
+//   100
+//   value
+//     Which is: 101
+// [  FAILED  ] GtestAssert.shows_argument_order2 (0 ms)
+
+TEST(GtestAssert, DISABLED_shows_argument_order2)
+{
+  int value{101};
+
+  EXPECT_EQ(value, 100);
+  EXPECT_EQ(100, value);
+}
+
+// to see which makes better messages
+//
+// [ RUN      ] Gtest.ExpectOrEq
+// gtest.cpp:283: Failure
+// Value of: 101
+// Expected: is equal to 100
+//   Actual: 101 (of type int)
+//
+// gtest.cpp:284: Failure
+// Expected equality of these values:
+//   101
+//   value
+//     Which is: 100
+// [  FAILED  ] Gtest.ExpectOrEq (0 ms)
+// [----------] 2 tests from Gtest (0 ms total)
+
+// for EXPECT_THROW()
+TEST(GtestAssert, shows_check_exception)
+{
+  std::vector<int> coll{1, 2, 3};
+
+  EXPECT_THAT(coll.empty(), false);
+
+  EXPECT_THAT(coll.at(0), 1);
+  EXPECT_THAT(coll.at(2), 3);
+
+  // Expected: coll.at(10) throws an exception of type std::range_error.
+  //   Actual: it throws a different type.
+  // EXPECT_THROW(coll.at(10), std::range_error);
+
+  // vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)
+  try
+  {
+    coll.at(10);
+  } catch (exception &e)
+  {
+    std::cout << e.what() << std::endl;
+  }
+}
+
+// ={=========================================================================
+// gtest-case1
+
+namespace
+{
+  class WeatherException : public std::exception
+  {
+  public:
+    const char *what() const noexcept { return "weather exception"; }
+  };
+
+  class WeatherStation
+  {
+  public:
+    enum class Direction
+    {
+      North,
+      South,
+      East,
+      West
+    };
+
+    enum class Outlook
+    {
+      Optimistic,
+      Pessimistic
+    };
+
+    virtual void wind(Direction *direction, double *strength) const = 0;
+    virtual double rainfall() const                                 = 0;
+    virtual std::string prediction(Outlook) const                   = 0;
+    virtual std::string snow(Outlook) const                         = 0;
+    virtual std::string sample(std::string) const                   = 0;
+
+    // to test gmock features so not in WeatherStation context
+    virtual void complexargs(const std::vector<int> &coll1,
+                             const std::vector<int> &coll2) const = 0;
+  };
+
+  class UserInterface
+  {
+  private:
+    std::shared_ptr<WeatherStation> station_;
+
+  public:
+    explicit UserInterface(const std::shared_ptr<WeatherStation> &station)
+        : station_(station)
+    {}
+
+    enum class Range
+    {
+      Heavy,
+      Medium,
+      Light
+    };
+
+    Range rain()
+    {
+      auto rainfall = station_->rainfall();
+
+      if ((0.0 <= rainfall) && (rainfall < 2.0))
+        return Range::Light;
+      else if ((2.0 <= rainfall) && (rainfall < 4.0))
+        return Range::Medium;
+      else
+        return Range::Heavy;
+    }
+
+    Range wind()
+    {
+      WeatherStation::Direction direction;
+      double strength;
+
+      station_->wind(&direction, &strength);
+
+      if ((0.0 <= strength) && (strength < 5.0))
+        return Range::Light;
+      else if ((5.0 <= strength) && (strength < 10.0))
+        return Range::Medium;
+      else
+        return Range::Heavy;
+    }
+
+    std::pair<std::string, std::string> prediction()
+    {
+      return std::make_pair(
+        station_->prediction(WeatherStation::Outlook::Optimistic),
+        station_->prediction(WeatherStation::Outlook::Pessimistic));
+    }
+
+    std::string snow()
+    {
+      try
+      {
+        return station_->snow(WeatherStation::Outlook::Pessimistic);
+      } catch (WeatherException &e)
+      {
+        return "exception in snow";
+      }
+    }
+
+    std::string sample() { return station_->sample("this is sample call"); }
+
+    void complexargs()
+    {
+      station_->complexargs(std::vector<int>({1, 2, 3, 4}),
+                            std::vector<int>({5, 6, 7, 8}));
+    }
+  };
+
+  // define mock
+
+  class MockWeatherStation : public WeatherStation
+  {
+  public:
+    MOCK_CONST_METHOD2(wind, void(Direction *direction, double *strength));
+    MOCK_CONST_METHOD0(rainfall, double());
+    MOCK_CONST_METHOD1(prediction, std::string(Outlook));
+    MOCK_CONST_METHOD1(snow, std::string(Outlook));
+    MOCK_CONST_METHOD1(sample, std::string(std::string));
+    MOCK_CONST_METHOD2(complexargs,
+                       void(const std::vector<int> &coll1,
+                            const std::vector<int> &coll2));
+  };
+} // namespace
+
+// check rain()
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey1)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  EXPECT_CALL(*station, rainfall()).WillOnce(Return(5.0));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  EXPECT_CALL(*station, rainfall()).WillRepeatedly(Return(5.0));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+// when use ON_CALL
+//
+// [ RUN      ] WeatherStationUserInterface.get_heavy_when_rainfall_is_havey2
+//
+// GMOCK WARNING:
+// Uninteresting mock function call - taking default action specified at:
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:259:
+//     Function call: rainfall()
+//           Returns: 5
+// NOTE: You can safely ignore the above warning unless this call should not happen.  Do not suppress it by blindly adding an EXPECT_CALL() if you don't mean to enforce the call.  See https://github.com/google/googletest/blob/master/googlemock/docs/CookBook.md#knowing-when-to-expect for details.
+// [       OK ] WeatherStationUserInterface.get_heavy_when_rainfall_is_havey2 (0 ms)
+
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey3)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  ON_CALL(*station, rainfall()).WillByDefault(Return(5.0));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+// suppress warning.
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey4)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  EXPECT_CALL(*station, rainfall()).Times(AnyNumber());
+
+  UserInterface ui(station);
+
+  // since mock do not return values.
+  // EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+// use nicemock
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey5)
+{
+  auto station = std::make_shared<NiceMock<MockWeatherStation>>();
+
+  UserInterface ui(station);
+}
+
+// wind()
+TEST(WeatherStationUserInterface, check_wind_when_rainfall_is_light)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  // since
+  // void wind(Direction *direction, double *strength) const = 0;
+
+  EXPECT_CALL(*station, wind(_, _))
+    .WillOnce(DoAll(SetArgPointee<0>(WeatherStation::Direction::North),
+                    SetArgPointee<1>(0.5)));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.wind(), UserInterface::Range::Light);
+}
+
+// prediction
+TEST(WeatherStationUserInterface, check_prediction1)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  // expect a call with *exact* arg
+
+  EXPECT_CALL(*station, prediction(WeatherStation::Outlook::Optimistic))
+    .WillOnce(Return("Sunny"));
+
+  EXPECT_CALL(*station, prediction(WeatherStation::Outlook::Pessimistic))
+    .WillOnce(Return("Overcast"));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.prediction(), std::make_pair("Sunny", "Overcast"));
+}
+
+// if use gmock-invoke
+// so invoke is for something complex to do.
+TEST(WeatherStationUserInterface, check_prediction2)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  // expect a call with *exact* arg
+
+  EXPECT_CALL(*station, prediction(WeatherStation::Outlook::Optimistic))
+    .WillOnce(
       Invoke([](WeatherStation::Outlook x) -> std::string { return "Sunny"; }));
 
-  EXPECT_CALL(*weather_station, prediction(WeatherStation::Pessimistic))
-    .WillRepeatedly(Invoke(
+  EXPECT_CALL(*station, prediction(WeatherStation::Outlook::Pessimistic))
+    .WillOnce(Invoke(
       [](WeatherStation::Outlook x) -> std::string { return "Overcast"; }));
 
-  UserInterface ui(weather_station);
-  auto predicted_range = ui.predict_range();
-  EXPECT_EQ("Sunny", predicted_range.first);
-  EXPECT_EQ("Overcast", predicted_range.second);
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.prediction(), std::make_pair("Sunny", "Overcast"));
 }
 
-TEST(WeatherStationUserInterface, DISABLED_snow_exception)
+// snow()
+TEST(WeatherStationUserInterface, check_snow)
 {
-  auto weather_station = std::make_shared<MockWeatherStation>();
+  auto station = std::make_shared<MockWeatherStation>();
 
-  // GMock: inject more complex logic using C++11 lambdas,
-  // and pattern match on the input value
-  EXPECT_CALL(*weather_station, snow(_))
-    .WillRepeatedly(Throw(WeatherException()));
+  // don't care arg and throw exception.
+  EXPECT_CALL(*station, snow(_)).WillOnce(Throw(WeatherException()));
 
-  UserInterface ui(weather_station);
-  EXPECT_EQ("snow exception", ui.snow());
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.snow(), "exception in snow");
 }
 
-TEST(WeatherStationUserInterface, test_sample)
+// *gmock-default-action*
+// when not specify action, return default constructed of T and this is
+// std::string in this case.
+
+TEST(WeatherStationUserInterface, check_default_action)
 {
-  auto weather_station = std::make_shared<MockWeatherStation>();
+  auto station = std::make_shared<MockWeatherStation>();
 
-  // GMock: inject more complex logic using C++11 lambdas,
-  // and pattern match on the input value
-  EXPECT_CALL(*weather_station, sample("this is sample"))
-    .WillRepeatedly(
-      Invoke([](std::string str) -> std::string { return str + "!!"; }));
+  // don't care arg
+  EXPECT_CALL(*station, sample(_));
 
-  UserInterface ui(weather_station);
-  EXPECT_EQ("this is sample!!", ui.test_sample());
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.sample(), "");
+}
+
+// see if std::vector arg works
+TEST(WeatherStationGmock, verify_complex_arguments1)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  EXPECT_CALL(*station,
+              complexargs(ElementsAre(1, 2, 3, 4), ElementsAre(5, 6, 7, 8)));
+
+  UserInterface ui(station);
+
+  ui.complexargs();
+}
+
+// cause mismatch
+//[ RUN      ] WeatherStationGmock.verify_complex_arguments2
+// unknown file: Failure
+// 
+// Unexpected mock function call - returning directly.
+//     Function call: complexargs(@0x7ffd1c8e2870 { 1, 2, 3, 4 }, @0x7ffd1c8e2850 { 5, 6, 7, 8 })
+// Google Mock tried the following 1 expectation, but it didn't match:
+// 
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:436: EXPECT_CALL(*station, complexargs(ElementsAre(1, 2, 3, 4), ElementsAre(5, 6, 7, 9)))...
+//   Expected arg #1: has 4 elements where
+// element #0 is equal to 5,
+// element #1 is equal to 6,
+// element #2 is equal to 7,
+// element #3 is equal to 9
+//            Actual: { 5, 6, 7, 8 }, whose element #3 doesn't match
+//          Expected: to be called once
+//            Actual: never called - unsatisfied and active
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:436: Failure
+// Actual function call count doesn't match EXPECT_CALL(*station, complexargs(ElementsAre(1, 2, 3, 4), ElementsAre(5, 6, 7, 9)))...
+//          Expected: to be called once
+//            Actual: never called - unsatisfied and active
+// [  FAILED  ] WeatherStationGmock.verify_complex_arguments2 (0 ms)
+
+TEST(WeatherStationGmock, verify_complex_arguments2)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  EXPECT_CALL(*station,
+              complexargs(ElementsAre(1, 2, 3, 4), ElementsAre(5, 6, 7, 9)));
+
+  UserInterface ui(station);
+
+  ui.complexargs();
+}
+
+// when use savearg
+TEST(WeatherStationGmock, verify_complex_arguments3)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  std::vector<int> coll1;
+  std::vector<int> coll2;
+
+  EXPECT_CALL(*station, complexargs(_, _))
+    .WillOnce(DoAll(SaveArg<0>(&coll1), SaveArg<1>(&coll2)));
+
+  UserInterface ui(station);
+
+  ui.complexargs();
+
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4));
+  EXPECT_THAT(coll2, ElementsAre(5, 6, 7, 8));
+}
+
+// cause mismatch
+// [ RUN      ] WeatherStationGmock.verify_complex_arguments4
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:478: Failure
+// Value of: coll2
+// Expected: has 4 elements where
+// element #0 is equal to 5,
+// element #1 is equal to 6,
+// element #2 is equal to 7,
+// element #3 is equal to 9
+//   Actual: { 5, 6, 7, 8 }, whose element #3 doesn't match
+// [  FAILED  ] WeatherStationGmock.verify_complex_arguments4 (0 ms)
+
+TEST(WeatherStationGmock, verify_complex_arguments4)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  std::vector<int> coll1;
+  std::vector<int> coll2;
+
+  EXPECT_CALL(*station, complexargs(_, _))
+    .WillOnce(DoAll(SaveArg<0>(&coll1), SaveArg<1>(&coll2)));
+
+  UserInterface ui(station);
+
+  ui.complexargs();
+
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4));
+  EXPECT_THAT(coll2, ElementsAre(5, 6, 7, 9));
 }
 
 #if 0
@@ -258,109 +595,6 @@ TEST(Gtest, MatcherForPair)
     // EXPECT_THAT(p1, EqPair(p3));
 }
 #endif
-
-// ={=========================================================================
-// gtest-expect
-
-/*
-
-https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
-
-FAIL();
-ADD_FAILURE();
-ADD_FAILURE_AT("file_path", line_number);
-
-FAIL() generates a fatal failure, while ADD_FAILURE() and ADD_FAILURE_AT()
-generate a nonfatal failure. These are useful when control flow, rather than a
-Boolean expression, determines the test's success or failure. For example, you
-might want to write something like:
-
-switch(expression) {
-  case 1:
-     ... some checks ...
-  case 2:
-     ... some other checks ...
-  default:
-     FAIL() << "We shouldn't get here.";
-}
-
-NOTE: you can only use FAIL() in functions that return void. See the Assertion
-Placement section for more information.
-
-[ RUN      ] Gtest.FailAssertion
-/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:293: Failure
-Failed
-should generate a fatal failure
-[  FAILED  ] Gtest.FailAssertion (0 ms)
-[ RUN      ] Gtest.Message
-/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:299: Failure
-Value of: false
-  Actual: false
-Expected: true
-expected true but false
-[  FAILED  ] Gtest.Message (0 ms)
-
-*/
-
-TEST(DISABLED_Gtest, FailAssertion)
-{
-  FAIL() << "should generate a fatal failure";
-}
-
-TEST(Gtest, Message)
-{
-  // do print message but make a test failed
-  EXPECT_TRUE(false) << "expected true but false";
-
-  // do not print message
-  EXPECT_TRUE(true) << "expected true but true";
-}
-
-TEST(Gtest, OrderOfArg)
-{
-  int value{100};
-
-  EXPECT_THAT(value, 100);
-  EXPECT_THAT(100, value);
-
-  // // t_ex_mock.cpp:262: Failure
-  // // Value of: value
-  // // Expected: is equal to 101
-  // //   Actual: 100 (of type int)
-  //
-  // EXPECT_THAT(value, 101);
-
-  // //
-  // // t_ex_mock.cpp:263: Failure
-  // // Value of: 101
-  // // Expected: is equal to 100
-  // //   Actual: 101 (of type int)
-  // EXPECT_THAT(101, value);
-}
-
-// to see which makes better messages
-//
-// [ RUN      ] Gtest.ExpectOrEq
-// gtest.cpp:283: Failure
-// Value of: 101
-// Expected: is equal to 100
-//   Actual: 101 (of type int)
-//
-// gtest.cpp:284: Failure
-// Expected equality of these values:
-//   101
-//   value
-//     Which is: 100
-// [  FAILED  ] Gtest.ExpectOrEq (0 ms)
-// [----------] 2 tests from Gtest (0 ms total)
-
-TEST(Gtest, DISABLED_ExpectOrEq)
-{
-  int value{100};
-
-  EXPECT_THAT(101, value);
-  EXPECT_EQ(101, value);
-}
 
 int main(int argc, char **argv)
 {
