@@ -665,20 +665,6 @@ TEST(CConThread, ThreadLocal)
 
 namespace cxx_async
 {
-  int sum{0};
-
-  int find_the_answer()
-  {
-    this_thread::sleep_for(chrono::milliseconds(100));
-    return sum + 90;
-  }
-
-  void do_other_stuff()
-  {
-    this_thread::sleep_for(chrono::seconds(10));
-    sum = 10;
-  }
-
   // as with cxx-thread
   class Foo
   {
@@ -695,7 +681,7 @@ namespace cxx_async
 
 } // namespace cxx_async
 
-TEST(CConAsync, async_MemberFunction)
+TEST(CConAsync, run_member_function)
 {
   using namespace cxx_async;
 
@@ -713,17 +699,83 @@ TEST(CConAsync, async_MemberFunction)
   }
 }
 
-// expect that do_other_stuff() finishes first. Is it? Since don't know when
-// async runs, answer can be either 90 or 100? always 90?
+namespace cxx_async
+{
+  int sum{0};
 
-TEST(CConAsync, async_IsRace)
+  int find_short()
+  {
+    this_thread::sleep_for(chrono::milliseconds(100));
+    // std::cout << "find_short(100ms) ends" << std::endl;
+    return sum + 90;
+  }
+
+  void do_long()
+  {
+    this_thread::sleep_for(chrono::seconds(5));
+    // std::cout << "do_long(5s) ends" << std::endl;
+    sum = 10;
+  }
+
+  int find_long()
+  {
+    this_thread::sleep_for(chrono::seconds(5));
+    // std::cout << "find_long(5s) ends" << std::endl;
+    return sum + 90;
+  }
+
+  void do_short()
+  {
+    this_thread::sleep_for(chrono::milliseconds(100));
+    // std::cout << "do_short(100ms) ends" << std::endl;
+    sum = 10;
+  }
+
+} // namespace cxx_async
+
+// which one runs first? answer can be either 90 or 100?
+// async finishes first so sum is 90
+TEST(CConAsync, check_launch_policy1)
 {
   using namespace cxx_async;
 
-  std::future<int> the_answer = std::async(find_the_answer);
-  do_other_stuff();
-  // EXPECT_THAT(the_answer.get(), 100);
-  EXPECT_THAT(the_answer.get(), 90);
+  std::future<int> result = std::async(find_short);
+  do_long();
+  // std::cout << "wait for results in main" << std::endl;
+  EXPECT_THAT(result.get(), 90);
+}
+
+// aync finishes later son sum is 100
+TEST(CConAsync, check_launch_policy2)
+{
+  using namespace cxx_async;
+
+  std::future<int> result = std::async(find_long);
+  do_short();
+  // std::cout << "wait for results in main" << std::endl;
+  EXPECT_THAT(result.get(), 100);
+}
+
+// async do not run since do not use result
+TEST(CConAsync, check_launch_policy3)
+{
+  using namespace cxx_async;
+
+  std::async(find_long);
+  do_short();
+  // std::cout << "wait for results in main" << std::endl;
+  EXPECT_THAT(sum, 10);
+}
+
+// do not use result and async runs
+TEST(CConAsync, check_launch_policy4)
+{
+  using namespace cxx_async;
+
+  auto result = std::async(find_long);
+  do_short();
+  // std::cout << "wait for results in main" << std::endl;
+  EXPECT_THAT(result.get(), 100);
 }
 
 // Using Launch Policies
@@ -736,38 +788,54 @@ TEST(CConAsync, async_IsRace)
 //
 // It is necessary to ensure that sooner or later, the passed functionality gets
 // called. Note that I wrote that async() `tries` to start the passed
-// functionality. If this didn’t happen we need the future object to force a
-// start when we need the result or want to ensure that the functionality was
-// performed. Thus, you need the future object even if you are not interested in
-// the outcome of a functionality started in the background.
+// functionality.
+//
+// If this didn’t happen we need the future object to *force* a start when we
+// need the result or want to ensure that the functionality was performed. Thus,
+// you need the future object even if you are not interested in the outcome of a
+// functionality started in the background.
 //
 // Accordingly, two kinds of outputs are possible for this program.
 
+// SEQUENTIAL or PARALLEL running?
+//
+// [ RUN      ] 
+// ++++++++++
+// ..........
+// [       OK ] 
+//
+// OR
+//
+// [ RUN      ]
+// .+.+..+...+..+.
+// +++++
+// [       OK ]
+
 // cxx-async with no option
 //
-// NOTE: this is not always the case and means see the same result as
-// LaunchPolicy2
-//
+// `std::launch::deferred | std::launch::async` to indicate that the
+// implementation may choose. This last option is `the default`
+
 // If async() couldn’t start func1(), it will run after func2(), when get() gets
 // called, so that the program will have the following output:
 //
-// [ RUN      ] CConAsync.Default
+// [ RUN      ]
 // ++++++++++
 // ..........
-// [       OK ] CConAsync.Default (7064 ms)
+// [       OK ]
 //
-// this is `sequential`
+// this is `sequential` so can see either sequential or parallel output.
 
-TEST(CConAsync, async_LaunchPolicy1)
+TEST(CConAsync, check_launch_policy11)
 {
+  // async
   std::future<int> result1(std::async([] { return doSomething('.'); }));
 
+  // main thread
   int result2 = doSomething('+');
 
   // . is 46 and + is 43 since doSomething() returns the input char
   int result = result1.get() + result2;
-
-  EXPECT_THAT(result, 89);
 }
 
 // You can force async() *not* to defer the passed functionality, by explicitly
@@ -784,7 +852,7 @@ TEST(CConAsync, async_LaunchPolicy1)
 // +++++
 // [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
-TEST(CConAsync, async_LaunchPolicy2)
+TEST(CConAsync, check_launch_policy12)
 {
   std::future<int> result1(
     std::async(launch::async, [] { return doSomething('.'); }));
@@ -793,7 +861,7 @@ TEST(CConAsync, async_LaunchPolicy2)
 
   int result = result1.get() + result2;
 
-  EXPECT_THAT(result, 89);
+  // EXPECT_THAT(result, 89);
 }
 
 // So, based on this first example, we can define a general way to make a
@@ -811,26 +879,27 @@ TEST(CConAsync, async_LaunchPolicy2)
 //
 // Because the evaluation order on the right side of the second statement is
 // unspecified, result1.get() might be called before func2() so that you have
-// sequential processing again.
+// *sequential* processing again.
 
 // `If you don’t assign the result of std::async(std::launch::async,...)`
 // anywhere, the caller will block until the passed functionality has finished,
 // which would mean that this is nothing but a synchronous call.
 
 // NOTE: so even if uses `launch::async`, it runs sequentially
+// [ RUN      ] CConAsync.check_launch_policy3
+// ..........
+// ++++++++++
+// [       OK ] CConAsync.check_launch_policy3 (7062 ms)
 
-TEST(CConAsync, async_LaunchPolicy3)
+TEST(CConAsync, check_launch_policy13)
 {
-  // future<int> result1(std::async(launch::async, []{return
-  // doSomething('.');}));
-
   std::async(launch::async, [] { return doSomething('.'); });
 
   doSomething('+');
 }
 
-// not use future return and just to make it runs parallel
-TEST(CConAsync, async_LaunchPolicy4)
+// not use future return but have future to make it runs parallel
+TEST(CConAsync, check_launch_policy14)
 {
   std::future<int> result1(
     std::async(launch::async, [] { return doSomething('.'); }));
@@ -856,8 +925,7 @@ TEST(CConAsync, async_LaunchPolicy4)
 //
 // done
 
-
-TEST(CConAsync, async_Status1)
+TEST(CConAsync, check_launch_policy21)
 {
   {
     std::cout << "starting 2 operations synchronously" << std::endl;
@@ -870,15 +938,14 @@ TEST(CConAsync, async_Status1)
     if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
         f2.wait_for(chrono::seconds(0)) != future_status::deferred)
     {
-      std::cout << "\nnot deffered" << std::endl;
+      std::cout << "not deffered" << std::endl;
 
-      // poll until at least one of the loops finished
+      // poll until at least one of the threads finished. "ready" means that
+      // thread is finished and if there is, exit loop.
       while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
              f2.wait_for(chrono::seconds(0)) != future_status::ready)
       {
-        //...;
-        // std::cout << "yield,";
-        std::cout << "w";
+        // std::cout << "w";
         std::this_thread::yield(); // hint to reschedule to the next thread
       }
     }
@@ -892,13 +959,13 @@ TEST(CConAsync, async_Status1)
       f2.get();
     } catch (const exception &e)
     {
-      cout << "\nEXCEPTION: " << e.what() << endl;
+      cout << "EXCEPTION: " << e.what() << endl;
     }
-    cout << "\ndone" << endl;
+    cout << "done" << endl;
   }
 }
 
-TEST(CConAsync, async_Status2)
+TEST(CConAsync, check_launch_policy22)
 {
   {
     string const waits{"\\|/-"};
@@ -914,15 +981,15 @@ TEST(CConAsync, async_Status2)
     if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
         f2.wait_for(chrono::seconds(0)) != future_status::deferred)
     {
-      cout << "\nnot deffered" << endl;
+      cout << "not deffered" << endl;
 
       // poll until at least one of the loops finished
       while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
              f2.wait_for(chrono::seconds(0)) != future_status::ready)
       {
         //...;
-        std::cout << flush << "\r" << waits[i % 4];
-        ++i;
+        // std::cout << flush << "\r" << waits[i % 4];
+        // ++i;
 
         this_thread::yield(); // hint to reschedule to the next thread
       }
@@ -936,9 +1003,9 @@ TEST(CConAsync, async_Status2)
       f2.get();
     } catch (const exception &e)
     {
-      cout << "\nEXCEPTION: " << e.what() << endl;
+      cout << "EXCEPTION: " << e.what() << endl;
     }
-    cout << "\ndone" << endl;
+    cout << "done" << endl;
   }
 }
 
