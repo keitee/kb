@@ -231,7 +231,7 @@ member variable and single entity. when two threads use the same EventLoop,
 m_loopRunning has the same single value.
 
 2. static EventLoopPrivate *m_loopRunning;
-same as 1 since `static` only make it availbble without making instance.
+same as 1 since `static` only make it available without making instance.
 
 3. static thread_local EventLoopPrivate *m_loopRunning;
 So how can differentiate threads? By using `thread_local`, a thread which

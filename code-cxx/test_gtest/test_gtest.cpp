@@ -99,6 +99,20 @@ TEST(GtestAssert, DISABLED_shows_argument_order1)
   EXPECT_THAT(100, OUT);
 }
 
+// the order of arg can cause compile error
+TEST(GtestAssert, shows_argument_order2)
+{
+  std::string result{"result"};
+
+  EXPECT_THAT(result, "result");
+
+  // googlemock/include/gmock/gmock-matchers.h:541:39: error: no matching
+  // function for call to ‘ImplicitCast_(const
+  // std::__cxx11::basic_string<char>&)’
+  //
+  // EXPECT_THAT("result", result);
+}
+
 // [ RUN      ] GtestAssert.shows_argument_order2
 // /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:103: Failure
 // Expected equality of these values:

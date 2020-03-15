@@ -1,15 +1,15 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
-#include <deque>
-#include <thread>
+#include "work.h"
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <mutex>
-#include "work.h"
+#include <thread>
+#include <vector>
 
 // ThreadPool, which creates worker threads to handle the work queue
-
 
 // code/c9/6/ThreadPool.h
 //
@@ -149,6 +149,7 @@ private:
 
 #endif
 
+#if 0
 // support mutiple worker threads and mutex on IFs
 
 class ThreadPool
@@ -223,6 +224,75 @@ class ThreadPool
 
             // std::cout << "worker ends" << std::endl;
         }
+};
+
+#endif
+
+class ThreadPool
+{
+private:
+  std::deque<Work> q_;
+  std::vector<std::thread> threads_;
+
+  // *cxx-atomic*
+  std::atomic<bool> done_{false};
+  std::mutex m_;
+
+  void worker_()
+  {
+    while (!done_)
+    {
+      // no works to do and do busy loop
+      while (!done_ && !hasWork())
+        ;
+
+      pullWork().execute();
+    }
+  }
+
+public:
+  // no ctor
+
+  ~ThreadPool() { stop(); }
+
+  void start(unsigned int poolSize = 1)
+  {
+    for (unsigned int i{0}; i < poolSize; ++i)
+      threads_.emplace_back(std::thread(&ThreadPool::worker_, this));
+  }
+
+  void stop()
+  {
+    done_ = true;
+
+    // cannot use "const auto" since join() is non-const
+    for (auto &t : threads_)
+      t.join();
+  }
+
+  bool hasWork()
+  {
+    std::lock_guard<std::mutex> lock(m_);
+    return !q_.empty();
+  }
+
+  void add(const Work &work)
+  {
+    std::lock_guard<std::mutex> lock(m_);
+    q_.emplace_front(work);
+  }
+
+  Work pullWork()
+  {
+    std::lock_guard<std::mutex> lock(m_);
+
+    if (q_.empty())
+      return Work{};
+
+    auto work = q_.back();
+    q_.pop_back();
+    return work;
+  }
 };
 
 #endif // THREADPOOL_H

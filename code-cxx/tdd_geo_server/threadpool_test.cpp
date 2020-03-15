@@ -1,7 +1,7 @@
-#include <mutex>
-#include <condition_variable>
-#include "gmock/gmock.h"
 #include "threadpool.h"
+#include "gmock/gmock.h"
+#include <condition_variable>
+#include <mutex>
 
 // "Separating threading logic from application logic"
 
@@ -10,48 +10,53 @@ using namespace testing;
 
 class AThreadPool : public Test
 {
-    public:
-        ThreadPool pool;
-        mutex m;
+public:
+  ThreadPool pool;
+  mutex m;
 };
 
-TEST_F(AThreadPool, HasNoWorkOnCreation) {
-   ASSERT_FALSE(pool.hasWork());
+TEST_F(AThreadPool, HasNoWorkOnCreation)
+{
+  ASSERT_FALSE(pool.hasWork());
 }
 
-TEST_F(AThreadPool, HasWorkAfterAdd) {
-   pool.add(Work{});
-   ASSERT_TRUE(pool.hasWork());
+TEST_F(AThreadPool, HasWorkAfterAdd)
+{
+  pool.add(Work{});
+  ASSERT_TRUE(pool.hasWork());
 }
 
-TEST_F(AThreadPool, AnswersWorkAddedOnPull) {
-   pool.add(Work{1});
-   auto work = pool.pullWork();
-   
-   ASSERT_THAT(work.id(), Eq(1));
+TEST_F(AThreadPool, AnswersWorkAddedOnPull)
+{
+  pool.add(Work{1});
+  auto work = pool.pullWork();
+
+  ASSERT_THAT(work.id(), Eq(1));
 }
 
-TEST_F(AThreadPool, PullsElementsInFIFOOrder) {
-   pool.add(Work{1});
-   pool.add(Work{2});
-   auto work = pool.pullWork();
-   
-   ASSERT_THAT(work.id(), Eq(1));
+TEST_F(AThreadPool, PullsElementsInFIFOOrder)
+{
+  pool.add(Work{1});
+  pool.add(Work{2});
+  auto work = pool.pullWork();
+
+  ASSERT_THAT(work.id(), Eq(1));
 }
 
-TEST_F(AThreadPool, HasNoWorkAfterLastElementRemoved) {
-   pool.add(Work{});
-   pool.pullWork();
-   ASSERT_FALSE(pool.hasWork());
+TEST_F(AThreadPool, HasNoWorkAfterLastElementRemoved)
+{
+  pool.add(Work{});
+  pool.pullWork();
+  ASSERT_FALSE(pool.hasWork());
 }
 
-TEST_F(AThreadPool, HasWorkAfterWorkRemovedButWorkRemains) {
-   pool.add(Work{});
-   pool.add(Work{});
-   pool.pullWork();
-   ASSERT_TRUE(pool.hasWork());
+TEST_F(AThreadPool, HasWorkAfterWorkRemovedButWorkRemains)
+{
+  pool.add(Work{});
+  pool.add(Work{});
+  pool.pullWork();
+  ASSERT_TRUE(pool.hasWork());
 }
-
 
 #if 0
 
@@ -115,99 +120,91 @@ TEST_F(AThreadPool, ExecutesAllWork) {
 
 #endif
 
-
 // c9/9/ThreadPoolTest.cpp
 
 class AThreadPoolAddRequest : public Test
 {
-    public:
-        ThreadPool pool;
-        mutex m;
-        condition_variable wasExecuted;
-        unsigned int count{0};
+public:
+  ThreadPool pool;
+  mutex m;
+  condition_variable wasExecuted;
+  unsigned int count{0};
 
-        vector<shared_ptr<thread>> threads;
+  vector<shared_ptr<thread>> threads;
 
-        void SetUp() override
-        {
-            pool.start();
-        }
+  void SetUp() override { pool.start(); }
 
-        void TearDown() override
-        {
-            for ( auto &t : threads )
-                t->join();
-        }
+  void TearDown() override
+  {
+    for (auto &t : threads)
+      t->join();
+  }
 
-        void incrementCountAndNotify()
-        {
-            unique_lock<mutex> lock(m);
-            ++count;
-            wasExecuted.notify_all();
-        }
+  void incrementCountAndNotify()
+  {
+    unique_lock<mutex> lock(m);
+    ++count;
+    wasExecuted.notify_all();
+  }
 
-        void waitForCountAndFailOnTimeout(unsigned int expectedCount)
-        {
-            unique_lock<mutex> lock(m);
-            ASSERT_TRUE(wasExecuted.wait_for(lock, chrono::milliseconds(100),
-                        [&] {return count == expectedCount;}));
-        }
+  void waitForCountAndFailOnTimeout(unsigned int expectedCount)
+  {
+    unique_lock<mutex> lock(m);
+    ASSERT_TRUE(wasExecuted.wait_for(lock, chrono::milliseconds(100), [&] {
+      return count == expectedCount;
+    }));
+  }
 };
 
 // refactor tests. 1 client and 1 thread in a pool
 TEST_F(AThreadPoolAddRequest, PullsWorkInAThread)
 {
-    Work work{ [&] { incrementCountAndNotify(); }};
-    unsigned int NumberOfWorkItems{1};
+  Work work{[&] { incrementCountAndNotify(); }};
+  unsigned int NumberOfWorkItems{1};
 
-    pool.add(work);
-    waitForCountAndFailOnTimeout(NumberOfWorkItems);
+  pool.add(work);
+  waitForCountAndFailOnTimeout(NumberOfWorkItems);
 }
 
 // 1 client and 1 thread in a pool
-TEST_F(AThreadPoolAddRequest, ExecutesAllWork) {
-   Work work{[&] { incrementCountAndNotify(); }};
-   unsigned int NumberOfWorkItems{3};
+TEST_F(AThreadPoolAddRequest, ExecutesAllWork)
+{
+  Work work{[&] { incrementCountAndNotify(); }};
+  unsigned int NumberOfWorkItems{3};
 
-   for (unsigned int i{0}; i < NumberOfWorkItems; i++)
-      pool.add(work);
+  for (unsigned int i{0}; i < NumberOfWorkItems; i++)
+    pool.add(work);
 
-   waitForCountAndFailOnTimeout(NumberOfWorkItems);
+  waitForCountAndFailOnTimeout(NumberOfWorkItems);
 }
-
 
 // <problem-4>
 // Creating Client Threads in the Test
 //
 // Our tests aren’t simply failing; they are generating segmentation faults.
-// Concurrent modification of the work queue is the likely suspect. 
+// Concurrent modification of the work queue is the likely suspect.
 //
 // NOTE seg fault? For me, ran 1000 times and no luck to see this reproduced.
 
 // 200 client and 1 thread in a pool
-TEST_F(AThreadPoolAddRequest, HoldsUpUnderClientStress) 
+TEST_F(AThreadPoolAddRequest, HoldsUpUnderClientStress)
 {
-   Work work{[&] { incrementCountAndNotify(); }};
-   unsigned int NumberOfWorkItems{10};
-   unsigned int NumberOfThreads{200};
+  Work work{[&] { incrementCountAndNotify(); }};
+  unsigned int NumberOfWorkItems{10};
+  unsigned int NumberOfThreads{200};
 
-   for (unsigned int i{0}; i < NumberOfThreads; ++i)
-   {
-       threads.push_back(
-               make_shared<thread>(
-                   [&] {
-                   for (unsigned int i{0}; i < NumberOfWorkItems; ++i)
-                     pool.add(work);
-                     }
-                   ));
-   }
+  for (unsigned int i{0}; i < NumberOfThreads; ++i)
+  {
+    threads.push_back(make_shared<thread>([&] {
+      for (unsigned int i{0}; i < NumberOfWorkItems; ++i)
+        pool.add(work);
+    }));
+  }
 
-   waitForCountAndFailOnTimeout(NumberOfThreads * NumberOfWorkItems);
+  waitForCountAndFailOnTimeout(NumberOfThreads * NumberOfWorkItems);
 }
 
-
 // To solve <problem-4>, introduce mutex on IFs
-
 
 // Creating Multiple Threads in the ThreadPool
 //
@@ -217,7 +214,7 @@ TEST_F(AThreadPoolAddRequest, HoldsUpUnderClientStress)
 // our work callback to add a thread if its ID is unique. Our assertion
 // compares the thread count specified to the number of unique threads
 // processed.
-//        
+//
 // <problem-5>
 // Can we ever know whether we’ve addressed all concurrency holes? Introduce
 // more threads in pool.
@@ -247,165 +244,158 @@ TEST_F(AThreadPoolAddRequest, HoldsUpUnderClientStress)
 //
 // So have to add a check in pullWork().
 
-
-class AThreadPoolWithMultipleThreads: public Test
+class AThreadPoolWithMultipleThreads : public Test
 {
-    public:
-        ThreadPool pool;
-        mutex m;
-        mutex ifm;
-        condition_variable wasExecuted;
-        unsigned int count{0};
+public:
+  ThreadPool pool;
+  mutex m;
+  mutex ifm;
+  condition_variable wasExecuted;
+  unsigned int count{0};
 
-        vector<shared_ptr<thread>> client_threads;
-        set<thread::id> worker_threads;
+  vector<shared_ptr<thread>> client_threads;
+  set<thread::id> worker_threads;
 
-        // removed since to set num of worker thread in the test
-        // void SetUp() override
-        // {
-        //     pool.start();
-        // }
+  // removed since to set num of worker thread in the test
+  // void SetUp() override
+  // {
+  //     pool.start();
+  // }
 
-        void TearDown() override
-        {
-            for ( auto &t : client_threads )
-                t->join();
-        }
+  void TearDown() override
+  {
+    for (auto &t : client_threads)
+      t->join();
+  }
 
-        void incrementCountAndNotify()
-        {
-            unique_lock<mutex> lock(m);
-            ++count;
-            // wasExecuted.notify_one();
-            wasExecuted.notify_all();
-        }
+  void incrementCountAndNotify()
+  {
+    unique_lock<mutex> lock(m);
+    ++count;
+    // wasExecuted.notify_one();
+    wasExecuted.notify_all();
+  }
 
-        void waitForCountAndFailOnTimeout(unsigned int expectedCount)
-        {
-            unique_lock<mutex> lock(m);
+  void waitForCountAndFailOnTimeout(unsigned int expectedCount)
+  {
+    unique_lock<mutex> lock(m);
 
-            // ASSERT_TRUE(wasExecuted.wait_for(lock, chrono::milliseconds(100),
-            //            [&] {return count == expectedCount;}));
+    // ASSERT_TRUE(wasExecuted.wait_for(lock, chrono::milliseconds(100),
+    //            [&] {return count == expectedCount;}));
 
-            auto ret = wasExecuted.wait_for(lock, chrono::milliseconds(100),
-                        [&] 
-                        {
-                        // cout << "wait_for: count: " << count << endl;
-                        return count == expectedCount;
-                        });
-            cout << "ret wait_for: " << ret << endl;
+    auto ret = wasExecuted.wait_for(lock, chrono::milliseconds(100), [&] {
+      // cout << "wait_for: count: " << count << endl;
+      return count == expectedCount;
+    });
+    cout << "ret wait_for: " << ret << endl;
 
-            //  this solves <problem-8>
-            if(!ret)
-            {
-              cout << "wait again wait_for: " << ret << endl;
-              ret = wasExecuted.wait_for(lock, chrono::milliseconds(100),
-                        [&] 
-                        {
-                        // cout << "wait_for: count: " << count << endl;
-                        return count == expectedCount;
-                        });
-            }
-        }
+    //  this solves <problem-8>
+    if (!ret)
+    {
+      cout << "wait again wait_for: " << ret << endl;
+      ret = wasExecuted.wait_for(lock, chrono::milliseconds(100), [&] {
+        // cout << "wait_for: count: " << count << endl;
+        return count == expectedCount;
+      });
+    }
+  }
 
-        void addThreadIfUnique(const thread::id &id)
-        {
-            // Q: okay to use like this?
-            unique_lock<mutex> block(ifm);
-            // lock_guard<mutex> block(ifm);
-            // cout << "tid : " << id << endl;
-            // cout << "." << endl;
-            worker_threads.insert(id);
-        }
+  void addThreadIfUnique(const thread::id &id)
+  {
+    // Q: okay to use like this?
+    unique_lock<mutex> block(ifm);
+    // lock_guard<mutex> block(ifm);
+    // cout << "tid : " << id << endl;
+    // cout << "." << endl;
+    worker_threads.insert(id);
+  }
 
-        size_t numberOfThreadsProcessed() 
-        {
-            return worker_threads.size();
-        }
+  size_t numberOfThreadsProcessed() { return worker_threads.size(); }
 };
 
 // 500 work items, 2 workers
 
-TEST_F(AThreadPoolWithMultipleThreads, DISABLED_DispatchesWorkToMultipleThreadsOneClient) {
-   // number of worker threads in pool
-   unsigned int numberOfThreads{2};
-   pool.start(numberOfThreads);
-   Work work{[&] { 
-      addThreadIfUnique(this_thread::get_id());
-      incrementCountAndNotify();
-   }};
-   unsigned int NumberOfWorkItems{500};
+TEST_F(AThreadPoolWithMultipleThreads,
+       DISABLED_DispatchesWorkToMultipleThreadsOneClient)
+{
+  // number of worker threads in pool
+  unsigned int numberOfThreads{2};
+  pool.start(numberOfThreads);
+  Work work{[&] {
+    addThreadIfUnique(this_thread::get_id());
+    incrementCountAndNotify();
+  }};
+  unsigned int NumberOfWorkItems{500};
 
-   for (unsigned int i{0}; i < NumberOfWorkItems; i++)
-      pool.add(work);
+  for (unsigned int i{0}; i < NumberOfWorkItems; i++)
+    pool.add(work);
 
-   waitForCountAndFailOnTimeout(NumberOfWorkItems);
-   EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfThreads));
+  waitForCountAndFailOnTimeout(NumberOfWorkItems);
+  EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfThreads));
 }
 
 //  500x100 work items, 100 clients, 2 workers
 //  note that clients threas only do add and there is only one wait thread which
 //  is test thread.
 
-TEST_F(AThreadPoolWithMultipleThreads, DispatchesWorkToMultipleThreadsMultipleClient) {
-   unsigned int numberOfWorkerThreads{2};
-   pool.start(numberOfWorkerThreads);
-   Work work{[&] { 
-      addThreadIfUnique(this_thread::get_id());
-      incrementCountAndNotify();
-   }};
+TEST_F(AThreadPoolWithMultipleThreads,
+       DispatchesWorkToMultipleThreadsMultipleClient)
+{
+  unsigned int numberOfWorkerThreads{2};
+  pool.start(numberOfWorkerThreads);
+  Work work{[&] {
+    addThreadIfUnique(this_thread::get_id());
+    incrementCountAndNotify();
+  }};
 
-   unsigned int NumberOfWorkItems{500};
+  unsigned int NumberOfWorkItems{500};
 
-   // <problem-8>
-   // okay when:
-   // unsigned int NumberOfClientThreads{10};
-   //
-   // void waitForCountAndFailOnTimeout(unsigned int expectedCount)
-   // wasExecuted.wait_for(lock, chrono::milliseconds(100),
-   //
-   // hangs when runs in run.py:
-   // unsigned int NumberOfClientThreads{100};
-   //
-   // void waitForCountAndFailOnTimeout(unsigned int expectedCount)
-   // wasExecuted.wait_for(lock, chrono::milliseconds(100),
-   //
-   // when increase time, passes all.
-   // wasExecuted.wait_for(lock, chrono::milliseconds(1000),
-   //
-   // Q: So more work items and needs more time to process. Okay, then when
-   // wait_for() returns, does it hang?
-   
-   unsigned int NumberOfClientThreads{100};
+  // <problem-8>
+  // okay when:
+  // unsigned int NumberOfClientThreads{10};
+  //
+  // void waitForCountAndFailOnTimeout(unsigned int expectedCount)
+  // wasExecuted.wait_for(lock, chrono::milliseconds(100),
+  //
+  // hangs when runs in run.py:
+  // unsigned int NumberOfClientThreads{100};
+  //
+  // void waitForCountAndFailOnTimeout(unsigned int expectedCount)
+  // wasExecuted.wait_for(lock, chrono::milliseconds(100),
+  //
+  // when increase time, passes all.
+  // wasExecuted.wait_for(lock, chrono::milliseconds(1000),
+  //
+  // Q: So more work items and needs more time to process. Okay, then when
+  // wait_for() returns, does it hang?
 
-   for (unsigned int i{0}; i < NumberOfClientThreads; ++i)
-   {
-       client_threads.push_back(
-               make_shared<thread>(
-                   [&] {
-                   for (unsigned int i{0}; i < NumberOfWorkItems; ++i)
-                     pool.add(work);
-                     }
-                   ));
-   }
+  unsigned int NumberOfClientThreads{100};
 
-   waitForCountAndFailOnTimeout(NumberOfClientThreads * NumberOfWorkItems);
+  for (unsigned int i{0}; i < NumberOfClientThreads; ++i)
+  {
+    client_threads.push_back(make_shared<thread>([&] {
+      for (unsigned int i{0}; i < NumberOfWorkItems; ++i)
+        pool.add(work);
+    }));
+  }
 
-   // <problem-7>
-   //
-   // use std::set since worker threads divides the total works and set
-   // removes duplicates.
-   //
-   // (Unfortunately, this test has the potential to fail on the rare
-   // occasion that one of the threads processes all of the work items. The
-   // exercise of eliminating this potential for sporadic failure is left
-   // to the reader.) 
-   //
-   // falis on:
-   //
-   // EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfWorkerThreads));
-   //
-   // HOW to divide works between worker threads??
+  waitForCountAndFailOnTimeout(NumberOfClientThreads * NumberOfWorkItems);
 
-   EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfWorkerThreads));
+  // <problem-7>
+  //
+  // use std::set since worker threads divides the total works and set
+  // removes duplicates.
+  //
+  // (Unfortunately, this test has the potential to fail on the rare
+  // occasion that one of the threads processes all of the work items. The
+  // exercise of eliminating this potential for sporadic failure is left
+  // to the reader.)
+  //
+  // falis on:
+  //
+  // EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfWorkerThreads));
+  //
+  // HOW to divide works between worker threads??
+
+  EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfWorkerThreads));
 }

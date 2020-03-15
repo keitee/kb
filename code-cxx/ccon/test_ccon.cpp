@@ -24,52 +24,116 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
-// CXXSLR 18.1 The High-Level Interface: async() and Futures
-//
-// To visualize what happens, we simulate the complex processings in func1() and
-// func2() by calling doSomething(),
-
-int doSomething(char c)
+namespace
 {
-  // *cxx-random*
-  default_random_engine dre(c);
-  uniform_int_distribution<int> id(10, 1000);
+  // CXXSLR 18.1 The High-Level Interface: async() and Futures
+  //
+  // To visualize what happens, we simulate the complex processings in func1() and
+  // func2() by calling doSomething(),
 
-  for (int i = 0; i < 10; ++i)
+  int doSomething(char c)
   {
-    this_thread::sleep_for(chrono::milliseconds(id(dre)));
-    cout.put(c).flush();
-  }
-  cout.put('\n');
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
 
-  return c;
-}
+    for (int i = 0; i < 10; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
+
+    std::cout.put('\n');
+
+    return c;
+  }
+} // namespace
 
 // ={=========================================================================
 /* cxx-thread
-
-[ RUN      ] CConThread.GetIDFromPthread
-thread id: 140276049487616
-
-main pid = 3942
-
-Hello world, sleeps for 10s, getpid=3942, gettid=3945
-[       OK ] CConThread.GetIDFromPthread (10000 ms)
-
 */
 
 namespace cxx_thread
 {
   void hello(ostringstream &os) { os << "Hello Concurrent World"; }
 
-  void hello_and_thread_id(ostringstream &os)
+  void function1(std::ostringstream &os)
   {
-    os << "Hello Concurrent World";
-    cout << "thread id: " << std::this_thread::get_id() << endl;
+    // std::cout << "function1 thread id " << std::this_thread::get_id() << std::endl;
+    os << std::this_thread::get_id();
+  }
+  void function2(void)
+  {
+    // std::cout << "function2 thread id " << std::this_thread::get_id() << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+} // namespace cxx_thread
+
+TEST(CConThread, see_identity)
+{
+  using namespace cxx_thread;
+
+  // 42.2.1
+  // a thread can have its id be id{} if is has not had a task assigned
+  {
+    std::thread t;
+    EXPECT_THAT(t.get_id(), std::thread::id{});
   }
 
-  // std::this_thread::get_id()  is != gettid();
+  // see that get_id() equals to this_thread::get_id()
+  {
+    std::ostringstream os1;
+    std::ostringstream os2;
 
+    std::thread t([&] { function1(os1); });
+    os2 << t.get_id();
+
+    t.join();
+
+    EXPECT_THAT(os1.str(), os2.str());
+  }
+
+  // see that get_id() equals to native_handle()
+  {
+    std::ostringstream os1;
+    std::ostringstream os2;
+
+    std::thread t([&] { function2(); });
+
+    os1 << t.native_handle();
+    os2 << t.get_id();
+
+    t.join();
+
+    EXPECT_THAT(os1.str(), os2.str());
+  }
+
+  // 42.2.1
+  // a thread can have its id be id{} if is has terminated (been joined)
+  {
+    std::ostringstream os1;
+
+    std::thread t([&] { function1(os1); });
+    t.join();
+
+    EXPECT_THAT(t.get_id(), std::thread::id{});
+  }
+
+  // 42.2.1
+  // a thread can have its id be id{} if is has been detached
+  {
+    std::thread t([&] { function2(); });
+
+    EXPECT_THAT(t.get_id(), Ne(std::thread::id{}));
+
+    t.detach();
+
+    EXPECT_THAT(t.get_id(), std::thread::id{});
+  }
+}
+
+namespace cxx_thread
+{
   static void *threadFunc(void *arg)
   {
     const char *s = (char *)arg;
@@ -85,24 +149,13 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-// thread id: 139805217429248
-
-TEST(CConThread, thread_id)
+// std::this_thread::get_id() is != gettid();
+// shows tid and pid
+TEST(CConThread, check_tid_and_pid)
 {
   using namespace cxx_thread;
 
-  // get id using std::thread
   {
-    ostringstream os;
-    std::thread t([&] { hello_and_thread_id(os); });
-    t.join();
-    EXPECT_THAT(os.str(), "Hello Concurrent World");
-  }
-
-  // get id and return value from pthred
-  {
-    using namespace cxx_thread;
-
     char coll[] = "Hello world";
     pthread_t t;
     void *res;
@@ -126,47 +179,23 @@ TEST(CConThread, thread_id)
       exit(EXIT_FAILURE);
     }
 
-    // get return
+    // get return from a thread
     EXPECT_THAT((long)res, 11);
-  }
-}
-
-TEST(CConThread, thread_run)
-{
-  using namespace cxx_thread;
-
-  // single
-  {
-    ostringstream os;
-    std::thread t([&] { hello(os); });
-    t.join();
-    EXPECT_THAT(os.str(), "Hello Concurrent World");
-  }
-
-  // parallel
-  // +..+..+...+..+.+++++
-  // done
-
-  {
-    std::thread t1([] { doSomething('.'); });
-    std::thread t2([] { doSomething('+'); });
-    t1.join();
-    t2.join();
   }
 }
 
 // true if the thread object identifies an active thread of execution, false
 // otherwise
 
-TEST(CConThread, thread_joinable)
+TEST(CConThread, see_joinable)
 {
   std::thread t([] { doSomething('+'); });
 
   std::cout << "thread is still running? " << std::boolalpha << t.joinable()
             << std::endl;
 
-  // DO NOT WORK as hoped since while() do not ends. Proabaly, it makes a thread
-  // keep alive.
+  // DO NOT WORK as hoped since while() do not ends. WHY? it makes a thread
+  // keep alive??
   //
   // while (t.joinable())
   // {
@@ -208,7 +237,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, thread_name)
+TEST(CConThread, see_thread_name)
 {
   using namespace cxx_thread;
 
@@ -240,11 +269,29 @@ namespace cxx_thread
 
 // show how arg and return value from thread are used
 
-TEST(CConThread, thread_ArgumentAndReturn)
+TEST(CConThread, run_thread)
 {
   using namespace cxx_thread;
 
-  // value
+  // single
+  {
+    std::ostringstream os;
+    std::thread t([&] { function1(os); });
+    t.join();
+  }
+
+  // parallel
+  // +..+..+...+..+.+++++
+  // done
+
+  {
+    std::thread t1([] { doSomething('.'); });
+    std::thread t2([] { doSomething('+'); });
+    t1.join();
+    t2.join();
+  }
+
+  // value and value will not be changed after t
   {
     int value{1};
 
@@ -258,7 +305,7 @@ TEST(CConThread, thread_ArgumentAndReturn)
   //
   // {
   //   int value{1};
-
+  //
   //   // In file included from /usr/include/c++/4.9/thread:39:0,
   //   //                  from ccon.cpp:2:
   //   // /usr/include/c++/4.9/functional: In instantiation of ‘struct
@@ -289,6 +336,7 @@ TEST(CConThread, thread_ArgumentAndReturn)
   // to understand this error, have to understand cxx-bind in
   // /usr/include/c++/4.9/functional since cxx-thread uses __bind_simple()
 
+  // use std::ref
   {
     int value{1};
 
@@ -299,7 +347,7 @@ TEST(CConThread, thread_ArgumentAndReturn)
     EXPECT_THAT(value, 201);
   }
 
-  // cxx-lambda
+  // cxx-lambda instead of std::ref
   {
     int value{1};
 
@@ -315,8 +363,66 @@ TEST(CConThread, thread_ArgumentAndReturn)
     std::thread t(update_data, std::ref(data));
     t.join();
 
-    // data is not updated
-    EXPECT_THAT(data, string("updated data"));
+    EXPECT_THAT(data, "updated data");
+  }
+}
+
+TEST(CConThread, run_thread_many)
+{
+  using namespace cxx_thread;
+
+  std::thread t;
+
+  for (int i = 0; i < 10; ++i)
+  {
+    if (t.get_id() != std::thread::id{})
+    {
+      // previous thread is still runs and wait to finish
+      std::cout << "join thread (" << i << ")" << std::endl;
+      t.join();
+    }
+
+    std::cout << "starts thread (" << i << ")" << std::endl;
+
+    // 42.2
+    // thread can be moved but not copied.
+
+    t = std::thread([i] {
+      std::cout << "function3(" << i << ") thread id "
+                << std::this_thread::get_id() << std::endl;
+
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    });
+
+    EXPECT_THAT(t.get_id(), Ne(std::thread::id{}));
+  }
+
+  // for the last thread
+  if ((t.get_id() != std::thread::id{}))
+  {
+    // previous thread is still runs and wait to finish
+    std::cout << "join thread (" << 10 << ")" << std::endl;
+    t.join();
+  }
+}
+
+// 42.2.3
+// To prevent a system thread from accidently outliving its thread, the thread
+// destructor calls terminate()
+//
+// [ RUN      ] CConThread.terminate_thread
+// terminate called without an active exception
+// Aborted
+
+TEST(CConThread, DISABLED_terminate_thread)
+{
+  using namespace cxx_thread;
+
+  {
+    // function2 waits for 5 secs
+    std::thread t([&] { function2(); });
+
+    // t.join();
   }
 }
 
@@ -337,7 +443,7 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
-TEST(CConThread, thread_MemberFunction)
+TEST(CConThread, see_membur_function)
 {
   using namespace cxx_thread;
 
@@ -376,7 +482,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, Priority1)
+TEST(CConThread, see_priority1)
 {
   using namespace cxx_thread;
 
@@ -412,7 +518,7 @@ TEST(CConThread, Priority1)
   t2.join();
 }
 
-TEST(CConThread, Priority2)
+TEST(CConThread, see_priority2)
 {
   using namespace cxx_thread;
 
@@ -799,10 +905,10 @@ TEST(CConAsync, check_launch_policy4)
 
 // SEQUENTIAL or PARALLEL running?
 //
-// [ RUN      ] 
+// [ RUN      ]
 // ++++++++++
 // ..........
-// [       OK ] 
+// [       OK ]
 //
 // OR
 //
@@ -1494,11 +1600,13 @@ TEST(CCon, mutex_Types)
 
   // use std::lock_guard
   {
-    auto f1 =
-      std::async(std::launch::async, print_use_lock_guard, "Hello from a first thread");
+    auto f1 = std::async(std::launch::async,
+                         print_use_lock_guard,
+                         "Hello from a first thread");
 
-    auto f2 =
-      std::async(std::launch::async, print_use_lock_guard, "Hello from a second thread");
+    auto f2 = std::async(std::launch::async,
+                         print_use_lock_guard,
+                         "Hello from a second thread");
 
     EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
 
@@ -1507,11 +1615,13 @@ TEST(CCon, mutex_Types)
 
   // use std::unique_lock provides the same cxx-raii; unlocks in dtor
   {
-    auto f1 =
-      std::async(std::launch::async, print_use_unique_lock, "Hello from a first thread");
+    auto f1 = std::async(std::launch::async,
+                         print_use_unique_lock,
+                         "Hello from a first thread");
 
-    auto f2 =
-      std::async(std::launch::async, print_use_unique_lock, "Hello from a second thread");
+    auto f2 = std::async(std::launch::async,
+                         print_use_unique_lock,
+                         "Hello from a second thread");
 
     EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
 
@@ -1941,8 +2051,8 @@ namespace cxx_condition
     bool thread_running{true};
   };
 
-  // NOTE: why not lock on m?
-  void push_items_and_notify(ConditionWait &cw)
+  // NOTE: do not use lock
+  void push_items_and_notify1(ConditionWait &cw)
   {
     // expect nothing happens since there is no item in the q since q is empty
     // but thread_running is true so wait() do not exit
@@ -1950,7 +2060,7 @@ namespace cxx_condition
       // wait to make sure consumer is ready
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-      // signal
+      // std::cout << "signal1 " << std::endl;
       cw.cv.notify_one();
     }
 
@@ -1962,7 +2072,7 @@ namespace cxx_condition
       for (int i = 0; i < 5; i++)
         cw.q.push(i);
 
-      // signal again
+      // std::cout << "signal2 " << std::endl;
       cw.cv.notify_one();
     }
 
@@ -1974,6 +2084,52 @@ namespace cxx_condition
       for (int i = 0; i < 5; i++)
         cw.q.push(i);
 
+      // std::cout << "signal3 " << std::endl;
+      cw.cv.notify_one();
+
+      cw.thread_running = false;
+    }
+  }
+
+  // NOTE: this time, use lock to push item to q
+  void push_items_and_notify2(ConditionWait &cw)
+  {
+    // expect nothing happens since there is no item in the q since q is empty
+    // but thread_running is true so wait() do not exit
+    {
+
+      // wait to make sure consumer is ready
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      std::cout << "signal1 " << std::endl;
+      cw.cv.notify_one();
+    }
+
+    // push some and signal
+    {
+      std::lock_guard<std::mutex> lock(cw.m);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      std::cout << "signal2 " << std::endl;
+      cw.cv.notify_one();
+    }
+
+    // push some and signal to end
+    {
+      std::lock_guard<std::mutex> lock(cw.m);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      std::cout << "signal3 " << std::endl;
       cw.cv.notify_one();
 
       cw.thread_running = false;
@@ -1983,7 +2139,7 @@ namespace cxx_condition
 
 // to see how wait() works
 
-TEST(CConCondition, condition_Wait)
+TEST(CConCondition, see_wait1)
 {
   using namespace cxx_condition;
 
@@ -1991,7 +2147,7 @@ TEST(CConCondition, condition_Wait)
 
   std::vector<int> coll{};
 
-  std::thread t([&] { push_items_and_notify(cw); });
+  std::thread t([&] { push_items_and_notify1(cw); });
 
   std::unique_lock<std::mutex> lock(cw.m);
 
@@ -2006,7 +2162,7 @@ TEST(CConCondition, condition_Wait)
     {
       auto item = cw.q.front();
       cw.q.pop();
-      // std::cout << "poped : " << item << std::endl;
+      std::cout << "poped : " << item << std::endl;
       coll.push_back(item);
     }
     else
@@ -2021,6 +2177,67 @@ TEST(CConCondition, condition_Wait)
   EXPECT_THAT(cw.q.size(), 4);
   // the while gets the second 0 and ends while
   EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 0));
+}
+
+TEST(CConCondition, see_wait2)
+{
+  using namespace cxx_condition;
+
+  struct ConditionWait cw;
+
+  std::vector<int> coll{};
+
+  std::thread t([&] { push_items_and_notify2(cw); });
+
+  std::unique_lock<std::mutex> lock(cw.m);
+
+  while (cw.thread_running)
+  {
+    // return from wait when
+    // 1. notified, and q is not empty or
+    // 2. notified, q is empty, and thread_running is false
+
+    cw.cv.wait(lock, [&] { return !cw.q.empty() || !cw.thread_running; });
+    if (!cw.q.empty())
+    {
+      auto item = cw.q.front();
+      cw.q.pop();
+      std::cout << "poped : " << item << std::endl;
+      coll.push_back(item);
+    }
+    else
+    {
+      std::cout << "woke up but q is empty" << std::endl;
+      coll.push_back(1000);
+    }
+  }
+
+  t.join();
+
+  // EXPECT_THAT(cw.q.size(), 4);
+
+  // TODO: this is the case where producer, push_items_and_notify2() finishes
+  // first and wait() returns. However, there is no gurantee for that? If
+  // interwinded, size can be 4?
+
+  EXPECT_THAT(cw.q.size(), 9);
+}
+
+TEST(CConCondition, see_wait_for)
+{
+  std::mutex m;
+  std::unique_lock<std::mutex> lock(m);
+  std::condition_variable cond;
+  std::queue<int> q;
+
+  EXPECT_THAT(q.empty(), true);
+
+  auto result =
+    cond.wait_for(lock, std::chrono::seconds(1), [&]() { return !q.empty(); });
+
+  // okay, it's done.
+  // EXPECT_THAT(result, std::cv_status::timeout);
+  EXPECT_THAT(result, false);
 }
 
 // interface:
@@ -2399,21 +2616,6 @@ TEST(DISABLED_CConCondition, ProducerAndConsumerError2)
 //
 //   std::thread c1(&consumer, q);
 // }
-
-TEST(CConCondition, cond_wait_for)
-{
-  std::mutex m;
-  std::unique_lock<std::mutex> lock(m);
-  std::condition_variable cond;
-  std::queue<int> q;
-
-  EXPECT_THAT(q.empty(), true);
-
-  cond.wait_for(lock, std::chrono::seconds(1), [&q]() { return !q.empty(); });
-
-  // okay, it's done.
-  EXPECT_THAT(true, true);
-}
 
 TEST(CConCondition, eventfd)
 {

@@ -7,6 +7,6 @@
 
 std::ostream &operator<<(std::ostream &os, const Location &location)
 {
-    os << "(" << location.latitude() << "," << location.longitude() << ")";
-    return os;
+  os << "(" << location.latitude() << "," << location.longitude() << ")";
+  return os;
 }

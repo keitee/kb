@@ -7,98 +7,97 @@
 
 void GeoServer::track(const std::string &user)
 {
-    // Q?
-    locations_[user] = Location();
+  // Q?
+  locations_[user] = Location();
 }
 
 void GeoServer::stopTracking(const std::string &user)
 {
-    locations_.erase(user);
+  locations_.erase(user);
 }
 
-bool GeoServer::isTracking(const std::string &user) const 
+bool GeoServer::isTracking(const std::string &user) const
 {
-    return locations_.find(user) != locations_.end();
+  return locations_.find(user) != locations_.end();
 }
 
-void GeoServer::updateLocation(const std::string &user, const Location &location)
+void GeoServer::updateLocation(const std::string &user,
+                               const Location &location)
 {
-    locations_[user] = location;
+  locations_[user] = location;
 }
 
 Location GeoServer::locationOf(const std::string &user) const
 {
-    if (!isTracking(user))
-        return Location{};
+  if (!isTracking(user))
+    return Location{};
 
-    return find(user)->second;
+  return find(user)->second;
 }
 
 std::unordered_map<std::string, Location>::const_iterator
 GeoServer::find(const std::string &user) const
 {
-    return locations_.find(user);
+  return locations_.find(user);
 }
 
 bool GeoServer::isDifferentUserInBounds(
-        const std::pair<std::string, Location> &each,
-        const std::string &user,
-        const Area &box) const
+  const std::pair<std::string, Location> &each,
+  const std::string &user,
+  const Area &box) const
 {
-    if( each.first == user )
-        return false;
+  if (each.first == user)
+    return false;
 
-    return box.inBounds(each.second);
+  return box.inBounds(each.second);
 }
 
-
 // std::vector<User> GeoServer::usersInBox(
-void GeoServer::usersInBox(
-        const std::string &user, double widthInMeters, 
-        double heightInMeters,
-        GeoServerListener *listener) const
+void GeoServer::usersInBox(const std::string &user,
+                           double widthInMeters,
+                           double heightInMeters,
+                           GeoServerListener *listener) const
 {
-    auto location = locations_.find(user)->second;
+  auto location = locations_.find(user)->second;
 
-    Area box{location, widthInMeters, heightInMeters};
+  Area box{location, widthInMeters, heightInMeters};
 
-    // std::vector<User> users;
+  // std::vector<User> users;
 
-    // for( auto &each : locations_ )
-    //     if( isDifferentUserInBounds(each, user, box) )
-    //     {
-    //         // users.push_back( User{each.first, each.second} );
-    //         if (listener)
-    //             listener->updated(User{each.first, each.second});
-    //     }
+  // for( auto &each : locations_ )
+  //     if( isDifferentUserInBounds(each, user, box) )
+  //     {
+  //         // users.push_back( User{each.first, each.second} );
+  //         if (listener)
+  //             listener->updated(User{each.first, each.second});
+  //     }
 
-    // c9/15/GeoServer.cpp
-    for( auto &each : locations_ )
-    {
-        Work work{ [&] 
-            {
-                if( isDifferentUserInBounds(each, user, box) )
-                {
-                    // users.push_back( User{each.first, each.second} );
-                    if (listener)
-                        listener->updated(User{each.first, each.second});
-                }
-            }};
-        pool_->add(work);
-    }
+  // c9/15/GeoServer.cpp
+  for (auto &each : locations_)
+  {
+    Work work{[&] {
+      if (isDifferentUserInBounds(each, user, box))
+      {
+        // users.push_back( User{each.first, each.second} );
+        if (listener)
+          listener->updated(User{each.first, each.second});
+      }
+    }};
+    pool_->add(work);
+  }
 
-    // NOTE:
-    // As always, we seek incremental change, leaving in place the logic that
-    // directly returns a vector of users. This allows us to prove our idea
-    // before wasting a lot of time applying a similar implementation to other
-    // tests.
+  // NOTE:
+  // As always, we seek incremental change, leaving in place the logic that
+  // directly returns a vector of users. This allows us to prove our idea
+  // before wasting a lot of time applying a similar implementation to other
+  // tests.
 
-    // return users;
+  // return users;
 }
 
 // c9/15/GeoServer.cpp
 
 void GeoServer::useThreadPool(std::shared_ptr<ThreadPool> pool)
 {
-    pool_ = pool;
+  pool_ = pool;
 }
