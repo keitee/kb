@@ -291,6 +291,8 @@ static int method_function1(sd_bus_message *m, void *data, sd_bus_error *error)
                                   "ListNames");            // method
 }
 
+// #define SD_BUS_METHOD(_member, _signature, _result, _handler, _flags)
+
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
   SD_BUS_METHOD(

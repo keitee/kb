@@ -50,9 +50,11 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-git
 *kt_dev_skymw_0000* skymw-rdk-xione
 *kt_dev_skymw_0000* skymw-rdk-llama
-*kt_dev_skymw_0000* skymw-rdk-as
+*kt_dev_skymw_0000* skymw-rdk-as-build
+*kt_dev_skymw_0000* skymw-rdk-as-proxy
 *kt_dev_skymw_0000* skymw-rdk-dtt
-*kt_dev_skymw_0000* skymw-rdk-as-appmanager rdk-as-windowmanager rdk-as-player
+*kt_dev_skymw_0000* skymw-rdk-as-player
+*kt_dev_skymw_0000* skymw-rdk-as-appmanager rdk-as-windowmanager
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -10893,7 +10895,7 @@ lrwxrwxrwx 1 keitee keitee 19 Jan  2 09:46 libwayland-egl.so -> libwayland-egl.s
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-as
+*kt_dev_skymw_0000* skymw-rdk-as-build
 
 // under bitbake
 meta-rdk-sky/recipes-core$ ll
@@ -10945,21 +10947,6 @@ iptables -I INPUT 1 -p tcp --match multiport --dport 9001:9007 -m conntrack --ct
 iptables -I OUTPUT 1 -p tcp --match multiport --sport 9001:9007 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
 
-systemctl stop appmanager
-./asproxy &
-./ASSystemService &
-./ASNetworkService &
-
-systemctl -a | grep -i sky
-  sky-appsservice.service                                                                                           loaded    active     running      Sky AS Apps Service
-  sky-asmock.service                                                                                                loaded    active     running      Sky AS Mock Service daemon
-  sky-asplayer.service                                                                                              loaded    active     running      Sky AS Player Service
-  sky-asproxy.service                                                                                               loaded    active     running      Sky AS Proxy daemon
-  sky-bluetoothrcu.service                                                                                          loaded    active     running      Sky Bluetooth RCU Daemon
-  sky-dobby.service                                                                                                 loaded    active     running      Sky Dobby (Container) daemon
-● sky-fixup.service                                                                                                 loaded    failed     failed       Sky FixUp
-
-
 *rdk-as-build* out of bitbake
 
 /media/keitee/ssd2/as/asappsserviced/RDK/AppManager/build
@@ -10970,29 +10957,8 @@ cmake -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 cmake -DCMAKE_TOOLCHAIN_FILE=./kit.toolchain.new.cmake ..
 
 
-*as-asmockservice*
-
-[Unit]
-Description=Sky AS Mock Service daemon
-After=sky-bluetoothrcu.service
-
-[Service]
-Type=dbus
-BusName=com.sky.as.mockservice
-ExecStart=/bin/sh -c '/usr/bin/asmockservice --journald --nobuiltin /etc/sky/asmockservice/configs/*.json'
-Restart=on-failure
-
-// do not use builtin json config files but still use extarnal confings in
-// /etc/sky? are they same?
-
-keitee@kit-ubuntu:/media/keitee/ssd2/as/asmockservice$ diff -r configs configs_from_box/
-Only in configs: apps.json
-Only in configs: btremotes.json
-Only in configs: network.json
-
-this means that these three files are not handled by mock; real services do
-instead.
-
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-as-proxy
 
 *rdk-as-proxy*
 
@@ -11202,10 +11168,20 @@ void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
     }
 }
 
+
+*as-proxy-from-http-to-request*
+
 {
   SD_BUS_METHOD("Config", nullptr,         "s",         &ASServicePrivate::config,                SD_BUS_VTABLE_UNPRIVILEGED),
-  SD_BUS_METHOD("Request", "usa{ss}a{ss}s", "(ua{ss}s)", &ASServicePrivate::request,               SD_BUS_VTABLE_UNPRIVILEGED),
+
+  SD_BUS_METHOD("Request", 
+      "usa{ss}a{ss}s", 
+      "(ua{ss}s)",
+      &ASServicePrivate::request,
+      SD_BUS_VTABLE_UNPRIVILEGED),
 }
+
+input:
 
 "us"
 uint32_t flags;                   // method flag
@@ -11220,11 +11196,8 @@ map<string, string>
 "s"                               // body
 const char*
 
+return:
 
-={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-dtt
-
-dbus-monitor --system "interface=com.sky.as.Service1"
 
 dbus-monitor --system --profile "interface=com.sky.as.Service1"
 
@@ -11233,6 +11206,8 @@ mc      1584356871.977624       126     :1.127  com.sky.as.system       /com/sky
 mc      1584356871.978126       320     :1.73   com.sky.as.proxy        /com/sky/as/service     com.sky.as.Service1     DBusProxyMethodCall
 mc      1584356871.978857       127     :1.127  com.sky.as.network      /com/sky/as/service     com.sky.as.Service1     PingRouter
 
+
+dbus-monitor --system "interface=com.sky.as.Service1"
 
 method call time=1584357012.340034 sender=:1.127 -> destination=com.sky.as.player serial=145 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
@@ -11286,6 +11261,93 @@ method call time=1584357012.340034 sender=:1.127 -> destination=com.sky.as.playe
       )
    ]
    string ""
+
+dbus-send --dest=com.sky.as.player \
+  /com/sky/as/service \
+  interface=com.sky.as.Service1.Request \
+  uint32:2 \
+  string "/as/players/1/action/watchstream" \
+  dict:string:string: \
+  "Host","192.168.0.103:9005", \
+  "Connection","keep-alive", \
+  "Content-Length","0" \
+  "Accept","*/*", \
+  "Origin","http://build01.mw.ethan.bskyb.com", \
+  "User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36", \
+  "Referer","http://build01.mw.ethan.bskyb.com/asda/?", \
+  "Accept-Encoding","gzip, deflate", \
+  "Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+  dict:string:string:\
+  "uri","http://skydvn-nowtv-atv-prod.skydvn.com/atv/skynews/1404/live/04.m3u8", \
+  "publicip", "90.216.134.192" \
+   string:""
+
+dbus-send --dest=com.sky.as.player \
+  /com/sky/as/service \
+  interface=com.sky.as.Service1.Request \
+  uint32:2 \
+  string "/as/players/1/action/livestream" \
+  dict:string:string: \
+  "Host","192.168.0.103:9005", \
+  "Connection","keep-alive", \
+  "Content-Length","0" \
+  "Accept","*/*", \
+  "Origin","http://build01.mw.ethan.bskyb.com", \
+  "User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36", \
+  "Referer","http://build01.mw.ethan.bskyb.com/asda/?", \
+  "Accept-Encoding","gzip, deflate", \
+  "Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+  dict:string:string:\
+  "uri","http://skydvn-nowtv-atv-prod.skydvn.com/atv/skynews/1404/live/04.m3u8", \
+  "publicip", "90.216.134.192" \
+   string:""
+
+
+register http executor to handle http get/post request which forwards it to
+the relevant service.
+
+void ServicesManager::bindServiceMethods(const std::vector<ServiceUrl> &urls,
+                                         const std::shared_ptr<IService> &service)
+{
+  else if ((method == REQ_METHOD_HTTP_GET) || (method == REQ_METHOD_HTTP_POST))
+  {
+    AS_WORKER::Factory *factory = new ServiceHttpExecutorFactory(mSecurity,
+        allowedLevels,
+        `service,`
+        url.expectsBody);
+    if (url.threaded)
+    {
+      mUrlMap->RegisterUrl(method, url.path, factory, url.threadName);
+    }
+    else
+    {
+      mUrlMap->RegisterUrl(method, url.path, factory);
+    }
+  }
+}
+
+// /rdk/ASProxy/Proxy/Services/source/ServiceHttpExecutor.cpp
+
+ServiceHttpExecutorFactory::ServiceHttpExecutorFactory(const std::shared_ptr<const ISecurityContext> &security,
+                                                       unsigned int securityLevelsMask,
+                                                       const std::shared_ptr<IService> &service,
+                                                       bool expectsRequestBody)
+    : BaseExecutorFactory(security, securityLevelsMask)
+    , mService(service)
+{}
+
+int ServiceHttpExecutor::execGetOrPost(int requestType)
+{
+  // send the request off to the remote process
+  ASResponse response =
+    mService->request(requestType, std::move(urlPath),
+        std::move(headerParams), std::move(queryParams),
+        std::move(body));
+}
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-dtt
 
 
 Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: 0000003435.054522 ERR: < M:AS_WEB_SERVER_MainThread.cpp F:Exec L:147 > KT: httpRequestStringPath 9005/as/players/1/action/watchstream?uri=http%3A%2F%2Fskydvn-nowtv-atv-prod.skydvn.com%2Fatv%2Fskynews%2F1404%2Flive%2F04.m3u8&publicip=90.216.134.192
@@ -11716,7 +11778,7 @@ ServiceScanController::ServiceScanController
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-as-appmanager rdk-as-windowmanager rdk-as-player
+*kt_dev_skymw_0000* skymw-rdk-as-player
 
 *rdk-as-player*
 
@@ -11730,6 +11792,7 @@ WorkingDirectory=/tmp
 ExecStartPre=/bin/rm -rf /tmp/llds
 ExecStart=/usr/sbin/asrdkplayer
 Restart=on-failure
+
 
 armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
 ./gst-plugins-rdk-aamp/1.99+git999-r0/gst-plugins-rdk-aamp-1.99+git999/libgstaamp.so
@@ -11772,6 +11835,10 @@ echo $WESTEROS_GL_USE_BEST_MODE
 echo $WESTEROS_SINK_USE_GFX
 
 asrdkplayer -v
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-as-appmanager rdk-as-windowmanager
 
 
 *rdk-as-appsserviced*
