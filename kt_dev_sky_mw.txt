@@ -11005,6 +11005,58 @@ LimitNPROC=1
 ProtectHome=true
 ProtectSystem=full
 
+*rdk-as-proxy-map*
+
+// ethan-as-source/Components/Rdk/ASProxy/Main.cpp
+
+int main(int argc, char *argv[])
+{
+  // NOTE: ProxyUrlMap
+  // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+  
+  // start AS (webserver)
+  AS_MAIN::StartAS(urlMap);
+}
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyMain.cpp
+
+void AS_MAIN::StartAS(const std::shared_ptr<ProxyUrlMap> &urlMap)
+{
+  // create the service manager
+  std::shared_ptr<IServicesController> servicesController =
+    IServicesController::create(urlMap, security);
+
+  // start AS
+  asMain = new AS_MAIN::ProxyMain(urlMap);
+  asMain->start();
+}
+
+
+M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
+M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
+M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/startlistening'
+M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/stoplistening'
+M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.player'
+
+bool ServicesManager::registerService(const std::string &configJson)
+{
+  `bindServiceMethods`(config.urls, service);
+  {
+    AS_LOG_MIL("adding %s executor for '%s'",
+    (method == REQ_METHOD_WS) ? "ws" : "http", url.path.c_str());
+
+    mUrlMap->RegisterUrl(method, url.path, factory, url.threadName);
+  }
+}
+
+// ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
+{
+  9005, // Debug, e.g. ASDA
+  {
+    {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+  }
+}
+
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
 
@@ -11037,9 +11089,53 @@ std::shared_ptr<IServicesController> IServicesController::create(const std::shar
   return std::make_shared<RdkServicesController>(urlMap, securityCtx);
 }
 
+NOTE: ServiceManager that registers url
+
 RdkServicesController::RdkServicesController()
     , mOurServiceName("com.sky.as.proxy")
-{}
+{
+  // create the manager which actually sets up the executors for each
+  // individual service
+  mManager = std::make_shared<ServicesManager>(urlMap, security);
+}
+
+void RdkServicesController::onServiceRegistered(const std::string &name)
+{
+  // register the service (the manager will handle setting up processing the
+  // service and setting up all the executors)
+  mManager->registerService( config, service, domainName, registeredDbusMethods );
+}
+
+void RdkServicesController::threadLoop()
+{
+  case Event::ServiceAdded:
+    onServiceRegistered(event.serviceName);
+    break;
+}
+
+// ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
+// where checks on url depending on country and platform
+
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+
+M:AS_WEB_SERVER_MainThread.cpp F:Exec L:188 > No registered url found for: /9005/as/players/1/action/watchlive
+  No registered url found for: /9005/as/players/1/action/watchlive
+
+{
+  AS_WORKER::Executor *executor = map->CreateExecutor( httpMethod, env, uri, &validator );
+
+  if ( executor == NULL )
+  {
+    AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
+  }
+}
+
+void UrlMap::RegisterUrl( REQ_METHOD method, char *url,
+                          AS_WORKER::Factory *factory,
+                          AS_WORKER::ParamValidator *paramValidator,
+                          AS_WORKER::ThreadParams *threadParams )
+{
+}
 
 
 void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
@@ -11128,6 +11224,78 @@ const char*
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-dtt
 
+dbus-monitor --system "interface=com.sky.as.Service1"
+
+dbus-monitor --system --profile "interface=com.sky.as.Service1"
+
+mc      1584356869.382300       125     :1.127  com.sky.as.player       /com/sky/as/service     com.sky.as.Service1     Request
+mc      1584356871.977624       126     :1.127  com.sky.as.system       /com/sky/as/service     com.sky.as.Service1     Request
+mc      1584356871.978126       320     :1.73   com.sky.as.proxy        /com/sky/as/service     com.sky.as.Service1     DBusProxyMethodCall
+mc      1584356871.978857       127     :1.127  com.sky.as.network      /com/sky/as/service     com.sky.as.Service1     PingRouter
+
+
+method call time=1584357012.340034 sender=:1.127 -> destination=com.sky.as.player serial=145 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
+   uint32 2
+   string "/as/players/1/action/watchstream"
+   array [
+      dict entry(
+         string "Host"
+         string "192.168.0.103:9005"
+      )
+      dict entry(
+         string "Connection"
+         string "keep-alive"
+      )
+      dict entry(
+         string "Content-Length"
+         string "0"
+      )
+      dict entry(
+         string "Accept"
+         string "*/*"
+      )
+      dict entry(
+         string "Origin"
+         string "http://build01.mw.ethan.bskyb.com"
+      )
+      dict entry(
+         string "User-Agent"
+         string "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36"
+      )
+      dict entry(
+         string "Referer"
+         string "http://build01.mw.ethan.bskyb.com/asda/?"
+      )
+      dict entry(
+         string "Accept-Encoding"
+         string "gzip, deflate"
+      )
+      dict entry(
+         string "Accept-Language"
+         string "en-GB,en-US;q=0.9,en;q=0.8"
+      )
+   ]
+   array [
+      dict entry(
+         string "uri"
+         string "http://skydvn-nowtv-atv-prod.skydvn.com/atv/skynews/1404/live/04.m3u8"
+      )
+      dict entry(
+         string "publicip"
+         string "90.216.134.192"
+      )
+   ]
+   string ""
+
+
+Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: 0000003435.054522 ERR: < M:AS_WEB_SERVER_MainThread.cpp F:Exec L:147 > KT: httpRequestStringPath 9005/as/players/1/action/watchstream?uri=http%3A%2F%2Fskydvn-nowtv-atv-prod.skydvn.com%2Fatv%2Fskynews%2F1404%2Flive%2F04.m3u8&publicip=90.216.134.192
+Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: 0000003435.054937 MIL: < M:ProxyUrlMap.cpp F:CreateExecutor L:173 > KT: ProxyUrlMap::CreateExecutor: /9005/as/players/1/action/watchstream
+Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: 0000003435.054964 MIL: < M:AS_WORKER_UrlMap.cpp F:CreateExecutor L:449 > KT: UrlMap::CreateExecutor:1 /9005/as/players/1/action/watchstream
+httpRequestStringPath 9005/as/players/1/action/watchstream?uri=http%3A%2F%2Fskydvn-nowtv-atv-prod.skydvn.com%2Fatv%2Fskynews%2F1404%2Flive%2F04.m3u8&publicip=90.216.134.192
+// http://skydvn-nowtv-atv-prod.skydvn.com/atv/skynews/1404/live/04.m3u8
+Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: KT: ProxyUrlMap::CreateExecutor: /9005/as/players/1/action/watchstream
+Mar 16 16:10:33 arrisxi6-morty asproxy[15717]: KT: UrlMap::CreateExecutor:1 /9005/as/players/1/action/watchstream
+
 // from ftp
 wget --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-01-31/Release_RDK_Readme.txt
 wget -r --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-02-10
@@ -11144,36 +11312,51 @@ iptables -F
 
 ssh -p 10022 root@192.168.0.103
 
-systemctl status sky-asplayer
+
+// to move where it's writable
+cd /opt
+
 systemctl stop sky-asplayer
-
-umount /usr/sbin/asrdkplayer
-// copy player
-scp -r -P 10022 ./asrdkplayer root@192.168.0.104:/opt
-mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
-systemctl start sky-asplayer
-
-journalctl -fu sky-asplayer
-journalctl -u sky-asplayer --since today
-
-
-systemctl status sky-asproxy
 systemctl stop sky-asproxy
+
+mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+mount-copybind ./asproxy /usr/sbin/asproxy
+
+systemctl start sky-asplayer
 systemctl start sky-asproxy
 
-journalctl -fu sky-asproxy
+systemctl status sky-asplayer
+systemctl status sky-asproxy
 
+
+// copy player
+umount /usr/sbin/asrdkplayer
+scp -r -P 10022 ./asrdkplayer root@192.168.0.103:/opt
 
 // copy proxy
-scp -r -P 10022 ./asproxy root@192.168.0.105:/opt
-mount-copybind ./asproxy /usr/sbin/asproxy
+systemctl stop sky-asproxy
 umount /usr/sbin/asproxy
+scp -r -P 10022 ./asproxy root@192.168.0.103:/opt
+
+journalctl -fu sky-asplayer
+journalctl -fu sky-asplayer --since today
+journalctl -fu sky-asplayer
+
+
+b AS_WEB_SERVER_MainThread.cpp:188
+b AS_WEB_SERVER_MainThread.cpp:KTDEBUG
+
+b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG
+
+journalctl -fu sky-asproxy
+journalctl -fu sky-asproxy
+
 
 ssh -p 10022 root@192.168.0.105 journalctl -u sky-asproxy --since today
 ssh -p 10022 root@192.168.0.105 journalctl -u sky-asproxy --since today > /opt/log.out
 
 // get log from box to host
-scp -P 10022 root@192.168.0.105:/opt/log.out .
+scp -P 10022 root@192.168.0.103:/opt/proxy.log .
 
 scp -P 10022 root@192.168.0.105:/opt/corefiles .
 
@@ -11182,7 +11365,7 @@ services/scan/action/start
 http://192.168.0.105:9005/as/services/scan/action/start?scantype=DTT-FULL
 
 GET
-http://192.168.0.105:9005/as/services/favourites
+http://192.168.0.103:9005/as/services/favourites
 services/favourites
 
 {
@@ -11192,6 +11375,13 @@ services/favourites
  { "lcn": 2, "sid": "2314"}
  ]
 }
+
+POST
+http://192.168.0.103:9005/as/players/1/action/watchlive
+
+http://192.168.0.103:9005/as/players/1/action/watchstream?uri=http://skydvn-nowtv-atv-prod.skydvn.com/atv/skynews/1404/live/04.m3u8
+
+http://192.168.0.103:9005/as/players/1/action/watchlive?sid=100
 
 
 // xi6-core-dump
