@@ -2335,6 +2335,7 @@ TEST(QtEvnet, useCustomEvent)
 
 // ={=========================================================================
 
+#if 0
 static void GoogleTestRunner(int argc, char **argv)
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
@@ -2363,3 +2364,22 @@ int main(int argc, char **argv)
 
   return app.exec();
 }
+#else
+
+int main(int argc, char **argv)
+{
+  QCoreApplication app(argc, argv);
+
+  // Since Google Mock depends on Google Test, InitGoogleMock() is
+  // also responsible for initializing Google Test.  Therefore there's
+  // no need for calling testing::InitGoogleTest() separately.
+  testing::InitGoogleMock(&argc, argv);
+  RUN_ALL_TESTS();
+
+  // TODO:
+  // with app.exec(), main() will not end but without it, why does all tests still
+  // work?
+  //  return app.exec();
+}
+
+#endif

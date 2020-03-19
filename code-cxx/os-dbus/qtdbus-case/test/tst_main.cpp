@@ -8,16 +8,6 @@
 
 // ={=========================================================================
 
-#if 0
-
-int main(int argc, char **argv)
-{
-  testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
-
-#else
-
 static void GoogleTestRunner(int argc, char **argv)
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
@@ -33,14 +23,6 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  // note: this do not exit when finishes.
-  //
-  // // Since Google Mock depends on Google Test, InitGoogleMock() is
-  // // also responsible for initializing Google Test.  Therefore there's
-  // // no need for calling testing::InitGoogleTest() separately.
-  // testing::InitGoogleMock(&argc, argv);
-  // RUN_ALL_TESTS();
-
   // Disable sigpipe as we run a few tests that deliberately close remote
   // ends of pipes / sockets.
   signal(SIGPIPE, SIG_IGN);
@@ -50,5 +32,3 @@ int main(int argc, char **argv)
 
   return app.exec();
 }
-
-#endif

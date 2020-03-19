@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_cxx VERSION 0.1 LANGUAGES CXX)
+project(test_gdb VERSION 0.1 LANGUAGES CXX)
 
-# enable_testing()
+enable_testing()
 
 # https://stackoverflow.com/questions/690223/how-to-retrieve-a-user-environment-variable-in-cmake-windows
 # Getting variables into your CMake script
@@ -17,6 +17,7 @@ project(test_cxx VERSION 0.1 LANGUAGES CXX)
 # $ENV{FOO}
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
+set(GTEST_DIR "$ENV{HOME}/works/googletest/googletest" CACHE PATH "The path to the GoogleTest")
 
 
 # Include the directory source_dir in your project. This directory must contain
@@ -60,12 +61,10 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # directory...  The directories to be added to the list of include directories.
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
+# include_directories(SYSTEM ${GTEST_DIR}/include)
 
 
-# do not work
-# add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-# add_compile_options("-g;-D_GLIBCXX_DEBUG")
-add_compile_options("-g")
+add_compile_options("-g;-D_GLIBCXX_DEBUG")
 
 
 # cmake help
@@ -144,72 +143,33 @@ add_compile_options("-g")
 # add_library(Boost::regex UNKNOWN IMPORTED)
 
 
-#find_package(Boost 1.70.0 COMPONENTS system thread)
-find_package(Boost 1.70.0 COMPONENTS system)
+find_package(Boost 1.70.0 COMPONENTS system thread)
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 
-# cmake -DCXX_CPP_VALUE=GCC ..
-# to use on #if/ifdef test
+# to find library name:
+#
+# ~/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core/Qt5CoreConfig.cmake
+# # For backwards compatibility only. Use Qt5Core_VERSION instead.
+# set(Qt5Core_VERSION_STRING 5.12.3)
+# 
+# set(Qt5Core_LIBRARIES Qt5::Core)
 
-add_definitions(-DGCC=1 -DCLANG=2)
-
-if (CXX_CPP_VALUE STREQUAL "GCC")
-  add_definitions(-DCXX_CPP_VALUE=GCC)
-elseif(CXX_CPP_VALUE STREQUAL "GLANG")
-  add_definitions(-DCXX_CPP_VALUE=CLANG)
-else()
-  message(WARNING "CXX_CPP_VALUE is not provided." )
-endif()
-
-add_definitions(-DARM=3 -DMIPS=4)
-
-if (CXX_CPP_VALUE2 STREQUAL "ARM")
-  add_definitions(-DCXX_CPP_VALUE2=ARM)
-elseif(CXX_CPP_VALUE2 STREQUAL "MIPS")
-  add_definitions(-DCXX_CPP_VALUE2=MIPS)
-else()
-  message(WARNING "CXX_CPP_VALUE2 is not provided." )
-endif()
+# used in library name:
+# target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
 
 
-# cxx.cpp
-add_executable(${PROJECT_NAME} "test_cxx.cpp")
+# test_abort.cpp
+add_executable(test_abort "test_abort.cpp")
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
+# ok
+# target_link_libraries(test_abort gmock gmock_main Boost::thread)
 
-# target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME} gmock_main)
+target_link_libraries(test_abort gmock gmock_main)
 
-# _ex.cpp
-add_executable(${PROJECT_NAME}_ex "test_cxx_ex.cpp")
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME}_ex gmock_main)
-
-# _pattern.cpp
-add_executable(${PROJECT_NAME}_pattern "test_cxx_pattern.cpp")
-#target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME}_pattern gmock_main)
-
-# _case.cpp
-add_executable(${PROJECT_NAME}_case "test_cxx_case.cpp")
-# target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME}_case gmock_main)
-
-# _boost.cpp
-add_executable(test_boost "test_boost.cpp")
-# target_link_libraries(test_boost gmock_main Boost::thread)
-target_link_libraries(test_boost gmock_main)
-
-# test_stl.cpp
-add_executable(test_stl "test_stl.cpp")
-# target_link_libraries(test_stl gmock_main Boost::thread)
-target_link_libraries(test_stl gmock_main)
-
-# add_test(Gtest.MatcherForPair ${PROJECT_NAME})
-add_test(${PROJECT_NAME} ${PROJECT_NAME})
-
+# add_test(${PROJECT_NAME} ${PROJECT_NAME})

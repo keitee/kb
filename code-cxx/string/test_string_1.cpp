@@ -246,7 +246,7 @@ TEST(StringOperation, MaxSize)
 // ={=========================================================================
 // string-substring string-find string-substr
 
-TEST(CxxStringOperation, SubstringFind)
+TEST(CxxStringOperation, find_substring)
 {
   // cxx-srring-find
   // http://www.cplusplus.com/reference/string/string/find/
@@ -276,7 +276,7 @@ TEST(CxxStringOperation, SubstringFind)
     EXPECT_THAT(found, -1);
   }
 
-  // cxx-srring-rfind reverse find
+  // cxx-srring-rfind find backwards
   // https://en.cppreference.com/w/cpp/string/basic_string/rfind
   //
   // Finds the `last substring` equal to the given character sequence. Search
@@ -303,7 +303,8 @@ TEST(CxxStringOperation, SubstringFind)
     found = coll1.rfind("The", 0);
     EXPECT_THAT(found, 0);
 
-    // starts from 2 and see match 'The'. returns 0 since 0 is the first char
+    // starts from 2 to backwards and see match 'The'. returns 0 since 0 is the
+    // first char
     found = coll1.rfind("The", 2);
     EXPECT_THAT(found, 0);
 
@@ -335,6 +336,14 @@ TEST(CxxStringOperation, SubstringFind)
     // search backwards from position 4
     auto found = s.rfind("is", 4);
     EXPECT_THAT(found, 2);
+  }
+
+  {
+
+    const std::string request{"/as/players/2/action/watchlive"};
+    const std::string s = "/as/players/2/";
+
+    EXPECT_THAT(request.rfind(s, 0), 0);
   }
 }
 

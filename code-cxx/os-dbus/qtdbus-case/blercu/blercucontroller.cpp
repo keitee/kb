@@ -86,6 +86,12 @@ QString BleRcuControllerImpl::managedDevices() const
   return "blercudevice1";
 }
 
+bool BleRcuControllerImpl::isValid() const
+{
+  qWarning("BleRcuControllerImpl::isValid() called");
+  return true;
+}
+
 bool BleRcuControllerImpl::isPairing() const
 {
   qWarning("BleRcuControllerImpl::isPairing() called");

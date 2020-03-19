@@ -10,12 +10,12 @@ add_library(blercu
   adaptors/blercucontroller1_adaptor.cpp
   ${HEADER_LIST})
 
-# we need this directory, and users of our library will need it too.
-# target_include_directories(student PUBLIC ../include)
 
-# TODO: `blercu` use headers from other sub project. Is there a better way to
-# do? For example, make it available to all sub projects from main cmake file?
-target_include_directories(blercu PUBLIC ../dbus)
+# to make it available to all sub projects from main cmake file?
+target_include_directories(blercu 
+  PUBLIC 
+  ../dbus
+  ${CMAKE_CURRENT_LIST_DIR})
 
 target_link_libraries(blercu PRIVATE dbus Qt5::DBus Qt5::Core)
 

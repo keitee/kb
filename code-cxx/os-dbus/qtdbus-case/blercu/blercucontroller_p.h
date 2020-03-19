@@ -40,6 +40,7 @@ public:
   bool registerToDBus(const QDBusConnection &) override;
   bool unregisterFromDBus(const QDBusConnection &) override;
 
+  bool isValid() const override;
   QString managedDevices() const override;
   bool isPairing() const override;
   quint8 pairingCode() const override;

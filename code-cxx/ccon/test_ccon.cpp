@@ -840,7 +840,7 @@ namespace cxx_async
 } // namespace cxx_async
 
 // which one runs first? answer can be either 90 or 100?
-// async finishes first so sum is 90
+// async finishes first since do_long takes 5 secs, so sum is 90
 TEST(CConAsync, check_launch_policy1)
 {
   using namespace cxx_async;
@@ -873,7 +873,7 @@ TEST(CConAsync, check_launch_policy3)
   EXPECT_THAT(sum, 10);
 }
 
-// do not use result and async runs
+// do not use result and async runs since use future
 TEST(CConAsync, check_launch_policy4)
 {
   using namespace cxx_async;
@@ -896,10 +896,10 @@ TEST(CConAsync, check_launch_policy4)
 // called. Note that I wrote that async() `tries` to start the passed
 // functionality.
 //
-// If this didn’t happen we need the future object to *force* a start when we
-// need the result or want to ensure that the functionality was performed. Thus,
-// you need the future object even if you are not interested in the outcome of a
-// functionality started in the background.
+// NOTE: If this didn’t happen we need the future object to *force* a start when
+// we need the result or want to ensure that the functionality was performed.
+// Thus, you need the future object even if you are not interested in the
+// outcome of a functionality started in the background.
 //
 // Accordingly, two kinds of outputs are possible for this program.
 
@@ -932,6 +932,7 @@ TEST(CConAsync, check_launch_policy4)
 //
 // this is `sequential` so can see either sequential or parallel output.
 
+// parallel on workstation
 TEST(CConAsync, check_launch_policy11)
 {
   // async
@@ -958,6 +959,7 @@ TEST(CConAsync, check_launch_policy11)
 // +++++
 // [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
+// parallel on workstation
 TEST(CConAsync, check_launch_policy12)
 {
   std::future<int> result1(
@@ -997,6 +999,7 @@ TEST(CConAsync, check_launch_policy12)
 // ++++++++++
 // [       OK ] CConAsync.check_launch_policy3 (7062 ms)
 
+// serial on workstation
 TEST(CConAsync, check_launch_policy13)
 {
   std::async(launch::async, [] { return doSomething('.'); });
@@ -1004,6 +1007,7 @@ TEST(CConAsync, check_launch_policy13)
   doSomething('+');
 }
 
+// parallel on workstation
 // not use future return but have future to make it runs parallel
 TEST(CConAsync, check_launch_policy14)
 {
@@ -1031,6 +1035,7 @@ TEST(CConAsync, check_launch_policy14)
 //
 // done
 
+// both runs parallel on workstation
 TEST(CConAsync, check_launch_policy21)
 {
   {

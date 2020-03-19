@@ -10,10 +10,11 @@ add_library(dbus
   dbusabstractadaptor.cpp
   ${HEADER_LIST})
 
-# we need this directory, and users of our library will need it too.
-# target_include_directories(student PUBLIC ../include)
+target_include_directories(dbus 
+  PUBLIC 
+  ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(dbus PRIVATE Qt5::DBus Qt5::Core)
+target_link_libraries(dbus PUBLIC Qt5::DBus Qt5::Core)
 
 # needs at least C++11
 target_compile_features(dbus PUBLIC cxx_std_11)

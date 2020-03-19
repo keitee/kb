@@ -42,6 +42,8 @@ add_subdirectory(test)
 
 add_executable(qtdbus-case main.cpp blercu)
 
+# NOTE: qt-moc
+#
 # add_executable(qtdbus-case main.cpp blercu)
 # this causes an error in main when use:
 # QSharedPointer<BleRcuControllerImpl>::create(config, nullptr);

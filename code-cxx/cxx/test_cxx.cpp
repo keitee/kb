@@ -10678,7 +10678,7 @@ namespace cxx_cpp
 #define foo 4
 } // namespace cxx_cpp
 
-TEST(CxxCpp, cpp_Stringification)
+TEST(CxxCpp, check_stringification)
 {
   {
     double x = 10.0;
@@ -10879,7 +10879,7 @@ namespace cxx_cpp
 // int 10
 // int 97
 
-TEST(CxxCpp, cpp_VariableArgs)
+TEST(CxxCpp, check_variable_args)
 {
   using namespace cxx_cpp;
 
@@ -10918,7 +10918,7 @@ namespace cxx_cpp
   // #define CHECK_CXX_CPP_DEFINED 0
 } // namespace cxx_cpp
 
-TEST(CxxCpp, cpp_defined_keyword)
+TEST(CxxCpp, check_conditional)
 {
 #if defined CHECK_CXX_CPP_DEFINED
   EXPECT_THAT(true, true);
@@ -10962,6 +10962,12 @@ TEST(CxxCpp, cpp_defined_keyword)
   EXPECT_THAT(true, true);
 #else
   EXPECT_THAT(false, true);
+#endif
+
+#if (CXX_CPP_VALUE == GCC) && (CXX_CPP_VALUE2 == ARM)
+  std::cout << "GCC AND ARM" << std::endl;
+#elif (CXX_CPP_VALUE == VALUE_GLANG) && (CXX_CPP_VALUE2 != ARM)
+  std::cout << "GLANG AND MIPS" << std::endl;
 #endif
 }
 

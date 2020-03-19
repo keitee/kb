@@ -19,6 +19,7 @@ public:
   virtual bool unregisterFromDBus(const QDBusConnection &dbusConn)       = 0;
 
 public:
+  virtual bool isValid() const       = 0;
   virtual bool isPairing() const     = 0;
   virtual quint8 pairingCode() const = 0;
 
@@ -30,11 +31,9 @@ public:
 signals:
   // TODO: can use reference here? const QString &
   void managedDeviceAdded(const QString address);
-
-  // signals:
-  // 	void managedDeviceAdded(BleAddress address);
-  // 	void managedDeviceRemoved(BleAddress address);
-  // 	void pairingStateChanged(bool pairing);
+  // void managedDeviceAdded(BleAddress address);
+  // void managedDeviceRemoved(BleAddress address);
+  void pairingStateChanged(bool pairing);
 };
 
 #endif // BLERCUCONTROLLER_H
