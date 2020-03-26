@@ -162,30 +162,31 @@ namespace cxx_string
 {
   // // insert for bool values
   void insert(const std::string &key, bool value)
-  { 
+  {
     std::cout << "insert(const std::string &key, bool value)" << std::endl;
     std::cout << "key: " << key << ", value: " << value << std::endl;
   }
 
   void insert(std::string &&key, bool value)
-  { 
+  {
     std::cout << "insert(std::string &&key, bool value)" << std::endl;
     std::cout << "key: " << key << ", value: " << value << std::endl;
   }
 
   // insert for string values
   void insert(const std::string &key, const std::string &value)
-  { 
-    std::cout << "insert(const std::string &key, const std::string &value)" << std::endl;
+  {
+    std::cout << "insert(const std::string &key, const std::string &value)"
+              << std::endl;
     std::cout << "key: " << key << ", value: " << value << std::endl;
   }
 
   void insert(std::string &&key, std::string &&value)
-  { 
+  {
     std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
     std::cout << "key: " << key << ", value: " << value << std::endl;
   }
-}
+} // namespace cxx_string
 
 // NOTE: if remove "insert for bool values", then both will use string version.
 // Looks like it's to do with resolution.
@@ -246,7 +247,7 @@ TEST(StringOperation, MaxSize)
 // ={=========================================================================
 // string-substring string-find string-substr
 
-TEST(CxxStringOperation, find_substring)
+TEST(CxxStringOperation, find_substring1)
 {
   // cxx-srring-find
   // http://www.cplusplus.com/reference/string/string/find/
@@ -275,18 +276,12 @@ TEST(CxxStringOperation, find_substring)
     found = coll1.find("park");
     EXPECT_THAT(found, -1);
   }
+}
 
-  // cxx-srring-rfind find backwards
-  // https://en.cppreference.com/w/cpp/string/basic_string/rfind
-  //
-  // Finds the `last substring` equal to the given character sequence. Search
-  // begins at pos, i.e. the found substring must not begin in a position
-  // following pos.
-  //
-  // Return value
-  // Position of the first character of the found substring or `npos` if no such
-  // substring is found.
+// (gdb) b CxxStringOperation_find_substring2_Test::TestBody()
 
+TEST(CxxStringOperation, find_substring2)
+{
   {
     std::string coll1{"The sixth sick sheik's sixth sheep's sick."};
     std::string coll2{"sixth"};
@@ -294,12 +289,17 @@ TEST(CxxStringOperation, find_substring)
 
     auto found = coll1.rfind(coll2);
     coll1.replace(found, coll2.length(), "seventh");
+
+    // now coll1 == coll3
     EXPECT_THAT(coll1, coll3);
 
+    // not found
     found = coll1.rfind(coll2, 0);
-    EXPECT_THAT(found, string::npos);
+    EXPECT_THAT(found, std::string::npos);
 
-    // starts from 0 and see match 'T' at 0. returns 0
+    // starts from 0 and see match single char 'T' at 0. returns 0
+    // that is inclusive
+    // THIS IS WRONG see find_substring3
     found = coll1.rfind("The", 0);
     EXPECT_THAT(found, 0);
 
@@ -317,9 +317,9 @@ TEST(CxxStringOperation, find_substring)
     found = coll1.rfind("The", 6);
     EXPECT_THAT(found, 0);
 
-    //
+    // starts from 0 and see match 's'
     found = coll1.rfind("sixth", 0);
-    EXPECT_THAT(found, string::npos);
+    EXPECT_THAT(found, std::string::npos);
 
     found = coll1.rfind("sixth", 4);
     EXPECT_THAT(found, 4);
@@ -339,11 +339,193 @@ TEST(CxxStringOperation, find_substring)
   }
 
   {
+    const std::string request1{"/as/players/2/action/watchlive"};
+    const std::string request2{"/as/players/1/action/watchlive"};
 
-    const std::string request{"/as/players/2/action/watchlive"};
     const std::string s = "/as/players/2/";
 
-    EXPECT_THAT(request.rfind(s, 0), 0);
+    // starts from 0
+    EXPECT_THAT(request1.rfind(s, 0), 0);
+    // search whole
+    EXPECT_THAT(request1.rfind(s), 0);
+
+    // starts from 0 ane expects `0 return` but not.
+    // EXPECT_THAT(request2.rfind(s, 0), 0);
+    // NOTE: WHY and this leads to find_substring3()
+
+    // starts from 0
+    EXPECT_THAT(request2.rfind(s, 0), std::string::npos);
+    // search whole
+    EXPECT_THAT(request2.rfind(s), std::string::npos);
+  }
+}
+
+/*
+
+/usr/include/c++/7/bits/basic_string.h
+
+@brief  Find last position of a string.
+@param __str  String to locate.
+@param __pos  Index of character to search back from (default end).
+@return  Index of start of last occurrence.
+
+Starting from @a __pos, searches backward for value of @a
+__str within this string.  If found, returns the index where
+it begins.  If not found, returns npos.
+
+size_type
+rfind(const basic_string& __str, size_type __pos = npos) const
+_GLIBCXX_NOEXCEPT
+{ return this->rfind(__str.data(), __pos, __str.size()); }
+
+
+/usr/include/c++/7/bits/basic_string.tcc
+
+template<typename _CharT, typename _Traits, typename _Alloc>
+typename basic_string<_CharT, _Traits, _Alloc>::size_type
+basic_string<_CharT, _Traits, _Alloc>::
+rfind(const _CharT* __s, size_type __pos, size_type __n) const
+{
+  // __size is size of string to search
+  const size_type __size = this->size();
+
+  // __n is size of sub-string
+  if (__n <= __size)
+  {
+    __pos = std::min(size_type(__size - __n), __pos);
+
+    const _CharT* __data = _M_data();
+
+    do
+    {
+      if (traits_type::compare(__data + __pos, __s, __n) == 0)
+        return __pos;
+    }
+    while (__pos-- > 0);
+  }
+  return npos;
+}
+
+/usr/include/c++/7/bits/char_traits.h
+
+static _GLIBCXX17_CONSTEXPR int
+compare(const char_type* __s1, const char_type* __s2, size_t __n)
+{
+  if (__n == 0)
+    return 0;
+  return __builtin_memcmp(__s1, __s2, __n);
+}
+
+
+cxx-srring-rfind find backwards
+https://en.cppreference.com/w/cpp/string/basic_string/rfind
+
+Finds the `last substring` equal to the given character sequence. Search
+begins at pos, i.e. the found substring must not begin in a position
+following pos.
+
+Return value
+Position of the first character of the found substring or `npos` if no such
+substring is found.
+
+*/
+
+namespace
+{
+  std::string::size_type
+  my_rfind(const std::string &str,
+           const std::string &sub,
+           std::string::size_type pos = std::string::npos)
+  {
+    // get size of the string to be searched
+    const std::string::size_type str_size_ = str.size();
+    // get size of the sub string
+    const std::string::size_type sub_size_ = sub.size();
+
+    if (sub_size_ <= str_size_)
+    {
+      // get new pos(starting point) from input pos
+      //
+      // when sub string is small
+      //
+      // {0,1,2,3,4,5,6,7,8,9}
+      // {0,1,2}
+      // 3     , 7            , when pos = 5, min(7,5) is 5
+      // 3     , 7            , when pos = 9, min(7,9) is 7
+      // 3     , 7            , when pos = 1, min(7,1) is 1
+      // 3     , 7            , when pos = 0, min(7,0) is 0
+      //
+      // wherever input pos is, there is no risk of comparing beyond the end
+      // of input since the size of sub string is already taken out and only
+      // min() of them is valid. that is, new pos is within 7.
+      //
+      // when sub string is large
+      //
+      // {0,1,2,3,4,5,6,7,8,9}
+      // {0,1,2,3,4,5,6}
+      // 6     , 3            , when pos = 5, min(3,5) is 3
+      // 6     , 3            , when pos = 9, min(3,9) is 3
+      // 6     , 3            , when pos = 1, min(3,1) is 1
+      // 6     , 3            , when pos = 0, min(3,0) is 0
+      //
+      // since size of sub string is 6 and new pos should leave enough space
+      // to compare
+      //
+      // this is why memcmp is used without worry to compare beyond the end
+      //
+      // the point is there should be enough space for comparing sub string.
+
+      pos = std::min((str_size_ - sub_size_), pos);
+
+      const char *data_ = str.c_str();
+
+      // use of input arg `pos` rather than defining local one.
+      do
+      {
+        // if sub string is found
+        if (memcmp(data_ + pos, sub.c_str(), sub_size_) == 0)
+          return pos;
+      } while (pos-- > 0);
+    }
+
+    // can use `pos` but use npos to make explicit.
+    // 1. when not found
+    // 2. when sub size is bigger than str size
+    return std::string::npos;
+  }
+} // namespace
+
+TEST(CxxStringOperation, find_substring3)
+{
+  {
+    std::string coll2{"sixth"};
+    std::string coll3{"The sixth sick sheik's seventh sheep's sick."};
+
+    // not found
+    auto found = my_rfind(coll3, coll2, 0);
+    EXPECT_THAT(found, std::string::npos);
+
+    // starts from 2 to backwards and see match 'The'. returns 0 since 0 is the
+    // first char. THIS IS comment is wrong and now knows why
+    found = my_rfind(coll3, "The", 0);
+    EXPECT_THAT(found, 0);
+  }
+
+  {
+    const std::string request1{"/as/players/2/action/watchlive"};
+    const std::string request2{"/as/players/1/action/watchlive"};
+
+    const std::string s = "/as/players/2/";
+
+    // starts from 0 which means search whole
+    EXPECT_THAT(my_rfind(request1, s, 0), 0);
+
+    // starts from 0 ane expects `0 return` but not.
+    // EXPECT_THAT(request2.rfind(s, 0), 0);
+    // NOTE: WHY and this leads to find_substring3()
+
+    // starts from 0 which means search whole
+    EXPECT_THAT(my_rfind(request2, s, 0), std::string::npos);
   }
 }
 
@@ -2813,7 +2995,8 @@ TEST(String, raw)
                            and works";
     os1 << message;
 
-    os2 << "this is                            a multi-line message                            and works";
+    os2 << "this is                            a multi-line message            "
+           "                and works";
 
     EXPECT_THAT(os1.str(), os2.str());
   }

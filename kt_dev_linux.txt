@@ -368,7 +368,6 @@
 *kt_linux_gcc_400* gcc-option-inline gcc-gnu-extension
 *kt_linux_gcc_400* gcc-option-debug
 *kt_linux_gcc_400* gcc-option-instrument
-*kt_linux_gcc_400* gcc-pragma
 *kt_linux_gcc_400* gcc-attribute
 *kt_linux_gcc_400* gcc-build-execution-env
 *kt_linux_gcc_400* gcc-toolchain-target-triplet
@@ -7755,6 +7754,8 @@ $ ssh root@172.20.33.192 ls -al
 
 // use "" to run all as a single command
 ssh -p 10022 root@192.168.0.105 "journalctl -u sky-asproxy --since today > /opt/log.out"
+// run remote command and save its output on local
+ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log"
 
 <options>
      Compression
@@ -24014,12 +24015,13 @@ Targets and Properties
 
 CMake developers saw the aforementioned problems and introduced language
 features that allow you to better structure your projects. Modern CMake is all
-about targets and properties. Conceptually this isn’t complicated. Targets
-model the components of you application. An executable is a target, a library
-is a target. Your application is built as a collection of targets that depend
-on and use each other.
+about `targets and properties.` Conceptually this isn’t complicated. 
 
-Targets have properties. Properties of a target are the source files it’s
+`Targets model the components of you application.` An executable is a target, a
+library is a target. Your application is built as a collection of targets that
+depend on and use each other.
+
+`Targets have properties.` Properties of a target are the source files it’s
 built from, the compiler options it requires, the libraries it links against.
 In modern CMake you create a list of targets and define the necessary
 properties on them.
@@ -24029,20 +24031,21 @@ Build Requirements vs Usage Requirements
 
 Target properties are defined in one of `two scopes`: `INTERFACE` and
 `PRIVATE`. Private properties are used internally to build the target, while
-interface properties are used externally by users of the target. In other
-words, interface properties model `usage requirements`, whereas private
-properties model `build requirements` of targets.
+interface properties are used externally by users of the target. 
+
+In other words, interface properties model `usage requirements`, whereas
+private properties model `build requirements` of targets.
 
 Interface properties have the prefix, wait for it, INTERFACE_ prepended to
 them.
 
-For example, the property COMPILE_OPTIONS encodes a list of options to be
+For example, the property `COMPILE_OPTIONS` encodes a list of options to be
 passed to the compiler when building the target. If a target must be built
 with all warnings enabled, for instance, this list should contain the option
 -Wall. This is a private property used only when building the target and won’t
 affect `its users` in any way.
 
-On the other hand, the property INTERFACE_COMPILE_FEATURES stores which
+On the other hand, the property `INTERFACE_COMPILE_FEATURES` stores which
 features must be supported by the compiler `when building users of the target`
 
 For instance, if the public header of a library contains a variadic function
@@ -24050,10 +24053,290 @@ template, this property should contain the feature cxx_variadic_templates.
 This instructs CMake that applications including this header will have to be
 built by a compiler that understands variadic templates.
 
-Properties can also be specified as PUBLIC. Public properties are defined in
+Properties can also be specified as `PUBLIC`. Public properties are defined in
 both PRIVATE and INTERFACE scopes.
 
 All of this is better understood with an example.
+
+
+Note that Boost::boost and RapidJSON::RapidJSON are targets themselves. But
+where did they come from? I haven’t told you the most breathtaking fact about
+targets yet: `targets can be exported.` Exported targets can be later imported
+into other projects.
+
+When we call find_package(Boost 1.55 REQUIRED COMPONENTS regex), CMake will
+execute `FindBoost.cmake`, where the targets Boost::boost and Boost::regex will
+be imported, allowing us to depend on them via target_link_libraries().
+
+Our projects have structure, as they are build as a collection of encapsulated
+targets, and CMake handles transitive requirements for us. You might be
+wondering with tears in your eyes how beautiful life can be, but boy are up
+for a revelation.
+
+Let’s try to build jsonutils:
+
+CMake Error at CMakeLists.txt:9
+    Target "JSONUtils" links to target "RapidJSON::RapidJSON" but the target was not found.
+
+
+Good boys export their targetsPermalink
+
+The imported target RapidJSON::RapidJSON could not be found, because
+RapidJSONConfig.cmake did not create it. Let’s inspect what rapidjson does in
+the config installed on my arch linux system:
+
+get_filename_component(RAPIDJSON_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+set(RAPIDJSON_INCLUDE_DIRS "/usr/include")
+message(STATUS "RapidJSON found. Headers: ${RAPIDJSON_INCLUDE_DIRS}")
+
+Yes, welcome to hell. This is where the real pain begins: 3rdparty
+dependencies. In the case of rapidjson, a single variable is set to point to
+its include directories. This is exactly what we don’t want, we don’t want
+variables, we want targets!
+
+In my case, 70% of my dependencies didn’t define any targets in their find
+modules or configs. The reality is that CMake usage is an anarchy. There are
+few rules and too much flexibility. We need standard practices, we need
+guidelines. We have design patterns for C++, why not for CMake?
+
+{
+https://cmake.org/cmake/help/v3.13/command/find_package.html?highlight=find_package
+
+Finds and loads settings from an external project. <PackageName>_FOUND will be
+set to indicate whether the package was found. When the package is found
+package-specific information is provided through variables and Imported
+Targets documented by the package itself.
+
+The command has `two modes` by which it searches for packages: “Module” mode and
+“Config” mode. The above signature selects Module mode. If no module is found
+the command `falls back to Config mode`, described below. This fall back is
+disabled if the MODULE option is given.
+
+In Module mode, CMake searches for a file called `Find<PackageName>.cmake` in
+the CMAKE_MODULE_PATH followed by the CMake installation. If the file is
+found, it is read and processed by CMake. It is responsible for finding the
+package, checking the version, and producing any needed messages. Some
+find-modules provide limited or no support for versioning; check the module
+documentation.
+
+
+Config mode search attempts to locate a configuration file provided by the
+package to be found. A cache entry called <PackageName>_DIR is created to hold
+the directory containing the file. By default the command searches for a
+package with the name <PackageName>. If the NAMES option is given the names
+following it are used instead of <PackageName>. The command searches for a
+file called `<PackageName>Config.cmake` or
+<lower-case-package-name>-config.cmake for each name specified. A replacement
+set of possible configuration file names may be given using the CONFIGS
+option. The search procedure is specified below. 
+
+Once found, the configuration file is read and processed by CMake. Since the
+file is provided by the package it already knows the location of package
+contents. The full path to the configuration file is stored in the cmake
+variable `<PackageName>_CONFIG`.
+}
+
+
+If you want it done right do it yourself. So what can you do in these cases?
+
+Daniel Pfeifer advises to report such usage as a bug to the library
+developers. I agree. Upstreams should support downstream’s modern target-based
+design. Ask yourself: do you really need this dependency? Are there
+alternatives that do support modern cmake usage?
+
+In this case, however, there is no other option other taking matters into your
+own hands and write FindRapidJSON.cmake ourselves:
+
+# FindRapidJSON.cmake
+#
+# Finds the rapidjson library
+#
+# This will define the following variables
+#
+#    RapidJSON_FOUND
+#    RapidJSON_INCLUDE_DIRS
+#
+# and the following imported targets
+#
+#     RapidJSON::RapidJSON
+#
+# Author: Pablo Arias - pabloariasal@gmail.com
+
+find_package(PkgConfig)
+pkg_check_modules(PC_RapidJSON QUIET RapidJSON)
+
+# This command is used to find a directory containing the named file. A cache
+# entry named by <VAR> is created to store the result of this command.
+
+find_path(`RapidJSON_INCLUDE_DIR`
+    NAMES rapidjson.h
+    PATHS ${PC_RapidJSON_INCLUDE_DIRS}
+    PATH_SUFFIXES rapidjson
+)
+
+set(RapidJSON_VERSION ${PC_RapidJSON_VERSION})
+
+# Mark the named cached variables as advanced.
+mark_as_advanced(RapidJSON_FOUND RapidJSON_INCLUDE_DIR RapidJSON_VERSION)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(RapidJSON
+    REQUIRED_VARS RapidJSON_INCLUDE_DIR
+    VERSION_VAR RapidJSON_VERSION
+)
+
+if(RapidJSON_FOUND)
+    set(`RapidJSON_INCLUDE_DIRS` ${RapidJSON_INCLUDE_DIR})
+endif()
+
+if(RapidJSON_FOUND AND NOT TARGET RapidJSON::RapidJSON)
+    add_library(RapidJSON::RapidJSON INTERFACE IMPORTED)
+    set_target_properties(RapidJSON::RapidJSON PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${RapidJSON_INCLUDE_DIR}"
+    )
+endif()
+
+This is a very simple find module that looks for rapidjson’s headers in the
+system and `creates the imported target RapidJSON::RapidJSON` that we require. I
+use INTERFACE to indicate that this “library” isn’t really a library, as there
+is no correponding .a or .so, `but just defines usage requirements.`
+
+
+This is how you do CMake
+
+We want jsonutils to integrate in a target-based build system of downstreams.
+This means that all they have to do to use jsonutils is this:
+(as shown example below)
+
+find_package(JSONUtils 1.0 REQUIRED)
+target_link_libraries(example `JSONUtils::JSONUtils`)
+
+
+To achieve this we need to do two things. 
+
+First, we need to export the target JSONUtils::JSONUtils. 
+
+And second, we need to import that target when downtreams call
+find_package(JSONUtils), i.e. from inside our JSONUtilsConfig.cmake.
+
+Let’s start with exporting our target to a JSONUtilsTargets.cmake script that
+imports it. First of all, we need to install the library itself (the actual .a
+    or .so file):
+
+include(GNUInstallDirs)
+install(TARGETS JSONUtils
+    EXPORT jsonutils-export
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+In CMake, installed targets are registered to exports using the EXPORT
+argument. Exports are therefore just a set of targets that can be exported and
+installed. Here we just told CMake to install our library and to register the
+target in the export `jsonutils-export`.
+
+Then we can go ahead and install the export that we defined above:
+
+install(EXPORT jsonutils-targets
+  FILE
+    JSONUtilsTargets.cmake
+  NAMESPACE
+    JSONUtils::
+  DESTINATION
+    ${CMAKE_INSTALL_LIBDIR}/cmake/JSONUtils
+)
+
+This will install the `import script JSONUtilsTargets.cmake` that, when included
+in other scripts, will load the targets defined in the export
+jsonutils-export. By using the NAMESPACE argument, we tell CMake to prepend
+the prefix JSONUtils:: to all targets imported.
+
+
+Import your targets inside your Config.cmake
+
+Remember, when clients call find_package(JSONUtils), CMake will look for and
+execute a `JSONUtilsConfig.cmake`.
+
+So that our target JSONUtils::JSONUtils is imported and can be used by
+clients, we `need to load JSONUtilsTargets.cmake in our config file`:
+
+# `JSONUtilsConfig.cmake`
+#
+get_filename_component(JSONUtils_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+include(CMakeFindDependencyMacro)
+
+find_dependency(Boost 1.55 REQUIRED COMPONENTS regex)
+find_dependency(RapidJSON 1.0 REQUIRED MODULE)
+
+# JSONUtilsTargets.cmake is generated file
+
+if(NOT TARGET JSONUtils::JSONUtils)
+    include("${JSONUtils_CMAKE_DIR}/`JSONUtilsTargets.cmake`")
+endif()
+
+
+Be aware that JSONUtilsTargets.cmake contains code like:
+
+add_library(JSONUtils::JSONUtils STATIC IMPORTED)
+`set_target_properties`(JSONUtils::JSONUtils PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include"
+  INTERFACE_LINK_LIBRARIES "Boost::boost;RapidJSON::RapidJSON;\$<LINK_ONLY:Boost::regex>"
+)
+
+Since this script references targets from boost and rapidjson, they need to be
+imported before including JSONUtilsTargets.cmake in JSONUtilsConfig.cmake.
+
+This is why we need to call find_dependency() in JSONUtilsConfig.cmake: to
+make sure that downstreams have all required dependencies installed and the
+needed targets are imported before they are referenced in our
+JSONUtilsTargets.cmake.
+
+# use
+/modern-cmake-sample/example_exec$ cat CMakeLists.txt
+cmake_minimum_required(VERSION 3.13...3.16 FATAL_ERROR)
+project(example_exec VERSION 0.0.1 LANGUAGES CXX)
+
+add_executable(example_exec src/main.cpp)
+target_compile_features(example_exec PRIVATE cxx_auto_type)
+
+find_package(JSONUtils 1.0 REQUIRED)
+target_link_libraries(example_exec JSONUtils::JSONUtils)
+
+
+https://pabloariasal.github.io/2018/02/19/its-time-to-do-cmake-right/
+
+This is about making user library *findable* by users of it in a cmake way.
+
+1. the repo for the sameple. 
+https://github.com/pabloariasal/modern-cmake-sample
+
+2. download rapid json. https://github.com/Tencent/rapidjson/
+
+3. build the sample
+
+4. install
+
+keitee@kit-ubuntu:~/works/modern-cmake-sample/libjsonutils/build$ sudo make install
+[sudo] password for keitee:
+[ 25%] Built target jsonutils
+[ 50%] Built target gtest
+[ 75%] Built target gtest_main
+[100%] Built target json_utils_test
+Install the project...
+-- Install configuration: ""
+-- Installing: /usr/local/lib/libjsonutils.a
+-- Up-to-date: /usr/local/include
+-- Installing: /usr/local/include/jsonutils
+-- Installing: /usr/local/include/jsonutils/json_utils.h
+-- Installing: /usr/local/lib/cmake/JSONUtils/`JSONUtilsTargets.cmake`
+-- Installing: /usr/local/lib/cmake/JSONUtils/JSONUtilsTargets-noconfig.cmake
+-- Installing: /usr/local/lib/cmake/JSONUtils/`FindRapidJSON.cmake`
+-- Installing: /usr/local/lib/cmake/JSONUtils/`JSONUtilsConfig.cmake`
+-- Installing: /usr/local/lib/cmake/JSONUtils/JSONUtilsConfigVersion.cmake
+
+5. build sample user app
+
+6. use ExernalProject to download googletest
 
 
 ={============================================================================
@@ -65682,17 +65965,6 @@ analysis purposes.
     functions with buffers larger than 8 bytes. The guards are initialized
     when a function is entered and then checked when the function exits. If a
     guard check fails, an error message is printed and the program exits.
-
-
-={============================================================================
-*kt_linux_gcc_400* gcc-pragma
-
-// stops compilation
-#error "unknwon cpu - you need to find out the stack grows downward or upward"
-
-// get a mesg during compilation like:
-// NDS_pthread.c:43:4: warning: #warning "xxx2" 
-#warning "xxx2"
 
 
 ={============================================================================

@@ -65,8 +65,8 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 # add_compile_options("-g;-D_GLIBCXX_DEBUG")
-add_compile_options("-g")
-
+add_compile_options("-g;-Wswitch-enum")
+# add_compile_options("-g;-Wall")
 
 # cmake help
 #

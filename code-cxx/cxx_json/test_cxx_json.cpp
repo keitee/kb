@@ -36,15 +36,22 @@ languages also be based on these structures.
 
 In JSON, they take on these forms:
 
-An object is an unordered set of name/value pairs. An object begins with {left
-brace and ends with }right brace. Each name is followed by :colon and the
+An object is an unordered set of name/value pairs. An object begins with `{left
+brace and ends with `}right brace`. Each name is followed by :colon and the
 name/value pairs are separated by ,comma.
 
 An array is an ordered collection of values. An array begins with [left bracket
 and ends with ]right bracket. Values are separated by ,comma.
 
-A value can be a string in double quotes, or a number, or true or false or null,
-or an object or an array. These structures can be nested.
+A value can be :
+a "string" in double quotes, or 
+a "number", or 
+"true or false" or 
+"null", or 
+an "object" or 
+an "array". 
+
+These structures can be nested.
 
 A string is a sequence of zero or more Unicode characters, wrapped in double
 quotes, using backslash escapes. A character is represented as a single
@@ -59,6 +66,7 @@ details, that completely describes the language.
 
 // ={=========================================================================
 https://en.wikibooks.org/wiki/JsonCpp
+http://open-source-parsers.github.io/jsoncpp-docs/doxygen/index.html
 
 While strict JSON syntax does not allow any comments, and requires the root
 value to be array or object, JsonCpp allows both C-style and C++-style comments,
@@ -164,7 +172,19 @@ TEST(CxxJSON, jsoncpp_ex1)
     // use reader and get `root`
     reader.parse(ifs, root);
 
+    // check
+    EXPECT_THAT(root.isMember("year"), true);
+    EXPECT_THAT(root.isMember("book"), true);
+
+    // check if it's string
+    {
+      const Json::Value &book = root["book"];
+      EXPECT_THAT(book.isString(), true);
+    }
+
     // access map
+    // std::string asString() const
+    std::cout << "year: " << root["year"].asUInt() << std::endl;
     std::cout << "book: " << root["book"].asString() << std::endl;
     std::cout << "year: " << root["year"].asUInt() << std::endl;
 
@@ -183,7 +203,7 @@ TEST(CxxJSON, jsoncpp_ex1)
     {
       const Json::Value &object = chars[i];
 
-      // bool Json::Value::isObject	(		)	const
+      // bool Json::Value::isObject	() const
 
       if (object.isObject() && !object.empty())
       {
@@ -289,12 +309,13 @@ TEST(CxxJSON, jsoncpp_ex1_1)
     // `characters` maps to array
     const Json::Value &chars = root["characters"];
 
-    // each array element is a map.
+    //         {"name":, "chapter":}                  // is it empty?
+    // is not counted in size()
     for (int i = 0; i < chars.size(); i++)
     {
       const Json::Value &object = chars[i];
 
-      // bool Json::Value::isObject	(		)	const
+      // bool Json::Value::isObject	() const
 
       if (object.isObject() && !object.empty())
       {
@@ -311,7 +332,7 @@ TEST(CxxJSON, jsoncpp_ex1_1)
                 << std::endl;
     }
 
-    // 
+    // here it is "empty"
     const Json::Value name = root["name"];
 
     EXPECT_THAT(name.isNull(), true);
@@ -319,7 +340,6 @@ TEST(CxxJSON, jsoncpp_ex1_1)
   }
 }
 
-// [ RUN      ] CxxJSON.ex2
 // {
 //         "book" : "Alice in Wonderland",
 //         "characters" :
@@ -337,9 +357,9 @@ TEST(CxxJSON, jsoncpp_ex1_1)
 //                         "name" : "Mad Hatter"
 //                 }
 //         ],
-//         "year" : 1865
+//         "year1" : 1865,
+//         "year2" : "1865"
 // }
-// [       OK ] CxxJSON.ex2 (0 ms)
 
 // construct json from code
 TEST(CxxJSON, jsoncpp_ex2)
@@ -358,10 +378,53 @@ TEST(CxxJSON, jsoncpp_ex2)
   Json::Value val;
 
   val["book"]       = "Alice in Wonderland";
-  val["year"]       = 1865;
+  val["year1"]       = 1865;
+  val["year2"]       = "1865";
   val["characters"] = ch;
 
   std::cout << val << std::endl;
+}
+
+// "string" and number are different? how?
+TEST(CxxJSON, jsoncpp_check_type)
+{
+  // create the main object
+  Json::Value val;
+
+  val["year1"]       = 1865;
+  val["year2"]       = "1865";
+
+  // "year1" is number
+  EXPECT_THAT(val["year1"].isString(), false);
+  EXPECT_THAT(val["year1"].isNumeric(), true);
+
+  // get type
+  // std::cout << val["year1"].type() << std::endl;
+  EXPECT_THAT(val["year1"].type(), Json::intValue);     // 1
+
+  // it can be converted to string as well
+  std::cout << val["year1"].asString() << std::endl;
+  std::cout << val["year1"].asInt() << std::endl;
+
+  // "year2" is string
+  EXPECT_THAT(val["year2"].isString(), true);
+  EXPECT_THAT(val["year2"].isNumeric(), false);
+
+  // get type
+  // std::cout << val["year2"].type() << std::endl;
+  EXPECT_THAT(val["year2"].type(), Json::stringValue);  // 4
+
+  std::cout << val["year2"].asString() << std::endl;
+
+  // NOTE: however, string not be converted to number
+  try
+  {
+    std::cout << val["year2"].asInt() << std::endl;
+  }
+  catch(const exception &e)
+  {
+    EXPECT_THAT(std::string(e.what()), "Value is not convertible to Int.");
+  }
 }
 
 namespace

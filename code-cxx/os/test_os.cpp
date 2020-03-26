@@ -184,9 +184,8 @@ DESCRIPTION
 
 */
 
-TEST(OsGlibc, glibc_memset)
+TEST(OsGlibc, check_memset)
 {
-  // 20 bytes of array
   char coll1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   char coll2[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   char coll3[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -194,15 +193,35 @@ TEST(OsGlibc, glibc_memset)
 
   EXPECT_THAT(coll1, ElementsAreArray({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
 
+  // same
   EXPECT_THAT(0, memcmp(coll1, coll2, 10));
 
+  // reset and same
   bzero(coll2, 10);
   EXPECT_THAT(coll2, ElementsAreArray({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
   EXPECT_THAT(0, memcmp(coll2, coll4, 10));
 
+  // reset and same
   memset(coll3, 0, 10);
   EXPECT_THAT(coll3, ElementsAreArray({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
   EXPECT_THAT(0, memcmp(coll3, coll4, 10));
+}
+
+TEST(OsGlibc, check_memcmp)
+{
+  char coll1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  char coll2[10] = {1, 1, 1, 1, 1, 2, 2, 2, 2, 2};
+
+  EXPECT_THAT(coll1, ElementsAreArray({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+
+  // same
+  EXPECT_THAT(0, memcmp(coll1, coll2, 2));
+  EXPECT_THAT(0, memcmp(coll1, coll2, 3));
+  EXPECT_THAT(0, memcmp(coll1, coll2, 4));
+  EXPECT_THAT(0, memcmp(coll1, coll2, 5));
+
+  // not same and coll1 is less so -1.
+  EXPECT_THAT(memcmp(coll1, coll2, 6), -1);
 }
 
 // ={=========================================================================

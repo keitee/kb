@@ -545,7 +545,7 @@ namespace cxx_variant
   };
 } // namespace cxx_variant
 
-TEST(CxxType, type_variant)
+TEST(CxxType, show_variant)
 {
   using namespace cxx_variant;
 
@@ -747,7 +747,7 @@ namespace cxx_variant
 // {key6:b}
 // [       OK ] CxxType.type_variantMap (0 ms)
 
-TEST(CxxType, type_variantMap)
+TEST(CxxType, show_variant_map)
 {
   using namespace cxx_variant;
 
@@ -915,8 +915,33 @@ TEST(Arith, Comparison)
 // ={=========================================================================
 // cxx-switch
 
-TEST(CxxStatement, switch)
+namespace
 {
+  enum class VALUES{E1, E2, E3, E4};
+}
+
+TEST(CxxSwitch, show_switch)
+{
+  {
+    ostringstream os;
+    VALUES value;
+
+    switch (value)
+    {
+      case VALUES::E1:
+        os << "value is 1";
+        break;
+
+      case VALUES::E2:
+        os << "value is 2";
+        break;
+
+      default:
+        os << "value is 2";
+        break;
+    }
+  }
+
   {
     ostringstream os;
     int value{2};
@@ -1701,7 +1726,7 @@ namespace ctor_init
   };
 } // namespace ctor_init
 
-TEST(Ctor, CtorInitForms)
+TEST(CxxCtor, show_init_forms)
 {
   using namespace ctor_init;
 
@@ -1732,6 +1757,12 @@ TEST(Ctor, CtorInitForms)
     Foo foo1{"use copy init"};
     Foo foo2 = foo1;
     EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  }
+
+  // WHY?
+  {
+    Foo foo2 = Foo{"use copy init"};
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and converting ctor");
   }
 
   // copy error
@@ -5152,6 +5183,7 @@ TEST(CxxCallable, lambda_Compare)
 }
 
 // Passing C++ captureless lambda as function pointer to C API
+// https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 //
 // The function-call operator is const unless the lambda is declared mutable. A
 // capture-less lambda also has a similar closure type except that there are no
@@ -5166,7 +5198,7 @@ TEST(CxxCallable, lambda_Compare)
 // the closure object.
 // Therefore, the closure type of a capture-less lambda that takes only one
 // void* parameter and returns void* could be imagined as:
-
+//
 // copied from test_ccon.cpp
 namespace
 {
@@ -7923,6 +7955,131 @@ TEST(CxxMove, move_signal5)
     // set_move2(m2);
   }
 }
+
+// ={=========================================================================
+// cxx-slice-off
+
+namespace cxx_slice_off1
+{
+  class Foo
+  {
+  protected:
+    std::string m_name{};
+
+  public:
+    Foo(const std::string &name = "Foo")
+        : m_name(name)
+    {}
+    virtual ~Foo() {}
+    virtual std::string name() { return m_name; }
+  };
+
+  class FooFoo : public Foo
+  {
+    private:
+      std::string m_middle_name{};
+
+    public:
+      FooFoo(const std::string &name, const std::string &middle)
+        : Foo(name), m_middle_name(middle)
+      {}
+
+      ~FooFoo() {}
+
+      std::string name() override { return m_name + ":" + m_middle_name; }
+  };
+} // namespace cxx_sliced_off
+
+TEST(CxxSlice, see_slice_1)
+{
+  using namespace cxx_slice_off1;
+
+  FooFoo foo1("Foo1", "Hoo1");
+  EXPECT_THAT(foo1.name(), "Foo1:Hoo1");
+
+  FooFoo foo2("Foo2", "Hoo2");
+  EXPECT_THAT(foo2.name(), "Foo2:Hoo2");
+
+  // copied since default copy assign used
+  foo1 = foo2;
+  EXPECT_THAT(foo1.name(), "Foo2:Hoo2");
+
+  Foo foo3("Bar1");
+  EXPECT_THAT(foo3.name(), "Bar1");
+
+  // copy assign
+  foo3 = foo2;
+
+  // slice-off
+  EXPECT_THAT(foo3.name(), "Foo2");
+}
+
+namespace cxx_slice_off2
+{
+  class Foo
+  {
+  protected:
+    std::string m_name{};
+
+  public:
+    Foo(const std::string &name = "Foo")
+        : m_name(name)
+    {}
+    virtual ~Foo() {}
+
+    Foo(const Foo&) = delete;
+    Foo& operator=(const Foo&) = delete;
+
+    virtual std::string name() { return m_name; }
+  };
+
+  class FooFoo : public Foo
+  {
+    private:
+      std::string m_middle_name{};
+
+    public:
+      FooFoo(const std::string &name, const std::string &middle)
+        : Foo(name), m_middle_name(middle)
+      {}
+
+      ~FooFoo() {}
+
+      std::string name() override { return m_name + ":" + m_middle_name; }
+  };
+} // namespace cxx_sliced_off
+
+// since compile error
+// NOTE: yes, raise compile error for slice off cases but also not able to copy
+// as well.
+
+#if 0
+TEST(CxxSlice, see_slice_2)
+{
+  using namespace cxx_slice_off2;
+
+  FooFoo foo1("Foo1", "Hoo1");
+  EXPECT_THAT(foo1.name(), "Foo1:Hoo1");
+
+  FooFoo foo2("Foo2", "Hoo2");
+  EXPECT_THAT(foo2.name(), "Foo2:Hoo2");
+
+  // copied since default copy assign used
+  // now compile error
+  foo1 = foo2;
+  EXPECT_THAT(foo1.name(), "Foo2:Hoo2");
+
+  Foo foo3("Bar1");
+  EXPECT_THAT(foo3.name(), "Bar1");
+
+  // copy assign
+  // now compile error
+  foo3 = foo2;
+
+  // slice-off
+  EXPECT_THAT(foo3.name(), "Foo2");
+}
+#endif
 
 // ={=========================================================================
 // cxx-override

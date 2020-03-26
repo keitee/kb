@@ -1826,7 +1826,7 @@ TEST(StlColl, set_SortOrder)
   }
 }
 
-TEST(StlColl, set_Search)
+TEST(StlCollSet, check_search)
 {
   {
     std::set<int> coll;
@@ -1853,6 +1853,11 @@ TEST(StlColl, set_Search)
     EXPECT_THAT(*coll.upper_bound(5), 6);
     EXPECT_THAT(*coll.equal_range(5).first, 5);
     EXPECT_THAT(*coll.equal_range(5).second, 6);
+
+    // how about not found?
+    EXPECT_THAT(coll.equal_range(7).first, coll.end());
+    EXPECT_THAT(coll.equal_range(7).second, coll.end());
+    EXPECT_THAT(coll.equal_range(7).first, coll.equal_range(7).second);
   }
 
   {

@@ -108,7 +108,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g")
+add_compile_options("-g;-D_GLIBCXX_DEBUG")
 
 
 # string_01

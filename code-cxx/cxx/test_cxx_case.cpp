@@ -1091,6 +1091,12 @@ namespace case_quote
 {
   class Quote
   {
+  private:
+    std::string book_no_{};
+
+  protected:
+    double price_;
+
   public:
     Quote()
         : book_no_()
@@ -1108,16 +1114,14 @@ namespace case_quote
 
     // calculate net price but do not have "discount" concept
     virtual double net_price(size_t count) const { return count * price_; }
-
-  private:
-    std::string book_no_;
-
-  protected:
-    double price_;
   };
 
   class Discount_Quote : public Quote
   {
+  protected:
+    size_t quantity_;
+    double discount_;
+
   public:
     // *cxx-ctor*
     // Why need to have constructors in abstract class although cannot
@@ -1130,6 +1134,7 @@ namespace case_quote
         : quantity_(0)
         , discount_(0.0)
     {}
+
     Discount_Quote(string const &book,
                    double price,
                    size_t quantity,
@@ -1145,10 +1150,6 @@ namespace case_quote
     // *cxx-abc*
     // okay to have in the middle of inheritance and "discount" concept
     virtual double net_price(size_t count) const = 0;
-
-  protected:
-    size_t quantity_;
-    double discount_;
   };
 
   class Bulk_Quote : public Discount_Quote
@@ -1162,9 +1163,9 @@ namespace case_quote
     {}
 
     // cxx-override cxx-const
-    // const is one of override condition
+    // const is one of override conditions
 
-    virtual double net_price(size_t count) const override
+    double net_price(size_t count) const override
     {
       if (count >= quantity_)
         return count * (1 - discount_) * price_;
@@ -1182,7 +1183,6 @@ namespace case_quote
 
     return net_price;
   }
-
 } // namespace case_quote
 
 // To use *gtest-fixture* as a driver than using use user class directly:
@@ -1284,6 +1284,7 @@ protected:
   CxxCaseQuoteX()
       : items_{compare}
   {}
+
   virtual ~CxxCaseQuoteX() {}
 
   virtual void SetUp() {}
@@ -1293,12 +1294,12 @@ protected:
   {
     double total{};
 
-    // when there are duplicates, skip them since net_price() gets called for
-    // them in single call
-
     for (auto it = items_.cbegin(); it != items_.cend();
          it      = items_.upper_bound(*it))
     {
+      // when there are duplicates, skip them since net_price() gets called for
+      // them in single call with count(num of books)
+
       total = (*it)->net_price(items_.count(*it));
 
       cout << "isbn: " << (*it)->isbn() << ", sold: " << items_.count(*it)
@@ -1322,6 +1323,10 @@ protected:
 
 TEST_F(CxxCaseQuoteX, CheckTotal_1)
 {
+  // WHY no error without this???
+  // using namespace case_quote;
+
+  // Quote("book no", price)
   items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
   items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
   items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
@@ -1339,7 +1344,7 @@ TEST_F(CxxCaseQuoteX, CheckTotal_2)
   items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
   items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
 
-  // minimum 3 to have 15% discount. 2 and no discount 45*2 = 90
+  // minimum 3 to have 15% discount. 2 books so no discount 45*2 = 90
   EXPECT_THAT(total_receipt(), 90);
 
   items_.clear();

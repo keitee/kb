@@ -84,12 +84,32 @@ TEST(GtestAssert, DISABLED_add_message)
 //   Actual: 101 (of type int)
 //
 // NOTE: GMOCK use the second below
-// 
+//
 // /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:94: Failure
 // Value of: 100
 // Expected: is equal to 101
 //   Actual: 100 (of type int)
 // [  FAILED  ] GtestAssert.shows_argument_order1 (0 ms)
+//
+// However, see below case:
+//
+// [ RUN      ] OsGlibc.check_memcmp
+//  /home/keitee/git/kb/code-cxx/os/test_os.cpp:224: Failure
+//  Value of: 0
+//  Expected: is equal to -1
+//    Actual: 0 (of type int)
+// [  FAILED  ] OsGlibc.check_memcmp (0 ms)
+//
+// EXPECT_THAT(0, memcmp(coll1, coll2, 6));
+//
+// [ RUN      ] OsGlibc.check_memcmp
+// /home/keitee/git/kb/code-cxx/os/test_os.cpp:232: Failure
+// Value of: memcmp(coll1, coll2, 6)
+// Expected: is equal to 0
+//   Actual: -1 (of type int)
+// [  FAILED  ] OsGlibc.check_memcmp (0 ms)
+//
+// EXPECT_THAT(memcmp(coll1, coll2, 6), 0);
 
 TEST(GtestAssert, DISABLED_shows_argument_order1)
 {
