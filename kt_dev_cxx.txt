@@ -31589,6 +31589,7 @@ This is called the intialization order fiasco, where global variables can be
 accessed, initialization value 0 for bulit-in types, before they are
 initialised since the order of initialization for global variables(including
 class statics) between translation units is undefined. 
+
 This is the *cxx-data-race* on global variables. 
 
 How to solve? By replacing the global variable with a function that returns a
@@ -31600,7 +31601,7 @@ because multiple threads may believe they're first and try to initialize the
 variable, or threads may try to use it after initialization has started on
 another thread but before it's finished. 
 
-In C++11 this problem is solved: the initialization is defined to happen on
+`In C++11 this problem is solved`: the initialization is defined to happen on
 exactly one thread.
 
 
@@ -31692,11 +31693,12 @@ class Singleton {
 Singleton* Singleton::_Instance = 0;
 
 
-cxx-singleton-copy-and-dtor
+// cxx-singleton-copy-and-dtor
+// 
+// Have to use shared_ptr to copy and dtor context? No. This is static function
+// and there is no Singleton object created. Hence no copy controls.
 
-Have to use shared_ptr to copy and dtor context? No. This is static function
-and there is no Singleton object created. Hence no copy controls.
-
+*cxx-memory*
 No need to delete _instance? Yes, will be reclaimed when an application
 terminates.
 
@@ -31760,6 +31762,15 @@ MazeFactory* MazeFactory::Instance () {
   return _instance;
 }
 
+class EnchantedMazeFactory : public MazeFactory
+{
+  public:
+    EnchantedMazeFactory();
+
+    virtual Room *MakeRoom(int n ) const
+    { return new EnchantedRoom(n); }
+    ...
+};
 
 // Support subclass or other instances
 MazeFactory* MazeFactory::Instance () {
@@ -31870,8 +31881,86 @@ note:
 MEC++26 shows more such as how limit the number of objects.
 
 
+{read}
+https://code.google.com/p/google-singleton-detector/wiki/WhySingletonsAreControversial
+
+note: here suppose that talks about class singleton but singleton+factory.
+
+Why Singletons Are Controversial
+
+The use of singletons is actually a fairly controversial subject in the Java
+community; what was once an often-used design pattern is now being looked at
+as a less than desirable coding practice.
+
+The problem with singletons is that they introduce global state into a
+program, allowing anyone to access them at anytime (ignoring scope). Even
+worse, singletons are one of the most overused design patterns today, meaning
+that many people introduce this possibly detrimental global state in instances
+where it isn't even necessary. 
+
+`What's wrong with singletons' use of global state?`
+
+`First, programs using global state are very difficult to test.` One of the
+hallmarks of testability is a loose coupling of classes, allowing you to
+isolate a single class and test it completely. When one class uses a singleton
+(and I'm talking about a classic singleton, one that enforces it own
+ singularity thorough a static getInstance() method), the singleton user and
+the singleton become inextricably coupled together. 
+
+It is no longer possible to test the user (class) without also testing the
+singleton. In many cases, this is a deal breaker that can prevent a developer
+from testing a class at all, especially if the singleton represents a
+`resource` that should not be updated by tests (i.e.  an important database).
+
+The ideal solution here is to pass in the singleton as a parameter in the
+user's constructor, allowing a tester to easily `mock out` the singleton for
+tests. The singleton then doesn't have to enforce its own singularity; this
+can be handled by the client or a factory class, which could produce the real
+version or a test version, eliminating the global state altogether. In fact,
+it should be considered a violation of the Single Responsibility Principle of
+  OO design to have an object responsible for its own singularity as well as
+  its normal tasks.
+
+NOTE:
+it is about testability of class which gets created from singleton interface
+and two issue:
+  o not able to mock it out. can use #define to use mock object instead?
+  o class have state. this is real problem 
+
+Second, programs that rely on global state hide their dependencies. One of the
+unique abilities of a singleton is that it can be accessed anywhere though its
+globally available static method (i.e.  getInstance()), allowing programmers
+to use it inside of a method `without having to pass it in` expressly through
+parameters. While this may seem easier to the programmer, relying on this
+static instance means that the signatures of methods no longer show their
+`dependencies`, because the method could `pull a singleton "out of thin air."`
+This means that users need knowledge of the inner workings of code to properly
+use it, making it more difficult to use and test.
+
+Tying these two problems together shows another issue with singletons. In
+todays world of test-driven and agile development, it is more important than
+ever to have small tests covering most of your code. One of the important
+things about these tests is that they must be able to be run in any order (not
+    dependent on each other), which can become a problem with singleton usage.
+
+Because the dependencies of some given methods aren't clear when they rely
+on singletons (getting them from static getters), a tester may unknowing write
+two tests that actually depend on each other by modifying a shared resource
+(the singleton). This can produce flaky tests, ones that pass when run in one
+order but fail when run in another, which aren't very useful.
+
+Still not convinced? Well, this certainly wasn't originally my idea, and it's
+not even that new. If you're looking for some more compelling arguments, check
+out some of these sources:
+
+All pages with Singleton in their title at the Portland Pattern Repository
+Wiki
+
+Use Your Singletons Wisely (IBM developerWorks) 
+
+
 ={============================================================================
-*kt_dev_cxx_0000* cxx-pattern-factory
+*kt_dev_cxx_0000* cxx-pattern-factory cxx-factory
 
 Creational Pattern, Factory Method
 
@@ -32126,76 +32215,38 @@ NewsLetter::NewsLetter( const NewsLetter& rhs )
   }
 }
 
+<ex>
+subclassing and registry
 
-{read}
-https://code.google.com/p/google-singleton-detector/wiki/WhySingletonsAreControversial
+class Factory : public Base
+{
+  public:
+    virtual ~Factory() {}
+    virtual Executor *CreateExecutor( Environment *env, Params *params ) = 0;
+};
 
-note: here suppose that talks about class singleton but singleton+factory.
+class ServiceListExecutorFactory : public AS_WORKER::Factory
+{
+  public:
+    ServiceListExecutorFactory() {}
 
-Why Singletons Are Controversial
+    AS_WORKER::Executor *CreateExecutor( AS_WORKER::Environment *env,
+        AS_WORKER::Params *params )
+    {
+      return new AS_SERVICELIST::ServiceListExecutor( env, params );
+    }
+};
 
-The use of singletons is actually a fairly controversial subject in the Java
-community; what was once an often-used design pattern is now being looked at
-as a less than desirable coding practice.
+// maps request string to "factory"
+{
+  servicelistexecutor                  = new AS_SERVICELIST::ServiceListExecutorFactory();
+  serviceListStatusExecutor            = new AS_SERVICELIST::ServiceListStatusExecutorFactory();
+  ...
 
-The problem with singletons is that they introduce global state into a
-program, allowing anyone to access them at anytime (ignoring scope). Even
-worse, singletons are one of the most overused design patterns today, meaning
-that many people introduce this possibly detrimental global state in instances
-where it isn't even necessary. What's wrong with singletons' use of global
-state?
-
-First, programs using global state are very difficult to test. One of the
-hallmarks of testability is a loose coupling of classes, allowing you to
-isolate a single class and test it completely. When one class uses a singleton
-(and I'm talking about a classic singleton, one that enforces it own
- singularity thorough a static getInstance() method), the singleton user and
-the singleton become inextricably coupled together. 
-
-It is no longer possible to test the user (class) without also testing the
-singleton. In many cases, this is a deal breaker that can prevent a developer
-from testing a class at all, especially if the singleton represents a
-'resource' that should not be updated by tests (i.e.  an important database).
-
-The ideal solution here is to pass in the singleton as a parameter in the
-user's constructor, allowing a tester to easily mock out the singleton for
-tests. The singleton then doesn't have to enforce its own singularity; this
-can be handled by the client or a factory class, which could produce the real
-version or a test version, eliminating the global state altogether. In fact,
-it should be considered a violation of the Single Responsibility Principle of
-  OO design to have an object responsible for its own singularity as well as
-  its normal tasks.
-
-Second, programs that rely on global state hide their dependencies. One of the
-unique abilities of a singleton is that it can be accessed anywhere though its
-globally available static method (i.e.  getInstance()), allowing programmers
-to use it inside of a method `without having to pass it in` expressly through
-parameters. While this may seem easier to the programmer, relying on this
-static instance means that the signatures of methods no longer show their
-'dependencies', because the method could pull a singleton "out of thin air."
-This means that users need knowledge of the inner workings of code to properly
-use it, making it more difficult to use and test.
-
-Tying these two problems together shows another issue with singletons. In
-todays world of test-driven and agile development, it is more important than
-ever to have small tests covering most of your code. One of the important
-things about these tests is that they must be able to be run in any order (not
-    dependent on each other), which can become a problem with singleton usage.
-
-Because the dependencies of some given methods aren't 'clear' when they rely
-on singletons (getting them from static getters), a tester may unknowing write
-two tests that actually depend on each other by modifying a shared resource
-(the singleton). This can produce flaky tests, ones that pass when run in one
-order but fail when run in another, which aren't very useful.
-
-Still not convinced? Well, this certainly wasn't originally my idea, and it's
-not even that new. If you're looking for some more compelling arguments, check
-out some of these sources:
-
-All pages with Singleton in their title at the Portland Pattern Repository
-Wiki
-
-Use Your Singletons Wisely (IBM developerWorks) 
+  map->RegisterUrl(REQ_METHOD_HTTP_GET, (char *) "/as/services",          servicelistexecutor );
+  map->RegisterUrl(REQ_METHOD_HTTP_GET, (char *) "/as/services/<b>/<sb>", servicelistexecutor );
+  ...
+}
 
 
 ={============================================================================

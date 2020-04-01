@@ -3790,22 +3790,38 @@ namespace cxx_static
   {
   private:
     static const size_t MAX_CODE_LENGTH{4}; // *TN* no define
-    static const std::string DIGIT_NOT_FOUND;
 
     // cause an error
     // static const std::string DIGIT_NOT_FOUND{"*"};
+    static const std::string DIGIT_NOT_FOUND;
+
+  public:
+    struct Data
+    {
+      std::string name{};
+      int value{};
+    };
+
+    static Data data;
+
   public:
     FooStatic1() {}
   };
 
   const std::string FooStatic1::DIGIT_NOT_FOUND{"*"};
+
+  FooStatic1::Data FooStatic1::data = {"FooStatic1", 100};
 } // namespace cxx_static
 
-TEST(CxxStatic, static_class_member)
+// show class member(static member) shall be defined outside
+TEST(CxxStatic, check_member)
 {
   using namespace cxx_static;
 
   FooStatic1 foo;
+
+  // is it going to be null by default init? no
+  EXPECT_THAT(FooStatic1::data.name, "FooStatic1");
 }
 
 namespace cxx_static

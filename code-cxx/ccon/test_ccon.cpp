@@ -62,6 +62,7 @@ namespace cxx_thread
     // std::cout << "function1 thread id " << std::this_thread::get_id() << std::endl;
     os << std::this_thread::get_id();
   }
+
   void function2(void)
   {
     // std::cout << "function2 thread id " << std::this_thread::get_id() << std::endl;

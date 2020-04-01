@@ -2,6 +2,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <forward_list>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <list>
@@ -3061,6 +3062,423 @@ TEST(PatternNotifierFull, sendNotificationManyArgs)
 
   noti.setKeyAndValue("key", "value");
 }
+
+/*
+// ={=========================================================================
+cxx_pattern_observer_notifier_full
+
+*/
+
+namespace cxx_singleton
+{
+  class Foo1
+  {
+    private:
+      std::string name_{};
+      int count_{0};
+      int calls_{0};
+      static Foo1 *instance_;
+
+      // to wait for random
+      std::default_random_engine dre;
+      std::uniform_int_distribution<int> id;
+
+    public:
+      // use `count_` to check num of instance created
+      static Foo1 *instance()
+      {
+        if (nullptr == instance_)
+        {
+          instance_ = new Foo1("Foo1");
+          instance_->increase();
+        }
+
+        return instance_;
+      }
+
+      Foo1(const Foo1&) = delete;
+      Foo1& operator=(const Foo1&) = delete;
+
+      // a destructor?
+      // No need to delete _instance? Yes, will be reclaimed when an application
+      // terminates.
+
+    public:
+      std::string name() const
+      { return name_; }
+
+      void increase() { ++count_; }
+
+      // to give calling thread waiting time
+      void exec() 
+      { 
+        std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+        ++calls_; 
+      }
+
+      int calls() { return calls_; }
+
+      int count() const
+      { return count_; }
+
+    private:
+      explicit Foo1(std::string const &name)
+          : name_(name), dre('r'),id(10, 1000)
+      {}
+  };
+
+  Foo1 *Foo1::instance_ = nullptr;
+
+  int instance_count = 0;
+
+  // when use reference
+  class Foo2
+  {
+    private:
+      std::string name_{};
+      int count_{0};
+      int calls_{0};
+
+      // to wait for random
+      std::default_random_engine dre;
+      std::uniform_int_distribution<int> id;
+
+    public:
+      // use `count_` to check num of instance created
+      static Foo2 &instance()
+      {
+        static Foo2 instance_("Foo2");
+        return instance_;
+      }
+
+      Foo2(const Foo2&) = delete;
+      Foo2& operator=(const Foo2&) = delete;
+
+      // a destructor?
+      // No need to delete _instance? Yes, will be reclaimed when an application
+      // terminates.
+
+    public:
+      std::string name() const
+      { return name_; }
+
+      void increase() { ++count_; }
+
+      // to give calling thread waiting time
+      void exec() 
+      { 
+        std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+        ++calls_; 
+      }
+
+      int calls() { return calls_; }
+
+      int count() const
+      { return count_; }
+
+    private:
+      explicit Foo2(std::string const &name)
+          : name_(name), dre('r'),id(10, 1000)
+      {
+        ++count_;
+      }
+  };
+} // namespace cxx_singleton
+
+TEST(PatternSingleton, check_on_single_thread_1)
+{
+  using namespace cxx_singleton;
+
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+  EXPECT_THAT(Foo1::instance()->count(), 1);
+
+  // uses `instance` more
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+
+  // count stays the same
+  EXPECT_THAT(Foo1::instance()->count(), 1);
+}
+
+TEST(PatternSingleton, check_on_single_thread_2)
+{
+  using namespace cxx_singleton;
+
+  EXPECT_THAT(Foo2::instance().name(), "Foo2");
+  EXPECT_THAT(Foo2::instance().count(), 1);
+
+  // uses `instance` more
+  EXPECT_THAT(Foo2::instance().name(), "Foo2");
+  EXPECT_THAT(Foo2::instance().name(), "Foo2");
+
+  // count stays the same
+  EXPECT_THAT(Foo2::instance().count(), 1);
+}
+
+namespace cxx_singleton
+{
+  void do_access_1()
+  {
+#ifndef DISABLE_WAIT
+    // to wait for random
+    std::default_random_engine dre('r');
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+#endif
+
+    EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+    std::cout << std::this_thread::get_id() << " ends" << std::endl;
+  }
+
+  void do_access_2()
+  {
+    for (size_t i = 0; i < 10; ++i)
+    {
+#ifndef DISABLE_WAIT
+      // to wait for random
+      std::default_random_engine dre('r');
+      std::uniform_int_distribution<int> id(10, 1000);
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+#endif
+
+      Foo1::instance()->exec();
+    }
+  }
+}
+
+// creates multiple threads which uses singleton to see how it works
+// thread safe as cxx11 supports
+TEST(PatternSingleton, check_on_multiple_thread_1)
+{
+  using namespace cxx_singleton;
+
+  std::vector<std::future<void>> threads;
+
+  // lets creates multiple threads to run
+  for (int i = 0; i < 10; ++i)
+  {
+    auto result = std::async(std::launch::async, do_access_1);
+
+    // use std::move() and otherwise, compile error
+    threads.emplace_back(std::move(result));
+
+    std::cout << std::this_thread::get_id() << " ends" << std::endl;
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads[i].get();
+    std::cout << "threads " << i << " ends" << std::endl;
+  }
+
+  // uses `instance` more
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+
+  // count stays the same
+  EXPECT_THAT(Foo1::instance()->count(), 1);
+}
+
+// ok, `initialisation` is thread-safe. how about meember function?
+//
+// as you can see it fails sometimes and this when #thread is 10
+//
+// [ RUN      ] PatternSingleton.check_on_multiple_thread_2
+// threads 0 ends
+// threads 1 ends
+// threads 2 ends
+// threads 3 ends
+// threads 4 ends
+// threads 5 ends
+// threads 6 ends
+// threads 7 ends
+// threads 8 ends
+// threads 9 ends
+// /home/keitee/git/kb/code-cxx/cxx/test_cxx_pattern.cpp:3245: Failure
+// Value of: Foo1::instance()->calls()
+// Expected: is equal to 100
+//   Actual: 98 (of type int)
+// [  FAILED  ] PatternSingleton.check_on_multiple_thread_2 (7160 ms)
+
+TEST(PatternSingleton, check_on_multiple_thread_2)
+{
+  using namespace cxx_singleton;
+
+  constexpr auto NUM_THREADS{10};
+
+  std::vector<std::future<void>> threads;
+
+  // lets creates multiple threads to run
+  for (int i = 0; i < NUM_THREADS; ++i)
+  {
+    auto result = std::async(std::launch::async, do_access_2);
+
+    // use std::move() and otherwise, compile error
+    threads.emplace_back(std::move(result));
+
+    // std::cout << std::this_thread::get_id() << " starts" << std::endl;
+  }
+
+  for (int i = 0; i < NUM_THREADS; ++i)
+  {
+    threads[i].get();
+    std::cout << "threads " << i << " ends" << std::endl;
+  }
+
+  // uses `instance` more
+  EXPECT_THAT(Foo1::instance()->name(), "Foo1");
+
+  // count stays the same
+  EXPECT_THAT(Foo1::instance()->calls(), NUM_THREADS * 10);
+}
+
+// https://www.modernescpp.com/index.php/thread-safe-initialization-of-a-singleton
+//
+// I use in the reference implementation the so called Meyers Singleton. The
+// elegance of this implementation is that the singleton object instance in line
+// 11 is a static variable with block scope. Therefore, instance will exactly be
+// initialized, when the static method getInstance (line 10 - 14) will be
+// executed the first time. In line 14 the volatile variable dummy is commented
+// out. When I translate the program with maximum optimization that has to
+// change. So the call MySingleton::getInstance() will not be optimized away.
+//
+// Guarantees of the C++ runtime
+// I already presented the details to the thread safe initialization of
+// variables in the post Thread safe initialization of data.
+//
+// Meyers Singleton
+// The beauty of the Meyers Singleton in C++11 is that it's automatically thread
+// safe. That is guaranteed by the standard: Static variables with block scope.
+// The Meyers Singleton is a static variable with block scope, so we are done.
+// It's still left to rewrite the program for four threads.
+//
+//
+// http://www.open-std.org/JTC1/SC22/WG21/
+//
+// https://stackoverflow.com/questions/8102125/is-local-static-variable-initialization-thread-safe-in-c11
+// C++ The relevant section 6.7:
+//
+// such a variable is initialized the first time control passes through its
+// declaration; such a variable is considered initialized upon the completion of
+// its initialization. [...] If control enters the declaration concurrently
+// while the variable is being initialized, the concurrent execution shall wait
+// for completion of the initialization.
+//
+// https://www.modernescpp.com/index.php/thread-safe-initialization-of-data
+//
+// #9 Neo 2018-12-26 12:34
+//
+// "There are three ways in C++ to initialize variables in a thread safe way."
+//
+// What about non-local static variables?
+//
+// static MyObject myObject; // ctor executed before main
+//
+// aren't they thread safe too?  Quote 0#10 Rainer Grimm 2018-12-29 17:18 Of
+// course, they are also thread-safe initialised because there exists only one
+// thread.
+
+namespace cxx_singleton
+{
+  constexpr auto tenMill= 10000000;
+
+  class MySingleton1
+  {
+    public:
+      static MySingleton1& getInstance()
+      {
+        // NOTE:
+        static MySingleton1 instance;
+
+        // volatile int dummy{};
+        return instance;
+      }
+    private:
+      MySingleton1()= default;
+
+      // NOTE
+      ~MySingleton1()= default;
+
+      MySingleton1(const MySingleton1&)= delete;
+      MySingleton1& operator=(const MySingleton1&)= delete;
+  };
+
+  std::chrono::duration<double> getTime()
+  {
+    auto begin= std::chrono::system_clock::now();
+
+    for ( size_t i= 0; i <= tenMill; ++i){
+      MySingleton1::getInstance();
+    }
+
+    return std::chrono::system_clock::now() - begin;
+  };
+} // namespace cxx_singleton
+
+TEST(PatternSingleton, reference_1)
+{
+  using namespace cxx_singleton;
+
+  constexpr auto fourtyMill = 4 * tenMill;
+
+  auto begin = std::chrono::system_clock::now();
+
+  for (size_t i = 0; i <= fourtyMill; ++i)
+  {
+    MySingleton1::getInstance();
+  }
+
+  auto end = std::chrono::system_clock::now() - begin;
+
+  std::cout << std::chrono::duration<double>(end).count() << std::endl;
+}
+
+// ok, it runs multiple threads but do not show the problem when use multiple
+// threads. Probarly, his intension is to measure performance. 
+
+TEST(PatternSingleton, reference_2)
+{
+  using namespace cxx_singleton;
+
+  auto fut1= std::async(std::launch::async,getTime);
+  auto fut2= std::async(std::launch::async,getTime);
+  auto fut3= std::async(std::launch::async,getTime);
+  auto fut4= std::async(std::launch::async,getTime);
+
+  auto total= fut1.get() + fut2.get() + fut3.get() + fut4.get();
+
+  std::cout << total.count() << std::endl;
+}
+
+namespace cxx_singleton
+{
+  // constexpr auto tenMill= 10000000;
+
+  class MySingleton2{
+    public:
+      static MySingleton2& getInstance()
+      {
+        // volatile int dummy{};
+        return instance;
+      }
+    private:
+      MySingleton2()= default;
+
+      // NOTE:
+      ~MySingleton2()= default;
+
+      MySingleton2(const MySingleton2&)= delete;
+      MySingleton2& operator=(const MySingleton2&)= delete;
+
+      // NOTE:
+      static MySingleton2 instance;
+  };
+
+  // NOTE:
+  MySingleton2 MySingleton2::instance;
+} // namespace cxx_singleton
 
 // ={=========================================================================
 int main(int argc, char **argv)

@@ -327,6 +327,7 @@ TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey1)
 
   EXPECT_CALL(*station, rainfall()).WillOnce(Return(5.0));
 
+  // NOTE: pass `mock` to user, ui, as arg and which enables `mocking`
   UserInterface ui(station);
 
   EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
@@ -521,6 +522,32 @@ TEST(WeatherStationGmock, verify_complex_arguments2)
 }
 
 // when use savearg
+// https://github.com/google/googletest/blob/master/googlemock/docs/cook_book.md
+//
+// Verifying Complex Arguments {#SaveArgVerify}
+//
+// If you want to verify that a method is called with a particular argument but
+// the match criteria is complex, it can be difficult to distinguish between
+// cardinality failures (calling the method the wrong number of times) and
+// argument match failures. Similarly, if you are matching multiple parameters,
+// it may not be easy to distinguishing which argument failed to match. For
+// example:
+//
+//   // Not ideal: this could fail because of a problem with arg1 or arg2, or maybe
+//   // just the method wasn't called.
+//
+//   EXPECT_CALL(foo, SendValues(_, ElementsAre(1, 4, 4, 7), EqualsProto( ... )));
+//
+// You can instead save the arguments and test them individually:
+// 
+//   EXPECT_CALL(foo, SendValues)
+//       .WillOnce(DoAll(SaveArg<1>(&actual_array), SaveArg<2>(&actual_proto)));
+//
+//   ... run the test
+//
+//   EXPECT_THAT(actual_array, ElementsAre(1, 4, 4, 7));
+//   EXPECT_THAT(actual_proto, EqualsProto( ... ));
+
 TEST(WeatherStationGmock, verify_complex_arguments3)
 {
   auto station = std::make_shared<MockWeatherStation>();
@@ -528,6 +555,7 @@ TEST(WeatherStationGmock, verify_complex_arguments3)
   std::vector<int> coll1;
   std::vector<int> coll2;
 
+  // save args into coll1, and coll2
   EXPECT_CALL(*station, complexargs(_, _))
     .WillOnce(DoAll(SaveArg<0>(&coll1), SaveArg<1>(&coll2)));
 
@@ -535,6 +563,7 @@ TEST(WeatherStationGmock, verify_complex_arguments3)
 
   ui.complexargs();
 
+  // check on the saved args
   EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4));
   EXPECT_THAT(coll2, ElementsAre(5, 6, 7, 8));
 }
