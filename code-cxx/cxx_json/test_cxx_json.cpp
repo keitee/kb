@@ -844,6 +844,91 @@ TEST(CxxJSON, jsoncpp_ex5)
   }
 }
 
+// do the same as above but use std::string directly
+//
+// http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_reader.html#af1da6c976ad1e96c742804c3853eef94
+//
+// bool Json::Reader::parse	(	const std::string & 	document,
+// Value & 	root,
+// bool 	collectComments = true 
+// )	
+
+TEST(CxxJSON, jsoncpp_ex5_1) 
+{
+  Json::Reader reader;
+  Json::Value root;
+
+  // parse the json
+  if (!reader.parse(ConfigJson, root))
+  {
+    std::cout << "failed to parse config json" << std::endl;
+    return;
+  }
+
+  if (!root.isObject())
+  {
+    std::cout << "invalid root config object" << std::endl;
+    return;
+  }
+
+  static const Json::StaticString domain("domain");
+  static const Json::StaticString urisName("uris");
+  static const Json::StaticString sysInfoName("providesSystemInfo");
+  static const Json::StaticString sysStatusName("providesSystemStatus");
+  static const Json::StaticString testPrefsName("testPreferences");
+  static const Json::StaticString sysSettingsName("systemSettings");
+
+  {
+    const Json::Value domainName = root[domain];
+
+    if (domainName.isString())
+    {
+      std::cout << "domain : " << domainName.asString() << std::endl;
+    }
+    else if (!domainName.isNull())
+    {
+      // not string and not null. shall be string or null.
+      std::cout << "invalid domain name format" << std::endl;
+    }
+  }
+
+  {
+    const Json::Value uris = root[urisName];
+
+    if (uris.isArray())
+    {
+      for (const Json::Value &uri : uris)
+      {
+        const Json::Value path = uri["path"];
+        const Json::Value method = uri["method"];
+
+        if (path.isString())
+        {
+          std::cout << "path   : " << path.asString() << std::endl;
+        }
+        else if (!path.isNull())
+        {
+          std::cout << "invalid path format" << std::endl;
+        }
+
+        if (method.isString())
+        {
+          std::cout << "method : " << method.asString() << std::endl;
+        }
+        else if (!method.isNull())
+        {
+          std::cout << "invalid method format" << std::endl;
+        }
+      }
+    }
+    else if (!uris.isNull())
+    {
+      // not string and not null. shall be array or null.
+      std::cout << "invalid uris format" << std::endl;
+    }
+  }
+}
+
 //  {
 //    "dvbtriplet": "318.4.8583", 
 //    "servicetypes": [

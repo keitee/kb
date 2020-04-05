@@ -24,7 +24,6 @@ using namespace testing;
 
 /*
 ={=============================================================================
-
 cxx_pattern_decorator
 
 The Morden C++ Challenge, Design Pattern
@@ -285,7 +284,6 @@ TEST(PatternDecorator, ValidatingPasswords_2)
 
 /*
 ={=============================================================================
-
 cxx_pattern_composite
 
 The Morden C++ Challenge, Design Pattern
@@ -454,7 +452,6 @@ TEST(PatternComposite, PasswordGenerator_2)
 
 /*
 ={=============================================================================
-
 cxx_pattern_template
 
 The-Modern-Cpp-Challenge/Chapter08/problem_69
@@ -698,7 +695,6 @@ TEST(PatternTemplate, GeneratingSecurityNumber)
 
 /*
 ={=============================================================================
-
 cxx_pattern_chain_of_responsibility
 
 The Morden C++ Challenge, Design Pattern
@@ -842,7 +838,6 @@ TEST(PatternChainOfResponsibility, ApprovalSystem)
 
 /*
 ={=============================================================================
-
 cxx_pattern_observer
 
 The Morden C++ Challenge, Design Pattern, Chapter 08
@@ -1653,7 +1648,6 @@ TEST(PatternObserver, ObservableVectorContainer)
 
 /*
 ={=============================================================================
-
 cxx_pattern_strategy
 
 The Morden C++ Challenge, Design Pattern, Chapter 08
@@ -2695,7 +2689,7 @@ TEST(PatternDispatcher, checkSync)
 }
 
 /*
-// ={=========================================================================
+={=========================================================================
 cxx_pattern_observer_notifier_full
 
 */
@@ -3064,8 +3058,8 @@ TEST(PatternNotifierFull, sendNotificationManyArgs)
 }
 
 /*
-// ={=========================================================================
-cxx_pattern_observer_notifier_full
+={=========================================================================
+cxx_pattern_singleton
 
 */
 
@@ -3479,6 +3473,121 @@ namespace cxx_singleton
   // NOTE:
   MySingleton2 MySingleton2::instance;
 } // namespace cxx_singleton
+
+/*
+={=========================================================================
+cxx_pattern_singleton read
+
+to make a singleton testable
+
+*/
+
+namespace
+{
+  // this is function we want to test but which uses singleton
+
+  Response sendData(const Data &data)
+  {
+    Request req;
+
+    // codes to transform Data into Request
+
+    return CommSingleton::instance()->send(req);
+  }
+
+
+  // o to make "source compatible" via default parameter so old code still use it
+  // with single parameter
+  //
+  // o to express singleton dependancy
+
+  Response sendData(const Data &data,
+      CommSingleton *comm = CommSingleton::instance());
+
+  Response sendData(const Data &data, CommSingleton *comm)
+  {
+    Request req;
+
+    // codes to transform Data into Request
+
+    return comm->send(req);
+  }
+
+
+  // o introduce wrapper to replace singleton
+  // o add "virtual" to allow override
+  // NOTE: this is a "mock" 
+
+  class CommWrapper
+  {
+    enum { SERVICE_ID = 249409 };
+
+    public:
+    CommWrapper(int service_id = SERVICE_ID)
+      : raw_client(service_id) {...}
+
+    Response send(const Request &req);
+
+    private:
+    TcpClient raw_client;
+  };
+
+  struct Service
+  {
+    static CommWrapper comm;
+  }
+
+  Response sendData(const Data &data,
+      CommWrapper &comm = Service::comm);
+
+  Response sendData(const Data &data, CommWrapper &comm)
+  {
+    Request req;
+
+    // codes to transform Data into Request
+
+    return comm.send(req);
+  }
+
+  // mock
+  class CommTester : public CommWrapper
+  {
+    public:
+      CommTester(Request &req) : req_(req) {}
+
+      // override
+      Response send(const Request &reg) 
+      { 
+        req_ = req; 
+        return Response(); 
+      }
+
+      Request &req_;
+  };
+
+  // test
+  int TestSendData()
+  {
+    Data data;
+    rec.id = 999;
+
+    // fill in more rec values
+
+    Request req;
+
+    // sendData() will fill in `req` and CommTester use reference to take it
+    // back so now we can see what sendData() do on Request `req`
+
+    CommTester client(req);
+
+    sendData(data, client);
+
+    if (req.senderId_ != rec.id)
+      std::cout << "Error ..." << std::endl;
+
+    // further validation of rec values...
+  }
+} // namespace
 
 // ={=========================================================================
 int main(int argc, char **argv)

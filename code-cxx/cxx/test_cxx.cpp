@@ -249,6 +249,7 @@ TEST(CxxMemoryModel, memory_model_allocator)
     // uninitialized_fill(b, e, t);
     // uninitialized_fill_n(b, n, t);
 
+    // ???
     auto result = std::uninitialized_copy(coll.cbegin(), coll.cend(), data);
 
     std::cout << "coll{";
@@ -917,14 +918,24 @@ TEST(Arith, Comparison)
 
 namespace
 {
-  enum class VALUES{E1, E2, E3, E4};
+  enum class VALUES
+  {
+    E1,
+    E2,
+    E3,
+    E4
+  };
 }
 
-TEST(CxxSwitch, show_switch)
+TEST(CxxExpression, show_switch)
 {
+#if 0
+  // when use "-Wswitch-enum" which is not on by -Wall:
+  // warning: enumeration value ‘E3’ not handled in switch [-Wswitch-enum]
+  // warning: enumeration value ‘E4’ not handled in switch [-Wswitch-enum]
   {
     ostringstream os;
-    VALUES value;
+    VALUES value{VALUES::E1};
 
     switch (value)
     {
@@ -941,6 +952,7 @@ TEST(CxxSwitch, show_switch)
         break;
     }
   }
+#endif
 
   {
     ostringstream os;
@@ -4099,7 +4111,7 @@ TEST(CxxFeaturesTest, UseIsspace)
 }
 
 // ={=========================================================================
-// cxx-function-object
+// cxx-callable
 
 // cxx-progress
 //
@@ -4212,7 +4224,7 @@ TEST(CxxCallable, function_pointer_cast)
   }
 }
 
-namespace cxx_function
+namespace cxx_callable
 {
   class Foo
   {
@@ -4247,16 +4259,17 @@ namespace cxx_function
 // std::function<void(Foo &)> op = &Foo::update_10;
 //                    ^^^^^
 
-TEST(CxxCallable, std_function)
+TEST(CxxCallable, check_std_function)
 {
-  using namespace cxx_function;
+  using namespace cxx_callable;
 
   // expect that nullptr if not set
+  // NOTE: EXPECT_THAT(op, nullptr); will make compile error
   {
     Foo foo = Foo(100);
-    std::function<void(Foo &)> op;
+    std::function<void(Foo &)> call;
 
-    if (op == nullptr)
+    if (call == nullptr)
       EXPECT_THAT(true, true);
     else
       EXPECT_THAT(true, false);
@@ -4264,8 +4277,8 @@ TEST(CxxCallable, std_function)
 
   // when use std::function, have to speficy `target`
   {
-    Foo foo                       = Foo(100);
-    std::function<void(Foo &)> op = &Foo::update_10;
+    Foo foo                         = Foo(100);
+    std::function<void(Foo &)> call = &Foo::update_10;
 
     // specify the target object
     //
@@ -4278,15 +4291,33 @@ TEST(CxxCallable, std_function)
     //
     // throws std::bad_function_call
 
-    op(foo);
+    call(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // the signatuer to std::function specify whether the argument is copy or
+  // compile error as call is typed as function pointer
+  // {
+  //   Foo foo = Foo(100);
+  //   auto call = &Foo::update_10;
+  //   call(foo);
+  //   EXPECT_THAT(foo.get_value(), 110);
+  // }
+
+  // when use more args
+  {
+    Foo foo                              = Foo(100);
+    std::function<void(Foo &, int)> call = &Foo::update;
+    call(foo, 50);
+
+    EXPECT_THAT(foo.get_value(), 150);
+  }
+
+  // the signature to std::function specify whether the argument is copy or
   // reference
   {
-    // use reference and copy
+    // difference when use reference and copy.
+    // note: use the same `foo`
     {
       Foo foo{100};
 
@@ -4294,10 +4325,16 @@ TEST(CxxCallable, std_function)
       fo1(foo);
       EXPECT_THAT(foo.get_value(), 120);
 
-      // if use reference, should be 140
+      fo1(foo);
+      EXPECT_THAT(foo.get_value(), 140);
+
+      // use copy and do not change
       std::function<void(Foo)> fo2 = &Foo::update_20;
       fo2(foo);
-      EXPECT_THAT(foo.get_value(), 120);
+      EXPECT_THAT(foo.get_value(), 140);
+
+      fo2(foo);
+      EXPECT_THAT(foo.get_value(), 140);
     }
 
     // use reference
@@ -4307,10 +4344,13 @@ TEST(CxxCallable, std_function)
 
       std::function<void(Foo &)> op = &Foo::update_20;
 
-      for_each(coll.begin(), coll.end(), op);
+      std::for_each(coll.begin(), coll.end(), op);
 
       // to get result out and algo-transform requires unary predicate
-      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+      std::transform(coll.begin(),
+                     coll.end(),
+                     back_inserter(result),
+                     print_value);
 
       EXPECT_THAT(result, ElementsAre(21, 22, 23));
     }
@@ -4322,19 +4362,132 @@ TEST(CxxCallable, std_function)
 
       std::function<void(Foo)> op = &Foo::update_20;
 
-      for_each(coll.begin(), coll.end(), op);
+      std::for_each(coll.begin(), coll.end(), op);
 
       // to get result out and cxx-transform requires unary predicate
-      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+      std::transform(coll.begin(),
+                     coll.end(),
+                     back_inserter(result),
+                     print_value);
 
       EXPECT_THAT(result, ElementsAre(1, 2, 3));
     }
   }
 }
 
+// cxx-bind and cxx-function are compatible?
+
+TEST(CxxCallable, check_std_function_2)
+{
+  using namespace cxx_callable;
+
+  {
+    Foo foo                         = Foo(100);
+    std::function<void(Foo &)> call = &Foo::update_10;
+
+    call(foo);
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    Foo foo                         = Foo(100);
+    std::function<void()> call = std::bind(&Foo::update_10, &foo);
+
+    // error: no match for call to ‘(std::function<void(cxx_callable::Foo&)>) ()’
+    // when use
+    // std::function<void(Foo &)> call = &Foo::update_10;
+
+    call();
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    Foo foo                              = Foo(100);
+    std::function<void(Foo &, int)> call = &Foo::update;
+    call(foo, 50);
+
+    EXPECT_THAT(foo.get_value(), 150);
+  }
+
+  {
+    Foo foo                              = Foo(100);
+    std::function<void(int)> call 
+      = std::bind(&Foo::update, &foo, std::placeholders::_1);
+
+    call(50);
+
+    EXPECT_THAT(foo.get_value(), 150);
+  }
+}
+
+
+// Use `cxx-mem-fn` to let the compiler deduce the member's type and to
+// generate a callable object. The callable generated by `mem_fn` can be
+// called on either an object or a pointer.
+//
+// mem_fn() needs target but not flexible as std::bind().
+//
+// std::bind(&foo::closeConsole, this, std::placeholders::_1);
+//
+// the point is std::bind() is more flexible.
+
+TEST(CxxCallable, check_std_memfn)
+{
+  using namespace cxx_callable;
+
+  // *cxx-error* since no default ctor for std::mem_fn()
+  // {
+  //   auto op = std::mem_fn();
+  // }
+
+  // need target
+  {
+    Foo foo = Foo(100);
+    auto op = std::mem_fn(&Foo::update_10);
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use args
+  {
+    Foo foo = Foo(100);
+    auto op = std::mem_fn(&Foo::update);
+
+    op(foo, 100);
+
+    EXPECT_THAT(foo.get_value(), 200);
+  }
+
+  // cxx-error compile error
+  // {
+  //   Foo foo = Foo(100);
+  //   auto op = std::mem_fn(&Foo::update_10, &foo);
+  //   op();
+  //   EXPECT_THAT(foo.get_value(), 110);
+  // }
+
+  // use reference
+  {
+    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    auto op = std::mem_fn(&Foo::update_10);
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+
+    EXPECT_THAT(result, ElementsAre(11, 12, 13));
+  }
+}
+
 // *cxx-bind*
 
-namespace cxx_function
+namespace cxx_callable
 {
   bool check_size(std::string const &s, std::string::size_type size)
   {
@@ -4349,14 +4502,14 @@ namespace cxx_function
   void increase(int &i) { ++i; }
 } // namespace cxx_function
 
-TEST(CxxCallable, std_bind)
+TEST(CxxCallable, check_std_bind)
 {
-  using namespace cxx_function;
+  using namespace cxx_callable;
 
   // use library defined callable
   {
-    std::plus<int> fo;
-    EXPECT_THAT(fo(10, 20), 30);
+    std::plus<int> call;
+    EXPECT_THAT(call(10, 20), 30);
   }
 
   // cxx-error: no matching function for call to ‘std::plus<int>::plus(int, int)’
@@ -4371,18 +4524,19 @@ TEST(CxxCallable, std_bind)
 
   // expect true if size >= 6
   {
-    auto fo = std::bind(check_size, std::placeholders::_1, 6);
+    auto call = std::bind(check_size, std::placeholders::_1, 6);
 
-    EXPECT_THAT(fo("hello"), false);
-    EXPECT_THAT(fo("hello!"), true);
+    EXPECT_THAT(call("hello"), false);
+    EXPECT_THAT(call("hello!"), true);
   }
 
   // show when bind() composites
   {
     std::vector<std::string> coll{"bind", "do", "wonders"};
 
-    int size{6};
+    size_t size{6};
 
+    // use lambda
     auto found1 =
       std::find_if(coll.cbegin(), coll.cend(), [size](std::string const &e) {
         return e.size() >= size;
@@ -4393,6 +4547,7 @@ TEST(CxxCallable, std_bind)
         return e.size() >= 6;
       });
 
+    // use function
     auto found3 =
       std::find_if(coll.cbegin(),
                    coll.cend(),
@@ -4548,11 +4703,11 @@ TEST(CxxCallable, std_bind)
 }
 
 // on member functions
-TEST(CxxCallable, std_bind_and_function)
+TEST(CxxCallable, check_std_bind_and_member_function)
 {
-  using namespace cxx_function;
+  using namespace cxx_callable;
 
-  // when use std::function<>
+  // when use std::function<> but have to use target
   {
     Foo foo{100};
     std::function<void(Foo &)> fo = &Foo::update_10;
@@ -4562,7 +4717,7 @@ TEST(CxxCallable, std_bind_and_function)
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // when use cxx-bind
+  // when use cxx-bind and use target as well
   {
     Foo foo{100};
     auto fo = std::bind(&Foo::update_10, _1);
@@ -4573,7 +4728,7 @@ TEST(CxxCallable, std_bind_and_function)
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // when use cxx-bind and object
+  // when use cxx-bind and object but not use target
   {
     Foo foo{100};
     auto fo = std::bind(&Foo::update_10, &foo);
@@ -4679,70 +4834,7 @@ TEST(CxxCallable, std_bind_and_function)
   }
 }
 
-// Use `cxx-mem-fn` to let the compiler deduce the member's type and to
-// generate a callable object. The callable generated by `mem_fn` can be
-// called on either an object or a pointer.
-//
-// mem_fn() needs target but not flexible as std::bind().
-//
-// std::bind(&foo::closeConsole, this, std::placeholders::_1);
-//
-// the point is std::bind() is more flexible.
-
-TEST(CxxCallable, std_memfn)
-{
-  using namespace cxx_function;
-
-  // *cxx-error* since no default ctor for std::mem_fn()
-  // {
-  //   auto op = std::mem_fn();
-  // }
-
-  // still need target
-  {
-    Foo foo = Foo(100);
-    auto op = std::mem_fn(&Foo::update_10);
-
-    op(foo);
-
-    EXPECT_THAT(foo.get_value(), 110);
-  }
-
-  // use args
-  {
-    Foo foo = Foo(100);
-    auto op = std::mem_fn(&Foo::update);
-
-    op(foo, 100);
-
-    EXPECT_THAT(foo.get_value(), 200);
-  }
-
-  // cxx-error compile error
-  // {
-  //   Foo foo = Foo(100);
-  //   auto op = std::mem_fn(&Foo::update_10, &foo);
-  //   op();
-  //   EXPECT_THAT(foo.get_value(), 110);
-  // }
-
-  // use reference
-  {
-    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    auto op = std::mem_fn(&Foo::update_10);
-
-    for_each(coll.begin(), coll.end(), op);
-
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), print_value);
-
-    EXPECT_THAT(result, ElementsAre(11, 12, 13));
-  }
-}
-
-namespace cxx_function
+namespace cxx_callable
 {
   class EventLoopPrivate
   {
@@ -4751,6 +4843,9 @@ namespace cxx_function
     {
       if (f)
         f();
+
+      // TODO?
+      return true;
     }
   };
 
@@ -4842,9 +4937,9 @@ namespace cxx_function
   };
 } // namespace cxx_function
 
-TEST(CxxFunctionObject, Case)
+TEST(CxxCallable, show_case)
 {
-  using namespace cxx_function;
+  using namespace cxx_callable;
 
   EventLoop loop;
   Target t1("t1", 100);
@@ -4867,26 +4962,23 @@ TEST(CxxFunctionObject, Case)
   // loop.invokeMethod(&Target::setNameAndValue, "case", 200);
 }
 
-TEST(CxxFunctionObject, Pointer)
+TEST(CxxCallable, Pointer)
 {
-  using namespace cxx_function;
+  using namespace cxx_callable;
 
   // use pointer
   {
     Foo foo = Foo(100);
 
-    // error
-    // void (*op)(void);
-
-    // see how to define pointer to member function
-    void (Foo::*op)(void);
-
     // `Unlike ordinary function pointer, no automatic conversion` between a
     // member funtion and a pointer to that function.
     // must explicitly use address-of operator
+    //
     // error
     // op = Foo::update_10;
 
+    // see how to define pointer to member function
+    void (Foo::*op)(void);
     op = &Foo::update_10;
 
     // cxx.cpp:2631:11: error: must use ‘.*’ or ‘->*’ to call pointer-to-member
@@ -4910,6 +5002,8 @@ TEST(CxxFunctionObject, Pointer)
     EXPECT_THAT(foo.get_value(), 120);
   }
 
+#if 0 // to avoid warning
+  // to show member function do not in object
   // f1 member address 0x43e3c4 | object address: 0x7ffeaf5f0c90
   // f2 member address 0x43e3c4 | object address: 0x7ffeaf5f0c80
   {
@@ -4923,12 +5017,15 @@ TEST(CxxFunctionObject, Pointer)
 
     // as said above, this is error:
     // cxx.cpp:2676:42: error: invalid use of non-static member function ‘void
-    // cxx_function::Foo::update_10()’ cout << "f2 member address " <<
-    // Foo::update_10 <<
+    // cxx_function::Foo::update_10()’ 
+    //
+    // cout << "f2 member address " << Foo::update_10 <<
   }
+#endif
 }
 
-TEST(CxxCallable, lambda_CaptureAndReturn)
+// cxx-lambda
+TEST(CxxCallable, lambda_capture_and_return)
 {
   {
     auto func = []() {
@@ -4991,7 +5088,11 @@ TEST(CxxCallable, lambda_CaptureAndReturn)
     EXPECT_THAT(x, 77);
     EXPECT_THAT(y, 44);
   }
+}
 
+// cxx-lambda
+TEST(CxxCallable, lambda_capture_mutable)
+{
   // To have a mixture of passing by value and passing by reference, you can
   // declare the lambda as mutable. In that case, objects are passed by value,
   // but inside the function object defined by the lambda, you have write access
@@ -5008,7 +5109,8 @@ TEST(CxxCallable, lambda_CaptureAndReturn)
 
       ++y;
 
-      // no *cxx-error*
+      // *cxx-error* without `mutable`
+      // error: increment of read-only variable ‘x’
       ++x;
     };
 
@@ -5018,6 +5120,20 @@ TEST(CxxCallable, lambda_CaptureAndReturn)
     // not 44
     EXPECT_THAT(x, 42);
     EXPECT_THAT(y, 44);
+  }
+
+  // CPL 11.4.3.4
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+    std::vector<int> result{0, 0, 0, 0, 0};
+
+    int count = coll.size();
+
+    std::generate(result.begin(), result.end(), [count]() mutable {
+      return --count;
+    });
+
+    EXPECT_THAT(result, ElementsAre(4, 3, 2, 1, 0));
   }
 }
 
@@ -5201,6 +5317,9 @@ TEST(CxxCallable, lambda_Compare)
 // Passing C++ captureless lambda as function pointer to C API
 // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 //
+// This begs the question, what makes capture-less lambda expressions so
+// different that they can be passed as function pointers? 
+//
 // The function-call operator is const unless the lambda is declared mutable. A
 // capture-less lambda also has a similar closure type except that there are no
 // nonstatic data members in it. However, a capture-less lambda has an
@@ -5212,31 +5331,115 @@ TEST(CxxCallable, lambda_Compare)
 // the lambda-expression is empty. It is a public, constexpr, (since C++17)
 // non-virtual, non-explicit, const noexcept (since C++14) member function of
 // the closure object.
-// Therefore, the closure type of a capture-less lambda that takes only one
-// void* parameter and returns void* could be imagined as:
 //
-// copied from test_ccon.cpp
-namespace
+// CPL 11.4.5: A lambda that captures nothing can be assigned to a pointer to
+// funciton of an appropriate type.
+
+namespace cxx_callable
 {
+  class Worker
+  {
+  private:
+    pthread_t id_;
+    bool stopped_{false};
+    const std::string waits_{"\\|/-"};
+    int count_{0};
 
-  // int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void
-  // *(*start_routine) (void *), void *arg);
+    void run()
+    {
+      while (!stopped_)
+      {
+        std::cout << flush << "\r" << waits_[count_ % 5];
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++count_;
+      }
 
-  static void *thread_func(void *arg)
+      std::cout << std::endl;
+    }
+
+  public:
+    int start()
+    {
+      return pthread_create(
+        &id_,
+        nullptr,
+        [](void *self) -> void * {
+          static_cast<Worker *>(self)->run();
+          return nullptr;
+        },
+        this);
+    }
+
+    void stop()
+    {
+      stopped_ = true;
+      pthread_join(id_, nullptr);
+    }
+  };
+
+  class Worker1
+  {
+  private:
+    const std::string waits_{"\\|/-"};
+    int count_{0};
+
+  public:
+    void* run(void *)
+    {
+      while (count_ < 1000)
+      {
+        std::cout << flush << "\r" << waits_[count_ % 5];
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++count_;
+      }
+
+      std::cout << std::endl;
+    }
+  };
+
+  // int pthread_create(pthread_t *thread, const pthread_attr_t *attr, 
+  // void*(*start_routine) (void *), void *arg);
+
+  static void *func1(void *arg)
   {
     const char *s = (char *)arg;
     // cout << "thread id: " << std::this_thread::get_id() << endl;
-    printf("%s, sleeps for 10s, getpid=%ld\n", s, getpid());
+    printf("%s, sleeps for 10s, getpid=%d\n", s, getpid());
     sleep(10);
 
     // return the length of input message
     return (void *)strlen(s);
   }
-} // namespace
+} // namespace cxx_callable
 
 // shows the same pid but not tid
-TEST(CxxCallable, lambda_c_interface)
+TEST(CxxCallable, lambda_and_c)
 {
+  using namespace cxx_callable;
+
+  // use `capture-less` lambda
+  {
+    Worker w;
+
+    if (0 == w.start())
+    {
+      std::this_thread::sleep_for(std::chrono::seconds(10));
+      w.stop();
+    }
+  }
+
+  // // can use member function?
+  // // error: cannot convert ‘std::_Bind<void* (cxx_callable::Worker1::*(cxx_callable::Worker1*, std::_Placeholder<1>))(void*)>’ 
+  // // to ‘void* (*)(void*)’ for argument ‘3’ to ‘int pthread_create(pthread_t*, const pthread_attr_t*, void* (*)(void*), void*)’
+  // {
+  //   Worker1 w;
+  //   pthread_t t;
+  //
+  //   auto call = std::bind(&Worker1::run, &w, std::placeholders::_1);
+  //
+  //   pthread_create( &t, nullptr, call, (void*) &w);
+  // }
+
   // static function works
   {
     char coll[] = "Hello world";
@@ -5247,14 +5450,14 @@ TEST(CxxCallable, lambda_c_interface)
     EXPECT_THAT(strlen(coll), 11);
 
     // this works since it's static
-    s = pthread_create(&t, NULL, thread_func, (void *)coll);
+    s = pthread_create(&t, NULL, func1, (void *)coll);
     if (s != 0)
     {
       printf("pthread_create failed");
       exit(EXIT_FAILURE);
     }
 
-    printf("main pid = %ld\n", getpid());
+    printf("main pid = %d\n", getpid());
 
     s = pthread_join(t, &res);
     if (s != 0)
@@ -5267,7 +5470,7 @@ TEST(CxxCallable, lambda_c_interface)
     EXPECT_THAT((long)res, 11);
   }
 
-  // use lambda
+  // use cxx-lambda
   {
     char coll[] = "Hello world";
     pthread_t t;
@@ -5293,7 +5496,7 @@ TEST(CxxCallable, lambda_c_interface)
       [](void *arg) -> void * {
         const char *s = (char *)arg;
         // cout << "thread id: " << std::this_thread::get_id() << endl;
-        printf("%s, sleeps for 10s, getpid=%ld\n", s, getpid());
+        printf("%s, sleeps for 10s, getpid=%d\n", s, getpid());
         sleep(10);
 
         // return the length of input message
@@ -5307,7 +5510,7 @@ TEST(CxxCallable, lambda_c_interface)
       exit(EXIT_FAILURE);
     }
 
-    printf("main pid = %ld\n", getpid());
+    printf("main pid = %d\n", getpid());
 
     s = pthread_join(t, &res);
     if (s != 0)
@@ -5320,6 +5523,22 @@ TEST(CxxCallable, lambda_c_interface)
     EXPECT_THAT((long)res, 11);
   }
 }
+
+/* other example
+
+  static void commandLineHandler(char *line);
+
+  m_rl_callback_handler_install(prompt.toLatin1().constData(),
+    commandLineHandler);
+
+  to:
+
+  m_rl_callback_handler_install(prompt.toLatin1().constData(),
+      [](char *line) -> void
+      {
+        printf("sleeps for 10s\n");
+      });
+*/
 
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
@@ -7714,6 +7933,7 @@ namespace cxx_move
       std::cout << "Move2 &operator=(const Move2 &rhs)" << std::endl;
       m_name  = rhs.m_name;
       m_value = rhs.m_value;
+      return *this;
     }
 
     // move controls
@@ -7729,6 +7949,7 @@ namespace cxx_move
       std::cout << "Move2 &operator=(Move2 &&rhs)" << std::endl;
       m_name  = std::move(rhs.m_name);
       m_value = rhs.m_value;
+      return *this;
     }
 
     bool isNameEmpty() const { return m_name.empty(); }
@@ -7779,6 +8000,7 @@ TEST(CxxMove, move_binding)
     const int &r3 = i * 42;
 
     int &&r4 = i * 42;
+    (r4);
   }
 }
 
@@ -7925,7 +8147,6 @@ TEST(CxxMove, move_signal5)
     Move1 m;
 
     const std::string cname("cmove");
-    const int cvalue{10};
 
     std::string name("move");
     int value{10};
@@ -7992,19 +8213,20 @@ namespace cxx_slice_off1
 
   class FooFoo : public Foo
   {
-    private:
-      std::string m_middle_name{};
+  private:
+    std::string m_middle_name{};
 
-    public:
-      FooFoo(const std::string &name, const std::string &middle)
-        : Foo(name), m_middle_name(middle)
-      {}
+  public:
+    FooFoo(const std::string &name, const std::string &middle)
+        : Foo(name)
+        , m_middle_name(middle)
+    {}
 
-      ~FooFoo() {}
+    ~FooFoo() {}
 
-      std::string name() override { return m_name + ":" + m_middle_name; }
+    std::string name() override { return m_name + ":" + m_middle_name; }
   };
-} // namespace cxx_sliced_off
+} // namespace cxx_slice_off1
 
 TEST(CxxSlice, see_slice_1)
 {
@@ -8043,27 +8265,28 @@ namespace cxx_slice_off2
     {}
     virtual ~Foo() {}
 
-    Foo(const Foo&) = delete;
-    Foo& operator=(const Foo&) = delete;
+    Foo(const Foo &) = delete;
+    Foo &operator=(const Foo &) = delete;
 
     virtual std::string name() { return m_name; }
   };
 
   class FooFoo : public Foo
   {
-    private:
-      std::string m_middle_name{};
+  private:
+    std::string m_middle_name{};
 
-    public:
-      FooFoo(const std::string &name, const std::string &middle)
-        : Foo(name), m_middle_name(middle)
-      {}
+  public:
+    FooFoo(const std::string &name, const std::string &middle)
+        : Foo(name)
+        , m_middle_name(middle)
+    {}
 
-      ~FooFoo() {}
+    ~FooFoo() {}
 
-      std::string name() override { return m_name + ":" + m_middle_name; }
+    std::string name() override { return m_name + ":" + m_middle_name; }
   };
-} // namespace cxx_sliced_off
+} // namespace cxx_slice_off2
 
 // since compile error
 // NOTE: yes, raise compile error for slice off cases but also not able to copy
@@ -10624,7 +10847,12 @@ namespace cxx_except
   class FooAbort
   {
   public:
-    ~FooAbort() { throw std::runtime_error("noexcept(true) so expects abort"); }
+
+    // warning: throw will always call terminate() [-Wterminate]
+    // without "noexcept(false)"
+
+    ~FooAbort() noexcept(false)
+    { throw std::runtime_error("noexcept(true) so expects abort"); }
   };
 } // namespace cxx_except
 
@@ -10685,12 +10913,10 @@ TEST(Exception, Noexcept)
 TEST(TypeConversion, Double)
 {
   // double value: 0
-  // double value: 0
   // double value is not < or > 0
   {
     double value{0};
     printf("double value: %g\n", value);
-    printf("double value: %u\n", value);
 
     if (value < 0)
       printf("double value is < 0\n");

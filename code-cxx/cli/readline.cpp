@@ -375,6 +375,12 @@ void ReadLinePrivate::start(const QString &prompt)
   m_rl_callback_handler_install(prompt.toLatin1().constData(),
                                 commandLineHandler);
 
+  // m_rl_callback_handler_install(prompt.toLatin1().constData(),
+  //     [](char *line) -> void
+  //     {
+  //       printf("sleeps for 10s\n");
+  //     });
+
   m_stdinListener->setEnabled(true);
 
   // https://doc.qt.io/qt-5/qtglobal.html#qInstallMessageHandler
