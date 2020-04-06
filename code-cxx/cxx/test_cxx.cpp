@@ -7451,7 +7451,7 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // For non-primitive types, it will be a compiler error, unless you've
 // overloaded operator!, in which case, it might do anything.
 
-TEST(CxxBool, LogicalNot)
+TEST(CxxBool, check_conversion)
 {
   {
     bool value{false};
@@ -7470,9 +7470,23 @@ TEST(CxxBool, LogicalNot)
 
     EXPECT_THAT((bool)value, true);
   }
+
+  {
+    std::string state{"NotActive"};
+
+    // positive value if *this appears after the character sequence specified by the
+    // arguments, in lexicographical order
+    // as seen cxx-string, it's confusing to check the return value
+    EXPECT_THAT(state.compare({"Active"}), 1);
+    EXPECT_THAT(state.compare({"NotAvailable"}), -19);
+
+    // however, other than 0, regarded as `true` in bool
+    EXPECT_THAT(!!state.compare({"Active"}), true);
+    EXPECT_THAT(!!state.compare({"NotAvailable"}), true);
+  }
 }
 
-TEST(Bool, CheckBoolDefault)
+TEST(CxxBool, CheckBoolDefault)
 {
   bool value{};
   EXPECT_EQ(value, false);
@@ -7527,7 +7541,7 @@ namespace __cxx_check
 
 } // namespace __cxx_check
 
-TEST(Bool, CheckUsage)
+TEST(CxxBool, CheckUsage)
 {
   using namespace __cxx_check;
 
@@ -7554,6 +7568,7 @@ TEST(Bool, CheckUsage)
   CHECK(100 != 101);
   CHECK(100 != 100);
 }
+
 
 // ={=========================================================================
 // cxx-stdio

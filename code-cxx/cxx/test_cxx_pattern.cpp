@@ -2498,7 +2498,6 @@ TEST(PatternDispatcher, checkDoneOnDispatcher)
   using namespace cxx_dispatcher_ex_2019_12;
 
   {
-    int value{};
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
 
@@ -3480,8 +3479,93 @@ cxx_pattern_singleton read
 
 to make a singleton testable
 
+Retiring the Singleton Pattern - Peter Muldoon - Meeting C++ 2019
+
+https://www.youtube.com/watch?v=f46jmm7r8Yg&fbclid=IwAR1YP8kkqLp8AWtYx4DAG5ARdqQtGqGeF5RcJ6-yxbgnOO50Nn0x9Ouamf4
+
 */
 
+/*
+case example
+
+DrmController is singleton and has static callback defined, onStateChange()
+since it's called from the third party moudle
+
+Can we use member function as a callback instead?
+
+Yes. not sure about its runtime behaviour but comiles okay
+ 
+1. one problem was compile issue. since it's not copyable, callable from
+bind() emits compile error and this can be fixed by using `std::ref`
+
+2. note that JSONRPC here uses std::function<> for a callback and this is why
+callable from bind() works
+
+namespace
+{
+  // before
+  class DrmController
+  {
+    private:
+      DrmController() = default;
+
+    public:
+      static DrmController &getInstance();
+      ~DrmController()                     = default;
+      DrmController(const DrmController &) = delete;
+      DrmController &operator=(const DrmController &) = delete;
+
+    private:
+      static void onStateChange(const Core::JSON::String &parameters);
+  };
+
+  void DrmController::initialise() const
+  {
+    m_drm = new JSONRPC::Client(_T(DRMACTIVATION_CALLSIGN.c_str()), _T(""));
+    if (nullptr != m_drm)
+    {
+      Core::ERROR_NONE !=
+             m_drm->Subscribe<Core::JSON::String>(1000,
+                                                  _T("drmstatechange"),
+                                                  &onStateChange);
+    }
+  }
+
+  // after
+  class DrmController
+  {
+    private:
+      DrmController() = default;
+
+    public:
+      static DrmController &getInstance();
+      ~DrmController()                     = default;
+      DrmController(const DrmController &) = delete;
+      DrmController &operator=(const DrmController &) = delete;
+
+    private:
+      static void onStateChange(const Core::JSON::String &parameters);
+  };
+
+  void DrmController::initialise() const
+  {
+    auto call = std::bind(&DrmController::onStateChange, 
+        std::ref(DrmController::getInstance()),
+        std::placeholders::_1);
+
+    m_drm = new JSONRPC::Client(_T(DRMACTIVATION_CALLSIGN.c_str()), _T(""));
+    if (nullptr != m_drm)
+    {
+      Core::ERROR_NONE !=
+          m_drm->Subscribe<Core::JSON::String>(1000, 
+              _T("drmstatechange"), call);
+    }
+  }
+}
+
+*/
+
+/*
 namespace
 {
   // this is function we want to test but which uses singleton
@@ -3526,7 +3610,7 @@ namespace
     CommWrapper(int service_id = SERVICE_ID)
       : raw_client(service_id) {...}
 
-    Response send(const Request &req);
+    virtual Response send(const Request &req);
 
     private:
     TcpClient raw_client;
@@ -3569,25 +3653,133 @@ namespace
   int TestSendData()
   {
     Data data;
-    rec.id = 999;
+    data.id = 999;
 
-    // fill in more rec values
+    // fill in more `data` values
 
     Request req;
 
-    // sendData() will fill in `req` and CommTester use reference to take it
-    // back so now we can see what sendData() do on Request `req`
+    // sendData() will fill in `req` and CommTester use reference to save it
+    // back so now we can examine what sendData() do on Request `req`
 
     CommTester client(req);
 
     sendData(data, client);
 
-    if (req.senderId_ != rec.id)
+    if (req.senderId != data.id)
       std::cout << "Error ..." << std::endl;
 
     // further validation of rec values...
   }
+
+
+  // o if use gmock
+
+  class MockComm : public CommWrapper
+  {
+    public:
+      MOCK_METHOD1(send, Response(const Request &));
+  };
+
+  TEST(CommTest, test_sendData)
+  {
+    Data data;
+    data.id = 999;
+
+    // fill in more `data` values
+
+    Request req;
+
+    MockComm comm;
+
+    EXPECT_CALL(comm, send(_)).WillOnce(DoAll(SaveArg<0>(&req), return(Reponse())));
+
+    sendData(data, comm);
+
+    ASSERT_EQ(req.senderId, data.id);
+
+    // further validation of rec values...
+  }
+
+
+  // o if use modern C++
+  // NOTE: why it said it's for Cxx-11?
+
+  // see here uses copy
+  using comm_func = std::function<Response(Request)>;
+
+  Response sendData(const Data &data,
+      comm_func comm = Service::comm);
+
+  Response sendData(const Data &data, comm_func comm)
+  {
+    Request req;
+
+    // codes to transform Data into Request
+
+    return comm(std::move(req));
+  }
+
+
+  // to remove copy, can do one of these. function_ref is beyond Cxx-11
+
+  Response sendData(const Data &data,
+      comm_func comm = std::ref(Service::comm));
+
+  using comm_func = std::function_ref<Response(Request)>;
+
+
+  // make it callable
+  class CommWrapper
+  {
+    enum { SERVICE_ID = 249409 };
+
+    public:
+    CommWrapper(int service_id = SERVICE_ID)
+      : raw_client(service_id) {...}
+
+    // virtual Response send(const Request &req);
+    Response operator()(const Request &req);
+
+    private:
+    TcpClient raw_client;
+  };
+
+  struct Service
+  {
+    static CommWrapper comm;
+  }
+
+
+  class MockComm : public CommWrapper
+  {
+    public:
+      MOCK_METHOD1(send, Response(Request));
+      Reponse operator()(Request reg) { return send(std::move(req)); }
+  };
+
+  TEST(CommTest, test_sendData)
+  {
+    Data data;
+    data.id = 999;
+
+    // fill in more `data` values
+
+    Request req;
+    Response resp;
+
+    MockComm comm;
+
+    EXPECT_CALL(comm, send(_)).WillOnce(DoAll(SaveArg<0>(&req), return(resp)));
+
+    sendData(data, std::ref(comm));
+
+    ASSERT_EQ(req.senderId, data.id);
+
+    // further validation of rec values...
+  }
 } // namespace
+*/
 
 // ={=========================================================================
 int main(int argc, char **argv)

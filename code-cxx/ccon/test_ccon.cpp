@@ -139,7 +139,7 @@ namespace cxx_thread
   {
     const char *s = (char *)arg;
     // cout << "thread id: " << std::this_thread::get_id() << endl;
-    printf("%s, sleeps for 10s, getpid=%ld, gettid=%ld\n",
+    printf("%s, sleeps for 10s, getpid=%d, gettid=%ld\n",
            s,
            getpid(),
            syscall(SYS_gettid));
@@ -171,7 +171,7 @@ TEST(CConThread, check_tid_and_pid)
       exit(EXIT_FAILURE);
     }
 
-    printf("main pid = %ld\n", getpid());
+    printf("main pid = %d\n", getpid());
 
     s = pthread_join(t, &res);
     if (s != 0)
@@ -964,7 +964,7 @@ TEST(CConAsync, check_launch_policy11)
 TEST(CConAsync, check_launch_policy12)
 {
   std::future<int> result1(
-    std::async(launch::async, [] { return doSomething('.'); }));
+    std::async(std::launch::async, [] { return doSomething('.'); }));
 
   int result2 = doSomething('+');
 
@@ -2057,11 +2057,10 @@ namespace cxx_condition
     bool thread_running{true};
   };
 
-  // NOTE: do not use lock
+  // NOTE: do not use lock on q access
   void push_items_and_notify1(ConditionWait &cw)
   {
-    // expect nothing happens since there is no item in the q since q is empty
-    // but thread_running is true so wait() do not exit
+    // send signal but consumer(main) do nothing since q is empty
     {
       // wait to make sure consumer is ready
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -2070,7 +2069,8 @@ namespace cxx_condition
       cw.cv.notify_one();
     }
 
-    // push some and signal
+    // push some and signal. consumer gets {0,1,2,3,4}
+    // wait() not block as long as condition is met
     {
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -2082,7 +2082,7 @@ namespace cxx_condition
       cw.cv.notify_one();
     }
 
-    // push some and signal to end
+    // push some and signal but end right away so consumer gets{0}
     {
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -2098,16 +2098,20 @@ namespace cxx_condition
   }
 
   // NOTE: this time, use lock to push item to q
+  // [ RUN      ] CConCondition.see_wait2
+  // signal1
+  // signal2
+  // signal3
+  // poped : 0
+  // [       OK ] CConCondition.see_wait2 (3001 ms)
+
   void push_items_and_notify2(ConditionWait &cw)
   {
-    // expect nothing happens since there is no item in the q since q is empty
-    // but thread_running is true so wait() do not exit
+    // send signal but consumer(main) do nothing since q is empty
     {
-
-      // wait to make sure consumer is ready
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-      std::cout << "signal1 " << std::endl;
+      // std::cout << "signal1 " << std::endl;
       cw.cv.notify_one();
     }
 
@@ -2121,7 +2125,7 @@ namespace cxx_condition
       for (int i = 0; i < 5; i++)
         cw.q.push(i);
 
-      std::cout << "signal2 " << std::endl;
+      // std::cout << "signal2 " << std::endl;
       cw.cv.notify_one();
     }
 
@@ -2135,7 +2139,49 @@ namespace cxx_condition
       for (int i = 0; i < 5; i++)
         cw.q.push(i);
 
-      std::cout << "signal3 " << std::endl;
+      // std::cout << "signal3 " << std::endl;
+      cw.cv.notify_one();
+
+      cw.thread_running = false;
+    }
+  }
+
+  // unlike push_items_and_notify2(), sleep first so that consumer runs.
+  void push_items_and_notify3(ConditionWait &cw)
+  {
+    // send signal but consumer(main) do nothing since q is empty
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // std::cout << "signal1 " << std::endl;
+      cw.cv.notify_one();
+    }
+
+    // push some and signal. now sleep first
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      std::lock_guard<std::mutex> lock(cw.m);
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      // std::cout << "signal2 " << std::endl;
+      cw.cv.notify_one();
+    }
+
+    // push some and signal to end. now sleep first
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      std::lock_guard<std::mutex> lock(cw.m);
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      // std::cout << "signal3 " << std::endl;
       cw.cv.notify_one();
 
       cw.thread_running = false;
@@ -2143,7 +2189,7 @@ namespace cxx_condition
   }
 } // namespace cxx_condition
 
-// to see how wait() works
+// to see how wait() works between main and t
 
 TEST(CConCondition, see_wait1)
 {
@@ -2155,6 +2201,7 @@ TEST(CConCondition, see_wait1)
 
   std::thread t([&] { push_items_and_notify1(cw); });
 
+  // lock here
   std::unique_lock<std::mutex> lock(cw.m);
 
   while (cw.thread_running)
@@ -2168,7 +2215,7 @@ TEST(CConCondition, see_wait1)
     {
       auto item = cw.q.front();
       cw.q.pop();
-      std::cout << "poped : " << item << std::endl;
+      // std::cout << "poped : " << item << std::endl;
       coll.push_back(item);
     }
     else
@@ -2195,6 +2242,7 @@ TEST(CConCondition, see_wait2)
 
   std::thread t([&] { push_items_and_notify2(cw); });
 
+  // lock here
   std::unique_lock<std::mutex> lock(cw.m);
 
   while (cw.thread_running)
@@ -2208,7 +2256,7 @@ TEST(CConCondition, see_wait2)
     {
       auto item = cw.q.front();
       cw.q.pop();
-      std::cout << "poped : " << item << std::endl;
+      // std::cout << "poped : " << item << std::endl;
       coll.push_back(item);
     }
     else
@@ -2220,14 +2268,59 @@ TEST(CConCondition, see_wait2)
 
   t.join();
 
+  // this is the case where producer, push_items_and_notify2() finishes
+  // first and wait() returns. since producer contiues running and holding lock.
+  // so consumer only gets one signal.
+
   // EXPECT_THAT(cw.q.size(), 4);
-
-  // TODO: this is the case where producer, push_items_and_notify2() finishes
-  // first and wait() returns. However, there is no gurantee for that? If
-  // interwinded, size can be 4?
-
   EXPECT_THAT(cw.q.size(), 9);
 }
+
+TEST(CConCondition, see_wait3)
+{
+  using namespace cxx_condition;
+
+  struct ConditionWait cw;
+
+  std::vector<int> coll{};
+
+  std::thread t([&] { push_items_and_notify3(cw); });
+
+  // lock here
+  std::unique_lock<std::mutex> lock(cw.m);
+
+  while (cw.thread_running)
+  {
+    // return from wait when
+    // 1. notified, and q is not empty or
+    // 2. notified, q is empty, and thread_running is false
+
+    cw.cv.wait(lock, [&] { return !cw.q.empty() || !cw.thread_running; });
+    if (!cw.q.empty())
+    {
+      auto item = cw.q.front();
+      cw.q.pop();
+      // std::cout << "poped : " << item << std::endl;
+      coll.push_back(item);
+    }
+    else
+    {
+      std::cout << "woke up but q is empty" << std::endl;
+      coll.push_back(1000);
+    }
+  }
+
+  t.join();
+
+  EXPECT_THAT(cw.q.size(), 4);
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 0));
+}
+
+// Called with a predicate as third argument, wait_for() and wait_until() return
+// the result of the predicate (whether the condition holds).
+
+// wait_for() will check the supplied predicate when woken and will return the
+// value of predicate OR `the timeout expires.` see *cxx-con-wait-unbounded*
 
 TEST(CConCondition, see_wait_for)
 {
@@ -2236,14 +2329,35 @@ TEST(CConCondition, see_wait_for)
   std::condition_variable cond;
   std::queue<int> q;
 
-  EXPECT_THAT(q.empty(), true);
+  // return cv_status when there is no predicate
+  {
+    auto result = cond.wait_for(lock, std::chrono::seconds(1));
 
-  auto result =
-    cond.wait_for(lock, std::chrono::seconds(1), [&]() { return !q.empty(); });
+    EXPECT_THAT(result, std::cv_status::timeout);
+  }
 
-  // okay, it's done.
-  // EXPECT_THAT(result, std::cv_status::timeout);
-  EXPECT_THAT(result, false);
+  // return bool
+  {
+    auto result = cond.wait_for(lock, std::chrono::seconds(1), [&]() {
+      return !q.empty();
+    });
+
+    // okay, it's done.
+    EXPECT_THAT(result, false);
+  }
+
+  {
+    q.push(1);
+
+    EXPECT_THAT(q.empty(), false);
+
+    auto result = cond.wait_for(lock, std::chrono::seconds(1), [&]() {
+      return !q.empty();
+    });
+
+    // okay, it's done.
+    EXPECT_THAT(result, true);
+  }
 }
 
 // interface:
@@ -2326,7 +2440,7 @@ namespace cxx_condition
     }
   }
 
-  // make consumer can consume more than 20 if it can.
+  // make consumer can consume as many as it could.
   void consumer_error(threadsafe_queue<int> &q)
   {
     std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
@@ -2351,7 +2465,8 @@ namespace cxx_condition
 // similar to linux-sync-cond-lpi-example
 // 3 producers and consumers which produces and consumes 20 items each
 
-TEST(CConCondition, ProducerAndConsumer)
+// no error
+TEST(CConCondition, see_condition_error_1)
 {
   using namespace cxx_condition;
 
@@ -2367,7 +2482,7 @@ TEST(CConCondition, ProducerAndConsumer)
     consumers.emplace_back(consumer, std::ref(q));
   }
 
-  this_thread::sleep_for(chrono::seconds(2));
+  std::this_thread::sleep_for(chrono::seconds(2));
 
   for (int i = 0; i < 3; ++i)
   {
@@ -2392,8 +2507,7 @@ TEST(CConCondition, ProducerAndConsumer)
 //
 // not easy to see when 5 consumer and see even when 3 consumers
 
-TEST(DISABLED_CConCondition, ProducerAndConsumerHangError)
-// TEST(CConCondition, ProducerAndConsumerHangError)
+TEST(DISABLED_CConCondition, see_condition_error_2)
 {
   using namespace cxx_condition;
 
@@ -2424,10 +2538,9 @@ TEST(DISABLED_CConCondition, ProducerAndConsumerHangError)
   EXPECT_THAT(consumed_total, 60);
 }
 
+// do notify_all() makes difference? NO
 namespace cxx_condition_notify_all
 {
-  // do notify_all() makes difference?
-
   template <typename T>
   class threadsafe_queue
   {
@@ -2498,9 +2611,29 @@ namespace cxx_condition_notify_all
       lock.unlock();
     }
   }
+
+  // make consumer can consume as many as it could.
+  void consumer_error(threadsafe_queue<int> &q)
+  {
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+
+    int value{};
+
+    while (true)
+    {
+      if (consumed_total >= 20 * 3)
+        break;
+
+      q.wait_and_pop(value);
+
+      lock.lock();
+      ++consumed_total;
+      lock.unlock();
+    }
+  }
 } // namespace cxx_condition_notify_all
 
-TEST(CConCondition, ProducerAndConsumerUseNotifyAllQueue)
+TEST(CConCondition, see_condition_error_3)
 {
   using namespace cxx_condition_notify_all;
 
@@ -2534,9 +2667,43 @@ TEST(CConCondition, ProducerAndConsumerUseNotifyAllQueue)
   EXPECT_THAT(consumed_total, 60);
 }
 
+TEST(DISABLED_CConCondition, see_condition_error_4)
+{
+  using namespace cxx_condition_notify_all;
+
+  threadsafe_queue<int> q;
+
+  consumed_total = 0;
+
+  std::thread c1(consumer_error, std::ref(q));
+  std::thread c2(consumer_error, std::ref(q));
+  std::thread c3(consumer_error, std::ref(q));
+  // std::thread c4(consumer_error, std::ref(q));
+  // std::thread c5(consumer_error, std::ref(q));
+
+  this_thread::sleep_for(chrono::seconds(2));
+
+  std::thread p1(&producer, std::ref(q));
+  std::thread p2(&producer, std::ref(q));
+  std::thread p3(&producer, std::ref(q));
+
+  c1.join();
+  c2.join();
+  c3.join();
+  // c4.join(); c5.join();
+  p1.join();
+  p2.join();
+  p3.join();
+
+  EXPECT_THAT(consumed_total, 60);
+}
+
 // 18.6.3 Using Condition Variables to Implement a Queue for Multiple Threads
-// Suffers from the same as Error1 as more consumers with no ways to finish all
-// consumers.
+// Suffers from the same as
+//
+// TEST(DISABLED_CConCondition, see_condition_error_2)
+//
+// since more consumers with no ways to finish all consumers.
 
 namespace cxx_condition_error
 {
@@ -2555,6 +2722,7 @@ namespace cxx_condition_error
         std::lock_guard<std::mutex> lg(queueMutex);
         queue.push(val + i);
       } // release lock
+
       queueCondVar.notify_one();
       std::this_thread::sleep_for(std::chrono::milliseconds(val));
     }
@@ -2565,18 +2733,20 @@ namespace cxx_condition_error
     while (true)
     {
       int val;
+
       {
         std::unique_lock<std::mutex> ul(queueMutex);
         queueCondVar.wait(ul, [] { return !queue.empty(); });
         val = queue.front();
         queue.pop();
       } // release lock
+
       std::cout << "consumer " << num << ": " << val << std::endl;
     }
   }
 } // namespace cxx_condition_error
 
-TEST(DISABLED_CConCondition, ProducerAndConsumerError2)
+TEST(DISABLED_CConCondition, see_condition_error_5)
 {
   using namespace cxx_condition_error;
 
@@ -2699,18 +2869,29 @@ TEST(CConCondition, eventfd)
 }
 
 // from CPP challenge which solves the issue when there are multiple consumers.
+// HOW? since it has checks on num of items to consume.
+//
+// while (office_open || !customers.empty())
 //
 // 66. Customer service system
 //
-// Write a program that simulates the way customers are served in an office. The
-// office has three desks where customers can be served at the same time.
-// Customers can enter the office at any time. They take a ticket with a service
-// number from a ticketing machine and wait until their number is next for
-// service at one of the desks. Customers are served in the order they entered
-// the office, or more precisely, in the order given by their ticket. Every time
-// a service desk finishes serving a customer, the next customer in order is
-// served. The simulation should stop after a particular number of customers
-// have been issued tickets and served.
+// Write a program that simulates the way customers are served in an office.
+//
+// The office has three desks where customers can be served at the same time.
+//
+// Customers can enter the office at any time.
+//
+// They take a ticket with a service number from a ticketing machine and wait
+// until their number is next for service at one of the desks.
+//
+// Customers are served in the order they entered the office, or more precisely,
+// in the order given by their ticket.
+//
+// Every time a service desk finishes serving a customer, the next customer in
+// order is served.
+//
+// The simulation should stop after a particular number of customers have been
+// issued tickets and served.
 
 namespace U66_Text
 {
@@ -2740,6 +2921,7 @@ namespace U66_Text
     std::mutex mt;
   };
 
+  // generate a ticket
   class ticketing_machine
   {
   public:
@@ -2779,7 +2961,7 @@ namespace U66_Text
 
 } // namespace U66_Text
 
-TEST(CConCondition, U66_Text)
+TEST(CConCondition, case_U66_text)
 {
   using namespace U66_Text;
 
@@ -2789,7 +2971,7 @@ TEST(CConCondition, U66_Text)
   std::condition_variable cv;
   int consumed{};
 
-  // consumers
+  // desk(consumers)
 
   std::vector<std::thread> desks;
 
@@ -2802,6 +2984,7 @@ TEST(CConCondition, U66_Text)
 
       logger::instance().log("desk " + std::to_string(i) + " open");
 
+      // office open or there are customers(producer)
       while (office_open || !customers.empty())
       {
         std::unique_lock<std::mutex> locker(mt);
@@ -2810,6 +2993,7 @@ TEST(CConCondition, U66_Text)
           return !customers.empty();
         });
 
+        // check again since can be timed out
         if (!customers.empty())
         {
           // not front()?
@@ -2834,7 +3018,7 @@ TEST(CConCondition, U66_Text)
           //     + std::to_string(i) + " done with customer "
           //     + std::to_string(c.ticket_number()));
         }
-      }
+      } // while
 
       logger::instance().log("desk " + std::to_string(i) + " closed");
     });

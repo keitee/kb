@@ -722,7 +722,6 @@ TEST(CxxString, Swap)
 // positive value if *this appears after the character sequence specified by the
 // arguments, in lexicographical order
 //
-//
 // int compare(size_type pos1, size_type count1, const basic_string& str ) const;
 
 TEST(StringOperation, operation_Compare)
@@ -773,6 +772,20 @@ TEST(StringOperation, operation_Compare)
 
     // h and help
     EXPECT_THAT(coll3.compare("help"), -3);
+  }
+
+  {
+    std::string state{"NotActive"};
+
+    // positive value if *this appears after the character sequence specified by the
+    // arguments, in lexicographical order
+    // as seen cxx-string, it's confusing to check the return value
+    EXPECT_THAT(state.compare({"Active"}), 1);
+    EXPECT_THAT(state.compare({"NotAvailable"}), -19);
+
+    // however, other than 0, regarded as `true` in bool
+    EXPECT_THAT(!!state.compare({"Active"}), true);
+    EXPECT_THAT(!!state.compare({"NotAvailable"}), true);
   }
 
   {

@@ -119,10 +119,9 @@ target_link_libraries(${PROJECT_NAME}_1 gmock_main Boost::regex)
 add_executable(${PROJECT_NAME}_2 test_string_2.cpp)
 target_link_libraries(${PROJECT_NAME}_2 gmock_main Boost::regex)
 
-# # fsm ex
-# add_executable(${PROJECT_NAME}_ex string_ex.cpp)
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main)
-
+# string_03
+add_executable(${PROJECT_NAME}_3 test_string_3.cpp)
+target_link_libraries(${PROJECT_NAME}_3 gmock_main)
 
 # # fsm qt for qt
 # find_package(Qt5Core)
