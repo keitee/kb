@@ -169,29 +169,35 @@ using namespace testing;
 
 /*
 // ={=========================================================================
-//
-[ RUN      ] CxxMemoryModel.allocator
-sizeof p : 8
-sizeof *p: 32
-coll{string1,string2,string3,}
-coll{string1,string2,string3,}
-[       OK ] CxxMemoryModel.allocator (0 ms)
+cxx-allocator
+
+alloc.allocate(size_type n);
+
+Allocates n * sizeof(T) bytes of uninitialized storage by calling ::operator
+new(std::size_t)
 
 */
 
-TEST(CxxMemoryModel, memory_model_allocator)
+TEST(CxxMemoryModel, check_allocator)
 {
   // do allocation only
   {
     std::allocator<std::string> alloc;
+
     auto const p = alloc.allocate(10);
-    std::cout << "sizeof p : " << sizeof(p) << std::endl;
-    std::cout << "sizeof *p: " << sizeof(*p) << std::endl;
+
+    // ? size?
+    EXPECT_THAT(sizeof(p), 8);
+    EXPECT_THAT(sizeof(*p), 32);
+
     alloc.deallocate(p, 10);
   }
 
   // do allocation and construction
+  // ? why sizeof are always the same regardless of string length
   {
+    std::vector<std::string> expected{};
+
     std::allocator<std::string> alloc;
 
     // auto const data = alloc.allocate(10);
@@ -202,28 +208,43 @@ TEST(CxxMemoryModel, memory_model_allocator)
     // NOTE: shall use `coll` to deallocate and access. crashes otherwise.
     auto const coll = data;
 
+    EXPECT_THAT(sizeof(coll), 8);
+    EXPECT_THAT(sizeof(*coll), 32);
+
+    // std::cout << "sizeof p " << sizeof(data) << std::endl;
+    // std::cout << "sizeof *p " << sizeof(*data) << std::endl;
+
     // calls ctor. From *cxx-11*, supports many ctors of the 'type'.
     //
     // The first argument to construct() must be a pointer to unconstructed
     // space allocated by allocate(). The second and subsequent argument
     // determine ctor to use.
 
-    alloc.construct(data++, "string1");
-    alloc.construct(data++, "string2");
-    alloc.construct(data++, "string3");
+    alloc.construct(data++, "looooooooooooooooooooooooooooooooooooong string1");
+    alloc.construct(data++, "looooooooooooooooooooooooooooooooooooong string2");
+    alloc.construct(data++, "looooooooooooooooooooooooooooooooooooong string3");
 
-    std::cout << "coll{";
+    EXPECT_THAT(sizeof(coll), 8);
+    EXPECT_THAT(sizeof(*coll), 32);
 
-    for (int i = 0; i < 3; i++)
-      std::cout << coll[i] << ",";
+    // std::cout << "sizeof p " << sizeof(data) << std::endl;
+    // std::cout << "sizeof *p " << sizeof(*data) << std::endl;
 
-    std::cout << "}" << std::endl;
+    // for (int i = 0; i < 3; i++)
+    //   expected.emplace_back(coll[i]);
+    // EXPECT_THAT(expected, ElementsAre("string1", "string2", "string3"));
 
     // alloc.destroy(p) calls dtor
 
     alloc.destroy(--data);
     alloc.destroy(--data);
     alloc.destroy(data);
+
+    EXPECT_THAT(sizeof(coll), 8);
+    EXPECT_THAT(sizeof(*coll), 32);
+
+    // std::cout << "sizeof p " << sizeof(data) << std::endl;
+    // std::cout << "sizeof *p " << sizeof(*data) << std::endl;
 
     alloc.deallocate(coll, 10);
   }
@@ -249,15 +270,7 @@ TEST(CxxMemoryModel, memory_model_allocator)
     // uninitialized_fill(b, e, t);
     // uninitialized_fill_n(b, n, t);
 
-    // ???
-    auto result = std::uninitialized_copy(coll.cbegin(), coll.cend(), data);
-
-    std::cout << "coll{";
-
-    for (int i = 0; i < 3; i++)
-      std::cout << data[i] << ",";
-
-    std::cout << "}" << std::endl;
+    std::uninitialized_copy(coll.cbegin(), coll.cend(), data);
 
     alloc.deallocate(data, 10);
   }
@@ -812,9 +825,9 @@ TEST(CxxType, show_variant_map)
 }
 
 // ={=========================================================================
-// cxx-array
+// cxx-array cxx-sizeof
 
-TEST(CxxSize, sizeof)
+TEST(CxxSize, see_sizeof)
 {
   using namespace use_sizeof;
 
@@ -873,6 +886,16 @@ TEST(CxxSize, sizeof)
     // 8 or else?
     // Here a pointer points to a 'type' and this is a struct in this case.
     EXPECT_EQ(sizeof(*plist), 24);
+  }
+
+  {
+    struct EventPayload
+    {
+      std::string state{};
+    };
+
+    EXPECT_THAT(sizeof(EventPayload), 32);
+    EXPECT_THAT(sizeof(EventPayload *), 8);
   }
 }
 
@@ -4249,7 +4272,7 @@ namespace cxx_callable
 
   size_t print_value(Foo &foo) { return foo.get_value(); }
 
-} // namespace cxx_function
+} // namespace cxx_callable
 
 // on member function.
 //
@@ -4390,7 +4413,7 @@ TEST(CxxCallable, check_std_function_2)
   }
 
   {
-    Foo foo                         = Foo(100);
+    Foo foo                    = Foo(100);
     std::function<void()> call = std::bind(&Foo::update_10, &foo);
 
     // error: no match for call to ‘(std::function<void(cxx_callable::Foo&)>) ()’
@@ -4411,16 +4434,15 @@ TEST(CxxCallable, check_std_function_2)
   }
 
   {
-    Foo foo                              = Foo(100);
-    std::function<void(int)> call 
-      = std::bind(&Foo::update, &foo, std::placeholders::_1);
+    Foo foo = Foo(100);
+    std::function<void(int)> call =
+      std::bind(&Foo::update, &foo, std::placeholders::_1);
 
     call(50);
 
     EXPECT_THAT(foo.get_value(), 150);
   }
 }
-
 
 // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
 // generate a callable object. The callable generated by `mem_fn` can be
@@ -4500,7 +4522,7 @@ namespace cxx_callable
   }
 
   void increase(int &i) { ++i; }
-} // namespace cxx_function
+} // namespace cxx_callable
 
 TEST(CxxCallable, check_std_bind)
 {
@@ -4935,7 +4957,7 @@ namespace cxx_callable
                 << std::endl;
     }
   };
-} // namespace cxx_function
+} // namespace cxx_callable
 
 TEST(CxxCallable, show_case)
 {
@@ -5318,7 +5340,7 @@ TEST(CxxCallable, lambda_Compare)
 // https://www.nextptr.com/tutorial/ta1188594113/passing-cplusplus-captureless-lambda-as-function-pointer-to-c-api
 //
 // This begs the question, what makes capture-less lambda expressions so
-// different that they can be passed as function pointers? 
+// different that they can be passed as function pointers?
 //
 // The function-call operator is const unless the lambda is declared mutable. A
 // capture-less lambda also has a similar closure type except that there are no
@@ -5384,7 +5406,7 @@ namespace cxx_callable
     int count_{0};
 
   public:
-    void* run(void *)
+    void *run(void *)
     {
       while (count_ < 1000)
       {
@@ -5397,7 +5419,7 @@ namespace cxx_callable
     }
   };
 
-  // int pthread_create(pthread_t *thread, const pthread_attr_t *attr, 
+  // int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
   // void*(*start_routine) (void *), void *arg);
 
   static void *func1(void *arg)
@@ -5429,7 +5451,7 @@ TEST(CxxCallable, lambda_and_c)
   }
 
   // // can use member function?
-  // // error: cannot convert ‘std::_Bind<void* (cxx_callable::Worker1::*(cxx_callable::Worker1*, std::_Placeholder<1>))(void*)>’ 
+  // // error: cannot convert ‘std::_Bind<void* (cxx_callable::Worker1::*(cxx_callable::Worker1*, std::_Placeholder<1>))(void*)>’
   // // to ‘void* (*)(void*)’ for argument ‘3’ to ‘int pthread_create(pthread_t*, const pthread_attr_t*, void* (*)(void*), void*)’
   // {
   //   Worker1 w;
@@ -7568,7 +7590,6 @@ TEST(CxxBool, CheckUsage)
   CHECK(100 != 101);
   CHECK(100 != 100);
 }
-
 
 // ={=========================================================================
 // cxx-stdio
@@ -10862,12 +10883,13 @@ namespace cxx_except
   class FooAbort
   {
   public:
-
     // warning: throw will always call terminate() [-Wterminate]
     // without "noexcept(false)"
 
     ~FooAbort() noexcept(false)
-    { throw std::runtime_error("noexcept(true) so expects abort"); }
+    {
+      throw std::runtime_error("noexcept(true) so expects abort");
+    }
   };
 } // namespace cxx_except
 

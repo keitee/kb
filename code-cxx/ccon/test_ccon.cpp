@@ -49,8 +49,8 @@ namespace
   }
 } // namespace
 
-// ={=========================================================================
-/* cxx-thread
+/* ={=========================================================================
+// cxx-thread
 */
 
 namespace cxx_thread
@@ -187,16 +187,37 @@ TEST(CConThread, check_tid_and_pid)
 
 // true if the thread object identifies an active thread of execution, false
 // otherwise
+//
+// the test shows that even if thread is finished, thread object is still valid
+// and joinable() still return true.
 
-TEST(CConThread, see_joinable)
+TEST(CConThread, check_joinable)
 {
-  std::thread t([] { doSomething('+'); });
+  std::thread t([] 
+      {
+        char c{'+'};
 
-  std::cout << "thread is still running? " << std::boolalpha << t.joinable()
-            << std::endl;
+        // *cxx-random*
+        std::default_random_engine dre(c);
+        std::uniform_int_distribution<int> id(10, 1000);
 
-  // DO NOT WORK as hoped since while() do not ends. WHY? it makes a thread
-  // keep alive??
+        for (int i = 0; i < 10; ++i)
+        {
+          std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+          std::cout.put(c).flush();
+        }
+
+        std::cout << "threads ends" << std::endl;
+      });
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+  //           << std::endl;
+  EXPECT_THAT(t.joinable(), true);
+
+  // DO NOT WORK as hoped since while() do not ends. 
   //
   // while (t.joinable())
   // {
@@ -204,10 +225,18 @@ TEST(CConThread, see_joinable)
   //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   // }
 
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+  //           << std::endl;
+  EXPECT_THAT(t.joinable(), true);
+
   t.join();
 
-  std::cout << "thread is still running? " << std::boolalpha << t.joinable()
-            << std::endl;
+  // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+  //           << std::endl;
+  EXPECT_THAT(t.joinable(), false);
 }
 
 namespace cxx_thread
@@ -1542,31 +1571,56 @@ namespace cxx_mutex
 
 } // namespace cxx_mutex
 
-// TEST(CCon, SHOW_DEADLOCK)
-// {
-//   std::mutex print_mutex;
-//
-//   std::mutex m;
-//   bool result{false};
-//
-//   m.lock();
-//   m.lock();
-//
-//   std::thread t( [&]
-//   {
-//      m.unlock();
-//      std::this_thread::sleep_for(std::chrono::seconds(2));
-//   }
-//   );
-//
-//   std::cout << "set" << std::endl;
-//   result = true;
-//
-//   m.unlock();
-//   t.join();
-//
-//   EXPECT_THAT(result, true);
-// }
+TEST(CConMutex, check_lock_type)
+{
+  std::mutex m;
+
+#if 0
+  // compile error since there's no bool conversion and lock_guard is always
+  // locked.
+  {
+    std::lock_guard<std::mutex> lock(m);
+    EXPECT_THAT(!!lock, true);
+  }
+#endif
+
+  {
+    std::unique_lock<std::mutex> lock(m);
+    EXPECT_THAT(!!lock, true);
+
+    lock.unlock();
+    EXPECT_THAT(!!lock, false);
+
+    lock.lock();
+    EXPECT_THAT(!!lock, true);
+  }
+}
+
+TEST(DISABLED_CConMutex, check_mutex_deadlock)
+{
+  std::mutex print_mutex;
+
+  std::mutex m;
+  bool result{false};
+
+  m.lock();
+  m.lock();
+
+  std::thread t( [&]
+      {
+      m.unlock();
+      std::this_thread::sleep_for(std::chrono::seconds(2));
+      }
+      );
+
+  std::cout << "set" << std::endl;
+  result = true;
+
+  m.unlock();
+  t.join();
+
+  EXPECT_THAT(result, true);
+}
 
 // LPI 30.1.7 Mutex Types
 //
@@ -1574,12 +1628,14 @@ namespace cxx_mutex
 // PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
 // 1. this works while the above shows `deadlock` becuase the above calls lock()
-// twice already before running a thread which calls unlock(). However, the
-// below runs thread before which calls unlock.
+// twice already before running a thread which calls unlock(). 
+//
+// However, the below runs thread before which calls unlock and main blocks on
+// second lock().
 //
 // 2. this works without calling second unlock() since *cxx-raii* do m.unlock();
 
-TEST(CCon, mutex_MultipleLockAndUnlock)
+TEST(CConMutex, check_mutex_lock_1)
 {
   std::mutex m;
   bool result{false};
@@ -1588,6 +1644,7 @@ TEST(CCon, mutex_MultipleLockAndUnlock)
 
   std::thread t([&] {
     std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::cout << "unset" << std::endl;
     m.unlock();
   });
 
@@ -1600,7 +1657,27 @@ TEST(CCon, mutex_MultipleLockAndUnlock)
   EXPECT_THAT(result, true);
 }
 
-TEST(CCon, mutex_Types)
+TEST(CConMutex, check_mutex_lock_2)
+{
+  std::mutex m;
+  bool result{false};
+
+  m.lock();
+
+  auto f = std::async(std::launch::async, [&] {
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::cout << "unset" << std::endl;
+    m.unlock();
+  });
+
+  m.lock();
+  std::cout << "set" << std::endl;
+  result = true;
+
+  EXPECT_THAT(result, true);
+}
+
+TEST(CConMutex, show_mutex_types)
 {
   using namespace cxx_mutex;
 
@@ -2329,11 +2406,23 @@ TEST(CConCondition, see_wait_for)
   std::condition_variable cond;
   std::queue<int> q;
 
-  // return cv_status when there is no predicate
+  // return cv_status when there is no predicate and timeout
   {
     auto result = cond.wait_for(lock, std::chrono::seconds(1));
 
     EXPECT_THAT(result, std::cv_status::timeout);
+  }
+
+  // when signaled
+  {
+    auto f = std::async([&cond] {
+        this_thread::sleep_for(chrono::milliseconds(1000));
+        cond.notify_one();
+        });
+
+    auto result = cond.wait_for(lock, std::chrono::seconds(10));
+
+    EXPECT_THAT(result, std::cv_status::no_timeout);
   }
 
   // return bool
@@ -2405,7 +2494,7 @@ namespace cxx_condition
 
   private:
     std::queue<T> queue_;
-    mutable std::mutex m_;
+    std::mutex m_;
     std::condition_variable cond_;
   };
 

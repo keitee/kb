@@ -1849,6 +1849,12 @@ https://gcc.gnu.org/onlinedocs/cpp/Pragmas.html
 // NDS_pthread.c:43:4: warning: #warning "xxx2" 
 #warning "xxx2"
 
+#pragma once
+
+If #pragma once is seen when scanning a header file, that file will never be
+read again, no matter what. It is a less-portable alternative to using
+‘#ifndef’ to guard the contents of header files against multiple inclusions.
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-cpp-defined
@@ -7125,7 +7131,7 @@ different.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-cstring cxx-check cxx-sizeof
 
-Queries size of the 'object' or 'type'. Used when actual size of the object
+Queries size of the `object` or `type`. Used when actual size of the object
 must be known `at compile time`:
 
 sizeof (type)
@@ -41971,14 +41977,16 @@ can neither add nor remove elements to change the size. Only a replacement of
 element values is possible.
 
 If you need a sequence with a fixed number of elements, class array<> has the
-best performance because memory is allocated on the 'stack' (if possible),
-reallocation never happens, and you have random access.
+best performance because memory `is allocated on the stack` (if possible),
+`reallocation never happens`, and you have random access.
 
-#include <array>
-
-namespace std {
-  template <typename T, size_t N>
-    class array;
+namespace
+{
+  // #include <array>
+  namespace std {
+    template <typename T, size_t N>
+      class array;
+  }
 }
 
 
@@ -41994,25 +42002,31 @@ create arrays with and without elements for initialization. The default
 constructor default initializes the elements, which means that the value of
 fundamental types is undefined.
 
-std::array<int,4> x;       // OOPS: elements of x have undefined value
-std::array<int,4> x = {};  // OK: all elements of x have value 0 (int())
-
-TEST(Array, ArrayCtors)
+TEST(CxxArray, check_ctors)
 {
+  // all fundamental types are initialised.
   {
-    array<int, 8> coll = {11,22,33};
-    coll.back() = 999;
-    coll[coll.size()-2] = 42;
+    std::array<int, 8> coll = {};
 
-    EXPECT_THAT(coll, ElementsAre(11,22,33,0,0,0,42,999));
+    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0, 0, 0, 0));
   }
 
   {
-    array<int, 3> coll{1,2,3};
+    std::array<int, 8> coll = {11, 22, 33};
+
+    EXPECT_THAT(coll.size(), 8);
+
+    coll.back()           = 999;
+    coll[coll.size() - 2] = 42;
+
+    EXPECT_THAT(coll, ElementsAre(11, 22, 33, 0, 0, 0, 42, 999));
+  }
+
+  {
+    array<int, 3> coll{1, 2, 3};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3));
   }
 }
-
 
 note:
 array header do not define ctors at all. How does it support ctor with
@@ -42030,49 +42044,108 @@ c.front()   Returns the first element (no check whether a first element exists)
 c.back()    Returns the last element (no check whether a last element exists)
 
 
-<cxx-array-as-c-array>
+<ex> *cxx-vector-array*
 
-7.2.3 Using arrays as C-Style Arrays
+7.3.3 Using Vectors as C-Style Arrays
 
-Same as *cxx-vector-array*
+As for class cxx-array, the C++ standard library guarantees that the elements of
+a vector are in contiguous memory. Thus, you can expect that for any valid index
+i in vector v, the following yields true:
+
+&v[i] == &v[0] + i
+
+This guarantee has some important consequences. It simply means that you can
+use a vector in all cases in which you could use a `dynamic array.` 
 
 
-<ex>
-TEST(StlArray, ArrayCtors)
+<ex> multi-array using cxx-vector and cxx-array
+
+TEST(CxxArray, check_multi_dimention)
 {
-  array<int, 8> coll = {11,22,33};
-  coll.back() = 999;
-  coll[coll.size()-2] = 42;
+  const size_t rows = 5;
+  const size_t cols = 5;
 
-  EXPECT_THAT(coll, ElementsAre(11,22,33,0,0,0,42,999));
-}
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
 
-// initialized: t.h.i.s. .i.s. .a.n. .c.h.a.r. .a.r.r.a.y.....................(41)
-// strcpyed   : u.s.e. .t.h.e. .a.d.d.r.e.s.s. .o.f. .f.i.r.s.t..................(41)
-// strcpyed   : u.s.e. .d.a.t.a. .m.e.m.b.e.r..o.f. .f.i.r.s.t..................(41)
+  {
+    std::vector<std::vector<int>> coll(rows, std::vector<int>(cols, 0));
 
-TEST(StlArray, ArrayAccess)
-{
-  // *TN* 
-  // array size is 41 and the initializer is less than this. does array handle
-  // this?
-  //
-  // array<char,50> carr{"ABCDEDFHIJKLMN"};
-  // PRINT_ELEMENTS(carr, "char array: ");
-  //
-  // changed PRINT_ELEMENTS() to print the # of iteration in a loop and see
-  // blank outputs
-  // ========
-  // char array: A B C D E D F H I J K L M N                                     (50)
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
+  }
 
-  array<char, 41> coll = {"this is an char array"};
-  PRINT_ELEMENTS(coll, "initialized: " );
+  // 0 0 0 0 0
+  // 1 1 1 1 0
+  // 0 0 0 0 0
+  // 0 1 1 1 1
+  // 2 0 0 0 0
 
-  strcpy( &coll[0], "use the address of first");
-  PRINT_ELEMENTS(coll, "strcpyed   : " );
+  {
+    std::vector<std::vector<int>> coll{{0, 0, 0, 0, 0},
+                                       {1, 1, 1, 1, 0},
+                                       {0, 0, 0, 0, 0},
+                                       {0, 1, 1, 1, 1},
+                                       {2, 0, 0, 0, 0}};
 
-  strcpy( coll.data(), "use data member");
-  PRINT_ELEMENTS(coll, "strcpyed   : " );
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
+  }
+
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+
+  {
+    std::array<std::array<int, cols>, rows> coll{0};
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
+  }
+
+  // 0 0 0 0 0
+  // 1 1 1 1 0
+  // 0 0 0 0 0
+  // 0 1 1 1 1
+  // 2 0 0 0 0
+
+  {
+    std::array<std::array<int, 5>, 5> coll{0, 0, 0, 0, 0, 1, 1, 1, 1,
+                                           0, 0, 0, 0, 0, 0, 0, 1, 1,
+                                           1, 1, 2, 0, 0, 0, 0};
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
+  }
 }
 
 
@@ -42823,139 +42896,6 @@ TEST(Vector, CopyAndMoveAssign)
     vector<int> coll1{1,2,3,4,5,6};
     GetVectorArg(coll1);
   }
-}
-
-
-<cxx-vector-array> *cxx-array*
-
-7.3.3 Using Vectors as C-Style Arrays
-
-As for class array<>, the C++ standard library guarantees that the elements of
-a vector are in contiguous memory. Thus, you can expect that for any valid
-index i in vector v, the following yields true:
-
-&v[i] == &v[0] + i
-
-This guarantee has some important consequences. It simply means that you can
-use a vector in all cases in which you could use a dynamic array. 
-
-TEST(CxxVector, asArray)
-{
-  {
-    vector<char> coll;
-    coll.resize(41);
-
-    // stl.cpp:943:32: error: invalid conversion from
-    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
-    // to ‘char*’ [-fpermissive]
-    //
-    //    strcpy(coll[0], "hello world");
-
-    strcpy(&coll[0], "hello world");
-    printf("%s\n", &coll[0]);
-  }
-
-  // Note, however, that since C++11, you don’t have to use the expression
-  // &a[0] to get direct access to
-  // the elements in the vector, because the member function data() is
-  // provided for this purpose:
-
-  {
-    vector<char> coll;
-    coll.resize(41);
-    strcpy(coll.data(), "hello world");
-    printf("%s\n", coll.data());
-  }
-}
-
-
-<ex> multi-array using cxx-vector and cxx-array
-
-TEST(StlMultiArray, UseVectorAndArray)
-{
-  const size_t rows = 5;
-  const size_t cols = 5;
-
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-
-  vector<vector<int>> coll_vector(rows, vector<int>(cols, 0)); 
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
-  {
-    for(size_t j = 0; j < cols; ++j)
-      cout << coll_vector[i][j] << " ";
-    cout << endl;
-  }
-  cout << "}" << endl;
-
-  // 0 0 0 0 0
-  // 1 1 1 1 0
-  // 0 0 0 0 0
-  // 0 1 1 1 1
-  // 2 0 0 0 0
-
-  std::vector<std::vector<int>> coll_vector_5{
-    {0,0,0,0,0},
-    {1,1,1,1,0},
-    {0,0,0,0,0},
-    {0,1,1,1,1},
-    {2,0,0,0,0}
-  };
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
-  {
-    for(size_t j = 0; j < cols; ++j)
-      cout << coll_vector_5[i][j] << " ";
-    cout << endl;
-  }
-  cout << "}" << endl;
-
-
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-  // 0 0 0 0 0
-
-  array<array<int, cols>, rows> coll_array{}; 
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
-  {
-    for(size_t j = 0; j < cols; ++j)
-      cout << coll_array[i][j] << " ";
-    cout << endl;
-  }
-  cout << "}" << endl;
-
-  // 0 0 0 0 0
-  // 1 1 1 1 0
-  // 0 0 0 0 0
-  // 0 1 1 1 1
-  // 2 0 0 0 0
-
-  std::array<std::array<int, 5>, 5> coll_array_5 = {
-    0,0,0,0,0,
-    1,1,1,1,0,
-    0,0,0,0,0,
-    0,1,1,1,1,
-    2,0,0,0,0
-  };
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
-  {
-    for(size_t j = 0; j < cols; ++j)
-      cout << coll_array_5[i][j] << " ";
-    cout << endl;
-  }
-  cout << "}" << endl;
 }
 
 
@@ -63689,14 +63629,16 @@ thread_local unsigned long
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ccon-lock-unique-lock
+*kt_dev_cxx_0000* cxx-ccon-lock-unique-lock cxx-lock
 
 std::unique_lock provides more `flexibility than std::lock_guard`
 
 o the ability to program explicitly when and how to lock or unlock its mutex.
   Thus, this lock object may or may not have a mutex locked (also known as
-  owning a mutex). This differs from a *cxx-lock-guard* which always has an
-  object locked throughout its lifetime.
+  owning a mutex). 
+
+  This differs from a *cxx-lock-guard* which always has an object locked
+  throughout its lifetime.
 
 o std::defer_lock to indicate that the mutex should remian unlocked on
   construction then later locked by calling std::unique_lock.lock().
@@ -64385,6 +64327,33 @@ access to pred().
 
 
 <cxx-condition-variable-wait> <cxx-cv-status>
+
+namespace
+{
+  // condition_variable
+ 
+  /// cv_status
+  enum class cv_status { no_timeout, timeout };
+
+    template<typename _Duration>
+      cv_status
+      wait_until(unique_lock<mutex>& __lock,
+		 const chrono::time_point<__clock_t, _Duration>& __atime)
+      { return __wait_until_impl(__lock, __atime); }
+
+    template<typename _Rep, typename _Period>
+      cv_status
+      wait_for(unique_lock<mutex>& __lock,
+	       const chrono::duration<_Rep, _Period>& __rtime)
+      { return wait_until(__lock, __clock_t::now() + __rtime); }
+
+    template<typename _Rep, typename _Period, typename _Predicate>
+      `bool`
+      wait_for(unique_lock<mutex>& __lock,
+	       const chrono::duration<_Rep, _Period>& __rtime,
+	       _Predicate __p);
+}
+
 Also note that for condition variables, you have the interface of waiting for
 a `maximum amount of time`: wait_for() waits for a duration of time, whereas
 wait_until() waits until a timepoint has arrived.
@@ -64669,34 +64638,6 @@ If you use wait_for() `in a loop`, you might end up waiting almost the full
 length of time before a spurious wake, and the next time through the wait time
 starts again. This may repeat any number of times, making the total wait time
 `unbounded.`
-
-
-<cxx-wait-return-value>
-namespace
-{
-  // condition_variable
- 
-  /// cv_status
-  enum class cv_status { no_timeout, timeout };
-
-    template<typename _Duration>
-      cv_status
-      wait_until(unique_lock<mutex>& __lock,
-		 const chrono::time_point<__clock_t, _Duration>& __atime)
-      { return __wait_until_impl(__lock, __atime); }
-
-    template<typename _Rep, typename _Period>
-      cv_status
-      wait_for(unique_lock<mutex>& __lock,
-	       const chrono::duration<_Rep, _Period>& __rtime)
-      { return wait_until(__lock, __clock_t::now() + __rtime); }
-
-    template<typename _Rep, typename _Period, typename _Predicate>
-      `bool`
-      wait_for(unique_lock<mutex>& __lock,
-	       const chrono::duration<_Rep, _Period>& __rtime,
-	       _Predicate __p);
-}
 
 
 ={============================================================================

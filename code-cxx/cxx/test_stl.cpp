@@ -359,6 +359,7 @@ TEST(CxxIterator, iterator_next)
     vector<int> coll{};
     auto pos    = coll.begin();
     auto result = next(pos);
+    (void)result;
   }
 }
 
@@ -1430,10 +1431,20 @@ TEST(CxxVector, asArray)
 // constructor default initializes the elements, which means that the value of
 // fundamental types is undefined.
 
-TEST(Array, ArrayCtors)
+TEST(CxxArray, check_ctors)
 {
+  // all fundamental types are initialised.
   {
-    array<int, 8> coll    = {11, 22, 33};
+    std::array<int, 8> coll = {};
+
+    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0, 0, 0, 0));
+  }
+
+  {
+    std::array<int, 8> coll = {11, 22, 33};
+
+    EXPECT_THAT(coll.size(), 8);
+
     coll.back()           = 999;
     coll[coll.size() - 2] = 42;
 
@@ -1446,62 +1457,69 @@ TEST(Array, ArrayCtors)
   }
 }
 
-// initialized: t.h.i.s. .i.s. .a.n. .c.h.a.r.
-// .a.r.r.a.y.....................(41) strcpyed   : u.s.e. .t.h.e.
-// .a.d.d.r.e.s.s. .o.f. .f.i.r.s.t..................(41) strcpyed   : u.s.e.
-// .d.a.t.a. .m.e.m.b.e.r..o.f. .f.i.r.s.t..................(41)
+// show access and also usage with C API
+//
+// [ RUN      ] CxxArray.check_access
+// initialized: t h i s   i s   a n   c h a r   a r r a y                     (41)
+// strcpyed   : u s e   t h e   a d d r e s s   o f   f i r s t                  (41)
+// strcpyed   : u s e   t h e   a d d r e s s   o f   f i r s t                  (41)
+// [       OK ] CxxArray.check_access (0 ms)
 
-TEST(Array, ArrayAccess)
-{
-  // *TN*
-  // array size is 41 and the initializer is less than this. does array handle
-  // this?
-  //
-  // array<char,50> carr{"ABCDEDFHIJKLMN"};
-  // PRINT_ELEMENTS(carr, "char array: ");
-  //
-  // changed PRINT_ELEMENTS() to print the # of iteration in a loop and see
-  // blank outputs
-  // ========
-  // char array: A B C D E D F H I J K L M N (50)
-
-  array<char, 41> coll = {"this is an char array"};
-  PRINT_ELEMENTS(coll, "initialized: ");
-
-  strcpy(&coll[0], "use the address of first");
-  PRINT_ELEMENTS(coll, "strcpyed   : ");
-
-  strcpy(coll.data(), "use data member");
-  PRINT_ELEMENTS(coll, "strcpyed   : ");
-}
-
-TEST(Array, AsCArray)
+TEST(CxxArray, check_access)
 {
   {
-    array<char, 41> coll;
+    std::array<char, 41> coll = {"this is an char array"};
+    PRINT_ELEMENTS(coll, "initialized: ");
 
-    // stl.cpp:943:32: error: invalid conversion from
-    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
+    strcpy(&coll[0], "use the address of first");
+    PRINT_ELEMENTS(coll, "strcpyed   : ");
+
+    // compile error
+    // error: invalid conversion from ‘std::array<char, 41>::value_type {aka char}’
     // to ‘char*’ [-fpermissive]
     //
-    //    strcpy(coll[0], "hello world");
+    // strcpy(coll[0], "use the address of first");
+    // PRINT_ELEMENTS(coll, "strcpyed   : ");
+
+    strcpy(coll.data(), "use the address of first");
+    PRINT_ELEMENTS(coll, "strcpyed   : ");
+  }
+
+  // array size is smaller than the initializer. does array handle
+  // this?
+  //
+  // error: initializer-string for array of chars is too long [-fpermissive]
+  // {
+  //   std::array<char, 10> coll = {"this is an char array"};
+  //   PRINT_ELEMENTS(coll, "initialized: ");
+  // }
+}
+
+TEST(CxxArray, check_vector)
+{
+  {
+    std::vector<char> coll;
+    coll.resize(41);
 
     strcpy(&coll[0], "hello world");
     printf("%s\n", &coll[0]);
   }
 
+  // Note that since C++11, you don’t have to use the expression
+  // &a[0] to get direct access to
+  // the elements in the vector, because the member function data() is
+  // provided for this purpose:
+
   {
-    array<char, 41> coll;
+    std::vector<char> coll;
+    coll.resize(41);
 
     strcpy(coll.data(), "hello world");
     printf("%s\n", coll.data());
   }
 }
 
-// ={=========================================================================
-// cxx-multi-dimensitional
-
-TEST(CxxVector, useVectorAndArray)
+TEST(CxxArray, check_multi_dimention)
 {
   const size_t rows = 5;
   const size_t cols = 5;
@@ -1512,16 +1530,18 @@ TEST(CxxVector, useVectorAndArray)
   // 0 0 0 0 0
   // 0 0 0 0 0
 
-  vector<vector<int>> coll_vector(rows, vector<int>(cols, 0));
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
   {
-    for (size_t j = 0; j < cols; ++j)
-      cout << coll_vector[i][j] << " ";
-    cout << endl;
+    std::vector<std::vector<int>> coll(rows, std::vector<int>(cols, 0));
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
   }
-  cout << "}" << endl;
 
   // 0 0 0 0 0
   // 1 1 1 1 0
@@ -1529,20 +1549,22 @@ TEST(CxxVector, useVectorAndArray)
   // 0 1 1 1 1
   // 2 0 0 0 0
 
-  std::vector<std::vector<int>> coll_vector_5{{0, 0, 0, 0, 0},
-                                              {1, 1, 1, 1, 0},
-                                              {0, 0, 0, 0, 0},
-                                              {0, 1, 1, 1, 1},
-                                              {2, 0, 0, 0, 0}};
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
   {
-    for (size_t j = 0; j < cols; ++j)
-      cout << coll_vector_5[i][j] << " ";
-    cout << endl;
+    std::vector<std::vector<int>> coll{{0, 0, 0, 0, 0},
+                                       {1, 1, 1, 1, 0},
+                                       {0, 0, 0, 0, 0},
+                                       {0, 1, 1, 1, 1},
+                                       {2, 0, 0, 0, 0}};
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
   }
-  cout << "}" << endl;
 
   // 0 0 0 0 0
   // 0 0 0 0 0
@@ -1550,16 +1572,18 @@ TEST(CxxVector, useVectorAndArray)
   // 0 0 0 0 0
   // 0 0 0 0 0
 
-  array<array<int, cols>, rows> coll_array{0};
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
   {
-    for (size_t j = 0; j < cols; ++j)
-      cout << coll_array[i][j] << " ";
-    cout << endl;
+    std::array<std::array<int, cols>, rows> coll{0};
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
   }
-  cout << "}" << endl;
 
   // 0 0 0 0 0
   // 1 1 1 1 0
@@ -1567,17 +1591,20 @@ TEST(CxxVector, useVectorAndArray)
   // 0 1 1 1 1
   // 2 0 0 0 0
 
-  std::array<std::array<int, 5>, 5> coll_array_5 = {
-    0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 0, 0, 0, 0};
-
-  cout << "{" << endl;
-  for (size_t i = 0; i < rows; ++i)
   {
-    for (size_t j = 0; j < cols; ++j)
-      cout << coll_array_5[i][j] << " ";
-    cout << endl;
+    std::array<std::array<int, 5>, 5> coll{0, 0, 0, 0, 0, 1, 1, 1, 1,
+                                           0, 0, 0, 0, 0, 0, 0, 1, 1,
+                                           1, 1, 2, 0, 0, 0, 0};
+
+    cout << "{" << endl;
+    for (size_t i = 0; i < rows; ++i)
+    {
+      for (size_t j = 0; j < cols; ++j)
+        cout << coll[i][j] << " ";
+      cout << endl;
+    }
+    cout << "}" << endl;
   }
-  cout << "}" << endl;
 }
 
 // ={=========================================================================
@@ -2653,7 +2680,7 @@ TEST(CxxList, search)
     {
       auto it = coll2.cbegin();
 
-      for (it; it != coll2.cend(); ++it)
+      for (; it != coll2.cend(); ++it)
       {
         // found this e and try the next
         if (*it == e)

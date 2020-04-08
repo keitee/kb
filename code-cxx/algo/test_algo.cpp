@@ -1042,8 +1042,10 @@ TEST(AlgoSwap, Swap)
   }
 }
 
-// ={=========================================================================
-// algo-occurance find a number seen odd times
+/*
+={=========================================================================
+algo-occurance find a number seen odd times cxx-xor
+*/
 
 namespace algo_occurance
 {
@@ -3721,18 +3723,18 @@ namespace algo_roman
     //                  make_pair(string("I"), 1)};
 
     const auto table = {make_pair(string("M"), 1000),
-                     make_pair(string("CM"), 900),
-                     make_pair(string("D"), 500),
-                     make_pair(string("CD"), 400),
-                     make_pair(string("C"), 100),
-                     make_pair(string("XC"), 90),
-                     make_pair(string("L"), 50),
-                     make_pair(string("XL"), 40),
-                     make_pair(string("X"), 10),
-                     make_pair(string("IX"), 9),
-                     make_pair(string("V"), 5),
-                     make_pair(string("IV"), 4),
-                     make_pair(string("I"), 1)};
+                        make_pair(string("CM"), 900),
+                        make_pair(string("D"), 500),
+                        make_pair(string("CD"), 400),
+                        make_pair(string("C"), 100),
+                        make_pair(string("XC"), 90),
+                        make_pair(string("L"), 50),
+                        make_pair(string("XL"), 40),
+                        make_pair(string("X"), 10),
+                        make_pair(string("IX"), 9),
+                        make_pair(string("V"), 5),
+                        make_pair(string("IV"), 4),
+                        make_pair(string("I"), 1)};
 
     int result{};
     size_t start{};
@@ -4846,27 +4848,29 @@ TEST(DISABLED_AlgoMaze, Array20x20)
   PRINT_M_ELEMENTS(maze.path_points);
 }
 
-// ={=========================================================================
-// algo-count-bits count same bits between two integers
-//
-// A = 35 = 10 0011
-// B =  9 =    1001
-//
-// Ans = 2 because only counts bit positions which are valid position in both
-// integers.
-//
-// From ansic, p50.
-// The function counts the number of 1 bits in its integer argument.
-//
-// 1. The key is not to use sizeof operator
-// 2. unsigned int
-//
-// *cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
-// guaranteed 0 values.
-//
-// 3. use independent of type.
+/*
+={=========================================================================
+algo-count-bits count same bits between two integers
 
-/* 191. Number of 1 Bits, Easy
+A = 35 = 10 0011
+B =  9 =    1001
+
+Ans = 2 because only counts bit positions which are valid position in both
+integers.
+
+From ansic, p50.
+The function counts the number of 1 bits in its integer argument.
+
+1. The key is not to use sizeof operator
+2. unsigned int
+
+*cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
+guaranteed 0 values.
+
+3. use independent of type.
+
+
+191. Number of 1 Bits, Easy
 
 Write a function that takes an unsigned integer and return the number of '1'
 bits it has (also known as the Hamming weight).
@@ -5002,10 +5006,9 @@ namespace algo_bit
 
     return count;
   }
-
 } // namespace algo_bit
 
-TEST(AlgoBit, bit_CountBits)
+TEST(AlgoBit, see_count_bits_1)
 {
   using namespace algo_bit;
 
@@ -5022,41 +5025,129 @@ TEST(AlgoBit, bit_CountBits)
     EXPECT_THAT(func(4294967293), 31);
   }
 
+  // same
   {
     auto func = hammingWeight_2;
 
-    // Input: 00000000000000000000000000001011, 11
     EXPECT_THAT(func(11), 3);
-
-    // Input: 00000000000000000000000010000000, 128
     EXPECT_THAT(func(128), 1);
-
-    // Input: 11111111111111111111111111111101, 4294967293
     EXPECT_THAT(func(4294967293), 31);
   }
 
+  // same
   {
     auto func = count_bit;
 
-    // Input: 00000000000000000000000000001011, 11
     EXPECT_THAT(func(11), 3);
-
-    // Input: 00000000000000000000000010000000, 128
     EXPECT_THAT(func(128), 1);
-
-    // Input: 11111111111111111111111111111101, 4294967293
     EXPECT_THAT(func(4294967293), 31);
   }
 
+  // same
   {
-    // Input: 00000000000000000000000000001011, 11
     EXPECT_THAT(__builtin_popcount(11), 3);
-
-    // Input: 00000000000000000000000010000000, 128
     EXPECT_THAT(__builtin_popcount(128), 1);
+    EXPECT_THAT(__builtin_popcount(4294967293), 31);
+  }
+}
+
+// known as "compute parity"
+//
+// if we change:
+//  return 0 if there even number of 1
+//  return 1 if there odd number of 1
+
+namespace algo_bit
+{
+  // if use the same approach
+  // int hammingWeight_2(uint32_t n);
+
+  int func_1(uint32_t n)
+  {
+    uint32_t count{};
+
+    while (n)
+    {
+      if (n & 0x1)
+        ++count;
+
+      n >>= 1;
+    }
+
+    return ((count % 2) == 0 ? 0 : 1);
+  }
+
+  int func_2(uint32_t n)
+  {
+    uint32_t result{};
+
+    while (n)
+    {
+      if (n & 0x1)
+      {
+        // even to odd
+        if (result == 0)
+          result = 1;
+        // odd to even, if result == 1
+        else
+          result = 0;
+      }
+
+      n >>= 1;
+    }
+
+    return result;
+  }
+
+  // performance improvement? cxx-xor
+  // see algo-occurance find a number seen odd times cxx-xor
+
+  int func_3(uint32_t n)
+  {
+    uint32_t result{};
+
+    while (n)
+    {
+      result = (n & 0x1) ^ result;
+
+      n >>= 1;
+    }
+
+    return result;
+  }
+}
+
+TEST(AlgoBit, see_count_bits_2)
+{
+  using namespace algo_bit;
+
+  {
+    auto func = func_1;
+
+    // Input: 00000000000000000000000000001011, 11
+    EXPECT_THAT(func(11), 1);
+
+    // Input: 00000000000000000000000010000001, 128
+    EXPECT_THAT(func(129), 0);
 
     // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(__builtin_popcount(4294967293), 31);
+    EXPECT_THAT(func(4294967293), 1);
+  }
+
+  {
+    auto func = func_2;
+
+    EXPECT_THAT(func(11), 1);
+    EXPECT_THAT(func(129), 0);
+    EXPECT_THAT(func(4294967293), 1);
+  }
+
+  {
+    auto func = func_3;
+
+    EXPECT_THAT(func(11), 1);
+    EXPECT_THAT(func(129), 0);
+    EXPECT_THAT(func(4294967293), 1);
   }
 }
 

@@ -1,10 +1,13 @@
 #include <boost/lexical_cast.hpp>
 #include <chrono>
+#include <condition_variable>
 #include <forward_list>
 #include <iostream>
 #include <limits>
 #include <list>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <regex>
 #include <set>
 #include <thread>
@@ -18,7 +21,6 @@ using namespace testing;
 
 /*
 ={=============================================================================
-
 StrBlob without StrBlobPtr
 
 CPR 455
@@ -461,7 +463,6 @@ TEST(CxxCase, StringBlobTemplate)
 
 /*
 ={=============================================================================
-
 StrVec
 
 CPR 524
@@ -629,6 +630,8 @@ namespace cxx_case_strvec
         m_free = m_capacity = coll.second;
         return *this;
       }
+
+      return *this;
     }
 
 #ifdef MOVE_SUPPORTED
@@ -855,7 +858,6 @@ TEST(CxxCase, StringVector)
 
 /*
 ={=============================================================================
-
 Problem 46, circular buffer, the modern c++ challenge
 
 1. use size(count) and head only
@@ -1075,7 +1077,6 @@ TEST(CxxCase, CircularQueueCountIterator)
 
 /*
 ={=============================================================================
-
 CXXPP, Quote
 
 1. use size(count) and head only
@@ -1749,6 +1750,230 @@ TEST(CxxCaseQuote, Clone)
   sale.add_item(Bulk_Quote("345", 45, 3, .15));
 
   sale.total_receipt(cout);
+}
+
+/*
+={=============================================================================
+cxx-queue
+
+*/
+
+// thread safe q from test_ccon
+//
+// NOTE:
+// 1. supports T but still one type at a time
+
+namespace cxx_case_queue
+{
+  template <typename T>
+  class threadsafe_queue
+  {
+  private:
+    std::queue<T> queue_;
+    std::mutex m_;
+    std::condition_variable cond_;
+
+  public:
+    threadsafe_queue() = default;
+
+    // do not support copy
+    threadsafe_queue(const threadsafe_queue &) = delete;
+    threadsafe_queue &operator=(const threadsafe_queue &) = delete;
+
+    void push(const T &item)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+
+      queue_.emplace(item);
+      cond_.notify_one();
+    }
+
+    void wait_and_pop(T &item)
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      cond_.wait(lock, [&] { return !queue_.empty(); });
+
+      item = queue_.front();
+      queue_.pop();
+    }
+
+    bool empty() const
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      return queue_.empty();
+    }
+  };
+
+  std::mutex consumed_mtx;
+  int consumed_total{};
+
+  void producer(threadsafe_queue<int> &q)
+  {
+    for (int i = 0; i < 20; ++i)
+    {
+      q.push(i);
+    }
+  }
+
+  void consumer(threadsafe_queue<int> &q)
+  {
+    // You can pass defer_lock to initialize the lock without locking the mutex
+    // (yet):
+    //
+    // note: must use lock here and it cause a rase otherwise.
+
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+
+    int value{};
+
+    for (int i = 0; i < 20; ++i)
+    {
+      q.wait_and_pop(value);
+      lock.lock();
+      ++consumed_total;
+      lock.unlock();
+    }
+  }
+} // namespace cxx_case_queue
+
+TEST(CxxCaseQueue, see_threadsafe_queue)
+{
+  using namespace cxx_case_queue;
+
+  threadsafe_queue<int> q;
+
+  consumed_total = 0;
+
+  std::vector<std::thread> consumers;
+  std::vector<std::thread> producers;
+
+  for (int i = 0; i < 3; ++i)
+  {
+    consumers.emplace_back(consumer, std::ref(q));
+  }
+
+  std::this_thread::sleep_for(chrono::seconds(2));
+
+  for (int i = 0; i < 3; ++i)
+  {
+    producers.emplace_back(producer, std::ref(q));
+  }
+
+  // waits for them to finish
+  for (auto &c : consumers)
+    c.join();
+
+  for (auto &p : producers)
+    p.join();
+
+  // ecah cunsumes 20
+  EXPECT_THAT(consumed_total, 60);
+}
+
+// event q from bleaudio case
+//
+// 1. same as threadsafe_queue
+//
+// 2. use struct which has many members to cover all type of messages
+//
+// BleAudio::queue<BleAudioMessage> m_q;
+// struct BleAudioMessage{}
+
+namespace cxx_case_queue_1
+{
+  template <typename T>
+  class ble_queue
+  {
+  private:
+    std::mutex m_;
+    std::condition_variable cv_;
+    std::deque<T> q_;
+
+  public:
+    void push(const T &item)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      q_.emplace_back(item);
+      cv_.notify_all();
+    }
+
+    // uses std::move() and return value
+    T wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m_);
+      cv_.wait(lock, [&] { return !q_.empty(); });
+      auto item = std::move(q_.front());
+      q_.pop_front();
+      return item;
+    }
+  };
+
+  std::mutex consumed_mtx;
+  int consumed_total{};
+
+  void producer(ble_queue<int> &q)
+  {
+    for (int i = 0; i < 20; ++i)
+    {
+      q.push(i);
+    }
+  }
+
+  void consumer(ble_queue<int> &q)
+  {
+    // You can pass defer_lock to initialize the lock without locking the mutex
+    // (yet):
+    //
+    // note: must use lock here and it cause a rase otherwise.
+
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+
+    int value{};
+
+    for (int i = 0; i < 20; ++i)
+    {
+      value = q.wait_and_pop();
+      lock.lock();
+      (void)value;
+      ++consumed_total;
+      lock.unlock();
+    }
+  }
+} // namespace cxx_case_queue_1
+
+TEST(CxxCaseQueue, see_ble_queue)
+{
+  using namespace cxx_case_queue_1;
+
+  ble_queue<int> q;
+
+  consumed_total = 0;
+
+  std::vector<std::thread> consumers;
+  std::vector<std::thread> producers;
+
+  for (int i = 0; i < 3; ++i)
+  {
+    consumers.emplace_back(consumer, std::ref(q));
+  }
+
+  std::this_thread::sleep_for(chrono::seconds(2));
+
+  for (int i = 0; i < 3; ++i)
+  {
+    producers.emplace_back(producer, std::ref(q));
+  }
+
+  // waits for them to finish
+  for (auto &c : consumers)
+    c.join();
+
+  for (auto &p : producers)
+    p.join();
+
+  // ecah cunsumes 20
+  EXPECT_THAT(consumed_total, 60);
 }
 
 // ={=========================================================================

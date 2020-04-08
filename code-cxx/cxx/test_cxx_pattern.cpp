@@ -3066,58 +3066,58 @@ namespace cxx_singleton
 {
   class Foo1
   {
-    private:
-      std::string name_{};
-      int count_{0};
-      int calls_{0};
-      static Foo1 *instance_;
+  private:
+    std::string name_{};
+    int count_{0};
+    int calls_{0};
+    static Foo1 *instance_;
 
-      // to wait for random
-      std::default_random_engine dre;
-      std::uniform_int_distribution<int> id;
+    // to wait for random
+    std::default_random_engine dre;
+    std::uniform_int_distribution<int> id;
 
-    public:
-      // use `count_` to check num of instance created
-      static Foo1 *instance()
+  public:
+    // use `count_` to check num of instance created
+    static Foo1 *instance()
+    {
+      if (nullptr == instance_)
       {
-        if (nullptr == instance_)
-        {
-          instance_ = new Foo1("Foo1");
-          instance_->increase();
-        }
-
-        return instance_;
+        instance_ = new Foo1("Foo1");
+        instance_->increase();
       }
 
-      Foo1(const Foo1&) = delete;
-      Foo1& operator=(const Foo1&) = delete;
+      return instance_;
+    }
 
-      // a destructor?
-      // No need to delete _instance? Yes, will be reclaimed when an application
-      // terminates.
+    Foo1(const Foo1 &) = delete;
+    Foo1 &operator=(const Foo1 &) = delete;
 
-    public:
-      std::string name() const
-      { return name_; }
+    // a destructor?
+    // No need to delete _instance? Yes, will be reclaimed when an application
+    // terminates.
 
-      void increase() { ++count_; }
+  public:
+    std::string name() const { return name_; }
 
-      // to give calling thread waiting time
-      void exec() 
-      { 
-        std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
-        ++calls_; 
-      }
+    void increase() { ++count_; }
 
-      int calls() { return calls_; }
+    // to give calling thread waiting time
+    void exec()
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      ++calls_;
+    }
 
-      int count() const
-      { return count_; }
+    int calls() { return calls_; }
 
-    private:
-      explicit Foo1(std::string const &name)
-          : name_(name), dre('r'),id(10, 1000)
-      {}
+    int count() const { return count_; }
+
+  private:
+    explicit Foo1(std::string const &name)
+        : name_(name)
+        , dre('r')
+        , id(10, 1000)
+    {}
   };
 
   Foo1 *Foo1::instance_ = nullptr;
@@ -3127,54 +3127,54 @@ namespace cxx_singleton
   // when use reference
   class Foo2
   {
-    private:
-      std::string name_{};
-      int count_{0};
-      int calls_{0};
+  private:
+    std::string name_{};
+    int count_{0};
+    int calls_{0};
 
-      // to wait for random
-      std::default_random_engine dre;
-      std::uniform_int_distribution<int> id;
+    // to wait for random
+    std::default_random_engine dre;
+    std::uniform_int_distribution<int> id;
 
-    public:
-      // use `count_` to check num of instance created
-      static Foo2 &instance()
-      {
-        static Foo2 instance_("Foo2");
-        return instance_;
-      }
+  public:
+    // use `count_` to check num of instance created
+    static Foo2 &instance()
+    {
+      static Foo2 instance_("Foo2");
+      return instance_;
+    }
 
-      Foo2(const Foo2&) = delete;
-      Foo2& operator=(const Foo2&) = delete;
+    Foo2(const Foo2 &) = delete;
+    Foo2 &operator=(const Foo2 &) = delete;
 
-      // a destructor?
-      // No need to delete _instance? Yes, will be reclaimed when an application
-      // terminates.
+    // a destructor?
+    // No need to delete _instance? Yes, will be reclaimed when an application
+    // terminates.
 
-    public:
-      std::string name() const
-      { return name_; }
+  public:
+    std::string name() const { return name_; }
 
-      void increase() { ++count_; }
+    void increase() { ++count_; }
 
-      // to give calling thread waiting time
-      void exec() 
-      { 
-        std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
-        ++calls_; 
-      }
+    // to give calling thread waiting time
+    void exec()
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      ++calls_;
+    }
 
-      int calls() { return calls_; }
+    int calls() { return calls_; }
 
-      int count() const
-      { return count_; }
+    int count() const { return count_; }
 
-    private:
-      explicit Foo2(std::string const &name)
-          : name_(name), dre('r'),id(10, 1000)
-      {
-        ++count_;
-      }
+  private:
+    explicit Foo2(std::string const &name)
+        : name_(name)
+        , dre('r')
+        , id(10, 1000)
+    {
+      ++count_;
+    }
   };
 } // namespace cxx_singleton
 
@@ -3239,7 +3239,7 @@ namespace cxx_singleton
       Foo1::instance()->exec();
     }
   }
-}
+} // namespace cxx_singleton
 
 // creates multiple threads which uses singleton to see how it works
 // thread safe as cxx11 supports
@@ -3375,34 +3375,36 @@ TEST(PatternSingleton, check_on_multiple_thread_2)
 
 namespace cxx_singleton
 {
-  constexpr auto tenMill= 10000000;
+  constexpr auto tenMill = 10000000;
 
   class MySingleton1
   {
-    public:
-      static MySingleton1& getInstance()
-      {
-        // NOTE:
-        static MySingleton1 instance;
+  public:
+    static MySingleton1 &getInstance()
+    {
+      // NOTE:
+      static MySingleton1 instance;
 
-        // volatile int dummy{};
-        return instance;
-      }
-    private:
-      MySingleton1()= default;
+      // volatile int dummy{};
+      return instance;
+    }
 
-      // NOTE
-      ~MySingleton1()= default;
+  private:
+    MySingleton1() = default;
 
-      MySingleton1(const MySingleton1&)= delete;
-      MySingleton1& operator=(const MySingleton1&)= delete;
+    // NOTE
+    ~MySingleton1() = default;
+
+    MySingleton1(const MySingleton1 &) = delete;
+    MySingleton1 &operator=(const MySingleton1 &) = delete;
   };
 
   std::chrono::duration<double> getTime()
   {
-    auto begin= std::chrono::system_clock::now();
+    auto begin = std::chrono::system_clock::now();
 
-    for ( size_t i= 0; i <= tenMill; ++i){
+    for (size_t i = 0; i <= tenMill; ++i)
+    {
       MySingleton1::getInstance();
     }
 
@@ -3429,18 +3431,18 @@ TEST(PatternSingleton, reference_1)
 }
 
 // ok, it runs multiple threads but do not show the problem when use multiple
-// threads. Probarly, his intension is to measure performance. 
+// threads. Probarly, his intension is to measure performance.
 
 TEST(PatternSingleton, reference_2)
 {
   using namespace cxx_singleton;
 
-  auto fut1= std::async(std::launch::async,getTime);
-  auto fut2= std::async(std::launch::async,getTime);
-  auto fut3= std::async(std::launch::async,getTime);
-  auto fut4= std::async(std::launch::async,getTime);
+  auto fut1 = std::async(std::launch::async, getTime);
+  auto fut2 = std::async(std::launch::async, getTime);
+  auto fut3 = std::async(std::launch::async, getTime);
+  auto fut4 = std::async(std::launch::async, getTime);
 
-  auto total= fut1.get() + fut2.get() + fut3.get() + fut4.get();
+  auto total = fut1.get() + fut2.get() + fut3.get() + fut4.get();
 
   std::cout << total.count() << std::endl;
 }
@@ -3449,24 +3451,26 @@ namespace cxx_singleton
 {
   // constexpr auto tenMill= 10000000;
 
-  class MySingleton2{
-    public:
-      static MySingleton2& getInstance()
-      {
-        // volatile int dummy{};
-        return instance;
-      }
-    private:
-      MySingleton2()= default;
+  class MySingleton2
+  {
+  public:
+    static MySingleton2 &getInstance()
+    {
+      // volatile int dummy{};
+      return instance;
+    }
 
-      // NOTE:
-      ~MySingleton2()= default;
+  private:
+    MySingleton2() = default;
 
-      MySingleton2(const MySingleton2&)= delete;
-      MySingleton2& operator=(const MySingleton2&)= delete;
+    // NOTE:
+    ~MySingleton2() = default;
 
-      // NOTE:
-      static MySingleton2 instance;
+    MySingleton2(const MySingleton2 &) = delete;
+    MySingleton2 &operator=(const MySingleton2 &) = delete;
+
+    // NOTE:
+    static MySingleton2 instance;
   };
 
   // NOTE:

@@ -67,6 +67,10 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # add_compile_options("-g;-D_GLIBCXX_DEBUG")
 add_compile_options("-g;-Wall;-Wswitch-enum")
 
+# We require C++14
+# set( CMAKE_CXX_STANDARD 14 )
+# set( CMAKE_CXX_STANDARD_REQUIRED ON )
+
 # cmake help
 #
 # cmake --help-command target_compile_options

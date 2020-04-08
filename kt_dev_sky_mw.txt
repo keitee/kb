@@ -502,6 +502,8 @@ cd /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK
 sudo cp -r /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/flash0 /home/keitee/mw/exports/titan
 
 wget --user=kyoupark --password=tegI3316 --no-check-certificate https://zork.ethan.bskyb.com/uk/sdk/Q000.024.55.00/Q__formal__Q000__Q000.024.55.00__SDK__eu-q-titan-uk__release_dbg__S__unsigned.tgz
+wget --user=kyoupark --password=tegI3316 --no-check-certificate https://zork.ethan.bskyb.com/uk/sdk/Q120.001.70.00/Q__formal__Q120__Q120.001.70.00__SDK__eu-q-titan-uk__release_dbg__S__unsigned.tgz
+
 
 <skymw-build-falconv2>
 cd /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK
@@ -1137,7 +1139,42 @@ NDS: ^0000000431.114917
         __AI_LOG_PRINTF(AI_DEBUG_LEVEL_MILESTONE, fmt, ##__VA_ARGS__)
 
 
-<q-as-code>
+// syslog conflict
+
+/rdk/2.0/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/include/WPEFramework/core/core.h
+#include "IIterator.h"
+
+usr/include/WPEFramework/core/IIterator.h
+#include "Trace.h"
+
+usr/include/WPEFramework/core/Trace.h
+
+#ifndef __WIN32__
+#include <syslog.h>
+#endif
+
+usr/include/sys/syslog.h
+
+#define	LOG_EMERG	0	/* system is unusable */
+#define	LOG_ALERT	1	/* action must be taken immediately */
+#define	LOG_CRIT	2	/* critical conditions */
+#define	LOG_ERR		3	/* error conditions */
+#define	LOG_WARNING	4	/* warning conditions */
+#define	LOG_NOTICE	5	/* normal but significant condition */
+#define	LOG_INFO	6	/* informational */
+#define	LOG_DEBUG	7	/* debug-level messages */
+
+
+usr/include/WPEFramework/jsonrpc/jsonrpc.h
+#pragma once
+#include "Module.h"
+
+/media/keitee/ssd2/rdk/2.0/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/include/WPEFramework/jsonrpc/Module.h
+#include "../core/core.h"
+#include "../websocket/websocket.h"
+
+
+*rdk-as-map* <q-as-code>
 
 // ethan-as-source/Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
 
@@ -1156,6 +1193,11 @@ void bindMethods( AS_WORKER::UrlMap *map )
 
 namespace AS_MAIN
 {
+  virtual void RegisterUrl( REQ_METHOD method, char *url,
+      AS_WORKER::Factory *factory,
+      AS_WORKER::ParamValidator *paramValidator = NULL,
+      AS_WORKER::ThreadParams *threadParams = NULL );
+
   class ProxyUrlMap : public AS_WORKER::UrlMap
   {
     void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
@@ -6740,7 +6782,7 @@ void BleRcuPairingStateMachine::onEnteredPairingState()
 bool BleRcuManagerImpl::pairDevice(const BleAddress &address)
 {
 	qInfo() << "requesting bluez pair" << device->address();
-	device->pair(0);
+	`device->pair(0);`
 	return true;
 }
 
@@ -6756,7 +6798,7 @@ void BleRcuDeviceImpl::pair(int timeout)
   m_isPairing = true;
 }
 
-void BleRcuDeviceImpl::onPairRequestReply(QDBusPendingCallWatcher *call)
+void `BleRcuDeviceImpl::onPairRequestReply`(QDBusPendingCallWatcher *call)
 {
 	QDBusPendingReply<> reply = *call;
 
@@ -6782,6 +6824,15 @@ void BleRcuDeviceImpl::onPairRequestReply(QDBusPendingCallWatcher *call)
 	// free the pending reply object
 	call->deleteLater();
 }
+
+!ERROR  -BLERCU       		< p:0x0000082a P:APP t:0x4928edc0 T:no name M:blercudevice.cpp 
+F:onPairRequestReply L:290 > E8:0F:C8:1A:73:C2 pairing request failed with error QDBusError("org.bluez.Error.AuthenticationCanceled", "Authentication Canceled")
+
+!WARN   -BLERCU       		< p:0x0000082a P:APP t:0x4928edc0 T:no name M:blercupairingstatemachine.cpp 
+F:onPairableChanged L:493 > adaptor 'pairable' disabled before target device became ready
+
+!WARN   -BLERCU       		< p:0x0000082a P:APP t:0x4928edc0 T:no name M:blercupairingstatemachine.cpp 
+F:onSetupTimeout L:595 > timed-out in setup phase (rcu didn't response to all requests within 60000ms)
 
 
 // from adaptor signal
@@ -11252,11 +11303,19 @@ int ServiceHttpExecutor::execGetOrPost(int requestType)
 }
 
 
-*rdk-as-proxy-map-security*
+*rdk-as-map*
 
 // ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
 
 std::map<int, PortAttributes>::iterator uriCategoryTableIterator = uriCategoryTable.begin();
+
+enum Platform
+{
+  PLATFORM_AMIDALA = 2000,
+  ...
+  PLATFORM_RDK,
+  PLATFORM_ALL
+};
 
 struct UriAttributes
 {
@@ -11276,10 +11335,17 @@ struct PortAttributes
   std::vector<std::string> corsUris;
 };
 
+std::map<int, PortAttributes> uriCategoryTable =
 {
-  9005, // Debug, e.g. ASDA
   {
-    {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+    9005, // Debug, e.g. ASDA
+    {
+      IP_ADDR_BIND_LOCALHOST,
+      true,                             // Main server used by EPG
+      false,
+      false,
+      {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+    }
   }
 }
 
@@ -11698,6 +11764,7 @@ journalctl -u sky-asproxy --since today > /opt/proxy.log
 journalctl -u sky-asproxy --since today > /opt/proxy.log
 
 ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log
+ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asplayer --since today" > player.log
 scp -P 10022 root@192.168.1.101:/opt/proxy.fail.log .
 
 
