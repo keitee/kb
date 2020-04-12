@@ -1029,6 +1029,64 @@ TEST(CxxJSON, jsoncpp_ex6)
   std::cout << response << std::endl;
 }
 
+// append() on array
+//
+// "/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/include/json/value.h" 3 4
+//
+// Value& append(const Value& value);
+// Value& append(Value&& value);
+//
+// servicelist1: {
+//         "uris" :
+//         [
+//                 "DTT",
+//                 "OTT"
+//         ]
+// }
+//
+// "DTT" is overwritten
+//
+// servicelist2: {
+//        "uris" : "OTT"
+// }
+
+TEST(CxxJSON, jsoncpp_ex7)
+{
+  {
+    Json::Value servicelist;
+
+    // set a array
+    servicelist["uris"] = Json::Value(Json::arrayValue);
+    servicelist["uris"].append("DTT");
+    servicelist["uris"].append("OTT");
+
+    std::cout << "servicelist1: " << servicelist << std::endl;
+  }
+
+  // same result as above
+  {
+    Json::Value servicelist;
+
+    // set a array
+    servicelist["uris"] = Json::Value(Json::arrayValue);
+    servicelist["uris"].append(Json::Value("DTT"));
+    servicelist["uris"].append(Json::Value("OTT"));
+
+    std::cout << "servicelist2: " << servicelist << std::endl;
+  }
+
+  {
+    Json::Value servicelist;
+
+    // set a array
+    servicelist["uris"] = Json::Value(Json::arrayValue);
+    servicelist["uris"] = Json::Value("DTT");
+    servicelist["uris"] = Json::Value("OTT");
+
+    std::cout << "servicelist3: " << servicelist << std::endl;
+  }
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
