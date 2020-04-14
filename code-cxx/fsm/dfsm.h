@@ -107,8 +107,8 @@ typedef struct _fsm_entry
   uint16_t input;        // input on which the transition works
   uint16_t new_state;    // new state
   VRM_FSM_ACTION action; // action on this transition
-  char *state_str;       // to support trace
-  char *input_str;       // to support trace
+  const char *state_str;       // to support trace
+  const char *input_str;       // to support trace
 } VRM_FSM_ENTRY;
 
 // /*

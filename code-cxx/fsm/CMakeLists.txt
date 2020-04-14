@@ -89,14 +89,14 @@ link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
 
-# fsm atm
-add_executable(${PROJECT_NAME}_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
-target_link_libraries(${PROJECT_NAME}_atm gmock_main)
+# cxx fsm
+add_executable(test_cxxfsm test_cxxfsm.cpp sfsm.cpp dfsm.cpp)
+target_link_libraries(test_cxxfsm gmock_main)
 
 
 # fsm ex
-add_executable(${PROJECT_NAME}_ex fsm_ex.cpp)
-target_link_libraries(${PROJECT_NAME}_ex gmock_main)
+add_executable(fsm_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
+target_link_libraries(fsm_atm gmock_main)
 
 
 # qtfsm

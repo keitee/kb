@@ -1270,107 +1270,6 @@ namespace messaging
 
 } // namespace messaging
 
-// when send a message which is handled in event chain:
-//
-// [ RUN      ] Message.SingleChain
-// TD: ctor: set chained_ true: pin_verified
-// TD: ctor: set chained_ true: pin_incorrect
-// TD: ctor: set chained_ true: cancel_pressed
-// TD: ~TD: chined_ false: cancel_pressed
-// TD: wait_dispatch_: cancel_pressed {
-// sender thread: send message...
-// TD: dispatch_: cancel_pressed: pass to prev:
-// TD: dispatch_: pin_incorrect: call f: pin_incorrect
-// atm::verify_pin::pin_incorrect
-// state = &atm::done_processing
-// TD: wait_dispatch_: cancel_pressed }
-// TD: ~TD: cancel_pressed
-// TD: ~TD: pin_incorrect
-// TD: ~TD: pin_verified
-// disp: ~disp: end:
-// press..
-// TD: ctor: set chained_ true: pin_verified
-// TD: ~TD: chined_ false: pin_verified
-// TD: wait_dispatch_: pin_verified {
-// ^C
-//
-// when send a message which is not handled in event chain:
-//
-// [ RUN      ] Message.SingleChain
-// TD: ctor: set chained_ true: pin_verified
-// TD: ctor: set chained_ true: pin_incorrect
-// TD: ctor: set chained_ true: cancel_pressed
-// TD: ~TD: chined_ false: cancel_pressed
-// TD: wait_dispatch_: cancel_pressed {
-// sender thread: send message...
-// TD: dispatch_: cancel_pressed: pass to prev:
-// TD: dispatch_: pin_incorrect: pass to prev:
-// TD: dispatch_: pin_verified: pass to prev:
-// disp: dispatch_: false
-// ^C
-
-TEST(Fsm, MessageSingleChain)
-{
-  using namespace messaging;
-  using namespace messaging::client;
-
-  receiver incoming_;
-
-  // as with atm::get_sender(), convert it to sender
-  sender sender_ = incoming_;
-
-  std::thread sender(sender_thread_func, std::ref(sender_));
-
-  try
-  {
-    // use one of action directly
-    //
-    // expect pin_* message from back fsm.
-    // void verifying_pin()
-    {
-      incoming_.wait()
-        .handle<pin_verified>([&](const pin_verified &msg) {
-          (void)msg;
-          std::cout << "atm::verify_pin::pin_verified" << std::endl;
-          std::cout << "state = &atm::wait_for_action" << std::endl;
-          ;
-        })
-        .handle<pin_incorrect>([&](const pin_incorrect &msg) {
-          std::cout << "atm::do pin_incorrect" << std::endl;
-          EXPECT_THAT(msg.name_, "pin_incorrect");
-        })
-        .handle<cancel_pressed>([&](const cancel_pressed &msg) {
-          (void)msg;
-          std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
-          std::cout << "state = &atm::done_processing" << std::endl;
-        });
-
-      // note:
-      // build next chain and if not, ends here since there is no further event
-      // and waits.
-      //
-      // std::cout << "press.." << std::endl;
-      // std::this_thread::sleep_for(std::chrono::seconds(1));
-      //
-      // incoming_.wait()
-      //   .handle<pin_verified>
-      //   (
-      //    [&](const pin_verified &msg)
-      //    {
-      //    (void)msg;
-      //    std::cout << "atm::verify_pin::pin_verified" << std::endl;
-      //    std::cout << "state = &atm::wait_for_action" << std::endl;;
-      //    }
-      //   );
-    }
-  } catch (close_queue const &)
-  {
-    std::cout << "got close_queue message" << std::endl;
-  }
-
-  sender.join();
-}
-
 namespace cxx_fsm
 {
   // define events/messages
@@ -1380,10 +1279,11 @@ namespace cxx_fsm
   struct money_inserted
   {
     unsigned amount_;
+    std::string name_;
     explicit money_inserted(unsigned const &amount)
-        : amount_(amount)
+        : amount_(amount), name_{"money_inserted"}
     {}
-    std::string get_name() { return "money_inserted"; }
+    std::string get_name() { return name_; }
   };
 
   struct item_1_purchased

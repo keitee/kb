@@ -1637,9 +1637,9 @@ TEST(CxxDeque, seePreAllocation)
 }
 
 // ={=========================================================================
-// cxx-queue-priority
+// cxx-queue-priority *cxx-queue*
 
-TEST(Queue, Ops)
+TEST(CxxQueue, check_operation)
 {
   {
     ostringstream os;
@@ -1648,8 +1648,12 @@ TEST(Queue, Ops)
     q.push("These ");
     q.push("are ");
     q.push("more than ");
+
+    // "These"
     os << q.front();
     q.pop();
+
+    // "These are"
     os << q.front();
     q.pop();
 
@@ -1659,12 +1663,45 @@ TEST(Queue, Ops)
     // discard one element
     q.pop();
 
+    // "These are four"
     os << q.front();
     q.pop();
+
+    // "These are four words!"
     os << q.front();
     q.pop();
 
     EXPECT_THAT(os.str(), "These are four words!");
+    EXPECT_THAT(q.size(), 0);
+  }
+
+  // cxx-queue-emplace but not emplace_back
+  // Pushes a new element to the end of the queue. The element is constructed
+  // in-place, i.e. no copy or move operations are performed. The constructor of
+  // the element is called with exactly the same arguments as supplied to the
+  // function.
+
+  {
+    ostringstream os;
+    std::queue<std::string> q;
+
+    q.emplace("These ");
+    q.emplace("are ");
+    q.emplace("more than ");
+
+    // "These"
+    os << q.front();
+    q.pop();
+
+    // "These are"
+    os << q.front();
+    q.pop();
+
+    // "These are more than "
+    os << q.front();
+    q.pop();
+
+    EXPECT_THAT(os.str(), "These are more than ");
     EXPECT_THAT(q.size(), 0);
   }
 
@@ -1687,11 +1724,7 @@ TEST(Queue, Ops)
 
     EXPECT_THAT(coll.size(), 0);
   }
-}
 
-// *cxx-queue*
-TEST(StlQueue, stl_queue)
-{
   {
     std::queue<int> pq;
 
@@ -1719,6 +1752,9 @@ TEST(StlQueue, stl_queue)
 
     pq.pop();
 
+    //         top
+    // 33, 55, 11
+
     // since queue do not support begin()/end(), cannot use ElementsAre and copy
     // to transform it to a vector. Did it manually.
     // copy(pq.begin(), pq.end(), back_inserter(coll));
@@ -1741,6 +1777,10 @@ TEST(StlQueue, stl_queue)
     pq.push(22);
     pq.push(66);
     pq.push(44);
+
+    // not
+    //         top
+    // 44, 66, 22
 
     //         top
     // 22, 44, 66

@@ -8405,7 +8405,7 @@ wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 '../../../../../../../generic/wayland-egl-bnxs/'`refsw17.3/vc5/common/display_framework.c
 
 
-<rdk-ssh> *rdk-xi6*
+<rdk-ssh> *rdk-xi6-flash*
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
 // Enable SSH Access (every time when boots)
 
@@ -8415,8 +8415,9 @@ root login.
 
 // since "/opt" is writable on xi6
 dropbearkey -t rsa -f /opt/sky-ssh-hostkey
-dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
+// dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
 
+dropbear -p :10022 -r /opt/sky-ssh-hostkey -B
 
 // have to run this when reboots
 dropbearkey -t rsa -f /tmp/sky-ssh-hostkey
@@ -9322,9 +9323,7 @@ since it will reuse the sstate (prebuilts) during this build, assuming the
 sstate-cache directory was populated with previous builds already.
 
 
-*bitbake-flash* *bitbake-image*
-
-Actually Flashing
+*bitbake-flash* *bitbake-image* *xi6-flash*
 
 Look for the build image. This will be under the usual location under the
 build directory of
@@ -9334,7 +9333,16 @@ build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty$
 // filename changes to date when build is made
 // `20191108100350`sdy_MTY_FBT.bin
 
+Copy this file to a FAT32 formatted USB stick and give it the name package.bin
+
 cp AX061AEI_VBN_fr_qtb_upgrade_20191106094759sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
+
+Connect up the serial and USB stick to the Xi6 and power on, press ctrl-c on the
+serial port to interrupt the boot process. Then type
+
+usbflash
+
+This will flash the package.bin from the USB stick, and reboot.
 
 
 *bitbake-image*
@@ -11758,7 +11766,7 @@ journalctl -fu sky-asplayer
 
 // get log from box to host
 journalctl -u sky-asproxy --since today > /opt/proxy.log
-journalctl -u sky-asproxy --since today > /opt/proxy.log
+journalctl -u sky-asrdkplayer --since today > /opt/player.log
 
 ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log
 ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asplayer --since today" > player.log
@@ -12287,6 +12295,35 @@ Thread 1 "asrdkplayer" received signal SIGSEGV, Segmentation fault.
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-as-player
+
+<as-player-queue>
+
+size_t Queue::Send(uint32_t event, 
+    void *payload, 
+    size_t payloadSize, 
+    bool prioritySend);
+
+size_t Queue::Recv(uint32_t *event, 
+    void *payload, 
+    size_t *payloadSize)
+{
+  return m_private->recvTimeout( event, payload, payloadSize, -1 );
+}
+
+size_t recvTimeout( uint32_t *event, void *payload, size_t *payloadSize, int timeout)
+{
+  {
+    copied = header->payloadSize;
+    *event = header->event;
+    *payloadSize = header->payloadSize;
+    if ( payload ) {
+      memcpy(payload, header->payload, copied);
+    }
+  }
+
+  return copied;
+}
+
 
 cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 
