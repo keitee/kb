@@ -2807,13 +2807,13 @@ namespace cxx_rvo
     return Snitch(100);
   }
 
-  vector<Snitch> ReturnVector()
+  std::vector<Snitch> ReturnVector()
   {
     // vector<Snitch> ivec(1000000000, 1);
     // vector(n, elem); creates n elements
-    vector<Snitch> ivec(10, Snitch(200));
-    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
-    return ivec;
+    std::vector<Snitch> coll(10, Snitch(200));
+    cout << "in ReturnVector: size of vector: " << coll.size() << endl;
+    return coll;
   }
 
   Snitch createSnitch() { return Snitch(200); }
@@ -2822,84 +2822,131 @@ namespace cxx_rvo
 
 } // namespace cxx_rvo
 
-TEST(RVO, OnSingle)
+// [ RUN      ] CxxRVO.check_single_construction
+// in ExampleRVO:
+// c'tor
+// d'tor
+// [       OK ] CxxRVO.check_single_construction (0 ms)
+
+TEST(CxxRVO, check_single_construction)
 {
   using namespace cxx_rvo;
 
   Snitch snitch = ExampleRVO();
 }
 
-TEST(RVO, OnVector)
+// [ RUN      ] CxxRVO.check_copy_to_vector
+// c'tor
+// copy c'tor   // 0
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor   // 9
+// d'tor
+// in ReturnVector: size of vector: 10
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_copy_to_vector (0 ms)
+
+TEST(CxxRVO, check_copy_to_vector)
 {
   using namespace cxx_rvo;
 
-  vector<Snitch> ivec = ReturnVector();
+  std::vector<Snitch> coll = ReturnVector();
+
+  cout << "return from ReturnVector: size of vector: " << coll.size() << endl;
 }
 
-TEST(RVO, OnArg)
+// [ RUN      ] CxxRVO.check_argument
+// c'tor
+// snitch value is: 200
+// d'tor
+// [       OK ] CxxRVO.check_argument (0 ms)
+
+TEST(CxxRVO, check_argument)
 {
   using namespace cxx_rvo;
 
   foo(Snitch(200));
 }
 
-TEST(RVO, OnAssignment)
+// [ RUN      ] CxxRVO.check_assignment
+// c'tor
+// ----------
+// c'tor
+// move assignment
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_assignment (0 ms)
+
+TEST(CxxRVO, check_assignment)
 {
   using namespace cxx_rvo;
 
+  // ctor
   Snitch s = createSnitch();
   cout << "----------" << endl;
+
+  // assign
   s = createSnitch();
 }
 
-// ={=========================================================================
-// cxx-reference-const
+// [ RUN      ] CxxRVO.check_when_rvo_on
+// c'tor
+// d'tor
+// [       OK ] CxxRVO.check_when_rvo_on (0 ms)
+// [ RUN      ] CxxRVO.check_when_rvo_off
+// c'tor
+// c'tor
+// move c'tor
+// d'tor
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_when_rvo_off (0 ms)
 
-struct Snitch_X
-{ // Note: All methods have side effects
-  Snitch_X(int value)
-      : value_(value)
-  {
-    cout << "c'tor" << endl;
-  }
-  ~Snitch_X() { cout << "d'tor" << endl; }
-
-  Snitch_X(Snitch_X const &) { cout << "copy c'tor" << endl; }
-  Snitch_X(Snitch_X &&) { cout << "move c'tor" << endl; }
-
-  Snitch_X &operator=(Snitch_X const &)
-  {
-    cout << "copy assignment" << endl;
-    return *this;
-  }
-
-  Snitch_X &operator=(Snitch_X &&)
-  {
-    cout << "move assignment" << endl;
-    return *this;
-  }
-
-  int getValue() const { return value_; }
-
-private:
-  int value_{0};
-};
-
-Snitch_X ExampleRVO_X()
+namespace cxx_rvo
 {
+  Snitch createSnitch2(bool runtime_condition)
+  {
+    Snitch a(100), b(100);
+    if (runtime_condition)
+    {
+      return a;
+    }
+    else
+    {
+      return b;
+    }
+  }
+} // namespace cxx_rvo
 
-  Snitch_X sn(100);
+TEST(CxxRVO, check_when_rvo_on)
+{
+  using namespace cxx_rvo;
 
-  cout << "in example rvo: " << sn.getValue() << endl;
-
-  return sn;
+  // ctor
+  Snitch s = createSnitch();
 }
 
-TEST(Reference, UseConstReference)
+TEST(CxxRVO, check_when_rvo_off)
 {
-  cout << "----------" << endl;
-  Snitch_X snitch = ExampleRVO_X();
-  cout << "----------" << endl;
+  using namespace cxx_rvo;
+
+  // ctor
+  Snitch s = createSnitch2(true);
 }
 
 // ={=========================================================================

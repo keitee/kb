@@ -213,6 +213,24 @@ add_executable(test_stl "test_stl.cpp")
 # target_link_libraries(test_stl gmock_main Boost::thread)
 target_link_libraries(test_stl gmock_main)
 
+# test bridge pattern.
+# bridge client. not needed bridge_p.h since there is no subclassing on impl.
+add_executable(bridge_client1 "bridge_client1.cpp" "bridge.cpp")
+add_executable(bridge_client2 "bridge_client2.cpp" "bridge.cpp")
+
+# bridge client when has subclassing on impl
+# bridge_abs.cpp which has WindowImpl and Window code
+# bridge_p.h which has WindowImpl declaration
+# briage_con.h bridge_con.cpp
+# NOTE: so need to have bridge_p.h for subclassing.
+
+add_executable(bridge_client3 "bridge_client1.cpp" 
+  "bridge_abs.cpp"
+  "bridge_con.cpp")
+add_executable(bridge_client4 "bridge_client2.cpp" 
+  "bridge_abs.cpp"
+  "bridge_con.cpp")
+
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

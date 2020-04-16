@@ -16246,7 +16246,11 @@ move operation, `the corresponding copy operation is used` in place of move via
 function matching. 
 
 *cxx-remember*
-if class has own copy ctor and assign then move `will not be synthesized`
+o if class has own copy ctor and assign then move `will not be synthesized`
+
+o if class has copy ctors deleted then move will not be synthesized. this is
+  from experience but not from text
+
 
 note:
 This means that having cxx-copy-controls ONLY can effectively turn off *cxx-rvo*
@@ -20966,126 +20970,183 @@ https://shaharmike.com/cpp/rvo/
 namespace cxx_rvo
 {
   // Note: All methods have side effects
-  struct Snitch 
+  struct Snitch
   {
-    Snitch(int value): value_(value) { cout << "c'tor" << endl; }
+    Snitch(int value)
+        : value_(value)
+    {
+      cout << "c'tor" << endl;
+    }
     ~Snitch() { cout << "d'tor" << endl; }
 
-    Snitch(const Snitch&) { cout << "copy c'tor" << endl; }
-    Snitch(Snitch&&) { cout << "move c'tor" << endl; }
+    Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
+    Snitch(Snitch &&) { cout << "move c'tor" << endl; }
 
-    Snitch& operator=(const Snitch&) {
+    Snitch &operator=(const Snitch &)
+    {
       cout << "copy assignment" << endl;
       return *this;
     }
 
-    Snitch& operator=(Snitch&&) {
+    Snitch &operator=(Snitch &&)
+    {
       cout << "move assignment" << endl;
       return *this;
     }
 
-    int getValue() const { return value_;}
+    int getValue() const { return value_; }
 
-    private:
+  private:
     int value_{0};
   };
 
-  Snitch ExampleRVO() {
+  Snitch ExampleRVO()
+  {
     std::cout << "in ExampleRVO: " << std::endl;
     return Snitch(100);
   }
 
-  vector<Snitch> ReturnVector() {
+  std::vector<Snitch> ReturnVector()
+  {
     // vector<Snitch> ivec(1000000000, 1);
     // vector(n, elem); creates n elements
-    vector<Snitch> ivec(10, Snitch(200));
-    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
-    return ivec;
+    std::vector<Snitch> coll(10, Snitch(200));
+    cout << "in ReturnVector: size of vector: " << coll.size() << endl;
+    return coll;
   }
 
-  Snitch createSnitch() {
-    return Snitch(200);
-  }
+  Snitch createSnitch() { return Snitch(200); }
 
-  void foo(Snitch s) {
-    cout << "snitch value is: " << s.getValue() << endl;
-  }
+  void foo(Snitch s) { cout << "snitch value is: " << s.getValue() << endl; }
 
-} // namespace
+} // namespace cxx_rvo
 
-TEST(RVO, OnSingle)
+// [ RUN      ] CxxRVO.check_single_construction
+// in ExampleRVO:
+// c'tor
+// d'tor
+// [       OK ] CxxRVO.check_single_construction (0 ms)
+
+TEST(CxxRVO, check_single_construction)
 {
   using namespace cxx_rvo;
 
   Snitch snitch = ExampleRVO();
 }
 
-TEST(RVO, OnVector)
+// [ RUN      ] CxxRVO.check_copy_to_vector
+// c'tor
+// copy c'tor   // 0
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor
+// copy c'tor   // 9
+// d'tor
+// in ReturnVector: size of vector: 10
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_copy_to_vector (0 ms)
+
+TEST(CxxRVO, check_copy_to_vector)
 {
   using namespace cxx_rvo;
 
-  vector<Snitch> ivec = ReturnVector();
+  std::vector<Snitch> coll = ReturnVector();
+
+  cout << "return from ReturnVector: size of vector: " << coll.size() << endl;
 }
 
-TEST(RVO, OnArg)
+// [ RUN      ] CxxRVO.check_argument
+// c'tor
+// snitch value is: 200
+// d'tor
+// [       OK ] CxxRVO.check_argument (0 ms)
+
+TEST(CxxRVO, check_argument)
 {
   using namespace cxx_rvo;
 
   foo(Snitch(200));
 }
 
-TEST(RVO, OnAssignment)
+// [ RUN      ] CxxRVO.check_assignment
+// c'tor
+// ----------
+// c'tor
+// move assignment
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_assignment (0 ms)
+
+TEST(CxxRVO, check_assignment)
 {
   using namespace cxx_rvo;
 
+  // ctor
   Snitch s = createSnitch();
   cout << "----------" << endl;
+
+  // assign
   s = createSnitch();
 }
 
-[ RUN      ] RVO.OnSingle
-in ExampleRVO: 
-c'tor
-d'tor
-[       OK ] RVO.OnSingle (0 ms)
-[ RUN      ] RVO.OnVector
-c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-copy c'tor
-d'tor
-in ReturnVector: size of vector: 10
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-d'tor
-[       OK ] RVO.OnVector (2 ms)
-[ RUN      ] RVO.OnArg
-c'tor
-snitch value is: 200
-d'tor
-[       OK ] RVO.OnArg (1 ms)
-[ RUN      ] RVO.OnAssignment
-c'tor
-----------
-c'tor
-move assignment
-d'tor
-d'tor
-[       OK ] RVO.OnAssignment (1 ms)
+// [ RUN      ] CxxRVO.check_when_rvo_on
+// c'tor
+// d'tor
+// [       OK ] CxxRVO.check_when_rvo_on (0 ms)
+// [ RUN      ] CxxRVO.check_when_rvo_off
+// c'tor
+// c'tor
+// move c'tor
+// d'tor
+// d'tor
+// d'tor
+// [       OK ] CxxRVO.check_when_rvo_off (0 ms)
+
+namespace cxx_rvo
+{
+  Snitch createSnitch2(bool runtime_condition)
+  {
+    Snitch a(100), b(100);
+    if (runtime_condition)
+    {
+      return a;
+    }
+    else
+    {
+      return b;
+    }
+  }
+} // namespace cxx_rvo
+
+TEST(CxxRVO, check_when_rvo_on)
+{
+  using namespace cxx_rvo;
+
+  // ctor
+  Snitch s = createSnitch();
+}
+
+TEST(CxxRVO, check_when_rvo_off)
+{
+  using namespace cxx_rvo;
+
+  // ctor
+  Snitch s = createSnitch2(true);
+}
 
 
 Return Value Optimization (RVO), Named RVO (NRVO) and Copy-Elision are in C++
@@ -21113,13 +21174,13 @@ $ clang++ -std=c++11 main.cpp && ./a.out
 c'tor
 d'tor
 
-// when cxx-rvo is off. gcc shows the same result.
 
-// As *cxx-return-cxx-move* shows, it uses *cxx-move* context in return but
-// that's not even needed since *cxx-rvo* do not use move context at all and
-// cxx-rvo is default.
-//
-// elide: to not pronounce a particular sound in a word:
+As *cxx-return-cxx-move* shows, it uses *cxx-move* context in return but that's
+not even needed since *cxx-rvo* do not use move context at all and cxx-rvo is
+default.
+
+elide: to not pronounce a particular sound in a word:
+
 
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
 c'tor
@@ -21129,33 +21190,15 @@ move c'tor
 d'tor
 d'tor
 
-In the first run (`without -fno-elide-constructors`) the compiler refrained
-from calling user code `despite it having a clear side effect` (being printing
-to console). 
+*cxx-side-effect*
+In the first run (`without -fno-elide-constructors`) which means rvo is on, the
+compiler refrained from calling code `despite it having a clear side effect` 
+(being printing to console in ctor). 
 
 
 <rvo-is-default>
 This is also the default behavior, meaning practically all C++ programs
 utilize RVO.
-
-
-// turn off RVO
-// https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#index-fno-elide-constructors
-//
-// elide: to not pronounce a particular sound in a word:
-//
-// 3.5 Options Controlling C++ Dialect
-// 
-// -fno-elide-constructors
-//
-// The C++ standard allows an implementation to omit creating a temporary that
-// is only used to initialize another object of the same type. Specifying this
-// option disables that optimization, and forces G++ to call the copy
-// constructor in all cases. This option also causes G++ to call trivial
-// member functions which otherwise would be expanded inline.
-// 
-// In C++17, the compiler is required to omit these temporaries, but this
-// option still affects trivial member functions.
 
 
 Without RVO the compiler creates 3 Snitch objects instead of 1:
@@ -21175,7 +21218,7 @@ o The named object snitch (when printing the second move c'tor).
 Performance
 
 The neat thing about RVO is that `it makes returning objects free.` It works via
-allocating memory for the to-be-returned object in the caller’s stack frame.
+allocating memory for the to-be-returned object `in the caller’s stack frame.`
 The returning function then uses that memory as if it was in its own frame
 without the programmer knowing / caring.
 
@@ -21221,14 +21264,45 @@ sys	0m0.000s
 
 This is due to Move Semantics, which is the subject of the next post.
 
-<ex>
-kyoupark@kit-debian64:~/works$ uname -a
-Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) x86_64 GNU/Linux
+<ex> gcc-ex
 
-kyoupark@kit-debian64:~/works$ gcc --version
-gcc (Debian 4.9.2-10) 4.9.2
+https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#index-fno-elide-constructors
 
-kyoupark@kit-debian64:~/works$ time ./on-evo.out
+elide: to not pronounce a particular sound in a word:
+
+3.5 Options Controlling C++ Dialect
+ 
+-fno-elide-constructors
+
+The C++ standard allows an implementation to omit creating a temporary that is
+only used to initialize another object of the same type. Specifying this option
+disables that optimization, and forces G++ to call the copy constructor in all
+cases. This option also causes G++ to call trivial member functions which
+otherwise would be expanded inline.
+ 
+In C++17, the compiler is required to omit these temporaries, but this option
+still affects trivial member functions.
+
+$ g++ main.cpp && ./a.out
+main before
+in ExampleRVO:
+c'tor
+main after
+d'tor
+
+$ g++ -fno-elide-constructors main.cpp && ./a.out
+main before
+in ExampleRVO:
+c'tor
+move c'tor
+d'tor
+move c'tor
+d'tor
+main after
+d'tor
+
+
+$ time ./on-evo.out
 c'tor
 d'tor
 end of main
@@ -21237,7 +21311,8 @@ real    2m46.195s
 user    2m42.556s
 sys     0m0.292s
 
-kyoupark@kit-debian64:~/works$ time ./no-evo.out
+
+$ time ./no-evo.out
 c'tor
 move c'tor
 d'tor
@@ -21251,10 +21326,10 @@ user    4m24.960s
 sys     0m0.368s
 
 
-In trying to come up with an example where RVO is faster on modern C++ using
-STL containers I hit a wall, mostly because of move-semantics but also because
-on x86_84 RVO is in the ABI so disabling it is harder. Please post such
-examples if you have any!
+In trying to come up with an example where RVO is faster on modern C++ using STL
+containers I hit a wall, mostly because of move-semantics but also because on
+x86_84 RVO is in the ABI so disabling it is harder. Please post such examples if
+you have any!
 
 
 Named Return Value Optimization (NRVO)
@@ -21329,7 +21404,8 @@ d'tor
 ----------
 
 
-<when-rvo-do-not-on>
+*cxx-rvo-when-off*
+
 When RVO doesn’t / can’t happen
 
 RVO is an optimization the compiler is allowed to apply (starting C++17 it is
