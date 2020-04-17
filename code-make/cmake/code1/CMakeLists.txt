@@ -75,8 +75,12 @@ message("Cache variable (after): ${xyz}")
 # This option may also be given as a single argument: -D<var>:<type>=<value> or
 # -D<var>=<value>.
 
-if(TARGET_REGION STREQUAL "XI")
-  message("TARGET_REGION : ${CMAKE_CURRENT_LIST_DIR}")
+#
+# $ cmake .. -DTARGET_REGION=X6
+#
+
+if(TARGET_REGION STREQUAL "X1" OR TARGET_REGION STREQUAL "X6")
+  message("TARGET_REGION : ${TARGET_REGION} ${CMAKE_CURRENT_LIST_DIR}")
 else()
   message("TARGET_REGION is not defined")
 endif()
