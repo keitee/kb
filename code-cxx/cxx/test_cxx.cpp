@@ -1586,6 +1586,14 @@ TEST(CxxCtor, Parameters)
   foo f2(value, 30);
 }
 
+// CPL, 17.4.3 Delegating Constructors
+//
+// [ RUN      ] CxxCtor.check_delegating_ctor
+// CtorCallsCtor(int, string)
+// CtorCallsCtor(string)
+// CtorCallsCtor(int, string)
+// [       OK ] CxxCtor.check_delegating_ctor (0 ms)
+
 namespace cxx_ctor
 {
   class CtorCallsCtor
@@ -1614,13 +1622,17 @@ namespace cxx_ctor
   };
 } // namespace cxx_ctor
 
-TEST(CxxCtor, CtorCallsCtor)
+TEST(CxxCtor, check_delegating_ctor)
 {
   using namespace cxx_ctor;
 
-  CtorCallsCtor oo("cxx-oo");
-  EXPECT_THAT(oo.get_value(), 10);
-  EXPECT_THAT(oo.get_name(), "cxx-oo");
+  CtorCallsCtor o1("cxx-oo");
+  EXPECT_THAT(o1.get_value(), 10);
+  EXPECT_THAT(o1.get_name(), "cxx-oo");
+
+  CtorCallsCtor o2(10, "cxx-oo");
+  EXPECT_THAT(o2.get_value(), 10);
+  EXPECT_THAT(o2.get_name(), "cxx-oo");
 }
 
 namespace cxx_ctor

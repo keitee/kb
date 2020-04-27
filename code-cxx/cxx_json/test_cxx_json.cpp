@@ -1025,7 +1025,12 @@ TEST(CxxJSON, jsoncpp_ex6)
   // std::cout << writer.write(servicelist) << std::endl;
 
   std::string response;
-  response.assign(writer.write(servicelist).c_str());
+
+  // no need to to this since write() returns std::string.
+  // response.assign(writer.write(servicelist).c_str());
+
+  response.assign(writer.write(servicelist));
+
   std::cout << response << std::endl;
 }
 

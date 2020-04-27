@@ -9,4 +9,3 @@ void XWindowImpl::DrawContentsImpl()
   std::cout << "XWindowImpl::DrawContentsImpl(): name is " << name_ << " called"
             << std::endl;
 }
-

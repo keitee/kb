@@ -927,7 +927,7 @@ namespace queue_circular_count_iterator
       head_        = next_pos();
       data_[head_] = item;
 
-      if (size_ < data_.size())
+      if (size_ < (T)(data_.size()))
         size_++;
     }
 
@@ -1974,6 +1974,133 @@ TEST(CxxCaseQueue, see_ble_queue)
 
   // ecah cunsumes 20
   EXPECT_THAT(consumed_total, 60);
+}
+
+// from code-cxx/fsm/test_cxxfsm.cpp
+
+namespace cxx_case_queue_ccon
+{
+  // polymorphic base. is that only purpose to have this? no.
+  struct message_base
+  {
+    virtual ~message_base() = default;
+  };
+
+  template <typename T>
+  struct wrapped_message : public message_base
+  {
+    T message_;
+
+    explicit wrapped_message(const T &message)
+        : message_(message)
+    {}
+  };
+
+  class queue
+  {
+  private:
+    std::mutex m_;
+    std::condition_variable cv_;
+
+    // can use unique_ptr instead? it seems no real difference since pop_front()
+    // will decrease counter and it will be released when client is done with it
+    // which is the same time point when use unique_ptr.
+
+    std::deque<std::shared_ptr<message_base>> q_;
+
+  public:
+    // create new type of wrapped_message<T> whenever push() is called
+    template <typename T>
+    void push(const T &message)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+
+      q_.emplace_back(std::make_shared<wrapped_message<T>>(message));
+      cv_.notify_one();
+    }
+
+    std::shared_ptr<message_base> wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      cv_.wait(lock, [&] { return !q_.empty(); });
+
+      auto message = std::move(q_.front());
+
+      // *cxx-error* cuase infinite loop on the user when omits this
+      q_.pop_front();
+
+      // not needed
+      // lock.unlock();
+
+      return message;
+    }
+  };
+
+  struct simple_message
+  {
+    std::string name_;
+    explicit simple_message()
+        : name_("simple_message")
+    {}
+  };
+} // namespace cxx_case_queue_ccon
+
+TEST(CxxCaseQueue, check_ccon_queue_1)
+{
+  using namespace cxx_case_queue_ccon;
+
+  // to avoid ambiguity
+  cxx_case_queue_ccon::queue q;
+
+  // send T. copy T into wrapped_message and save shared_ptr of it
+  //
+  // NOTE:
+  // see use of template function then template class. have to populate a class
+  // for every T? it's easy and light to populate template functoin for each T.
+
+  q.push(simple_message());
+
+  // get std::shared_ptr<message_base>
+  auto sp = q.wait_and_pop();
+
+  // what's really saved in shared pointer is wrapped_message instance.
+  // dynamic_cast() should success since it's in inheritance.
+  wrapped_message<simple_message> *message =
+    dynamic_cast<wrapped_message<simple_message> *>(sp.get());
+
+  // message->message_ is T which is copied in adn T.name_ to get name
+  // std::cout << "message->message_ : " << message->message_.name_ << std::endl;
+  EXPECT_THAT(message->message_.name_, "simple_message");
+}
+
+// use `reinterpret_cast` instead
+
+TEST(CxxCaseQueue, check_ccon_queue_2)
+{
+  using namespace cxx_case_queue_ccon;
+  // to avoid ambiguity
+  cxx_case_queue_ccon::queue q;
+
+  // send T. copy T into wrapped_message and save shared_ptr of it
+  //
+  // NOTE:
+  // see use of template function then template class. have to populate a class
+  // for every T? it's easy and light to populate template functoin for each T.
+
+  q.push(simple_message());
+
+  // get std::shared_ptr<message_base>
+  auto sp = q.wait_and_pop();
+
+  // what's really saved in shared pointer is wrapped_message instance.
+  // dynamic_cast() should success since it's in inheritance.
+  wrapped_message<simple_message> *message =
+    reinterpret_cast<wrapped_message<simple_message> *>(sp.get());
+
+  // message->message_ is T which is copied in adn T.name_ to get name
+  // std::cout << "message->message_ : " << message->message_.name_ << std::endl;
+  EXPECT_THAT(message->message_.name_, "simple_message");
 }
 
 // ={=========================================================================

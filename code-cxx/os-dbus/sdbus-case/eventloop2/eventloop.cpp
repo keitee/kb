@@ -270,8 +270,13 @@ Thread 2 (Thread 0x7ffff5d7c700 (LWP 6144)):
 
 
 NOTE: 
-recursive lock? means that it is possible to be called (dispatched) while
-handleing the one? Is there really a case where running thread flush itself?
+recursive lock? means that:
+
+1. it is possible to be called (dispatched) while handling the one? Is there
+really a case where running thread flush itself?
+
+2. while serving or dispatching functor, it is possible to call invokeMethond()
+which pushes item to queue. (from the same thread)
 
 this is used in client interfaces as well and recursive lock only works for
 the same thread. Uses recursive lock for this case which seems to be rare.
@@ -372,7 +377,10 @@ EventLoop::~EventLoop()
   m_private.reset();
 }
 
-// NOTE: no need to check on m_private since it's constructed when EventLoop do.
+// NOTE:
+// no need to check on m_private since it's constructed when EventLoop is
+// created.
+
 int EventLoop::run()
 {
   return m_private->run();
@@ -393,8 +401,10 @@ size_t EventLoop::size() const
   return m_private->size();
 }
 
-// NOTE: access private member so make it friend or add public member functions
+// NOTE: 
+// access private member so make it friend or add public member functions
 // to it.
+
 sd_event *EventLoop::handle() const
 {
   return m_private->m_eventloop;

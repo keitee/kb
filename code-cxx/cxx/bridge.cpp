@@ -6,15 +6,15 @@
 
 class WindowImpl
 {
-  private:
-    std::string name_{};
+private:
+  std::string name_{};
 
-  public:
-    WindowImpl(const std::string &name)
-        : name_{name}
-    {}
+public:
+  WindowImpl(const std::string &name)
+      : name_{name}
+  {}
 
-    virtual void DrawContentsImpl();
+  virtual void DrawContentsImpl();
 };
 
 void WindowImpl::DrawContentsImpl()

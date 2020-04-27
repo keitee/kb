@@ -35,7 +35,7 @@ public:
 
   sd_event *handle() const;
 
-  // return true if th calling thread is the smae running eventloop
+  // return true if the calling thread is the smae running eventloop
   bool onEventLoopThread() const;
 
 public:
@@ -47,6 +47,7 @@ public:
     return invokeMethodImpl(f);
   }
 
+  // for convenience to support f with args
   template <typename F, typename... Args>
   inline bool invokeMethod(F &&f, Args &&... args) const
   {

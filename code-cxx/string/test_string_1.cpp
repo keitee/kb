@@ -38,30 +38,37 @@ TEST(StringIterator, PosEnd)
 // ={=========================================================================
 // *cxx-string-ctor*
 
-TEST(String, string_Create)
+TEST(String, check_ctor)
 {
   {
-    string s("nico");
+    std::string s("nico");
     EXPECT_THAT(s.length(), 4);
   }
 
+  // ascii code 48 is '0'
   {
-    string s(5, 'c');
+    std::string s{48};
+    EXPECT_THAT(s.size(), 1);
+    EXPECT_THAT(s, ElementsAre('0'));
+  }
+
+  {
+    std::string s(5, 'c');
     EXPECT_THAT(s, ElementsAre('c', 'c', 'c', 'c', 'c'));
   }
 
   {
-    string s(5, 'c');
+    std::string s(5, 'c');
     EXPECT_THAT(s, "ccccc");
   }
 
   {
-    string s{"zoo"};
+    std::string s{"zoo"};
     EXPECT_EQ(s, "zoo");
   }
 
   {
-    string s("zoo");
+    std::string s("zoo");
     EXPECT_EQ(s, "zoo");
   }
 
@@ -244,13 +251,112 @@ TEST(StringOperation, MaxSize)
 #endif
 }
 
+/*
 // ={=========================================================================
 // string-substring string-find string-substr
+// cxx-srring-find
+// http://www.cplusplus.com/reference/string/string/find/
+//
+// size_t find (const string& str, size_t pos = 0) const noexcept;
+// size_t find (const char* s, size_t pos, size_type n) const;
 
-TEST(CxxStringOperation, find_substring1)
 {
-  // cxx-srring-find
-  // http://www.cplusplus.com/reference/string/string/find/
+  /usr/include/c++/7/bits/basic_string.h
+
+  // @brief  Find position of a string.
+  // @param __str  String to locate.
+  // @param __pos  Index of character to search from (default 0).
+  // @return  Index of start of first occurrence.
+  //
+  // Starting from @a __pos, searches forward for value of @a __str within
+  // this string.  If found, returns the index where it begins.  If not
+  // found, returns npos.
+
+  size_type
+    find(const basic_string& __str, size_type __pos = 0) const
+    { return this->find(__str.data(), __pos, __str.size()); }
+
+  /usr/include/c++/7/bits/basic_string.tcc
+
+  template<typename _CharT, typename _Traits, typename _Alloc>
+    typename basic_string<_CharT, _Traits, _Alloc>::size_type
+    basic_string<_CharT, _Traits, _Alloc>::
+    find(const _CharT* __s, size_type __pos, size_type __n) const
+    {
+      const size_type __size = this->size();
+
+      // when size of sub, __n, is null. why need this?
+      if (__n == 0)
+        return __pos <= __size ? __pos : npos;
+
+      if (__pos >= __size)
+        return npos;
+
+      const _CharT __elem0 = __s[0];
+      const _CharT* const __data = data();
+      const _CharT* __first = __data + __pos;
+      const _CharT* const __last = __data + __size;
+
+      size_type __len = __size - __pos;
+
+      while (__len >= __n)
+      {
+        // Find the first occurrence of __elem0:
+        __first = traits_type::find(__first, __len - __n + 1, __elem0);
+        if (!__first)
+          return npos;
+
+        // Compare the full strings from the first occurrence of __elem0.
+        // We already know that __first[0] == __s[0] but compare them again
+        // anyway because __s is probably aligned, which helps memcmp.
+        if (traits_type::compare(__first, __s, __n) == 0)
+          return __first - __data;
+
+        __len = __last - ++__first;
+      }
+
+      return npos;
+    }
+}
+
+*/
+
+namespace
+{
+  std::string::size_type my_find(const std::string &str,
+                                 const std::string &sub,
+                                 std::string::size_type pos = std::string::npos)
+  {
+    const auto size_string_ = str.size();
+    const auto size_sub_ = sub.size();
+
+    if (size_sub_ <= size_string_)
+    {
+      const char *string_ = str.c_str();
+
+      auto limit = size_string_ - size_sub_;
+
+      // when not support `pos`
+      // std::string::size_type pos{};
+
+      // same as rfind
+      pos = std::min((size_string_ - size_sub_), pos);
+
+      do
+      {
+        // when found
+        if (memcmp(string_ + pos, sub.c_str(), size_sub_) == 0)
+          return pos;
+      } while (pos++ < limit);
+    }
+
+    return std::string::npos;
+  }
+}
+#endif
+
+TEST(CxxStringOperation, find_substring_1)
+{
   {
     std::string coll1{"There are two needles in this haystack with needles."};
     std::string coll2{"needle"};
@@ -266,27 +372,58 @@ TEST(CxxStringOperation, find_substring1)
     found = coll1.find("haystack");
     EXPECT_THAT(found, 30);
 
+    // not found
+    found = coll1.find("haystack", 31);
+    EXPECT_THAT(found, std::string::npos);
+
     found = coll1.find('.');
     EXPECT_THAT(found, 51);
 
     found = coll1.find("park");
-    EXPECT_THAT(found, string::npos);
+    EXPECT_THAT(found, std::string::npos);
 
     // since npos is unsigned
     found = coll1.find("park");
     EXPECT_THAT(found, -1);
   }
+
+  {
+    std::string coll1{"There are two needles in this haystack with needles."};
+    std::string coll2{"needle"};
+
+    // first match
+    std::size_t found = my_find(coll1, coll2, 0);
+    EXPECT_THAT(found, 14);
+
+    found = my_find(coll1, "haystack", 0);
+    EXPECT_THAT(found, 30);
+
+    // not found
+    found = my_find(coll1, "haystack", 31);
+    EXPECT_THAT(found, std::string::npos);
+
+    found = my_find(coll1, ".", 0);
+    EXPECT_THAT(found, 51);
+
+    found = my_find(coll1, "park", 0);
+    EXPECT_THAT(found, string::npos);
+
+    // since npos is unsigned
+    found = my_find(coll1, "park", 0);
+    EXPECT_THAT(found, -1);
+  }
 }
 
 // (gdb) b CxxStringOperation_find_substring2_Test::TestBody()
-
-TEST(CxxStringOperation, find_substring2)
+// cxx-string-rfind
+TEST(CxxStringOperation, find_substring_2)
 {
   {
     std::string coll1{"The sixth sick sheik's sixth sheep's sick."};
     std::string coll2{"sixth"};
     std::string coll3{"The sixth sick sheik's seventh sheep's sick."};
 
+    // search from the end
     auto found = coll1.rfind(coll2);
     coll1.replace(found, coll2.length(), "seventh");
 
@@ -297,9 +434,9 @@ TEST(CxxStringOperation, find_substring2)
     found = coll1.rfind(coll2, 0);
     EXPECT_THAT(found, std::string::npos);
 
-    // starts from 0 and see match single char 'T' at 0. returns 0
-    // that is inclusive
-    // THIS IS WRONG see find_substring3
+    // "starts from 0 and see match single char 'T' at 0. returns 0
+    // that is inclusive"
+    // THIS description is WRONG see find_substring3
     found = coll1.rfind("The", 0);
     EXPECT_THAT(found, 0);
 
@@ -357,6 +494,14 @@ TEST(CxxStringOperation, find_substring2)
     EXPECT_THAT(request2.rfind(s, 0), std::string::npos);
     // search whole
     EXPECT_THAT(request2.rfind(s), std::string::npos);
+  }
+
+  // when both has the same size but different
+  {
+    const std::string request1{"/as/players/2/action/watchlive"};
+    const std::string request2{"/as/players/1/action/watchlive"};
+
+    EXPECT_THAT(request1.rfind(request2, 0), std::string::npos);
   }
 }
 
@@ -439,11 +584,16 @@ namespace
   {
     // get size of the string to be searched
     const std::string::size_type str_size_ = str.size();
-    // get size of the sub string
+
+    // get size of the string to search
     const std::string::size_type sub_size_ = sub.size();
 
+    // size of string to search shall not bigger than one of to be searched
     if (sub_size_ <= str_size_)
     {
+      // use of min() to support `pos` to start. if not support pos, then no
+      // need to use min. always starts from the end and use str_size-stb_size.
+      //
       // get new pos(starting point) from input pos
       //
       // when sub string is small
@@ -480,6 +630,13 @@ namespace
       const char *data_ = str.c_str();
 
       // use of input arg `pos` rather than defining local one.
+      // NOTE:
+      // 1. use of do/while and `pos-- > 0` to compare up to index 0.
+      // 2. if use while() instead, do not cover when pos is 0; str and sub is
+      // equal.
+      // 3. when pos is 0, pos-- makes UNIT_MAX but while() use the previous
+      // value which is 0.
+
       do
       {
         // if sub string is found
@@ -495,20 +652,23 @@ namespace
   }
 } // namespace
 
-TEST(CxxStringOperation, find_substring3)
+TEST(CxxStringOperation, find_substring_3)
 {
   {
     std::string coll2{"sixth"};
-    std::string coll3{"The sixth sick sheik's seventh sheep's sick."};
+    std::string coll3{"The sixth sick sheik's sixth sheep's sick."};
 
     // not found
     auto found = my_rfind(coll3, coll2, 0);
     EXPECT_THAT(found, std::string::npos);
 
-    // starts from 2 to backwards and see match 'The'. returns 0 since 0 is the
-    // first char. THIS IS comment is wrong and now knows why
+    // found
     found = my_rfind(coll3, "The", 0);
     EXPECT_THAT(found, 0);
+
+    // found from the end.
+    found = my_rfind(coll3, coll2);
+    EXPECT_THAT(found, 23);
   }
 
   {
@@ -517,15 +677,19 @@ TEST(CxxStringOperation, find_substring3)
 
     const std::string s = "/as/players/2/";
 
-    // starts from 0 which means search whole
+    // starts from 0 
     EXPECT_THAT(my_rfind(request1, s, 0), 0);
 
-    // starts from 0 ane expects `0 return` but not.
-    // EXPECT_THAT(request2.rfind(s, 0), 0);
-    // NOTE: WHY and this leads to find_substring3()
-
-    // starts from 0 which means search whole
+    // starts from 0
     EXPECT_THAT(my_rfind(request2, s, 0), std::string::npos);
+  }
+
+  // when both has the same size but different
+  {
+    const std::string request1{"/as/players/2/action/watchlive"};
+    const std::string request2{"/as/players/1/action/watchlive"};
+
+    EXPECT_THAT(my_rfind(request1, request2, 0), std::string::npos);
   }
 }
 
@@ -941,12 +1105,12 @@ TEST(String, OutputCstring)
 // ={=========================================================================
 // string-conversion
 
-TEST(StringConverison, functions)
+TEST(StringConverison, check_functions)
 {
   // to string
   {
-    EXPECT_THAT(to_string(11), "11");
-    EXPECT_THAT(to_string(3301), "3301");
+    EXPECT_THAT(std::to_string(11), "11");
+    EXPECT_THAT(std::to_string(3301), "3301");
   }
 
   // to string in hex
@@ -1009,7 +1173,7 @@ TEST(StringConverison, functions)
   }
 }
 
-TEST(StringConverison, stringstream)
+TEST(StringConverison, check_stringstream)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.
   // *cxx-string-convert-to-string*

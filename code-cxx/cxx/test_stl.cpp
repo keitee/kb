@@ -3275,21 +3275,52 @@ TEST(AlgoGenerate, check_generate)
 {
   using namespace algo_generate;
 
-  std::list<int> coll;
+  std::list<int> coll{};
 
   // insert five random numbers
-  generate_n(back_inserter(coll), // beginning of destination range
-             5,                   // count
-             rand);               // new value generator
+  std::generate_n(back_inserter(coll), // beginning of destination range
+                  5,                   // count
+                  rand);               // new value generator
 
   // PRINT_ELEMENTS(coll);
 
   // `overwrite` with five new random numbers
-  generate(coll.begin(),
-           coll.end(),          // destination range
-           IntegerSequence(1)); // new value generator
+  std::generate(coll.begin(),
+                coll.end(),          // destination range
+                IntegerSequence(1)); // new value generator
 
   EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6));
+}
+
+// note on "iota" but not "itoa" and see how it differs from generate()
+//
+// https://en.cppreference.com/w/cpp/algorithm/iota
+// Fills the range [first, last) with sequentially increasing values, starting
+// with value and repetitively evaluating ++value.
+
+TEST(AlgoGenerate, check_iota)
+{
+  using namespace algo_generate;
+
+  {
+    std::list<int> coll{0, 0, 0, 0, 0};
+
+    std::generate(coll.begin(),
+                  coll.end(),          // destination range
+                  IntegerSequence(1)); // new value generator
+
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6));
+  }
+
+  {
+    std::list<int> coll{0, 0, 0, 0, 0};
+
+    std::iota(coll.begin(),
+              coll.end(), // destination range
+              2);
+
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6));
+  }
 }
 
 TEST(AlgoGenerate, Reference)

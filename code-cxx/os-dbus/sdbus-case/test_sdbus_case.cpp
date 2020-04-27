@@ -18,10 +18,31 @@ using namespace testing;
 
 // ={=========================================================================
 
-void w1(int &v)
+namespace
 {
-  v += 1;
-  // std::cout << "w1: " << v << std::endl;
+  void w1(int &v)
+  {
+    v += 1;
+    std::cout << "w1: " << v << std::endl;
+  }
+
+  void cause_dangling_reference(EventLoop &loop)
+  {
+    int value{0};
+    loop.invokeMethod(std::bind(w1, std::ref(value)));
+  }
+
+  void f2(std::string &message)
+  {
+    message += ":called";
+  }
+
+  // so pass a reference to local which will be invalid when f gets called.
+  void cause_dangling_reference_2(EventLoop &loop)
+  {
+    std::string message("dangling");
+    loop.invokeMethod(std::bind(f2, std::ref(message)));
+  }
 }
 
 // posts many work but nothing is done since do not run event loop and process
@@ -29,7 +50,7 @@ void w1(int &v)
 //
 // size is 10 but value is still 0.
 
-TEST(EventLoop, event_no_work)
+TEST(EventLoop, check_no_work)
 {
   int value{};
 
@@ -51,7 +72,7 @@ TEST(EventLoop, event_no_work)
 // EventLoopPrivate::m_loopRuunig is null and runs path when "this !=
 // m_loopRunning". that use sem and wait for that and blocked there.
 
-TEST(DISABLED_EventLoop, event_flush_no_work)
+TEST(DISABLED_EventLoop, check_flush_and_no_work)
 {
   int value{};
 
@@ -69,10 +90,10 @@ TEST(DISABLED_EventLoop, event_flush_no_work)
 
 // one thread which runs event loop and the other pushes task and use flush()
 //
-// it surfaces deadlock issue and works oken when have
+// it surfaces deadlock issue and works okay when have
 // #define DEADLOCK_FIX
 
-TEST(EventLoop, event_deadlock)
+TEST(EventLoop, check_deadlock)
 {
   int value{};
 
@@ -120,7 +141,7 @@ TEST(EventLoop, event_deadlock)
 // M:eventloop.cpp F:~EventLoopPrivate L:80 > EventLoopPrivate::~EventLoopPrivate()
 // [       OK ] EventLoop.event_flush1 (1 ms)
 
-TEST(EventLoop, event_flush1)
+TEST(EventLoop, check_flush_with_flush)
 {
   {
     int value{};
@@ -180,8 +201,216 @@ TEST(EventLoop, event_flush1)
   }
 }
 
-// see that it works without flush()
-TEST(EventLoop, event_flush2)
+TEST(EventLoop, check_flush_with_flush_and_copy)
+{
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(std::bind(w1, value));
+
+      loop.flush();
+      EXPECT_THAT(loop.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    // since do not use std::ref and w1 changes v which is local to
+    // clousure(callable) so no effect on real value
+    EXPECT_THAT(value, 0);
+  }
+
+  // same as above but use the convenient form of invokeMethod()
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(w1, value);
+
+      loop.flush();
+      EXPECT_THAT(loop.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    // since do not use std::ref and w1 changes v which is local to
+    // clousure(callable) so no effect on real value
+    EXPECT_THAT(value, 0);
+  }
+}
+
+// as you can see, for dangling case, it's changes randomly
+//
+// [ RUN      ] EventLoop.check_flush_and_dangling
+// w1: 1
+// w1: 2
+// w1: 3
+// w1: 4
+// w1: 5
+// w1: 6
+// w1: 7
+// w1: 8
+// w1: 9
+// w1: 10
+// w1: 1
+// w1: 2
+// w1: 3
+// w1: 4
+// w1: 5
+// w1: 6
+// w1: 7
+// w1: 8
+// w1: 32559
+// w1: 32560
+// [       OK ] EventLoop.check_flush_and_dangling (1 ms)
+// [ RUN      ] EventLoop.check_flush_and_dangling
+// w1: 1
+// w1: 2
+// w1: 3
+// w1: 4
+// w1: 5
+// w1: 6
+// w1: 7
+// w1: 8
+// w1: 9
+// w1: 10
+// w1: 32596
+// w1: 32597
+// w1: 32598
+// w1: 32599
+// w1: 32600
+// w1: 32601
+// w1: 32602
+// w1: 32603
+// w1: 32604
+// w1: 32605
+// [       OK ] EventLoop.check_flush_and_dangling (1 ms)
+//
+// so how about using structure than int?
+
+TEST(EventLoop, check_flush_and_dangling_1)
+{
+  // no dangling case
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(std::bind(w1, std::ref(value)));
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    EXPECT_THAT(value, 10);
+  }
+
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        cause_dangling_reference(loop);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    // since do not use std::ref and w1 changes v which is local to
+    // clousure(callable) so no effect on real value
+    EXPECT_THAT(value, 0);
+  }
+
+  // sometimes raise exception but mostly makes code dump:
+  //
+  // #0  __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:308
+  // #1  0x000055d9e07e2142 in std::char_traits<char>::copy (__s1=0xd5663e8d6c30 <error: Cannot access memory at address 0xd5663e8d6c30>, __s2=0x55d9e084fb12 ":called", __n=7) at /usr/include/c++/7/bits/char_traits.h:350
+  // #2  0x000055d9e07eae9a in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_S_copy (__d=0xd5663e8d6c30 <error: Cannot access memory at address 0xd5663e8d6c30>, __s=0x55d9e084fb12 ":called", __n=7)
+  //     at /usr/include/c++/7/bits/basic_string.h:340
+  // #3  0x000055d9e07e852f in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append (this=0x7f8c5c873800, __s=0x55d9e084fb12 ":called", __n=7) at /usr/include/c++/7/bits/basic_string.tcc:367
+  // #4  0x000055d9e07e4de1 in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::append (this=0x7f8c5c873800, __s=0x55d9e084fb12 ":called") at /usr/include/c++/7/bits/basic_string.h:1258
+  // #5  0x000055d9e07e50f1 in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::operator+= (this=0x7f8c5c873800, __s=0x55d9e084fb12 ":called") at /usr/include/c++/7/bits/basic_string.h:1168
+  // #6  0x000055d9e07b0cd7 in (anonymous namespace)::f2 (message="") at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/test_sdbus_case.cpp:37
+  // #7  0x000055d9e07f059a in std::__invoke_impl<void, void (*&)(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&), std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&> (
+  //     __f=@0x7f8c58000c60: 0x55d9e07b0cb8 <(anonymous namespace)::f2(std::__cxx11::string&)>) at /usr/include/c++/7/bits/invoke.h:60
+  // #8  0x000055d9e07efb1a in std::__invoke<void (*&)(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&), std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&> (
+  //     __fn=@0x7f8c58000c60: 0x55d9e07b0cb8 <(anonymous namespace)::f2(std::__cxx11::string&)>) at /usr/include/c++/7/bits/invoke.h:95
+  // #9  0x000055d9e07eeeb1 in std::_Bind<void (*(std::reference_wrapper<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >))(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)>::__call<void, , 0ul>(std::tuple<>&&, std::_Index_tuple<0ul>) (this=0x7f8c58000c60, __args=...) at /usr/include/c++/7/functional:467
+  // #10 0x000055d9e07ed86d in std::_Bind<void (*(std::reference_wrapper<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >))(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)>::operator()<, void>() (this=0x7f8c58000c60) at /usr/include/c++/7/functional:551
+  // #11 0x000055d9e07eb51f in std::_Function_handler<void (), std::_Bind<void (*(std::reference_wrapper<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >))(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)> >::_M_invoke(std::_Any_data const&) (__functor=...) at /usr/include/c++/7/bits/std_function.h:316
+  // #12 0x000055d9e07f4fac in std::function<void ()>::operator()() const (this=0x7ffc10cd0630) at /usr/include/c++/7/bits/std_function.h:706
+  // #13 0x000055d9e07f3bb6 in EventLoopPrivate::event_handler_ (s=0x55d9e2064740, fd=6, revents=1, userdata=0x55d9e2061f40) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/eventloop2/eventloop.cpp:128
+  // #14 0x00007f8c5e577e90 in ?? () from /lib/x86_64-linux-gnu/libsystemd.so.0
+  // #15 0x00007f8c5e57924a in sd_event_dispatch () from /lib/x86_64-linux-gnu/libsystemd.so.0
+  // #16 0x00007f8c5e5793d9 in sd_event_run () from /lib/x86_64-linux-gnu/libsystemd.so.0
+  // #17 0x00007f8c5e57960b in sd_event_loop () from /lib/x86_64-linux-gnu/libsystemd.so.0
+  // #18 0x000055d9e07f3d3a in EventLoopPrivate::run (this=0x55d9e2061f40) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/eventloop2/eventloop.cpp:183
+  // #19 0x000055d9e07f4312 in EventLoop::run (this=0x7ffc10cd07e0) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/eventloop2/eventloop.cpp:386
+  // #20 0x000055d9e07b2642 in EventLoop_check_flush_and_dangling_1_Test::TestBody (this=0x55d9e20634a0) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/test_sdbus_case.cpp:371
+  // #21 0x000055d9e083e7c0 in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
+  // #22 0x000055d9e0837e71 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
+  // #23 0x000055d9e0813dba in testing::Test::Run() ()
+-
+  {
+    int value{};
+
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
+
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        cause_dangling_reference_2(loop);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+
+    // since do not use std::ref and w1 changes v which is local to
+    // clousure(callable) so no effect on real value
+    EXPECT_THAT(value, 0);
+  }
+}
+
+// see that it works without flush() since flush() is only necessary when
+// forcefully shutdown all.
+
+TEST(EventLoop, check_flush_without_flush)
 {
   const int count{10000000};
 
@@ -270,7 +499,9 @@ TEST(EventLoop, event_flush2)
 // 0000017889.914018 WRN: < M:eventloop.cpp F:flush L:322 > flush called from different thread(140079061800704), m_loopRunning(0x(nil))
 // 0000017889.914052 WRN: < M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
 
-TEST(EventLoop, event_flush3)
+// see quit() first and flush() later
+
+TEST(EventLoop, check_flush_with_wrong_order)
 {
   int value{};
 
@@ -360,9 +591,13 @@ namespace
 
 // invokeMethod() use copy? okay use on temporary? yes since cxx-bind use copy
 // context which is usded in invokeMethod()
+//
+// as can see, while vector header is increasing and `reset` happens at
+// different points in these runs, functor f still prints vector header
+// properly. since callable from std::bind() is self-contained.
 
 // [ RUN      ] EventLoop.event_invoke_do_copy
-// reset them and quit  <<---
+// reset them and quit  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // ================
 // headers: size : 1: header1,
 // body: body1
@@ -393,7 +628,7 @@ namespace
 // ================
 // headers: size : 4: header1, header2, header3, header4,
 // body: body4
-// reset them and quit  <<---
+// reset them and quit  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // ================
 // headers: size : 5: header1, header2, header3, header4, header5,
 // body: body5
@@ -409,7 +644,7 @@ namespace
 // ================
 // headers: size : 3: header1, header2, header3,
 // body: body3
-// reset them and quit  <<--- 
+// reset them and quit  <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // ================
 // headers: size : 4: header1, header2, header3, header4,
 // body: body4
@@ -418,7 +653,7 @@ namespace
 // body: body5
 // [       OK ] EventLoop.event_invoke_do_copy (501 ms)
 
-TEST(EventLoop, event_invoke_do_copy)
+TEST(EventLoop, check_invoke_do_copy)
 {
   {
     int value{};
@@ -474,7 +709,7 @@ TEST(EventLoop, event_invoke_do_copy)
 
 // use memeber function
 
-TEST(EventLoop, event_invoke_member)
+TEST(EventLoop, check_invoke_member)
 {
   {
     int value{};
@@ -485,8 +720,6 @@ TEST(EventLoop, event_invoke_member)
     auto f1 = std::async(std::launch::async, [&]() {
       for (int i = 0; i < 10; ++i)
         loop.invokeMethod(&Work1::printArgs, &w, 10, 20, 30);
-
-      EXPECT_THAT(loop.size(), 10);
 
       loop.quit(0);
     });
@@ -504,8 +737,6 @@ TEST(EventLoop, event_invoke_member)
     auto f1 = std::async(std::launch::async, [&]() {
       Work2 w(loop);
       w.pushWorks();
-
-      EXPECT_THAT(loop.size(), 10);
 
       loop.quit(0);
     });
