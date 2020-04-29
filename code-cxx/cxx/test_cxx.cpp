@@ -5674,24 +5674,20 @@ namespace cxx_smart_pointer
     std::string m_name;
 
   public:
-    explicit SmartFoo2()
+    explicit SmartFoo2(const std::string &name = "Foo")
+      : m_name(name)
     {
-      std::cout << "SmartFoo2()" << std::endl;
-      m_name = "smart foo";
+      std::cout << "SmartFoo2::SmartFoo2: " << m_name << std::endl;
     }
 
-    explicit SmartFoo2(const std::string name)
-        : m_name(name)
+    ~SmartFoo2()
     {
-      std::cout << "SmartFoo2(std::string)" << std::endl;
+      std::cout << "SmartFoo2::~SmartFoo2: " << m_name << std::endl;
     }
-
-  public:
-    ~SmartFoo2() = default;
   };
 } // namespace cxx_smart_pointer
 
-TEST(CxxSmartPointer, sp_construct)
+TEST(CxxSmartPointer, check_ctor)
 {
   using namespace cxx_smart_pointer;
 
@@ -5704,7 +5700,7 @@ TEST(CxxSmartPointer, sp_construct)
   }
 
   {
-    shared_ptr<string> pNico = std::make_shared<string>("nico"); // OK
+    std::shared_ptr<string> pNico = std::make_shared<string>("nico"); // OK
   }
 
   // // NO since requires cxx-copy-init but shared ptr's ctor are explicit
@@ -5805,26 +5801,26 @@ TEST(CxxSmartPointer, sp_construct)
   }
 }
 
-TEST(CxxSmartPointer, sp_shared_copy)
+TEST(CxxSmartPointer, check_copy_1)
 {
-  auto p = make_shared<int>(42);
+  auto p = std::make_shared<int>(42);
 
   // p.use++
   auto q(p);
 
-  // all prints 2
+  // all prints 2 since it's in the same group
   EXPECT_THAT(p.use_count(), 2);
   EXPECT_THAT(q.use_count(), 2);
 
   EXPECT_THAT(*p, 42);
   EXPECT_THAT(*q, 42);
 
-  auto r = make_shared<int>(52);
+  auto r = std::make_shared<int>(52);
 
   // q.use++ and r.use--. destroies a object which r pointed.
   r = q;
 
-  // all prints 3
+  // all prints 3 since all are in the same group
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
   EXPECT_THAT(r.use_count(), 3);
@@ -5832,8 +5828,142 @@ TEST(CxxSmartPointer, sp_shared_copy)
   EXPECT_THAT(*r, 42);
 }
 
+TEST(CxxSmartPointer, check_copy_2)
+{
+  auto p = std::make_shared<int>(42);
+
+  // two p.use++
+  auto q(p);
+  auto r(p);
+
+  // all prints 3 since it's in the same group
+  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(q.use_count(), 3);
+
+  EXPECT_THAT(*p, 42);
+  EXPECT_THAT(*q, 42);
+
+  // going to change use count? no
+  r = q;
+  q = p;
+  p = r;
+  r = q;
+
+  // all prints 3 since all are in the same group
+  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(q.use_count(), 3);
+  EXPECT_THAT(r.use_count(), 3);
+}
+
+// it is okay to copy around as long as f1, f2 remains.
+
+TEST(CxxSmartPointer, check_copy_3)
+{
+  using namespace cxx_smart_pointer;
+
+  auto f1 = std::make_shared<SmartFoo2>("foo1");
+  auto f2 = std::make_shared<SmartFoo2>("foo2");
+
+  auto prev(f1);
+  auto curr(f2);
+
+  // all prints 2 for each group
+  EXPECT_THAT(f1.use_count(), 2);
+  EXPECT_THAT(f2.use_count(), 2);
+
+  // prev = f2, curr = f1
+  prev = curr;
+  curr = f1;
+
+  // all prints 2 for each group
+  EXPECT_THAT(f1.use_count(), 2);
+  EXPECT_THAT(f2.use_count(), 2);
+
+  // prev = f1, curr = f2
+  prev = curr;
+  curr = f2;
+  
+  // all prints 2 for each group
+  EXPECT_THAT(f1.use_count(), 2);
+  EXPECT_THAT(f2.use_count(), 2);
+}
+
+// o Double delete *cxx-sp-shared-ownership*
+//
+// Have to ensure that only `one group of shared pointers` owns an object.
+//
+// int* p = new int;
+// shared_ptr<int> sp1(p);
+// shared_ptr<int> sp2(p);       // new shared ptr group and double delete.
+//
+// For this reason, you should always directly initialize a smart pointer the
+// moment you create the object with its associated resource:
+//
+// shared_ptr<int> sp1(new int);
+// shared_ptr<int> sp2(sp1);     // OK
+
+TEST(CxxSmartPointer, check_group_or_ownership)
+{
+  {
+    int *p = new int{42};
+
+    // create sp1
+    std::shared_ptr<int> sp1(p);
+
+    // p.use++
+    // As for "auto sp2(sp1);", create another sp in the same group
+    auto sp2 = sp1;
+
+    // all prints 2 since it's in the same group
+    EXPECT_THAT(sp1.use_count(), 2);
+    EXPECT_THAT(sp2.use_count(), 2);
+
+    EXPECT_THAT(*sp1, 42);
+    EXPECT_THAT(*sp2, 42);
+  }
+
+  {
+    int *p = new int{42};
+
+    // create sp1
+    std::shared_ptr<int> sp1(p);
+
+    // create sp1 and sp2 first
+    std::shared_ptr<int> sp2;
+    std::shared_ptr<int> sp3;
+
+    // and set
+    sp2 = sp1;
+    sp3 = sp1;
+
+    // all prints 2 since it's in the same group
+    EXPECT_THAT(sp1.use_count(), 3);
+    EXPECT_THAT(sp2.use_count(), 3);
+
+    EXPECT_THAT(*sp1, 42);
+    EXPECT_THAT(*sp2, 42);
+  }
+
+  {
+    int *p = new int{42};
+
+    // create sp1
+    std::shared_ptr<int> sp1(p);
+
+    // However, this creates another group/owner of sp and cause `double delete`
+    std::shared_ptr<int> sp2(p);
+
+    // all prints 1 since it's NOT in the same group
+    EXPECT_THAT(sp1.use_count(), 1);
+    EXPECT_THAT(sp2.use_count(), 1);
+
+    EXPECT_THAT(*sp1, 42);
+    EXPECT_THAT(*sp2, 42);
+  }
+}
+
 // common for shared and unique
-TEST(CxxSmartPointer, sp_reset)
+TEST(CxxSmartPointer, check_reset)
 {
   // 1. sp, shared structure, and referenced object are *separate* entity.
   //
@@ -5843,15 +5973,17 @@ TEST(CxxSmartPointer, sp_reset)
   // EXPECT_THAT(q.use_count(), 0);
 
   {
-    auto p = make_shared<int>(42);
+    auto p = std::make_shared<int>(42);
 
     // use++
     auto q(p);
     auto r(p);
 
+    // all are in the same group
     EXPECT_THAT(p.use_count(), 3);
     EXPECT_THAT(q.use_count(), 3);
 
+    // q is out
     q.reset();
 
     EXPECT_THAT(p.use_count(), 2);
@@ -5863,16 +5995,17 @@ TEST(CxxSmartPointer, sp_reset)
   }
 
   {
-    auto p = make_shared<int>(42);
+    auto p = std::make_shared<int>(42);
 
     // use++
     auto q(p);
     auto r(p);
 
+    // all are in the same group
     EXPECT_THAT(p.use_count(), 3);
     EXPECT_THAT(q.use_count(), 3);
 
-    // same as cxx-sp-reset()
+    // q is out and same as cxx-sp-reset()
     q = nullptr;
 
     EXPECT_THAT(p.use_count(), 2);
@@ -5881,16 +6014,17 @@ TEST(CxxSmartPointer, sp_reset)
   }
 
   {
-    auto p = make_shared<int>(42);
+    auto p = std::make_shared<int>(42);
 
     // use++
     auto q(p);
     auto r(p);
 
+    // all are in the same group
     EXPECT_THAT(p.use_count(), 3);
     EXPECT_THAT(q.use_count(), 3);
 
-    // multiple reset() are fine
+    // q is out and multiple reset() are fine
     q.reset();
     q.reset();
     q.reset();
@@ -5900,23 +6034,54 @@ TEST(CxxSmartPointer, sp_reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+}
+
+// common
+TEST(CxxSmartPointer, check_bool_support)
+{
+  {
+    auto p = std::make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    // all are in the same group
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // q is out
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+
+    EXPECT_TRUE(p);
+
+    // cxx-sp-bool, q is nullptr
+    EXPECT_FALSE(q);
+
+    EXPECT_TRUE(r);
+  }
 
   {
-    unique_ptr<int> up{new int(100)};
+    std::unique_ptr<int> up{new int(100)};
 
     EXPECT_TRUE(up);
+
+    // cxx-error on gmock matcher
+    // EXPECT_THAT(up, nullptr);
+    EXPECT_THAT(!!up, true);
+    EXPECT_THAT(up != nullptr, true);
+
     EXPECT_THAT(*up, 100);
-
-    up.reset();
-
-    // now, up is nullptr
-    EXPECT_FALSE(up);
   }
 }
 
 // CXXSLR 5.2 Smart Pointers
 
-TEST(CxxSmartPointer, sp_shared_example1)
+TEST(CxxSmartPointer, check_shared_example_1)
 {
   std::shared_ptr<std::string> pNico{new std::string("nico")};
   std::shared_ptr<std::string> pJutta{new std::string("jutta")};
@@ -5956,45 +6121,6 @@ TEST(CxxSmartPointer, sp_shared_example1)
   }
 
   EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
-}
-
-// common
-TEST(CxxSmartPointer, sp_bool)
-{
-  {
-    auto p = make_shared<int>(42);
-
-    // use++
-    auto q(p);
-    auto r(p);
-
-    EXPECT_THAT(p.use_count(), 3);
-    EXPECT_THAT(q.use_count(), 3);
-
-    q.reset();
-
-    EXPECT_THAT(p.use_count(), 2);
-    EXPECT_THAT(q.use_count(), 0);
-    EXPECT_THAT(r.use_count(), 2);
-
-    EXPECT_TRUE(p);
-    // cxx-sp-bool, q is nullptr
-    EXPECT_FALSE(q);
-    EXPECT_TRUE(r);
-  }
-
-  {
-    unique_ptr<int> up{new int(100)};
-
-    EXPECT_TRUE(up);
-
-    // cxx-error on gmock matcher
-    // EXPECT_THAT(up, nullptr);
-    EXPECT_THAT(!!up, true);
-    EXPECT_THAT(up != nullptr, true);
-
-    EXPECT_THAT(*up, 100);
-  }
 }
 
 // ={=========================================================================

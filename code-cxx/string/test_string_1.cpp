@@ -353,7 +353,6 @@ namespace
     return std::string::npos;
   }
 }
-#endif
 
 TEST(CxxStringOperation, find_substring_1)
 {
@@ -1206,6 +1205,7 @@ TEST(StringConverison, check_stringstream)
     EXPECT_THAT(os.str(), "10");
   }
 
+  // input integer to hex string
   {
     std::string input{"15056"};
     uint32_t value = std::stoi(input.c_str());
@@ -1213,6 +1213,16 @@ TEST(StringConverison, check_stringstream)
     std::ostringstream os;
     os << hex << value;
     EXPECT_THAT(os.str(), "3ad0");
+  }
+
+  // input integer and add some. to string
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << 5000 + value;
+    EXPECT_THAT(os.str(), "20056");
   }
 
   // to string
