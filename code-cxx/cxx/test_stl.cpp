@@ -807,24 +807,24 @@ private:
 };
 
 // ={=
-TEST(CxxVector, Ctor)
+TEST(CxxVector, check_ctor)
 {
   {
-    vector<int> coll(5);
+    std::vector<int> coll(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }
 
   // *cxx-vector-resize*
   {
-    vector<int> coll;
+    std::vector<int> coll;
     coll.resize(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }
 
   {
-    vector<int> coll(5, 10);
+    std::vector<int> coll(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10, 10, 10, 10, 10));
   }
@@ -833,7 +833,7 @@ TEST(CxxVector, Ctor)
   // so vector-resize() do the same as ctor(n, e)
 
   {
-    vector<int> coll;
+    std::vector<int> coll;
     coll.resize(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10, 10, 10, 10, 10));
@@ -846,17 +846,18 @@ TEST(CxxVector, Ctor)
   }
 
   // initializer_list
+  // unlike vecor(n), vector{n} creates single element.
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
-  }
-  {
-    vector<int> coll{1};
-    EXPECT_THAT(coll, ElementsAre(1));
-  }
-  {
-    vector<int> coll{2};
-    EXPECT_THAT(coll, ElementsAre(2));
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6));
+
+    std::vector<int> coll2{1};
+    ASSERT_THAT(coll2.size(), Eq(1));
+    EXPECT_THAT(coll2, ElementsAre(1));
+
+    std::vector<int> coll3{2};
+    ASSERT_THAT(coll3.size(), Eq(1));
+    EXPECT_THAT(coll3, ElementsAre(2));
   }
 
   // iterator

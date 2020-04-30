@@ -61,7 +61,7 @@ KT KB. CPP
 *kt_dev_cxx_0001* cxx-volatile
 *kt_dev_cxx_0000* cxx-stdio cxx-stream
 *kt_dev_cxx_0000* cxx-stream cxx-file
-*kt_dev_cpp_0004* expr-post-and-pre
+*kt_dev_cpp_0004* cxx-postfix
 *kt_dev_cpp_0004* expr-chain
 |kt_dev_lang_008| type and printf
 |kt_dev_lang_011| expr-literal
@@ -5864,18 +5864,17 @@ end: line
 
 
 ={============================================================================
-*kt_dev_cpp_0004* expr-post-and-pre
+*kt_dev_cpp_0004* cxx-postfix
 
-{value-and-effect}
-There are situations where the 'value' of increase is different from the
-'effect'. `post-increase` differs in value and effect.
+There are situations where the `value` of increase is different from the
+*cxx-side-effect*. `cxx-postfix` differs in value and effect.
 
 WHEN n = 5: 
 
-x = n++;    // x has 5; value is 5 and effect is 6.
-x = ++n;    // x has 6; value is 6 and effect is 6.
+x = n++;    // x has 5; value is 5 and side-effect is 6.
+x = ++n;    // x has 6; value is 6 and side-effect is 6.
 
-When no value is used and use only effect, pre or post are the same:
+When no value is used and use only effect, postfix and postfix are the same:
 
 // when valus is not used
 if( c == '\n' )
@@ -5888,147 +5887,204 @@ fcall( ++val );   // fcall(6);
 fcall( val++ );   // fcall(5);
 
 
-<ex> *ex-squeeze* 
+<ex> algo-squeeze
+
 Delete all c from string s. From C prog language, p47. All these are example
-where post version is required.
+where postfix is required.
 
 void squeeze(char s[], int c);
 
-// ansic version
-void squeeze(char s[], int c)
+namespace algo_squeeze
 {
-  int i, j;
-
-  for( i = j = 0; s[i] != '\0'; i++ )
-    if( s[i] != c )
-      s[j++] = s[i];
-
-  s[j] = '\0';
-}
-
-// use one var
-void squeeze( char s[], int c )
-{
-  char* scan;
-
-  for( scan = s; *scan; scan++ )
+  // ansic version
+  void squeeze1(char s[], int c)
   {
-    // if not matches: copy s[current] = s[sacn] and increase s
-    if( *scan != c )
-      *s++ = *scan;
+    int i, j;
+
+    for (i = j = 0; s[i] != '\0'; i++)
+      if (s[i] != c)
+        s[j++] = s[i];
+
+    s[j] = '\0';
   }
 
-  *s = *scan;
-}
+  // use one var
+  void squeeze2(char s[], int c)
+  {
+    char *scan;
 
-int main()
+    for (scan = s; *scan; scan++)
+    {
+      // if not matches: copy s[current] = s[sacn] and increase s
+      if (*scan != c)
+        *s++ = *scan;
+    }
+
+    *s = *scan;
+  }
+
+  void squeeze3(char s[], int c)
+  {
+    // do not use `run` variable since use s for that
+    char *pos = s;
+
+    while (*s)
+    {
+      if (*s != c)
+        *pos++ = *s;
+
+      ++s;
+    }
+
+    // set the end
+    *pos = '\0';
+  }
+} // namespace algo_squeeze
+
+TEST(AlgoSqueeze, try_1)
 {
-  char arr[] = "this is a program to squeeze";
+  using namespace algo_squeeze;
 
-  cout << arr << endl;
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
 
-  squeeze( arr, 'e' );
+    squeeze1(arr, 'e');
 
-  cout << arr << endl;
+    // std::cout << arr << std::endl;
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
+
+    squeeze2(arr, 'e');
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
+
+    squeeze3(arr, 'e');
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
 }
 
-this is a program to squeeze
-this is a program to squz
+/*
+ansic, exercise 2-4.
 
-
-<ex> *ex-squeeze-two* ansic, exercise 2-4.
 Write an alternate version of squeeze(s1,s2) that deletes each character in the
 string s1 that matches 'any' character in the string s2.
 
-The key:
+void squeeze2(char s[], char t[]);
 
-* Use t[] as outer loop and run squeeze() for each char in t[].
-* Can use t[] as inner loop.
-* Both are O(nm).
+*/
 
-// http://clc-wiki.net/wiki/K%26R2_solutions:Chapter_2:Exercise_4
-void squeeze2(char s[], char t[]) {
+namespace algo_squeeze_2
+{
+  void squeeze1(char s[], char t[])
+  {
     int i, j, k;
-    for (k = 0; t[k] != '\0'; k++) {
-        for (i = j = 0; s[i] != '\0'; i++)      // { squeeze1()
-            if (s[i] != t[k])
-                s[j++] = s[i];
-        s[j] = '\0';                            // }
-    }
-}
-
-void squeeze_mine( char s[], char t[] )
-{
-  char *run, *write;
-
-  for(; *t; t++)
-  {
-    for( write = run = s; *run; run++ )
+    for (k = 0; t[k] != '\0'; k++)
     {
-      if( *run != *t )
-        *write++ = *run;
+      for (i = j = 0; s[i] != '\0'; i++) // { squeeze1()
+        if (s[i] != t[k])
+          s[j++] = s[i];
+      s[j] = '\0'; // }
+    }
+  }
+
+  // mine
+  void squeeze2(char s[], char t[])
+  {
+    char *run, *write;
+
+    for (; *t; t++)
+    {
+      for (write = run = s; *run; run++)
+      {
+        if (*run != *t)
+          *write++ = *run;
+      }
+
+      *write = '\0';
+    }
+  }
+
+  // simple way would be that loops t[] for each char of s[]. O(n2)
+  // so if suppose it's ASCII char, may use loopup table and get O(n) but use
+  // more space.
+
+  // Cannot use bset[(*t-'a')] since this assumes input is all lower characters.
+  // For example, for space char(32) index becomes -65 (32-97) and makes a core.
+
+  void squeeze3(char s[], char t[])
+  {
+    // assuems ASCII *cxx-vector-bool*
+    std::vector<bool> lookup(256);
+
+    // fills up the table
+    while (*t)
+    {
+      lookup[*t] = true;
+      ++t;
     }
 
-    *write = '\0';
-  }
-}
+    char *pos;
 
-int main()
+    for (pos = s; *s; ++s)
+    {
+      // not in the lookup, that is, not shown in t[]
+      if (lookup[*s] == false)
+        *pos++ = *s;
+    }
+
+    // since *s shuld be '\0'
+    *pos = *s;
+  }
+} // namespace algo_squeeze_2
+
+TEST(AlgoSqueeze, try_2)
 {
-  char mesg[] = "hello world";
-  char mesg2[] = "hello world";
+  using namespace algo_squeeze_2;
 
-  printf("mesg : %s\n", mesg );
-  squeeze( mesg, "l" );
-  printf("mesg : %s\n", mesg );
-
-  printf("mesg2 : %s\n", mesg2 );
-  squeeze3( mesg2, "ol" );
-  printf("mesg2 : %s\n", mesg2 );
-}
-
-mesg : hello world
-mesg : heo word
-mesg2 : hello world
-mesg2 : he wrd
-
-
-*ex-bitset*
-All approaches above has the worst case of O(nm). There is an approach to have
-O(n+m) but use more space.
-
-#include <iostream>
-#include <vector>
-
-using namespace std;
-
-// Cannot use bset[(*t-'a')] since this assumes input is all lower characters.
-// For example, for space char(32) index becomes -65 (32-97) and makes a core.
-
-void squeeze( char s[], char t[] )
-{
-  vector<bool> bset(256); 
-
-  while(*t)
   {
-    bset[*t] = true;
-    t++;
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
+
+    squeeze1(arr, filter);
+
+    // std::cout << arr << std::endl;
+
+    EXPECT_THAT(strcmp(arr, result), 0);
   }
 
-  for( char* run = s; *run; run++ )
   {
-    // *run is different, that is not in the bset then copy
-    if( bset[*run] == false )
-      *s++ = *run;
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
+
+    squeeze2(arr, filter);
+
+    EXPECT_THAT(strcmp(arr, result), 0);
   }
 
-  *s = '\0';
-}
+  {
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
 
-mesg : hello world
-mesg : heo word
-mesg2 : hello world
-mesg2 : he wrd
+    squeeze3(arr, filter);
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+}
 
 
 <ex> *ex-any* ansic, exercise 2-5. 
@@ -11182,7 +11238,7 @@ and `only if` they are needed. These are `public and inline` according to
 EC++05.
 
 dtor, default-ctor, 
-*cxx-copy-control* : copy ctor, copy assign, move ctor(C++11), move assign(C++11)
+*cxx-copy-control* : copy ctor and assign, move ctor and assign *cxx-11*
 
 
 <cxx-deleted>
@@ -19732,8 +19788,8 @@ class StrVec {
 See cpp-sp-ex-strblob-example for more.
 
 
-{cxx-operator-postfix-cxx-overload-operator-postfix}
-MEC++06. `postfix` can be ineffective when used on user-type.
+{cxx-operator-postfix-cxx-overload-operator-postfix} *cxx-prefix-cxx-postfix* 
+MEC++06. cxx-postfix can be ineffective when used on user-type.
 
 The prefix form of the increment operator is sometimes called - increment and
 fetch, while the postfix form is often known as fetch and increment.
@@ -19872,7 +19928,7 @@ TEST(Operator, PrefixPostfix)
 
 
 <should-prefer-pre-inc-when-use-none-premitive>
-The prefix increment function has no such temporaries. This leads to the
+The *cxx-prefix* increment function has no such temporaries. This leads to the
 possibly startling conclusion that, for efficiency reasons alone, clients of
 UPInt should prefer prefix increment to postfix increment unless they really
 need the behavior of postfix increment.
@@ -43026,7 +43082,6 @@ TEST(Vector, CopyAndMoveAssign)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-coll-cxx-vector-bool
 
-{cxx-vector-bool}
 For Boolean elements, the C++ standard library provides a 'specialization' of
 vector<>. Such a usual implementation would reserve at least 1 byte for each
 element. The vector<bool> specialization usually uses internally only 1 bit
@@ -53176,7 +53231,7 @@ operation is overloaded for a single integral type. So you should always use
 nullptr or char* pointers.
 
 
-const CharT* c_str() const;
+`const` CharT* c_str() const;
 
 copy()            Copies or writes the contents to a character array
 
@@ -53196,8 +53251,8 @@ copy() copies the contents of the string `into a character array` provided by
 the caller. An ’\0’ character is 'not' appended.
 
 note: 
-data() and c_str() return an array that is 'owned' by the string. Thus, the
-caller must 'not' modify or free the memory. note: seems not possible since it
+data() and c_str() return an array that is `owned` by the string. Thus, the
+caller must not modify or free the memory. note: seems not possible since it
 is const?
 
 

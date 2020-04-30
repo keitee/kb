@@ -1871,6 +1871,40 @@ TEST(CxxCaseQueue, see_threadsafe_queue)
   EXPECT_THAT(consumed_total, 60);
 }
 
+namespace cxx_case_queue_1
+{
+  // simple message q
+  template <typename T>
+  class queue
+  {
+  private:
+    std::mutex m_;
+    std::condition_variable cv_;
+    std::queue<T> q_;
+
+  public:
+    void push(const T &mesg)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+
+      q_.emplace(mesg);
+      cv_.notify_one();
+    }
+
+    T wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      cv_.wait(lock, [this] { return !q_.empty(); });
+
+      auto mesg = q_.front();
+      q_.pop();
+
+      return mesg;
+    }
+  };
+} // namespace cxx_case_queue_1
+
 // event q from bleaudio case
 //
 // 1. same as threadsafe_queue

@@ -11305,7 +11305,7 @@ LimitNPROC=1
 ProtectHome=true
 ProtectSystem=full
 
-*rdk-as-proxy-map*
+*rdk-as-proxy-map* *as-map*
 
 // ethan-as-source/Components/Rdk/ASProxy/Main.cpp
 
@@ -11360,10 +11360,11 @@ bool ServicesManager::registerService(const std::string &configJson)
     // void ProxyUrlMap::RegisterUrl();
     `mUrlMap->RegisterUrl`(method, url.path, factory);
     {
-      *validator*
+      *as-map-validator*
       // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-      static std::map<std::string, UriParamValidatorType> overrideUriParamValidator = {
-      {"/as/players/<vwid>/action/watchlive",URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
+      static std::map<std::string, UriParamValidatorType> overrideUriParamValidator = 
+      {
+        {"/as/players/<vwid>/action/watchlive", URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
       };
 
       // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
@@ -11380,6 +11381,166 @@ bool ServicesManager::registerService(const std::string &configJson)
   }
 }
 
+
+*as-map-validator*
+
+// Components/AS/Worker/source/AS_WORKER_ParamValidator.cpp
+
+// Components/AS/Worker/include/ExpectedParams_rdk.dat
+static std::map<std::string, TExpectedParams> expectedParamsList = {
+
+#elif defined(RDK)
+// The dat file deals with RDK specific param support
+#include "ExpectedParams_rdk.dat"
+};
+
+typedef std::map<std::string, ParamAttributes> TParamAttributes;              ///< The collection of the parameters and its attributes
+typedef std::map<ParamTypes_t, TParamAttributes> TExpectedParams;             ///< The collection of expected parameters for all sources
+
+struct ParamAttributes
+{
+    /**
+     * @brief The constructor with default values to allow partial initialisation
+     */
+    ParamAttributes( bool risMandatory = false, std::string rexpandedName =
+        std::string(), std::string rdescription = std::string(), ParamDataType
+        rdataType = ParamDataTypeUndef, std::set<std::string> rvalidValues =
+        std::set<std::string>(), REQ_METHOD rrequestMethod = REQ_METHOD_UNKNOWN
+        )
+    {
+        isMandatory = risMandatory;
+        expandedName = rexpandedName;
+        description = rdescription;
+        dataType = rdataType;
+        validValues = rvalidValues;
+        requestMethod = rrequestMethod;
+    }
+
+    bool isMandatory;                    ///< The the parameter mandatory
+    std::string expandedName;            ///< The expanded name to make it more readable, e.g. "b" is expanded to "bouquet"
+    std::string description;             ///< The detail description of the parameter
+    ParamDataType dataType;              ///< The data type of the parameter
+    std::set<std::string> validValues;   ///< The allowed valid values for the parameter
+    REQ_METHOD requestMethod;            ///< The HTTP method for which the parameter is applicable
+};
+
+{
+"/as/services", {
+                 {AS_WORKER::QUERY_PARAM,
+                  {
+                   {"filter", {false, 
+                                "Filter", 
+                                "Filter type of services, OTT is online services only",
+                                AS_WORKER::ParamDataTypeEnum,
+                                {"BROADCAST", "OTT"}
+                              }
+                   }
+                  }
+                 },
+                 {AS_WORKER::HEADER_PARAM,
+                  {
+                   {"If-None-Match", {false, "Etag received", "HTTP Etag sent by the client", AS_WORKER::ParamDataTypeString}}
+                  }
+                 }
+                }
+},
+...
+
+
+// Components/AS/Worker/include/AS_WORKER_ParamValidator.h
+
+class ParamValidator : public Base
+
+class SystemSettingParamValidator : public AS_WORKER::ParamValidator
+{
+  virtual int Validate(
+      AS_WORKER::Params &params, 
+      AS::string &postBody, 
+      AS::string &jsonResponse, 
+      const std::function<int( Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function = {} );
+};
+
+void UrlMap::RegisterUrl( REQ_METHOD method, char *url,
+                          AS_WORKER::ParamValidator *paramValidator)
+{
+  // get TExpectedParams from expectedParamsList and save it to `m_expectedParams`
+  // if found.
+  paramValidator->SetExpectedParamsForUrl( method, url );
+}
+
+
+/**
+ * @brief The reason why the check failed
+ */
+struct FailReason
+{
+  AS::string key;                    ///< The key of the parameter that failed
+  AS::string value;                  ///< The value of the parameter that failed
+  ParamValidationFailReason reason;  ///< The reason for the failure
+  REQ_METHOD requestMethod;          ///< The HTTP method of the failed request
+
+  bool operator ==( const FailReason& rhs ) const
+  {
+    return (key == rhs.key && (value == rhs.value) 
+        && (reason == rhs.reason) && (requestMethod == rhs.requestMethod));
+  }
+};
+
+struct Error
+{
+  FailReason failReason;       ///< The fail reason
+  AS::string developerMessage; ///< The developer message
+};
+
+int ParamValidator::Validate(AS_WORKER::Params &params, AS::string &postBody,
+    AS::string &jsonResponse, const std::function<int( Json::Value &,
+      AS::multimap<int, Error> & )> &function )
+{
+  // ErrCode: 102, User Message: Invalid Parameters, Notes: The URL was badly formed.
+  AS::multimap<int, Error> errors;
+
+  // return `failedReasons`
+  void ParamValidator::PerformValidation( Params &params, AS::string &postBody,
+      TFailReasons &failedReasons, bool lambdaOverrideAvailable )
+  {
+    // look up `m_expectedParams` and build up `failedReasons`
+  }
+
+  // loops on `failedReasons` and builds errors
+  errors.insert( AS::make_pair( errorCode, error ) );
+
+  // use the supplied function
+  if ( function )
+  {
+    int ret = function( errorDoc, errors );
+    if ( ret != 0 )
+    {
+      httpCode = ret;
+    }
+  }
+
+  return httpCode;
+}
+
+// each validator override `Validate()` and call base one at the end.
+int ServicesManualActionScanParamValidator::Validate( AS_WORKER::Params &params,
+    AS::string &postBody, AS::string &jsonResponse, const std::function<int(
+      Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function )
+
+{
+  // define lamba
+
+  return AS_WORKER::ParamValidator::Validate( params, postBody, jsonResponse, `lambda` );
+}
+
+
+class MethodExecutor : public Executor
+{
+  int Exec()
+  {
+    std::atomic<TExpectedParams *> &expectedParams = it->paramValidator->ExpectedParams();
+  }
+};
 
 *as-executor*
 
@@ -11399,6 +11560,11 @@ Exec()
 
     AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
   }
+
+  *as-map-validator-check*
+  validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
+
+  // if validation is okay, run it on thread
 }
 
 

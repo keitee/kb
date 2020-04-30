@@ -70,7 +70,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, see_identity)
+TEST(CConThread, check_identity)
 {
   using namespace cxx_thread;
 
@@ -193,22 +193,21 @@ TEST(CConThread, check_tid_and_pid)
 
 TEST(CConThread, check_joinable)
 {
-  std::thread t([] 
-      {
-        char c{'+'};
+  std::thread t([] {
+    char c{'+'};
 
-        // *cxx-random*
-        std::default_random_engine dre(c);
-        std::uniform_int_distribution<int> id(10, 1000);
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
 
-        for (int i = 0; i < 10; ++i)
-        {
-          std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
-          std::cout.put(c).flush();
-        }
+    for (int i = 0; i < 10; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
 
-        std::cout << "threads ends" << std::endl;
-      });
+    std::cout << "threads ends" << std::endl;
+  });
 
   // wait for thread to finish
   std::this_thread::sleep_for(std::chrono::seconds(10));
@@ -217,7 +216,7 @@ TEST(CConThread, check_joinable)
   //           << std::endl;
   EXPECT_THAT(t.joinable(), true);
 
-  // DO NOT WORK as hoped since while() do not ends. 
+  // DO NOT WORK as hoped since while() do not ends.
   //
   // while (t.joinable())
   // {
@@ -237,6 +236,136 @@ TEST(CConThread, check_joinable)
   // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
   //           << std::endl;
   EXPECT_THAT(t.joinable(), false);
+}
+
+namespace cxx_thread
+{
+  // simple message q
+  template <typename T>
+  class queue
+  {
+  private:
+    std::mutex m_;
+    std::condition_variable cv_;
+    std::queue<T> q_;
+
+  public:
+    void push(const T &mesg)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+
+      q_.emplace(mesg);
+      cv_.notify_one();
+    }
+
+    T wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      cv_.wait(lock, [this] { return !q_.empty(); });
+
+      auto mesg = q_.front();
+      q_.pop();
+
+      return mesg;
+    }
+  };
+} // namespace cxx_thread
+
+TEST(CConThread, check_exit_method)
+{
+  // use `exit` message and return. do not see "thread end" message
+  {
+    cxx_thread::queue<uint32_t> q;
+
+    std::thread t([&] {
+      while (true)
+      {
+        auto mesg = q.wait_and_pop();
+
+        switch (mesg)
+        {
+          case 100:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+
+          // MESG_EXIT(200)
+          case 200:
+            return;
+
+          default:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+        }
+      }
+
+      std::cout << "while ends" << std::endl;
+    });
+
+    auto event = std::async(std::launch::async, [&] {
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "send a message" << std::endl;
+      q.push(100);
+
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "send a exit message" << std::endl;
+      q.push(200);
+    });
+
+    std::cout << "waits for thread to end" << std::endl;
+    t.join();
+    std::cout << "thread ended" << std::endl;
+  }
+
+  // use `exit` message and flag
+  {
+    cxx_thread::queue<uint32_t> q;
+    bool runnable{true};
+
+    std::thread t([&] {
+      while (runnable)
+      {
+        auto mesg = q.wait_and_pop();
+
+        switch (mesg)
+        {
+          case 100:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+
+          // MESG_EXIT(200)
+          case 200:
+            runnable = false;
+            break;
+
+          default:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+        }
+      }
+
+      std::cout << "while ends" << std::endl;
+    });
+
+    auto event = std::async(std::launch::async, [&] {
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "send a message" << std::endl;
+      q.push(100);
+
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "send a exit message" << std::endl;
+      q.push(200);
+    });
+
+    std::cout << "waits for thread to end" << std::endl;
+    t.join();
+    std::cout << "thread ended" << std::endl;
+  }
+
+  // can use eventfd as TimerQueue::timerThread_() but need other ways to get
+  // message such as timerfd_
+  // {
+  // }
 }
 
 namespace cxx_thread
@@ -1606,12 +1735,10 @@ TEST(DISABLED_CConMutex, check_mutex_deadlock)
   m.lock();
   m.lock();
 
-  std::thread t( [&]
-      {
-      m.unlock();
-      std::this_thread::sleep_for(std::chrono::seconds(2));
-      }
-      );
+  std::thread t([&] {
+    m.unlock();
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  });
 
   std::cout << "set" << std::endl;
   result = true;
@@ -1628,7 +1755,7 @@ TEST(DISABLED_CConMutex, check_mutex_deadlock)
 // PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
 // 1. this works while the above shows `deadlock` becuase the above calls lock()
-// twice already before running a thread which calls unlock(). 
+// twice already before running a thread which calls unlock().
 //
 // However, the below runs thread before which calls unlock and main blocks on
 // second lock().
@@ -2416,9 +2543,9 @@ TEST(CConCondition, see_wait_for)
   // when signaled
   {
     auto f = std::async([&cond] {
-        this_thread::sleep_for(chrono::milliseconds(1000));
-        cond.notify_one();
-        });
+      this_thread::sleep_for(chrono::milliseconds(1000));
+      cond.notify_one();
+    });
 
     auto result = cond.wait_for(lock, std::chrono::seconds(10));
 

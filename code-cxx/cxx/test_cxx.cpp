@@ -169,6 +169,37 @@ using namespace testing;
 
 /*
 // ={=========================================================================
+cxx-null
+
+check null char, '\0', which is actually integer 0.
+
+*/
+
+TEST(CxxNull, check_null)
+{
+  std::ostringstream os;
+
+  // in order to get hex value for char 'a', which is 61, have to use (int)
+  // cast.
+  //
+  // std::cout << "a: " << hex << (int)'a' << std::endl;
+  // gets "61"
+  //
+  // std::cout << "a: " << hex << 'a' << std::endl;
+  // gets "a"
+
+  os << std::hex << (int)'0';
+  EXPECT_THAT(os.str(), "30");
+
+  // reset os
+  os.str("");
+
+  os << std::hex << (int)'\0';
+  EXPECT_THAT(os.str(), "0");
+}
+
+/*
+// ={=========================================================================
 cxx-allocator
 
 alloc.allocate(size_type n);
@@ -5675,7 +5706,7 @@ namespace cxx_smart_pointer
 
   public:
     explicit SmartFoo2(const std::string &name = "Foo")
-      : m_name(name)
+        : m_name(name)
     {
       std::cout << "SmartFoo2::SmartFoo2: " << m_name << std::endl;
     }
@@ -5882,7 +5913,7 @@ TEST(CxxSmartPointer, check_copy_3)
   // prev = f1, curr = f2
   prev = curr;
   curr = f2;
-  
+
   // all prints 2 for each group
   EXPECT_THAT(f1.use_count(), 2);
   EXPECT_THAT(f2.use_count(), 2);
@@ -11768,10 +11799,9 @@ TEST(Typedef, Alias)
   }
 }
 
-// ={=========================================================================
-// cxx-class
-
-// so semi-colon(;) at end DO NOT matter
+/* ={=========================================================================
+cxx-class
+*/
 
 namespace cxx_class
 {
@@ -11793,6 +11823,7 @@ namespace cxx_class
   class ClassB
   {
   public:
+    // here see ";" at the end
     ClassB()
         : name_("ClassB")
     {
@@ -11807,7 +11838,8 @@ namespace cxx_class
 
 } // namespace cxx_class
 
-TEST(Class, ColonDoesMatter)
+// extra semi-colon do not matter
+TEST(CxxClass, check_extra_colon_at_end)
 {
   using namespace cxx_class;
 
@@ -11817,9 +11849,6 @@ TEST(Class, ColonDoesMatter)
   ClassB cbo;
   cbo.getName();
 }
-
-// ={=========================================================================
-// cxx-class-nested
 
 namespace cxx_nested_1
 {
@@ -11853,7 +11882,7 @@ namespace cxx_nested_1
   };
 } // namespace cxx_nested_1
 
-TEST(Class, Nested_1)
+TEST(CxxClass, cxx_nested_1)
 {
   using namespace cxx_nested_1;
 
@@ -11900,13 +11929,100 @@ namespace cxx_nested_2
   };
 } // namespace cxx_nested_2
 
-TEST(Class, Nested_2)
+TEST(CxxClass, cxx_nested_2)
 {
   using namespace cxx_nested_2;
 
   Outer o;
   o.test();
 }
+
+/* ={=========================================================================
+cxx-class-vptr
+*/
+
+namespace cxx_class_vptr
+{
+  class foo1
+  {
+    int x;
+    int y;
+  };
+
+  class foo2
+  {
+    int x;
+    int y;
+
+  public:
+    int sum() { return x + y; }
+  };
+
+  class foo3
+  {
+  public:
+    int x;
+    int y;
+
+  public:
+    virtual int sum() { return x + y; }
+  };
+
+  class foo4 : public foo3
+  {
+  public:
+    int a;
+    int b;
+
+  public:
+    virtual int mul() { return a * b; }
+  };
+} // namespace cxx_class_vptr
+
+// :11992:51: warning: offsetof within non-standard-layout type ‘cxx_class_vptr::foo3’ is undefined [-Winvalid-offsetof]
+//    std::cout << "offsetof(foo3, x) : " << offsetof(foo3, x) << std::endl;
+ 
+#if 0
+TEST(CxxClass, check_size_vptr)
+{
+  using namespace cxx_class_vptr;
+
+  foo1 f1;
+  EXPECT_THAT(sizeof(f1), 8);
+
+  foo2 f2;
+  EXPECT_THAT(sizeof(f2), 8);
+
+  // has virtual function and have vptr in a object
+  foo3 f3;
+
+  // x86_64 GNU/Linux, +8
+  EXPECT_THAT(sizeof(f3), 16);
+
+  // offsetof(foo3, x) : 8
+  // offsetof(foo3, y) : 12
+  std::cout << "offsetof(foo3, x) : " << offsetof(foo3, x) << std::endl;
+  std::cout << "offsetof(foo3, y) : " << offsetof(foo3, y) << std::endl;
+
+  // inheritance?
+  foo4 f4;
+
+  // x86_64 GNU/Linux, +8(vptr), +8(two members)
+  EXPECT_THAT(sizeof(f4), 24);
+
+  // to use `offsetof`, member variable must be public
+  // offsetof(foo4, x) : 8
+  // offsetof(foo4, y) : 12
+  // offsetof(foo4, a) : 16
+  // offsetof(foo4, b) : 20
+  std::cout << "offsetof(foo4, x) : " << offsetof(foo4, x) << std::endl;
+  std::cout << "offsetof(foo4, y) : " << offsetof(foo4, y) << std::endl;
+  std::cout << "offsetof(foo4, a) : " << offsetof(foo4, a) << std::endl;
+  std::cout << "offsetof(foo4, b) : " << offsetof(foo4, b) << std::endl;
+
+  // multiple inheritance cause to have multiple vptrs.
+}
+#endif
 
 // ={=========================================================================
 

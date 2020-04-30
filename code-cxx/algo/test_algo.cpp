@@ -50,6 +50,227 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
   cout << "(" << count << ")" << endl;
 }
 
+/* ={=========================================================================
+algo-squeeze cxx-bitset
+
+Delete all c from string s. From C prog language, p47. All these are example
+where postfix is required.
+
+void squeeze(char s[], int c);
+
+*/
+
+namespace algo_squeeze
+{
+  // ansic version
+  void squeeze1(char s[], int c)
+  {
+    int i, j;
+
+    for (i = j = 0; s[i] != '\0'; i++)
+      if (s[i] != c)
+        s[j++] = s[i];
+
+    s[j] = '\0';
+  }
+
+  // use one var
+  void squeeze2(char s[], int c)
+  {
+    char *scan;
+
+    for (scan = s; *scan; scan++)
+    {
+      // if not matches: copy s[current] = s[sacn] and increase s
+      if (*scan != c)
+        *s++ = *scan;
+    }
+
+    *s = *scan;
+  }
+
+  void squeeze3(char s[], int c)
+  {
+    // do not use `run` variable since use s for that
+    char *pos = s;
+
+    while (*s)
+    {
+      if (*s != c)
+        *pos++ = *s;
+
+      ++s;
+    }
+
+    // set the end
+    *pos = '\0';
+  }
+} // namespace algo_squeeze
+
+TEST(AlgoSqueeze, try_1)
+{
+  using namespace algo_squeeze;
+
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
+
+    squeeze1(arr, 'e');
+
+    // std::cout << arr << std::endl;
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
+
+    squeeze2(arr, 'e');
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "this is a program to squeeze";
+    const char result[] = "this is a program to squz";
+
+    squeeze3(arr, 'e');
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+}
+
+/*
+ansic, exercise 2-4.
+
+Write an alternate version of squeeze(s1,s2) that deletes each character in the
+string s1 that matches 'any' character in the string s2.
+
+void squeeze2(char s[], char t[]);
+
+*/
+
+namespace algo_squeeze_2
+{
+  void squeeze1(char s[], char t[])
+  {
+    int i, j, k;
+    for (k = 0; t[k] != '\0'; k++)
+    {
+      for (i = j = 0; s[i] != '\0'; i++) // { squeeze1()
+        if (s[i] != t[k])
+          s[j++] = s[i];
+      s[j] = '\0'; // }
+    }
+  }
+
+  // mine
+  void squeeze2(char s[], char t[])
+  {
+    char *run, *write;
+
+    for (; *t; t++)
+    {
+      for (write = run = s; *run; run++)
+      {
+        if (*run != *t)
+          *write++ = *run;
+      }
+
+      *write = '\0';
+    }
+  }
+
+  // simple way would be that loops t[] for each char of s[]. O(n2)
+  // so if suppose it's ASCII char, may use loopup table and get O(n) but use
+  // more space.
+
+  // Cannot use bset[(*t-'a')] since this assumes input is all lower characters.
+  // For example, for space char(32) index becomes -65 (32-97) and makes a core.
+
+  void squeeze3(char s[], char t[])
+  {
+    // assuems ASCII *cxx-vector-bool*
+    std::vector<bool> lookup(256);
+
+    // fills up the table
+    while (*t)
+    {
+      lookup[*t] = true;
+      ++t;
+    }
+
+    char *pos;
+
+    for (pos = s; *s; ++s)
+    {
+      // not in the lookup, that is, not shown in t[]
+      if (lookup[*s] == false)
+        *pos++ = *s;
+    }
+
+    // since *s shuld be '\0'
+    *pos = *s;
+  }
+} // namespace algo_squeeze_2
+
+TEST(AlgoSqueeze, try_2)
+{
+  using namespace algo_squeeze_2;
+
+  {
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
+
+    squeeze1(arr, filter);
+
+    // std::cout << arr << std::endl;
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
+
+    squeeze2(arr, filter);
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+
+  {
+    char arr[]          = "hello world";
+    char filter[]       = "ol";
+    const char result[] = "he wrd";
+
+    squeeze3(arr, filter);
+
+    EXPECT_THAT(strcmp(arr, result), 0);
+  }
+}
+
+/* ={=========================================================================
+algo-any cxx-bitset
+
+Write the function any(s1,s2), which returns the first location in the string s1
+where any character from the string s2 occurs, or -1 if s1 contains no
+characters from s2.
+
+note: 
+The standard library function strpbrk does the same job but returns a pointer to
+the location.
+
+char *strpbrk(const char *s, const char *accept);
+
+not good since based on the "squeeze" approach which means more work to find
+the first time since key chars can happen any order and did not stop on
+"first" match
+
+*/
+
 // ={=========================================================================
 // algo-two-player-card-game
 
@@ -5115,7 +5336,7 @@ namespace algo_bit
 
     return result;
   }
-}
+} // namespace algo_bit
 
 TEST(AlgoBit, see_count_bits_2)
 {
