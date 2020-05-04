@@ -347,6 +347,7 @@ public:
 protected:
 };
 
+// check if initial state gets called when starts fsm
 TEST_F(StateMachineTest, transitionToInitialState)
 {
   enum

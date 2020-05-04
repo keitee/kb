@@ -56,7 +56,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-dtt
 *kt_dev_skymw_0000* skymw-rdk-as-player
 *kt_dev_skymw_0000* skymw-rdk-as-appmanager rdk-as-windowmanager
-*kt_dev_skymw_0000* skymw-rdk-vgdrm
+*kt_dev_skymw_0000* skymw-rdk-drm
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -1009,6 +1009,10 @@ http://10.184.136.138:8081/job/AS_MASTER_INT/
 
 
 <as-rest> <comp-asda>
+
+// it's a Germany DTH box running on local ci, just on your right side in the office
+10.69.144.51:9505
+
 http://build01.mw.ethan.bskyb.com/asda/#
 
 192.168.0.104:9005
@@ -1191,143 +1195,140 @@ cat /opt/persistent/sky/diag.cfg
         },
  
 
-*rdk-as-map* <q-as-code>
+*as-map* <q-as-code>
 
 // ethan-as-source/Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
 
 void bindMethods( AS_WORKER::UrlMap *map )
 {
-    map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",                           servicelistexecutor );
+  watchliveExecutor                    = new AS_PLAYER::WatchLiveExecutorFactory();
 
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/start",                  serviceScanStartExecutor,        new ServicesScanActionStartParamValidator() );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",                  serviceScanAbortExecutor );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",                 serviceScanCommitExecutor );
-    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",                        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/players/<vwid>/action/watchlive",
+      watchliveExecutor,                new PlayersVwidParamValidator() );
 }
 
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+// ethan-as-source/Components/AS/Worker/include/AS_WORKER_Environment.h
+class Environment : public Base
 
-namespace AS_MAIN
+// ethan-as-source/Components/AS/Worker/include/AS_WORKER_Parameters.h
+class Params : public Base
+
+// has members releated to threads
+
+class Executor : public Base
 {
-  virtual void RegisterUrl( REQ_METHOD method, char *url,
-      AS_WORKER::Factory *factory,
-      AS_WORKER::ParamValidator *paramValidator = NULL,
-      AS_WORKER::ThreadParams *threadParams = NULL );
+  private:
+    Thread *m_thread; // Optional
+    ThreadParams *m_threadParams; // NULL is non-threaded
 
-  class ProxyUrlMap : public AS_WORKER::UrlMap
-  {
-    void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
-        const std::string &url,
-        AS_WORKER::Factory *factory,
-        const std::string &threadName )
+  protected:
+    virtual int Exec( void ) = 0;
+
+    // ...
+};
+
+class Factory : public Base
+{
+  public:
+    virtual ~Factory()
     {
-      pthread_rwlock_wrlock(&mRwLock);
-
-      // for some reason the RegisterUrl methods take a non-const char pointer, so
-      // copy the url into a mutable buffer
-      static char urlBuf[256];
-      strncpy(urlBuf, url.c_str(), sizeof(urlBuf));
-      urlBuf[sizeof(urlBuf) - 1] = '\0';
-
-      // create the thread params if a name was given
-      AS_WORKER::ThreadParams *threadParams = nullptr;
-      if (!threadName.empty())
-      {
-        threadParams = new AS_WORKER::ThreadParams(threadName.c_str());
-      }
-
-      // call the original methods to register the url
-      AS_WORKER::UrlMap::RegisterUrl(method, urlBuf, factory, nullptr, threadParams);
-
-      pthread_rwlock_unlock(&mRwLock);
-
-      // can now add the url and method to the allowed ones for CORS
-      mCorsExecutor->add(method, url);
     }
+
+    virtual Executor *CreateExecutor( Environment *env, Params *params ) = 0;
+};
+
+*as-player-watchlive*
+// ethan-as-source/Components/AS/Services/Executors/Players/WatchLive/include/AS_PLAYER_WatchLiveExecutor.h
+
+class WatchLiveExecutor : public AS_WORKER::Executor
+{
+  public:
+    /**
+     * @brief: Watch live executor that internally calls the watch live method
+     * provided by the player controller
+     *
+     * This function is the entry point into the executor. The function could be
+     * either called synchronously or becomes a thread and should be capable of
+     * handling either
+     *
+     * @retval   0          on success 
+     * @retval   Non-zero   values on failure
+     */
+    int Exec(); 
+};
+
+// Components/AS/Services/Executors/Players/WatchLive/source/AS_PLAYER_WatchLiveExecutor.cpp
+
+class WatchLiveExecutorFactory : public AS_WORKER::Factory
+{
+  public:
+    /**
+     * @brief Get watch live executor
+     *
+     * @param[in] env               : AS worker environment
+     * @param[in] params            : AS worker parameters
+     *
+     * @retval Watch live executor
+     */
+    AS_WORKER::Executor *CreateExecutor( AS_WORKER::Environment *env, AS_WORKER::Params *params )
+    {
+      return new AS_PLAYER::WatchLiveExecutor( env, params );
+    }
+};
+
+
+*as-executor*
+
+// this is how m_UrlMap is shared with web server
+
+ASMain::ASMain( AS_WEB_SERVER_STARTUP_CALLBACK startupCallback, ASUserTag startupCallbackUserTag )
+{
+  AS_SWITCHBOARD::bindMethods( &`m_UrlMap` );
+
+  m_mainWebServer = new AS_WEB_SERVER::WebServer(
+      `m_UrlMap`, ipAddress, uriCategoryTableIterator->first, m_requestResponseLogger );
+}
+
+// ethan-as-source/Components/AS/WebServer/source/AS_WEB_SERVER_MainThread.cpp
+
+Exec()
+{
+  AS_LOG_ERROR( "KT: httpRequestStringPath %s", httpRequestStringPath.c_str() );
+
+  AS_WEB_SERVER::Environment *env = 
+    new AS_WEB_SERVER::Environment( m_webServer, httpRequestHandle, httpMethod, *uri, m_webServer->GetRequestResponseLogger() );
+
+  AS_WORKER::Uri *uri = new AS_WORKER::Uri( httpRequestStringPath );
+
+  AS_WORKER::Executor *executor = `map->CreateExecutor`( httpMethod, env, uri, &validator );
+
+  if ( executor == NULL )
+  {
+    M:AS_WEB_SERVER_MainThread.cpp F:Exec L:188 > No registered url found for: /9005/as/players/1/action/watchlive
+    No registered url found for: /9005/as/players/1/action/watchlive
+
+    AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
   }
+
+  *as-map-validator-check*
+  validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
+
+  // if validation is okay, run it on thread
 }
 
 // ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
-// as-proxy-servicemanager
-MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
+AS_WORKER::Executor *UrlMap::CreateExecutor( 
+    int method, 
+    AS_WORKER::Environment *env, 
+    AS_WORKER::Uri *uri, AS_WORKER::ParamValidator **validator ) const 
+{ 
+  // class Uri : public Params
 
-MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
-
-MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
-
-
-*as-player-watchlive*
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/players/<vwid>/action/watchlive",       watchliveExecutor,                new PlayersVwidParamValidator() );
-
-// Components/AS/Services/Executors/Players/WatchLive/source/AS_PLAYER_WatchLiveExecutor.cpp
-WatchLiveExecutor::WatchLiveExecutor( AS_WORKER::Environment *env, AS_WORKER::Params *params ){}
-
-
-*rdk-as-executor*
-
-class ASRequesthandler
-{
-  public :
-    ASRequesthandler()
-    {}
-
-    void executeFactory(const ASRequest &request)
-    {
-      //request is made to copy by value to ensure instance is not being deleted
-      std::thread threadObj = std::thread([this,request] { `this->execute(request);` });
-      threadObj.detach();
-    }
-
-    virtual void execute(const ASRequest & request) = 0;
-};
-
-class ServicesFavouritesExecutor : public ASRequesthandler
-{
-  // overrides
-  execute( const ASRequest &request )
-  {
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    ASRequest::Method method = request.method();
-
-    if ( method == ASRequest::HttpPost )
-    {
-      handlePostRequest( request );
-    }
-    else if ( method == ASRequest::HttpGet )
-    {
-      handleGetRequest( request );
-    }
-    else
-    {
-      request.sendErrorReply( ASRequest::NotSupportedError );
-    }
-
-    AS_LOG_EXIT( "%s", __func__ );
-  }
+  exec = matchingUrlRegData->factory->CreateExecutor( env, uri );
 }
 
 
-*rdk-as-error*
+*as-error*
 
 HTTP Status Codes
 
@@ -1355,6 +1356,7 @@ response will have the following format:
 }
 
 
+// as-rdk
 bool ASRequest::sendErrorReply(int httpCode, int errorCode,
                                const std::string &userMessage,
                                const std::string &developerMessage) const;
@@ -8694,6 +8696,15 @@ ag PARALLEL_MAKE_pn-wpe-webkit ./meta-rdk-ext/recipes-extended/wpe-webkit/wpe-we
 
 <rdk-build-when-use-docker>
 
+// gabriel
+
+export SHARENAME=gabrial_docker
+export SHAREBASE=`pwd`
+// sudo docker run -v $HOME/:/home/gabrielstrimtu -it -e LOCAL_USER_ID=$(id -u) -e LOCAL_USER=$USER  ubuntu14.04-as-local-user:latest
+sudo docker run -v $SHAREBASE/$SHARENAME:/home/developer -it -e LOCAL_USER_ID=$(id -u) -e LOCAL_USER=$USER  ubuntu14.04-as-local-user:latest
+
+/media/keitee/ssd2
+
 sudo docker load < kamals_ubuntu14_docker.tgz
 [sudo] password for keitee:
 Loaded image: tony-working0image:latest
@@ -11341,10 +11352,28 @@ M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.p
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/`ServicesManager.cpp`
 
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+
+class ProxyUrlMap : public AS_WORKER::UrlMap
+
 const std::shared_ptr<AS_MAIN::`ProxyUrlMap`> mUrlMap;
 
 bool ServicesManager::registerService(const std::string &configJson)
 {
+  void bindMethods( AS_WORKER::UrlMap *map )
+  {
+    map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",
+        servicelistexecutor );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/start",
+        serviceScanStartExecutor,        new ServicesScanActionStartParamValidator() );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",                  serviceScanAbortExecutor );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",                 serviceScanCommitExecutor );
+    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",                        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
+  }
+
   // register uri to factory which has the relevant service.
   `bindServiceMethods`(const std::vector<ServiceUrl> &urls,
                      const std::shared_ptr<IService> &service)
@@ -11380,6 +11409,32 @@ bool ServicesManager::registerService(const std::string &configJson)
     }
   }
 }
+
+// ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
+// as-proxy-servicemanager
+MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
+
+MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
+
+MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
+MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
 
 
 *as-map-validator*
@@ -11534,37 +11589,50 @@ int ServicesManualActionScanParamValidator::Validate( AS_WORKER::Params &params,
 }
 
 
-class MethodExecutor : public Executor
+*rdk-as-map*
+
+// ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
+
+std::map<int, PortAttributes>::iterator uriCategoryTableIterator = uriCategoryTable.begin();
+
+enum Platform
 {
-  int Exec()
-  {
-    std::atomic<TExpectedParams *> &expectedParams = it->paramValidator->ExpectedParams();
-  }
+  PLATFORM_AMIDALA = 2000,
+  ...
+  PLATFORM_RDK,
+  PLATFORM_ALL
 };
 
-*as-executor*
-
-// ethan-as-source/Components/AS/WebServer/source/AS_WEB_SERVER_MainThread.cpp
-Exec()
+struct `UriAttributes`
 {
-  AS_LOG_ERROR( "KT: httpRequestStringPath %s", httpRequestStringPath.c_str() );
+  // req_method is enum
+  std::vector<REQ_METHOD> methods;
+  std::vector<Platform> `platforms`;
+  std::vector<Country> countries;
+};
 
-  AS_WORKER::Uri *uri = new AS_WORKER::Uri( httpRequestStringPath );
+struct PortAttributes
+{
+  IpAddressScope ipAddressScope;
+  bool serverMain;
+  bool testPort;
+  bool gatewayOnly;
+  std::multimap<std::string, `UriAttributes`> uris;
+  std::vector<std::string> corsUris;
+};
 
-  AS_WORKER::Executor *executor = `map->CreateExecutor`( httpMethod, env, uri, &validator );
-
-  if ( executor == NULL )
+std::map<int, PortAttributes> uriCategoryTable =
+{
   {
-    M:AS_WEB_SERVER_MainThread.cpp F:Exec L:188 > No registered url found for: /9005/as/players/1/action/watchlive
-    No registered url found for: /9005/as/players/1/action/watchlive
-
-    AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
+    9005, // Debug, e.g. ASDA
+    {
+      IP_ADDR_BIND_LOCALHOST,
+      true,                             // Main server used by EPG
+      false,
+      false,
+      {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+    }
   }
-
-  *as-map-validator-check*
-  validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
-
-  // if validation is okay, run it on thread
 }
 
 
@@ -11617,49 +11685,47 @@ int ServiceHttpExecutor::execGetOrPost(int requestType)
 }
 
 
-*rdk-as-map*
+*rdk-as-executor*
 
-// ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
-
-std::map<int, PortAttributes>::iterator uriCategoryTableIterator = uriCategoryTable.begin();
-
-enum Platform
+class ASRequesthandler
 {
-  PLATFORM_AMIDALA = 2000,
-  ...
-  PLATFORM_RDK,
-  PLATFORM_ALL
-};
+  public :
+    ASRequesthandler()
+    {}
 
-struct `UriAttributes`
-{
-  // req_method is enum
-  std::vector<REQ_METHOD> methods;
-  std::vector<Platform> `platforms`;
-  std::vector<Country> countries;
-};
-
-struct PortAttributes
-{
-  IpAddressScope ipAddressScope;
-  bool serverMain;
-  bool testPort;
-  bool gatewayOnly;
-  std::multimap<std::string, `UriAttributes`> uris;
-  std::vector<std::string> corsUris;
-};
-
-std::map<int, PortAttributes> uriCategoryTable =
-{
-  {
-    9005, // Debug, e.g. ASDA
+    void executeFactory(const ASRequest &request)
     {
-      IP_ADDR_BIND_LOCALHOST,
-      true,                             // Main server used by EPG
-      false,
-      false,
-      {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+      //request is made to copy by value to ensure instance is not being deleted
+      std::thread threadObj = std::thread([this,request] { `this->execute(request);` });
+      threadObj.detach();
     }
+
+    virtual void execute(const ASRequest & request) = 0;
+};
+
+class ServicesFavouritesExecutor : public ASRequesthandler
+{
+  // overrides
+  execute( const ASRequest &request )
+  {
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    ASRequest::Method method = request.method();
+
+    if ( method == ASRequest::HttpPost )
+    {
+      handlePostRequest( request );
+    }
+    else if ( method == ASRequest::HttpGet )
+    {
+      handleGetRequest( request );
+    }
+    else
+    {
+      request.sendErrorReply( ASRequest::NotSupportedError );
+    }
+
+    AS_LOG_EXIT( "%s", __func__ );
   }
 }
 
@@ -11872,6 +11938,18 @@ string:""
 
 // OK
 
+   array [
+      dict entry(
+         string "uri"
+         string "http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8"
+      )
+      dict entry(
+         string "publicip"
+         string "84.92.52.164"
+      )
+   ]
+   string ""
+
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
 com.sky.as.Service1.Request \
@@ -12032,6 +12110,8 @@ method return time=1585175944.623156 sender=:1.381 -> destination=:1.382 serial=
 // on xi6 rdk box
 dropbearkey -t rsa -f /opt/sky-ssh-hostkey
 dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
+// new
+dropbear -p :10022 -r /opt/sky-ssh-hostkey -B
 
 iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
@@ -12079,7 +12159,17 @@ journalctl -u sky-asrdkplayer --since today > /opt/player.log
 
 ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log
 ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asplayer --since today" > player.log
+ssh -p 10022 root@192.168.1.101 "journalctl --since today" > xx.log
 scp -P 10022 root@192.168.1.101:/opt/proxy.fail.log .
+
+
+*as-epg*
+cat /lib/systemd/system/sky-epg.service
+journalctl -fu sky-epg
+
+root@arrisxi6-morty:~# cat /tmp/data/sky/packages/com.bskyb.epgui/console.log
+epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open shared object file: No such file or directory
+pid 6 has terminated (return code 127)
 
 
 *gdb*
@@ -12709,6 +12799,7 @@ signal time=1588155475.676216 sender=:1.103 -> destination=:1.101 serial=1094 pa
    "vwid" : 1
 }
 "
+
 signal time=1588155475.677124 sender=:1.103 -> destination=:1.101 serial=1095 path=/com/sky/as/service; interface=com.sky.as.Service1; member=WebSocketUpdate
    string "/as/players/1/status"
    string "{
@@ -12719,6 +12810,7 @@ signal time=1588155475.677124 sender=:1.103 -> destination=:1.101 serial=1095 pa
    "vwid" : 1
 }
 "
+
 signal time=1588155476.797501 sender=:1.103 -> destination=:1.101 serial=1097 path=/com/sky/as/service; interface=com.sky.as.Service1; member=WebSocketUpdate
    string "/as/players/1/status"
    string "{
@@ -12729,40 +12821,45 @@ signal time=1588155476.797501 sender=:1.103 -> destination=:1.101 serial=1097 pa
    "vwid" : 1
 }
 "
-signal time=1588155477.368805 sender=:1.103 -> destination=:1.101 serial=1098 path=/com/sky/as/service; interface=com.sky.as.Service1; member=WebSocketUpdate
+
+signal time=1588323974.982534 sender=:1.103 -> destination=:1.101 serial=1269 path=/com/sky/as/service; interface=com.sky.as.Service1; member=WebSocketUpdate
    string "/as/players/1/status"
    string "{
    "aspect" : "16:9",
    "audioenabled" : true,
+   "endposutc" : 248,
    "h" : 1080,
    "media" : "STREAM",
+   "posutc" : 13,
+   "posutcms" : 13800,
    "ps" : "PLAYING",
+   "speed" : 1,
+   "startposutc" : 0,
    "uristream" : "http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8",
    "vwid" : 1,
    "w" : 1920
 }
 "
 
-    VOD:
-    struct
-    {
-        Player::State ps;
-        Player::StateReason psr;
+VOD:
+struct
+{
+    Player::State ps;
+    Player::StateReason psr;
 
-        float speed;
-        uint64_t posutcms;
-        time_t posutc;
-        time_t startposutc;
-        time_t endposutc;
+    float speed;
+    uint64_t posutcms;
+    time_t posutc;
+    time_t startposutc;
+    time_t endposutc;
 
-        std::string uristream;
+    std::string uristream;
 
-        int w, h;
-        Player::MediaAspectRatio aspect;
+    int w, h;
+    Player::MediaAspectRatio aspect;
+    bool audioenabled;
 
-        bool audioenabled;
-
-    } m_status;
+} m_status;
 
 vwid = "1"
 media = STREAM
@@ -12771,16 +12868,16 @@ media = STREAM
 ps = IDLE | PENDING | PLAYING | BLOCKED
 
 // optional?
-[psr = EOM | BUFFERING | CONTENT NOT FOUND | PLAYER SESSION FAILURE ]
+// [psr = EOM | BUFFERING | CONTENT NOT FOUND | PLAYER SESSION FAILURE ]
 
-// speed = 1.0 | 0.0
-// startposutc = 0
-// postutc = <pos>
-// posutcms = <posutcms>
-// endposutc = <epos>
+speed = 1.0 | 0.0
+startposutc = 0
+postutc = <pos>
+posutcms = <posutcms>
+endposutc = <epos>
 uristream = ...
 w = ...
-// h = ...
+h = ...
 aspect = ...
 audioenabled = true
 
@@ -12790,6 +12887,8 @@ DTT [FS:DTT]:
 
 vwid = "1"
 media = LIVE
+
+//
 eid = "7d2-f517"
 
 // from request
@@ -12815,7 +12914,6 @@ enum PlayerState{
     PS_MEDIA,
 };
 
-
 // startposutc the position of the earliest point of media, in epoch time,
 // represented in seconds UTC
 startposutc = <spos>
@@ -12836,17 +12934,16 @@ audioenabled = true
 
 
 // the current reason(s) for the player state. 
-
-[psr = 
-PIN1 | PIN2 | PIN3 | PIN BLOCK | CARD NO RIGHTS | CARD NOT ACTIVE 
-| NOT BROADCASTING 
-| TECHNICAL FAULT 
-| NO SIGNAL 
-| UHD HDCP ERROR 
-| PLAYER SESSION FAILURE 
-| UNKNOWN CA 
-| CA USAGE RULES VIOLATION 
-| SERVICE NOT SCANNED]
+// [psr = 
+// PIN1 | PIN2 | PIN3 | PIN BLOCK | CARD NO RIGHTS | CARD NOT ACTIVE 
+// | NOT BROADCASTING 
+// | TECHNICAL FAULT 
+// | NO SIGNAL 
+// | UHD HDCP ERROR 
+// | PLAYER SESSION FAILURE 
+// | UNKNOWN CA 
+// | CA USAGE RULES VIOLATION 
+// | SERVICE NOT SCANNED]
 
 // fixed. ok
 speed = 1.0
@@ -12858,20 +12955,6 @@ speed = 1.0
     CoreStatus's one can simply use the least (numeric) one. */
 
 enum CoreStatus {
-    //GenericErrors are high priority errors the overrule errors
-    //in other components.
-
-    FUTARQUE_REFLECTION_SKIP() eCsGenericErrorBase=0,
-    eCsGenericNoResource=eCsGenericErrorBase,
-
-    // As the source of the input, the stream provider has the
-    //highest priority.
-    FUTARQUE_REFLECTION_SKIP() eCsPlayerControllerErrorBase=30,
-    eCsPlayerControllerSinkUnavailable=eCsPlayerControllerErrorBase,
-    eCsPlayerControllerSinkReleasedOnRequest,
-    eCsPlayerControllerNothingToRecord,
-    eCsPlayerControllerUnableToRecordStream,
-
     ...
 
     FUTARQUE_REFLECTION_SKIP() eCsGenericOkBase=2000,
@@ -12880,6 +12963,7 @@ enum CoreStatus {
     eCsDonePlaying,
     eCsAllIsWell
 };
+
 
 // MediaRite play
 
@@ -14302,6 +14386,32 @@ add them for 9001 and 9005
 /as/drm/action/activate
 /as/drm/action/deactivate
 /ott/action/signout
+
+
+// for drm parsing since for TEE, vgdrm is in AAMP and should pass all vgdrm
+// parameters to play via url.
+
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=VG-DRM+Integration#VG-DRMIntegration-AAMPTuneURLBuildRules
+
+vgcassetid=<vgcassetid>&vgctoken=<vgctoken>&streamtype=<streamtype>
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/1/action/watchstream" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:\
+"uri","http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8",\
+"vgcassetid","100",\
+"vgctoken","200",\
+"publicip","84.92.52.164" \
+string:""
 
 
 ={============================================================================

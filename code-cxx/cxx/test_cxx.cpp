@@ -6157,8 +6157,7 @@ TEST(CxxSmartPointer, check_shared_example_1)
 // ={=========================================================================
 // cxx-smart-ptr cxx-up
 
-/*
-
+#if 0
 :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
@@ -6169,29 +6168,30 @@ std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
 = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
 std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-TEST(SharedPointer, UniqueDoNotSupportCopy)
+TEST(CxxSmartPointer, check_unique_not_support_copy)
 {
-  unique_ptr<std::string> p1(new std::string("nico"));
+  {
+    std::unique_ptr<std::string> p1(new std::string("nico"));
 
-  // *cxx-error*
-  unique_ptr<std::string> p2(p1);
+    // *cxx-error*
+    unique_ptr<std::string> p2(p1);
 
-  unique_ptr<std::string> p3;
 
-  // *cxx-error*
-  p3 = p2;
+    unique_ptr<std::string> p3;
+
+    // *cxx-error*
+    p3 = p2;
+  }
+
+  {
+    // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+    // std::basic_string<char>*}’ to non-scalar type
+    // ‘std::unique_ptr<std::basic_string<char> >’ requested
+
+    unique_ptr<std::string> p1 = new string;
+  }
 }
-
-TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
-{
-  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-  // std::basic_string<char>*}’ to non-scalar type
-  // ‘std::unique_ptr<std::basic_string<char> >’ requested
-
-  unique_ptr<std::string> p1 = new string;
-}
-
-*/
+#endif
 
 namespace cxx_sp_shared
 {
@@ -6206,18 +6206,33 @@ namespace cxx_sp_shared
     Foo(int val = 1)
         : id(val)
     {
-      // cout << "Foo ctor(" << id << ")" << endl;
+      cout << "Foo ctor(" << id << ")" << endl;
     }
 
     ~Foo()
     {
       dtor_count++;
-      // cout << "Foo dtor(" << id << ")" << endl;
+      cout << "Foo dtor(" << id << ")" << endl;
     }
   };
 } // namespace cxx_sp_shared
 
-TEST(CxxSmartPointer, sp_unique_moveAssign)
+
+TEST(CxxSmartPointer, check_unique_move_assign_1)
+{
+    using namespace cxx_sp_shared;
+
+    std::unique_ptr<Foo> p1(new Foo(1));
+    std::unique_ptr<Foo> p2(new Foo(2));
+
+    // f1 is gone. p1->f2. p2 is null
+    p1 = std::move(p2);
+
+    EXPECT_TRUE(p1);
+    EXPECT_FALSE(p2);
+}
+
+TEST(CxxSmartPointer, check_unique_move_assign_2)
 {
   // Foo ctor(1)
   // Foo ctor(2)
@@ -6229,6 +6244,10 @@ TEST(CxxSmartPointer, sp_unique_moveAssign)
   {
     using namespace cxx_sp_shared;
 
+    // reset global counter
+    cxx_sp_shared::dtor_count = 0;
+
+    // empty up
     std::unique_ptr<Foo> up;
 
     // not support copy assign for lvalue but support for rvalue
@@ -6250,6 +6269,7 @@ TEST(CxxSmartPointer, sp_unique_moveAssign)
   // Foo ctor(2)
   // Foo ctor(3)
   // Foo ctor(4)
+  //
   // Foo dtor(2)
   // Foo dtor(1)
   // Foo dtor(4)
@@ -6265,10 +6285,15 @@ TEST(CxxSmartPointer, sp_unique_moveAssign)
 
     EXPECT_TRUE(p3);
 
-    p2 = std::move(p3); // p1->F1   , p2->F3, p3->null
-    p3 = std::move(p1); // p1->null , p2->F3, p3->F1
-    p3 = std::move(p1); // p1->null , p2->F3, p3->null
+    // f2 is gone, p2->f3, p3 is null
+    p2 = std::move(p3);
+    EXPECT_FALSE(p3);
 
+    // p3->f1, p1 is null
+    p3 = std::move(p1);
+
+    // f1 is gone, p3 is null since p1 is already null
+    p3 = std::move(p1);
     EXPECT_FALSE(p3);
   }
 }

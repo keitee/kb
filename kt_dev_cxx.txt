@@ -259,8 +259,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-sp-delete sp-deleter
 *kt_dev_cxx_0000* cxx-sp-read: can store unique_ptr in a container?
 *kt_dev_cxx_0000* cxx-sp-issue cxx-sp-shared-from-this
-*kt_dev_stl_105* smart pointer: gotw #102: exception safety
-|kt_dev_stl_102| smart pointer: internal: auto_ptr
+*kt_dev_cxx_0000* cxx-sp-read exception safety
+*kt_dev_cxx_0000* cxx-sp-read internal
 *kt_dev_cxx_0000* cxx-sp-code
 *kt_dev_cpp_0000* cxx-sp-thread-safety
 *kt_dev_cxx_0000* cxx-sp-case-examples
@@ -12624,7 +12624,10 @@ EC++07. The problem is that base dtor runs when derived dtor is expected via
 derived-to-base pointer is used.
 
 GCC spec says it will have cxx-undefined result but in reality, destroy only
-the base part; `partially destroyed.` In GCC, no runtime error in simple test. 
+the base part; `partially destroyed.` 
+
+note In GCC, no runtime error in simple test. what's the real problem?
+
 
 This is the same for other member functions. That is if miss out virtual
 keywords in a base, then will have only base version even if expected derived
@@ -18764,7 +18767,7 @@ match, no match, and ambiguous call.
 
 For `name-lookup` inside a namespace, look in members in case class, and if
 not found, continue looking in enclosing scope; which is a open scope having a
-name to look up. This can be `block, class, or namespace` So continue looking
+name to look up. This can be `block, class, or cxx-namespace` So continue looking
 in classes up the chain of inheritance or namespaces. This search goes upwards
 that means declared before use and before in reading order. For example, int
 A::C1::f3() in qualified name. 
@@ -19378,7 +19381,13 @@ int main()
 }
 
 
-<cxx-ood> *cxx-encapsulation*
+<cxx-ood> *cxx-encapsulation* *cxx-namespace*
+
+https://stackoverflow.com/questions/1434937/namespace-functions-versus-static-methods-on-a-class
+
+C.5: Place helper functions in the same namespace as the class they support
+http://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#c5-place-helper-functions-in-the-same-namespace-as-the-class-they-support
+
 EC++23 About considering encapsulation in design:
 
 OOD principle dictates that data and functions that operates on them should be
@@ -19433,7 +19442,8 @@ void clearBrowser( Webbrowser& wb )
   wb.removeCookies();
 }
 
-Use namespace due to *cpp-adt* 
+
+Use namespace due to *cxx-argument-dependant-lookup*
 
 namespace WebBrowserStuff {
   class WebBrowser { ... };
@@ -31663,6 +31673,23 @@ What should go into Impl class from interface or visual class?
 `Put all nonvirtual private members and private data` into Impl class since
 client code shouldn't and doesn't care about these parts and protected and
 virtuals to be seen and used by derived class.
+
+
+*cxx-sp*
+when use unique_ptr and foward declaration, it fails to compile. However, it is
+okay when include a header instead.
+
+/include/c++/6.4.0/bits/unique_ptr.h:74:22: error: invalid application of ‘sizeof’ to incomplete type ‘MlPlayerPrivate’
+  static_assert(sizeof(_Tp)>0,
+                      ^
+
+class MlPlayerPrivate;
+
+class MlPlayer final : public Player
+{
+private:
+  std::unique_ptr<MlPlayerPrivate> m_private;
+}
 
 
 ={============================================================================
@@ -57449,8 +57476,7 @@ up2 = std::move(up1);
 
 <ex>
 
-/*
-
+#if 0
 :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
@@ -57461,57 +57487,30 @@ std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
 = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
 std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-TEST(SharedPointer, UniqueDoNotSupportCopy)
-{
-  unique_ptr<std::string> p1(new std::string("nico"));
-
-  // *cxx-error*
-  unique_ptr<std::string> p2(p1);
-
-  unique_ptr<std::string> p3;
-
-  // *cxx-error*
-  p3 = p2;
-}
-
-TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
-{
-  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-  // std::basic_string<char>*}’ to non-scalar type
-  // ‘std::unique_ptr<std::basic_string<char> >’ requested
-
-  unique_ptr<std::string> p1 = new string;
-}
-
-*/
-
-TEST(CxxSmartPointerUnique, construct)
+TEST(CxxSmartPointer, check_unique_not_support_copy)
 {
   {
-    std::unique_ptr<std::string> up(new std::string);
-    // std::string()->empty()
-    EXPECT_THAT(up->empty(), true);
-  }
+    std::unique_ptr<std::string> p1(new std::string("nico"));
 
-  // since *cxx-14* and 
-  // template< class T, class... Args >
-  //  unique_ptr<T> make_unique( Args&&... args );
-  //
-  // https://gcc.gnu.org/projects/cxx-status.html
-  //
-  // C++14 Support in GCC
-  // GCC has full support for the previous revision of the C++ standard, which
-  // was published in 2014.
-  //
-  // This mode is the default in GCC 6.1 and above; it can be explicitly
-  // selected with the -std=c++14 command-line flag, or -std=gnu++14 to enable
-  // GNU extensions as well.
+    // *cxx-error*
+    unique_ptr<std::string> p2(p1);
+
+
+    unique_ptr<std::string> p3;
+
+    // *cxx-error*
+    p3 = p2;
+  }
 
   {
-    auto up = make_unique<std::string>("unique pointer");
-    EXPECT_THAT(*up, "unique pointer");
+    // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+    // std::basic_string<char>*}’ to non-scalar type
+    // ‘std::unique_ptr<std::basic_string<char> >’ requested
+
+    unique_ptr<std::string> p1 = new string;
   }
 }
+#endif
 
 namespace cxx_sp_shared
 {
@@ -57534,51 +57533,84 @@ namespace cxx_sp_shared
   };
 } // namespace
 
-
-// Foo ctor(1)
-// Foo ctor(2)
-// Foo dtor(1)
-// Foo ctor(3)
-// Foo dtor(2)
-// Foo dtor(3)
-
-TEST(SmartPointer, UniqueSetUseMove_0)
+TEST(CxxSmartPointer, check_unique_move_assign_1)
 {
-  using namespace cxx_sp_shared;
+    using namespace cxx_sp_shared;
 
-  std::unique_ptr<Foo> up;
+    std::unique_ptr<Foo> p1(new Foo(1));
+    std::unique_ptr<Foo> p2(new Foo(2));
 
-  // not support copy assign for lvalue but support for rvalue
-  up = std::move(std::unique_ptr<Foo>(new Foo(1)));
-  up = std::move(std::unique_ptr<Foo>(new Foo(2)));
-  up = std::move(std::unique_ptr<Foo>(new Foo(3)));
+    // f1 is gone. p1->f2. p2 is null
+    p1 = std::move(p2);
+
+    EXPECT_TRUE(p1);
+    EXPECT_FALSE(p2);
 }
 
-// Foo ctor(1)
-// Foo ctor(2)
-// Foo ctor(3)
-// Foo ctor(4)
-// Foo dtor(2)
-// Foo dtor(1)
-// Foo dtor(4)
-// Foo dtor(3)
-
-TEST(SmartPointer, UniqueSetUseMove_1)
+TEST(CxxSmartPointer, check_unique_move_assign_2)
 {
-  using namespace cxx_sp_shared;
+  // Foo ctor(1)
+  // Foo ctor(2)
+  // Foo dtor(1)
+  // Foo ctor(3)
+  // Foo dtor(2)
+  // Foo dtor(3)
 
-  unique_ptr<Foo> p1(new Foo(1));
-  unique_ptr<Foo> p2(new Foo(2));
-  unique_ptr<Foo> p3(new Foo(3));
-  unique_ptr<Foo> p4(new Foo(4));
+  {
+    using namespace cxx_sp_shared;
 
-  EXPECT_TRUE(p3);
+    // reset global counter
+    cxx_sp_shared::dtor_count = 0;
 
-  p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
-  p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
-  p3 = std::move(p1);     // p1->null , p2->F3, p3->null
+    // empty up
+    std::unique_ptr<Foo> up;
 
-  EXPECT_FALSE(p3);
+    // not support copy assign for lvalue but support for rvalue
+    up = std::move(std::unique_ptr<Foo>(new Foo(1)));
+    up = std::move(std::unique_ptr<Foo>(new Foo(2)));
+    // Foo(1) is gone
+    EXPECT_THAT(dtor_count, 1);
+
+    up = std::move(std::unique_ptr<Foo>(new Foo(3)));
+    // Foo(2) is gone
+    EXPECT_THAT(dtor_count, 2);
+
+    up = nullptr;
+    // Foo(3) is gone
+    EXPECT_THAT(dtor_count, 3);
+  }
+
+  // Foo ctor(1)
+  // Foo ctor(2)
+  // Foo ctor(3)
+  // Foo ctor(4)
+  //
+  // Foo dtor(2)
+  // Foo dtor(1)
+  // Foo dtor(4)
+  // Foo dtor(3)
+
+  {
+    using namespace cxx_sp_shared;
+
+    std::unique_ptr<Foo> p1(new Foo(1));
+    std::unique_ptr<Foo> p2(new Foo(2));
+    std::unique_ptr<Foo> p3(new Foo(3));
+    std::unique_ptr<Foo> p4(new Foo(4));
+
+    EXPECT_TRUE(p3);
+
+    // f2 is gone, p2->f3, p3 is null
+    p2 = std::move(p3);
+    EXPECT_FALSE(p3);
+
+    // p3->f1, p1 is null
+    p3 = std::move(p1);
+
+    // f1 is gone, p3 is null since p1 is already null
+    p3 = std::move(p1);
+    EXPECT_FALSE(p3);
+  }
 }
 
 
@@ -59058,7 +59090,7 @@ namespace cxx_code *cxx-sp-code*
 
 
 ={============================================================================
-*kt_dev_stl_105* smart pointer: gotw #102: exception safety
+*kt_dev_cxx_0000* cxx-sp-read exception safety
 
 GotW #102: Exception-Safe Function Calls (Difficulty: 7/10)
 
@@ -59198,7 +59230,7 @@ Guidelines:
 
 
 ={============================================================================
-*kt_dev_stl_102* smart pointers internal
+*kt_dev_cxx_0000* cxx-sp-read internal
 
 {auto-ptr}
 MEC++28 that is about auto_ptr. The typical implementation is:
@@ -60009,29 +60041,101 @@ For other platforms there are fall-backs using mutex locks. Boost (as of
 preprocessor selects one based on the compiler, standard library, platform
 etc. 
 
-// SO,
-  For the version of shared_ptr in libstdc++ the compiler and library are
-  fixed, which makes things much simpler: we have an atomic CAS or we don't,
-  see Lock Policy below for details. 
+// SO
+For the version of shared_ptr in libstdc++ the compiler and library are fixed,
+    which makes things much simpler: we have an atomic CAS or we don't, see Lock
+      Policy below for details. 
 
 
 http://www.modernescpp.com/index.php/atomic-smart-pointers
+
+Atomic Smart Pointers
+
+22 February 2017
 
 C++20 will have atomic smart pointers. To be exactly, we will get a
 std::atomic_shared_ptr and a std::atomic_weak_ptr. But why? std::shared_ptr
 and std::weak_ptr are already thread-safe. Sort of. Let me dive into the
 details.
 
-Before I start, I want to make a short detour. This detour should only
-emphasise how import it is that the std::shared_ptr has a well-defined
-multithreading semantic and you know and use it. From the multithreading point
-of view, std::shared_ptr is this kind of data structures you will not use in
-multithreading programs. They are by definition shared and mutable; therefore
-they are the ideal candidates for data races and hence for undefined
-behaviour. At the other hand there is the guideline in modern C++: Don't touch
-memory. That means, use smart pointers in multithreading programs.  
+Before I start, I want to make a short detour. This detour should only emphasise
+how import it is that the std::shared_ptr has a well-defined multithreading
+semantic and you know and use it. From the multithreading point of view,
+std::shared_ptr is this kind of data structures you will not use in
+  multithreading programs. They are by definition shared and mutable; therefore
+  they are the ideal candidates for data races and hence for undefined
+  behaviour. At the other hand there is the guideline in modern C++: Don't touch
+  memory. That means, use smart pointers in multithreading programs.  
 
-// follow the link for more
+
+Half thread-safe
+
+I often have the question in my C++ seminars: Are smart pointers thread-safe? My
+defined answer is `yes and no.` 
+
+Why? A std::shared_ptr consists of a control block and its resource. Yes, the
+control block is thread-safe; but no, the access to the resource is not
+thread-safe. That means, modifying the reference counter is an atomic operation
+and you have the guarantee that the resource will be deleted exactly once. These
+are all guarantees a std::shared_ptr gives you.
+
+The assertion that a std::shared_ptr provides, are described by Boost.
+
+o A shared_ptr instance can be "read" (accessed using only const operations)
+simultaneously by multiple threads.
+
+o Different shared_ptr instances can be "written to" (accessed using mutable
+    operations such as operator= or reset) simultaneously by multiple threads
+(even when these instances are copies, and share the same reference count
+ underneath.) 
+
+
+To make the two statements clear, let me show a simple example.
+When you copy a std::shared_ptr in a thread, all is fine.
+
+std::shared_ptr<int> ptr = std::make_shared<int>(2011);
+
+for (auto i= 0; i<10; i++) {
+   std::thread([ptr]{                           (1)
+     std::shared_ptr<int> localPtr(ptr);        (2)
+     localPtr = std::make_shared<int>(2014);    (3)
+    }).detach(); 
+}
+
+At first to (2). By using copy construction for the std::shared_ptr localPtr,
+   only the control block is used. That is thread-safe. 
+
+(3) is a little bit more interesting. localPtr (3) is set to a new
+std::shared_ptr. This is from the multithreading point of view no problem: Die
+lambda-function (1) binds ptr by copy. Therefore, the modification of localPtr
+takes place on a copy.
+
+The story will change dramatically if I take the std::shared_ptr by reference.
+
+std::shared_ptr<int> ptr = std::make_shared<int>(2011);  
+
+for (auto i= 0; i<10; i++){
+   std::thread([&ptr]{                         (1)
+     ptr= std::make_shared<int>(2014);         (2)
+   }).detach(); 
+}
+ 
+
+The lambda-function binds the std::shared_ptr ptr by reference (1). Therefore
+the assignment (2) is a race condition on the resource and the program has
+undefined behaviour.
+
+Admittedly that was not so easy to get. std::shared_ptr requires special
+attention in a multithreading environment. They are very special. They are the
+only non-atomic data types in C+ for which atomic operations exist.
+
+
+Atomic Operations for std::shared_ptr
+
+There are specialisations for the atomic operations load, store, compare and
+exchange for a std::shared_ptr. By using the explicit variant you can even
+specify the memory model. Here are the free atomic operations for
+std::shared_ptr.
 
 
 ={============================================================================
