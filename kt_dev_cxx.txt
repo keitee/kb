@@ -291,7 +291,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-ccon-call-once
 *kt_dev_cxx_0000* cxx-ccon-lock-shared-lock cxx-boost-shared-lock
 *kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock
-*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-atomic
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
 *kt_dev_cxx_0000* cxx-ccon-task-model cxx-future cxx-async
 *kt_dev_cxx_0000* cxx-ccon-promise
@@ -31675,7 +31676,7 @@ client code shouldn't and doesn't care about these parts and protected and
 virtuals to be seen and used by derived class.
 
 
-*cxx-sp*
+*cxx-sp-unique*
 when use unique_ptr and foward declaration, it fails to compile. However, it is
 okay when include a header instead.
 
@@ -31690,6 +31691,31 @@ class MlPlayer final : public Player
 private:
   std::unique_ptr<MlPlayerPrivate> m_private;
 }
+
+
+From Smart Pointers in C++, Fluent C++
+
+There is a rule in C++ that says that deleting a pointer leads to undefined behaviour if:
+
+o this pointer has type void*, or
+
+o the type pointed to is incomplete, that is to say is only forward declared,
+
+std::unique_ptr happens to check in its destructor if the definition of the
+type is visible before calling delete. So it refuses to compile and to call
+delete if the type is only forward declared.
+
+Since we removed the declaration of the destructor in the Fridge class, the
+compiler took over and defined it for us. But compiler-generated methods are
+declared inline, so they are implemented in the header file directly. And
+there, the type of FridgeImpl is incomplete.  Hence the error.
+
+The fix would then be to declare the destructor and thus prevent the compiler
+from doing it for us. So the header file becomes:
+
+And we can still use the default implementation for the destructor that the
+compiler would have generated. But we need to put it in the implementation
+file, after the definition of FridgeImpl:
 
 
 ={============================================================================
@@ -56642,8 +56668,8 @@ the same hold for shared_ptr? No. array is special and not vector.
 
 The weak pointer is `checked pointer class.` Two points:
 
-o The weak_ptr `do not participate in the reference count` of shared_ptr and
-  won't affect the lifetime of the object. 
+o The weak_ptr `do not increase/participate in the reference count` of
+  shared_ptr and won't affect the lifetime of the object. 
 
 o Because the object might no longer exist, cannot use a weak_ptr to access
   its object directly.
@@ -56661,7 +56687,7 @@ o One example is `cyclic references` If two objects refer to each other using
   might want to use ordinary pointers in this situation, but doing so requires
   explicitly caring for and managing the release of associated resources.
 
-*cxx-dangling-reference*
+  *cxx-dangling-reference*
 o Another example occurs when you explicitly `want to share but not own` an
   object. Thus, you have the semantics that the lifetime of a reference to an
   object `outlives the object it refers to.` 
@@ -56670,6 +56696,11 @@ o Another example occurs when you explicitly `want to share but not own` an
   
   ordinary pointers might not notice that the object they refer to is not
   valid anymore, which introduces the risk of accessing released data.
+
+  *cxx-cache*
+o Another use case pointed out by this answer on Stack Overflow is that
+  weak_ptr can be used to maintain a cache. The data may or may not have been
+  cleared from the cache, and the weak_ptr references this data.
 
 
 <cxx-sp-weak-operations>
@@ -64833,6 +64864,145 @@ void data_processing_thread()
       break;
   }
 }
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-atomic
+
+With is_lock_free(), you can check whether an atomic type internally uses
+locks to be atomic. If not, you have `native hardware support` for the atomic
+operations (which is a prerequisite for using atomics in signal handlers).
+
+
+Both compare_exchange_strong() and compare_exchange_weak() are so-called
+`compare-and-swap (CAS) operations.` CPUs often provide this atomic operation
+to compare the contents of a memory location to a given value and, only if
+they are the same, modify the contents of that memory location to a given new
+value. This guarantees that the new value is calculated based on up-to-date
+information.
+
+The effect is something like the following pseudocode:
+
+bool compare_exchange_strong (T& expected, T desired)
+{
+  if (this->load() == expected) {
+    this->store(desired);
+    return true;
+  }
+  else {
+    expected = this->load();
+    return false;
+  }
+}
+
+Thus, if the value had been updated by another thread in the meantime, it
+returns false with the new value in expected.
+
+
+18.7.4 The Low-Level Interface of Atomics
+
+The low-level interface of atomics means using the atomic operations in a way
+that we have `no guaranteed sequential consistency.` Thus, compilers and
+hardware might (partially) reorder access on atomics (see Section 18.4.3, page
+    986).
+
+Beware again: Although I give an example, this area is a minefield. You need a
+lot of expertise to know when memory reorderings are worth the effort, and
+even experts often make mistakes in this area
+
+
+An Example for the Low-Level Interface of Atomics
+
+The store() operation performs a so-called release operation on the affected
+memory location, which by default ensures that all prior memory operations,
+whether atomic or not, become visible to other threads before the effect of
+the store operation.
+
+The load() operation performs a so-called acquire operation on the affected
+memory location, which by default ensures that all following memory
+operations, whether atomic or not, become visible to other threads after the
+load operation.
+
+As a consequence, because the setting of data happens before the provider()
+  stores true in the readyFlag and the processing of data happens after the
+  consumer() has loaded true as value of the readyFlag, the processing of data
+  is guaranteed to happen after the data was provided.
+
+This guarantee is provided because in all atomic operations, we use a default
+memory order named memory_order_seq_cst, which stands for sequential
+consistent memory order.
+
+{
+  long data;
+  std::atomic<bool> readyFlag{false};
+
+  // void thread1()
+  void provider()
+  {
+    // after reading a character
+    std::cout << "press <return>" << std::endl;
+    std::cin.get();
+
+    // provide some data
+    data = 42;
+
+    // and signal readiness
+    readyFlag.store(true);
+  }
+
+  // void thread2()
+  void consumer()
+  {
+    // wait for readiness and do something else
+    while (!readyFlag.load())
+    {
+      std::cout.put('.').flush();
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    // and process provided data
+    std::cout << "\nvalue : " << data << std::endl;
+  }
+}
+
+We use `the default memory order`, which guarantees sequential consistency.
+In fact, what we really call is:
+
+readyFlag.store(true, `std::memory_order_seq_cst`);
+
+while (!readyFlag.load(std::memory_order_seq_cst))
+
+Thus, each operation has an optional argument to pass the memory order, which
+by default is std::memory_order_seq_cst (sequential consistent memory order).
+
+By passing other values as memory order, we can weaken `the order guarantees.`
+
+
+However, relaxing all constraints on the order of atomic operations would
+result in undefined behavior:
+
+// ERROR: undefined behavior:
+data = 42;
+readyFlag.store(true,std::memory_order_relaxed);
+
+The reason is that std::memory_order_relaxed doesn’t guarantee that all prior
+memory operations become visible to other threads before the effect of the
+store operation. Thus, the provider might write data after setting the ready
+flag, so the consumer might read data while it gets written, which is a data
+race.
+
+
+No More Details
+
+I don’t explain these low-level interfaces in more detail because this feature
+is for real concurrency experts or those who want to become experts. So, you
+should definitely use specific resources for that.
+
+One good starting point is Anthony Williams book C++ Concurrency in Action
+(see [Williams:C++Conc]), especially Chapters 5 and 7. Another is Hans Boehm’s
+list of URLs for material about memory models (see [Boehm:C++MM]).
+
+NOTE: is it worthwhile to study?
 
 
 ={============================================================================

@@ -366,6 +366,52 @@ TEST(CConThread, check_exit_method)
   // message such as timerfd_
   // {
   // }
+
+  // use cxx-atomic and still need to send a message since it waits on q.
+  {
+    cxx_thread::queue<uint32_t> q;
+    std::atomic<bool> runnable{true};
+
+    std::thread t([&] {
+      while (runnable.load())
+      {
+        auto mesg = q.wait_and_pop();
+
+        switch (mesg)
+        {
+          case 100:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+
+            // // MESG_EXIT(200)
+            // case 200:
+            //   runnable = false;
+            //   break;
+
+          default:
+            std::cout << "got mesg : " << mesg << std::endl;
+            break;
+        }
+      }
+
+      std::cout << "while ends" << std::endl;
+    });
+
+    auto event = std::async(std::launch::async, [&] {
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "send a message" << std::endl;
+      q.push(100);
+
+      std::this_thread::sleep_for(chrono::milliseconds(2000));
+      std::cout << "set runnable false" << std::endl;
+      runnable.store(false);
+      q.push(200);
+    });
+
+    std::cout << "waits for thread to end" << std::endl;
+    t.join();
+    std::cout << "thread ended" << std::endl;
+  }
 }
 
 namespace cxx_thread
@@ -3761,11 +3807,124 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
   cout << "searched value : " << tslt.value_for("three") << endl;
 }
 
-// ={=========================================================================
-/* cxx-atomic
-CXXCCON, Listing 5.4 Sequential consistency implies a total ordering
-
+/* ={=========================================================================
+cxx-atomic
 */
+
+namespace cxx_atomic_ex_1
+{
+  // C++SL, 18.6.2 A First Complete Example for Condition Variables
+  // better approach which uses a condition variable than polling
+
+  namespace cond_ex
+  {
+    bool readyFlag;
+    std::mutex readyMutex;
+    std::condition_variable readyCondVar;
+
+    void thread1()
+    {
+      // do something thread2 needs as preparation
+      std::cout << "press <return>" << std::endl;
+      std::cin.get();
+
+      // signal that thread1 has prepared a condition
+      {
+        std::lock_guard<std::mutex> lg(readyMutex);
+        readyFlag = true;
+      } // release lock
+
+      readyCondVar.notify_one();
+    }
+
+    void thread2()
+    {
+      // wait until thread1 is ready (readyFlag is true)
+      {
+        std::unique_lock<std::mutex> ul(readyMutex);
+        readyCondVar.wait(ul, [] { return readyFlag; });
+      } // release lock
+
+      // do whatever shall happen after thread1 has prepared things
+      std::cout << "done" << std::endl;
+    }
+  } // namespace cond_ex
+
+  // two problems here:
+  //
+  // 1. In general, reading and writing even for fundamental data types is not
+  // atomic. Thus, you might read a half-written Boolean, which according to the
+  // standard results in undefined behavior.
+  //
+  // 2. The generated code might change the order of operations, so the
+  // providing thread might set the ready flag before the data is provided, and
+  // the consuming thread might process the data before evaluating the ready
+  // flag.
+  //
+  // With a mutex, both problems are solved, but a mutex might be a relatively
+  // expensive operation in both necessary resources and latency of the
+  // exclusive access. So, instead of using mutexes and lock, it might be worth
+  // using atomics instead.
+  //
+  // store() assigns a new value.
+  // load() yields the current value.
+
+  // 18.7.1 Example of Using Atomics
+  // version which use atomic
+
+  namespace atomic_ex
+  {
+    long data;
+    std::atomic<bool> readyFlag{false};
+
+    // void thread1()
+    void provider()
+    {
+      // after reading a character
+      std::cout << "press <return>" << std::endl;
+      std::cin.get();
+
+      // provide some data
+      data = 42;
+
+      // and signal readiness
+      readyFlag.store(true);
+    }
+
+    // void thread2()
+    void consumer()
+    {
+      // wait for readiness and do something else
+      while (!readyFlag.load())
+      {
+        std::cout.put('.').flush();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      }
+
+      // and process provided data
+      std::cout << "\nvalue : " << data << std::endl;
+    }
+  } // namespace atomic_ex
+} // namespace cxx_atomic_ex_1
+
+TEST(CConAtomic, check_ex_1)
+{
+  {
+    using namespace cxx_atomic_ex_1::cond_ex;
+
+    auto f1 = std::async(std::launch::async, thread1);
+    auto f2 = std::async(std::launch::async, thread2);
+  }
+
+  {
+    using namespace cxx_atomic_ex_1::atomic_ex;
+
+    auto p = std::async(std::launch::async, provider);
+    auto c = std::async(std::launch::async, consumer);
+  }
+}
+
+// CXXCCON, Listing 5.4 Sequential consistency implies a total ordering
 
 namespace cxx_atomic
 {

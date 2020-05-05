@@ -1850,16 +1850,16 @@ TEST(CxxQueue, check_operation)
 // ={=========================================================================
 // cxx-set
 
-TEST(StlColl, set_InsertAndEmplace)
+TEST(StlCollSet, check_insert_and_emplace)
 {
-  set<int> coll1{};
+  std::set<int> coll1{};
 
   for (int i = 0; i < 9; i++)
     coll1.insert(i);
 
   EXPECT_THAT(coll1, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
 
-  set<int> coll2{};
+  std::set<int> coll2{};
 
   for (int i = 0; i < 9; i++)
     coll2.emplace(i);
@@ -1867,7 +1867,7 @@ TEST(StlColl, set_InsertAndEmplace)
   EXPECT_THAT(coll2, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
 }
 
-TEST(StlColl, set_SortOrder)
+TEST(StlCollSet, check_order)
 {
   {
     // cxx-less <
@@ -1879,6 +1879,27 @@ TEST(StlColl, set_SortOrder)
     // cxx-greater > like cxx-sp, unique pointer, use typename
     std::set<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
     EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 2));
+  }
+}
+
+TEST(StlCollSet, check_assign)
+{
+  std::set<int> coll1{13, 9, 10, 2, 11, 12, 8, 7};
+  EXPECT_THAT(coll1.size(), 8); 
+
+  std::set<int> coll2{4, 5, 6};
+  EXPECT_THAT(coll2.size(), 3);
+
+  coll1 = coll2;
+
+  EXPECT_THAT(coll1, ElementsAre(4, 5, 6));
+  EXPECT_THAT(coll2, ElementsAre(4, 5, 6));
+}
+
+TEST(StlCollSet, check_duplicate)
+{
+  {
+    std::set<int> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
 
     // duplicate, 7, is removed
     EXPECT_THAT(coll.size(), 8);
@@ -1889,8 +1910,27 @@ TEST(StlColl, set_SortOrder)
     begin = coll.begin();
     coll.erase(begin);
 
-    EXPECT_THAT(coll, ElementsAre(11, 10, 9, 8, 7, 2));
+    EXPECT_THAT(coll, ElementsAre(8, 9, 10, 11, 12, 13));
     EXPECT_THAT(coll.size(), 6);
+  }
+
+  {
+    std::multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    size_t duplicate_count{};
+
+    // see duplicates
+    EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 7, 2));
+
+    // for (auto e : coll)
+    //   if (coll.count(e) % 2 == 0)
+    //     ++duplicate_count;
+
+    for (auto e : coll)
+      if (1 < coll.count(e))
+        ++duplicate_count;
+
+    // why 2 since see 7 two times in a loop
+    EXPECT_THAT(duplicate_count, 2);
   }
 }
 
@@ -1960,29 +2000,7 @@ TEST(StlCollSet, check_search)
   }
 }
 
-TEST(SetMulti, Duplicate)
-{
-  {
-    multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
-    size_t duplicate_count{};
-
-    // see duplicates
-    EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 7, 2));
-
-    // for (auto e : coll)
-    //   if (coll.count(e) % 2 == 0)
-    //     ++duplicate_count;
-
-    for (auto e : coll)
-      if (1 < coll.count(e))
-        ++duplicate_count;
-
-    // why 2 since see 7 two times in a loop
-    EXPECT_THAT(duplicate_count, 2);
-  }
-}
-
-TEST(Set, Erase)
+TEST(StlCollSet, check_erase)
 {
   // if there is match at the beginning, removes them
   {

@@ -6199,7 +6199,8 @@ namespace cxx_sp_shared
 
   class Foo
   {
-  private:
+    // intentionally made it public
+  public:
     int id;
 
   public:
@@ -6214,9 +6215,43 @@ namespace cxx_sp_shared
       dtor_count++;
       cout << "Foo dtor(" << id << ")" << endl;
     }
+
+    int getId() const
+    {
+      return id;
+    }
   };
 } // namespace cxx_sp_shared
 
+#if 0
+// see unique_ptr<const T>
+
+TEST(CxxSmartPointer, check_unique_const)
+{
+    using namespace cxx_sp_shared;
+
+    // ok
+    {
+      std::unique_ptr<Foo> p1(new Foo(1));
+
+      p1->id = 100;
+
+      EXPECT_THAT(p1->getId(), 100);
+    }
+
+    // now it causes compile error
+    {
+      std::unique_ptr<const Foo> p1(new Foo(1));
+
+      // error: assignment of member ‘cxx_sp_shared::Foo::id’ in read-only
+      // object
+
+      p1->id = 100;
+
+      EXPECT_THAT(p1->getId(), 100);
+    }
+}
+#endif
 
 TEST(CxxSmartPointer, check_unique_move_assign_1)
 {
