@@ -193,26 +193,69 @@ namespace cxx_string
     std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
     std::cout << "key: " << key << ", value: " << value << std::endl;
   }
+
+  void check_bool(bool value)
+  {
+    std::cout << "check_bool: " << value << std::endl;
+  }
 } // namespace cxx_string
 
 // NOTE: if remove "insert for bool values", then both will use string version.
 // Looks like it's to do with resolution.
 //
 // there is no bool conversion of string. Then how it uses bool version?
+//
+// NO. it turns out that's because there is implicit pointer to bool conversion
+// and that's what's happening here.
 
-// [ RUN      ] String.string_Resolution
+// [ RUN      ] String.check_string_bool_1
 // insert(std::string &&key, bool value)
 // key: key1, value: 1
 // insert(std::string &&key, std::string &&value)
 // key: key2, value: value2
-// [       OK ] String.string_Resolution (0 ms)
+// [       OK ] String.check_string_bool_1 (0 ms)
+// [ RUN      ] String.check_string_bool_2
+// check_bool: 1
+// [       OK ] String.check_string_bool_2 (0 ms)
 
-TEST(String, string_Resolution)
+// (gdb) b String_check_string_resolution_Test::TestBody()
+
+TEST(String, check_string_bool_1)
 {
   using namespace cxx_string;
 
   insert("key1", "value1");
   insert("key2", std::string("value2"));
+}
+
+TEST(String, check_string_bool_2)
+{
+  using namespace cxx_string;
+
+  check_bool("value1");
+
+  bool expected1 = "value1";
+  EXPECT_THAT(expected1, true);
+
+  bool expected2 = "";
+  EXPECT_THAT(expected2, true);
+
+  char *ptr{nullptr};
+  bool expected3 = ptr;
+  EXPECT_THAT(expected3, false);
+}
+
+TEST(String, check_empty)
+{
+  using namespace cxx_string;
+
+  std::string coll{};
+
+  // error: could not convert ‘coll’ from ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ to ‘bool’
+  // if (coll)
+  //   std::cout << "coll" << std::endl;
+
+  EXPECT_THAT(coll.empty(), true);
 }
 
 // ={=========================================================================

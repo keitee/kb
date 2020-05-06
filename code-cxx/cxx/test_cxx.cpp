@@ -343,7 +343,7 @@ TEST(CxxMemoryModel, check_allocator)
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
-TEST(CxxType, type_size)
+TEST(CxxType, check_size)
 {
 #if defined(__LP64__) || defined(_LP64)
   std::cout << "LP64" << std::endl;
@@ -386,6 +386,24 @@ TEST(CxxType, type_size)
   std::cout << "size of (uint16_t) is           : " << sizeof(uint16_t) << endl;
   std::cout << "size of (uint32_t) is           : " << sizeof(uint32_t) << endl;
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
+}
+
+// *cxx-issue-case* *cxx-vaarg-issue*
+// This not only cause compile warnings. It causes core dump on embedded which
+// is very difficult to get call traces since it's crashes in libc.
+//
+// But works okay in PC build
+
+TEST(CxxType, check_crash)
+{
+  typedef long int int64;
+
+  int64 value{-1};
+
+  EXPECT_THAT(sizeof(int64), 8);
+
+  // cause core?
+  printf("value (%d)\n", value);
 }
 
 // ={=========================================================================
@@ -6216,10 +6234,7 @@ namespace cxx_sp_shared
       cout << "Foo dtor(" << id << ")" << endl;
     }
 
-    int getId() const
-    {
-      return id;
-    }
+    int getId() const { return id; }
   };
 } // namespace cxx_sp_shared
 
@@ -6255,16 +6270,16 @@ TEST(CxxSmartPointer, check_unique_const)
 
 TEST(CxxSmartPointer, check_unique_move_assign_1)
 {
-    using namespace cxx_sp_shared;
+  using namespace cxx_sp_shared;
 
-    std::unique_ptr<Foo> p1(new Foo(1));
-    std::unique_ptr<Foo> p2(new Foo(2));
+  std::unique_ptr<Foo> p1(new Foo(1));
+  std::unique_ptr<Foo> p2(new Foo(2));
 
-    // f1 is gone. p1->f2. p2 is null
-    p1 = std::move(p2);
+  // f1 is gone. p1->f2. p2 is null
+  p1 = std::move(p2);
 
-    EXPECT_TRUE(p1);
-    EXPECT_FALSE(p2);
+  EXPECT_TRUE(p1);
+  EXPECT_FALSE(p2);
 }
 
 TEST(CxxSmartPointer, check_unique_move_assign_2)
@@ -12041,7 +12056,7 @@ namespace cxx_class_vptr
 
 // :11992:51: warning: offsetof within non-standard-layout type ‘cxx_class_vptr::foo3’ is undefined [-Winvalid-offsetof]
 //    std::cout << "offsetof(foo3, x) : " << offsetof(foo3, x) << std::endl;
- 
+
 #if 0
 TEST(CxxClass, check_size_vptr)
 {

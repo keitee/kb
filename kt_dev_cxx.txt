@@ -55,6 +55,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-bits cxx-builtin-type
 *kt_dev_cxx_0000* cxx-bits cxx-limits
 *kt_dev_cxx_0000* cxx-type cxx-32-bit cxx-64-bit
+*kt_dev_cxx_0000* cxx-printf-format cxx-vaarg
 *kt_dev_cxx_0000* cxx-bits cxx-bitset cxx-align
 *kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 *kt_dev_cxx_0000* cxx-issue-incremental-build
@@ -63,14 +64,12 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-stream cxx-file
 *kt_dev_cpp_0004* cxx-postfix
 *kt_dev_cpp_0004* expr-chain
-|kt_dev_lang_008| type and printf
 |kt_dev_lang_011| expr-literal
 *kt_dev_cxx_0004* cxx-pointer cxx-array
 *kt_dev_cpp_0004* pointer-argv
 *kt_dev_cpp_0004* pointer-null
 *kt_dev_cpp_0004* pointer-reading
 *kt_dev_cxx_0000* cxx-cstring cxx-check cxx-sizeof
-*kt_dev_cxx_0000* cxx-printf-format cxx-vaarg
 *kt_dev_cxx_0000* cxx-switch
 *kt_dev_cxx_0000* cxx-loop cxx-for cxx-while cxx-side-effect
 |kt_dev_cxx_0000| cxx-precedence
@@ -4040,6 +4039,201 @@ to use with bit pattern.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-type cxx-32-bit cxx-64-bit
 
+<ex> *cxx-printf*
+{
+  printf("ulong max from limits: %luL\n", ULLONG_MAX );
+  printf("ulong max from limits: %lluL\n", ULLONG_MAX );
+  cout << "ulong max from limits: " << ULLONG_MAX << endl;
+}
+
+ulong max from limits: 4294967295L            //         0xffffffff 
+ulong max from limits: 18446744073709551615L  // 0xffffffffffffffff
+ulong max from limits: 18446744073709551615
+
+This shows that printf outputs differently depending on specifier used.
+
+<ex>
+
+{
+  unsigned long long umax = UINT_MAX;
+
+  printf("Maximum value of type unsigned int : %llu, 0x%llx\n\n",
+      umax, umax);
+}
+
+Maximum value of type unsigned int : 4294967295, 0xffffffff
+
+{
+  unsigned long long umax = UINT_MAX;
+
+  printf("Maximum value of type unsigned int : %u, 0x%llx\n\n",
+      umax, umax);
+}
+
+Maximum value of type unsigned int : 4294967295, 0xffffffff00000000
+
+Why different? printf bug?
+
+{
+  unsigned int umax = UINT_MAX;
+
+  printf("value of type unsigned int : %u, 0x%x\n\n",
+      umax, umax);
+}
+
+value of type unsigned int : 4294967295, 0xffffffff
+
+{
+  unsigned int umax = UINT_MAX;
+
+  printf("value of type unsigned int : %llu, 0x%llx\n\n",
+      umax, umax);
+}
+
+value of type unsigned int : 18446744073709551615, 0x10804875b
+
+
+note:
+Looks like that printf uses pointer depending on `specifier used`
+
+
+<ex>
+
+{
+    double d_val = 3.14;
+    int i_val = d_val;
+    double d_vval = i_val;
+
+    std::cout << "d_val: " << d_val << ", i_val: " << i_val << std::endl;
+    std::cout << "d_val: " << d_val << ", i_val: " << i_val << ", d_vval: " << d_vval << std::endl;
+
+    printf ("d_val: %e, i_val: %e, \n", d_val, i_val );
+    printf ("d_val: %e, i_val: %e, d_vval: %e \n", d_val, i_val, d_vval);
+}
+
+d_val: 3.14, i_val: 3
+d_val: 3.14, i_val: 3, d_vval: 3
+d_val: 3.140000e+00, i_val: 3.034283e-86,
+d_val: 3.140000e+00, i_val: 3.000000e+00, d_vval: 0.000000e+00
+
+
+<ex>
+Started from a question that "What would happen when do UINT_MAX*16 and put the
+result back to unsigned int?"
+
+{
+  unsigned int umax = UINT_MAX;
+
+  printf("value of type unsigned int : %u, 0x%x \n", umax, umax);
+
+  unsigned long long ll = 16*umax;
+
+  or
+
+  unsigned int ll = 16*umax;
+
+  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
+}
+
+value of type unsigned int : 4294967295, 0xffffffff
+value of type unsigned long: 4294967280, 0xfffffff0
+
+
+<cxx-wrap-around>
+The result looks like done 16(2^4) shift regardless of type used. Why is that?
+This is due to *wrap-around*
+
+CPM P35.
+
+If we assign an out-of-range value to an object of unsigned type, the result is
+the 'remainder' of the value 'modulo' the number of values the 'target' type can
+hold. For example, 8-bit unsigned char can hold values from 0 through 255
+inclusive. If we assign a value outside this range, the compiler assigns the
+remainder of that value modulo 256. Therefore, assigning -1 to an unsigned char
+gives that object the value 256.
+
+{
+  unsigned int umax = UINT_MAX;
+
+  printf("value of type unsigned int : %u, 0x%x \n", umax, umax);
+
+  unsigned long long ll = 2*umax;
+
+  printf("value of type unsigned long: %llu, 0x%llx\n\n", ll, ll);
+}
+
+value of type unsigned int : 4294967295, 0xffffffff
+value of type unsigned long: 4294967294, 0xfffffffe
+
+
+{
+  unsigned long long umax = UINT_MAX;
+
+  printf("value of type unsigned int : %llu, 0x%llx \n", umax, umax);
+
+  unsigned long long ll = 2*umax;
+
+  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
+}
+
+value of type unsigned int : 4294967295, 0xffffffff
+value of type unsigned long: 8589934590, 0x1fffffffe
+
+The above shows that wrap-around happens before promotion.
+
+
+{
+  unsigned long long umax = UINT_MAX;
+
+  printf("value of type unsigned int : %llu, 0x%llx \n", umax, umax);
+
+  unsigned long long ll = 16*umax;
+
+  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
+}
+
+value of type unsigned int : 4294967295, 0xffffffff
+value of type unsigned long: 68719476720, 0xffffffff0
+
+
+<Q>
+Interesting thing found is that when use calculation to get MIN and MAX, cout
+prints out MIN without minus sign but printf do. When use real value as limits.h
+do, cout prints out minus sign.
+
+#include <iostream>
+#include <climits>
+#include <cstdio>
+
+using namespace std;
+
+#define MUINT_MAX (~(unsigned)0)
+
+// #define MINT_MAX ((unsigned)~0>>1)
+// #define MINT_MIN (-MINT_MAX-1)
+
+// taken from limits.h
+#define MINT_MIN  (-MINT_MAX - 1)
+#define MINT_MAX  2147483647
+
+int main()
+{
+  cout << "uint: " << 0 << " - " << UINT_MAX << endl;
+  cout << " int: " << INT_MIN << " - " << INT_MAX << endl;
+
+  cout << "uint: " << 0 << " ~ " << MUINT_MAX << endl;
+  cout << " int: " << -MINT_MAX-1 << " ~ " << MINT_MAX << endl;
+
+  printf("signed int : %4d ~ %4d \n", MINT_MIN, MINT_MAX );
+}
+
+uint: 0 - 4294967295
+ int: -2147483648 - 2147483647
+uint: 0 ~ 4294967295
+ int: -2147483648 ~ 2147483647            // note:
+signed int : -2147483648 ~ 2147483647 
+
+
 <cxx-type-cxx-size-t>
 type `size_t` is a machine-specific `unsigned type` that is guaranteed to be
 large enough to hold `the size of any` object in memory.
@@ -4112,9 +4306,10 @@ sometimes must be written for a particular size of storage, regardless of what
 machine the program runs on.
 
 To address this problem, `the GNU C Library contains C type definitions` you can
-use to declare integers that meet your exact needs. Because the GNU C Library
-header files are customized to a specific machine, your program source code
-doesn’t have to be.
+use to declare integers that meet your exact needs. 
+
+Because the GNU C Library header files are customized to a specific machine,
+`your program source code doesn’t have to be.`
 
 These typedefs are in `stdint.h`.
 
@@ -4129,28 +4324,6 @@ uint8_t
 uint16_t
 uint32_t
 uint64_t
-
-Ok, then these types would solve the issue? "NO" since see the issue on using
-printf.
-
-{
-  uint64_t value{10};
-
-#if !defined(__LP64__) || !defined(_LP64)
-  // 32 bits
-  // warning: format ‘%ld’ expects argument of type ‘long int’, but argument 2 has type ‘uint64_t {aka long long unsigned int}’ [-Wformat=]
-  // printf("uint64 value is %ld\n", value);
-
-  printf("uint64 value is %lld\n", value);
-#else
-  // 64 bits
-  printf("uint64 value is %ld\n", value);
-
-  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
-  // printf("uint64 value is %lld\n", value);
-#endif
-}
-
 
 // LP64
 // __x86_64__
@@ -4185,10 +4358,44 @@ printf.
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
-As said "To address this problem, `the GNU C Library contains C type definitions`"
-shows the same size but shows issue on printf
 
-So the possible solution is:
+Ok, then these types would solve the issue? "NO" since see the issue on using
+*cxx-printf*
+
+So the same `uint64_t` has the same physical size on both but is regarded as
+different type:
+
+{
+  uint64_t value{10};
+
+#if !defined(__LP64__) || !defined(_LP64)
+
+  // 32 bits
+  // warning: format ‘%ld’ expects argument of type ‘long int’, 
+  // but argument 2 has type ‘uint64_t {aka `long long unsigned int`}’ [-Wformat=]
+  //
+  // printf("uint64 value is %ld\n", value);
+
+  printf("uint64 value is %lld\n", value);
+
+#else
+
+  // 64 bits
+  // warning: format ‘%lld’ expects argument of type ‘long long int’, 
+  // but argument 2 has type ‘uint64_t {aka `long unsigned int`}’ [-Wformat=]
+  //
+  // printf("uint64 value is %lld\n", value);
+
+  printf("uint64 value is %ld\n", value);
+
+#endif
+}
+
+So problem here is `have to use right format specifier` depending on 32/64.
+
+the possible two solution:
+
+1. use if/def
 
 #if defined(__LP64__) || defined(_LP64)
   AS_LOG_ERROR("failed to find timer with tag %ld to remove", tag);
@@ -4208,7 +4415,8 @@ for a target where long int and pointer both use 64-bits and int uses 32-bit.
 
 see *cxx-cpp-check-define*
 
-Or the other solution is to use PRId64
+
+2. the other solution is to use PRId64
 
 https://stackoverflow.com/questions/9225567/how-to-print-a-int64-t-type-in-c
 
@@ -4219,6 +4427,990 @@ AS_LOG_ERROR("failed to find timer with tag % to remove" PRId64, tag);
 AS_LOG_ERROR("failed to find timer with tag %" PRId64 " to remove", tag);
 
 this is effectively same as pre-processor replace PRIxx with "ld" or "lld".
+
+
+*cxx-issue-case* *cxx-vaarg-issue*
+
+This not only cause compile warnings. It causes core dump on embedded which is
+very difficult to get call traces since it's crashes in libc.
+
+int64 spk{-1};
+
+printf("pk(%d)\n", spk);
+
+#0  0xb68bce6e in strlen () from /lib/libc.so.6
+#1  0xb689fe04 in vfprintf () from /lib/libc.so.6
+#2  0xb68a2aea in printf () from /lib/libc.so.6
+
+should catch `cxx-warning` when build then could save days.
+
+warning: format ‘%d’ expects argument of type ‘int’, 
+  but argument 2 has type ‘int64 {aka long long int}’ [-Wformat=]
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-printf-format cxx-vaarg
+
+<cxx-printf-format>
+
+       int printf(const char *format, ...);
+
+man 3 printf
+
+   Format of the format string
+
+       The format string is a character string, beginning and ending in its
+       initial shift state, if any. The format string is composed of zero or
+       more  directives: 
+       
+       ordinary  characters (not  %),  which  are copied unchanged to the
+       output stream; 
+       
+       and `conversion specifications`, each of which results in fetching zero
+       or more subsequent arguments. Each conversion specification is
+       introduced by the character `%`, and
+       
+       In between 
+
+       1. there may be (in this order) zero or more `flags`, 
+       2. an optional minimum `field width`, 
+       3. an optional `precision` 
+       4. an optional `length modifier`
+       5. `ends with a conversion specifier`
+
+   The length modifier
+
+       Here, "integer conversion" stands for d, i, o, u, x, or X conversion.
+
+       hh     
+       A following integer conversion corresponds to a signed char or unsigned
+       char argument, or a following n conversion corresponds to a pointer to
+       a signed char argument.
+
+       h
+       A following integer conversion corresponds to a short int or unsigned
+       short int argument, or a following n conversion corresponds to a
+       pointer to a short int argument.
+
+       l
+       (ell) A following integer conversion corresponds to a long int or
+       unsigned long int argument, or a following n conversion corresponds to
+       a pointer to a long int argument, or a following c conversion
+       corresponds to a wint_t argument, or a following s conversion
+       corresponds to a pointer to wchar_t argument.
+
+       ll
+       (ell-ell).  A following integer conversion corresponds to a long long
+       int or unsigned long long int argument, or a following n conversion
+       corresponds to a pointer to a long long int argu‐ ment.
+
+       L 
+       A following a, A, e, E, f, F, g, or G conversion corresponds to a long
+       double argument. (C99 allows %LF, but SUSv2 does not.)
+
+
+   The conversion specifier
+
+       A character that specifies the type of conversion to be applied.  The
+       conversion specifiers and their meanings are:
+
+       d, i
+       
+       The int argument is converted to signed decimal notation.  The
+       precision, if any, gives the minimum number of digits that must appear;
+       if the converted value requires fewer digits, it is padded on the left
+       with  zeros.  The default precision is 1.  When 0 is printed with an
+       explicit precision 0, the output is empty.
+
+       o, u, x, X 
+       
+       The  `unsigned-int` argument is converted to 
+
+       unsigned octal (o),
+
+       unsigned decimal (u), 
+
+       unsigned hexadecimal (x and X) notation. 
+       The letters abcdef are used for x conversions; the letters ABCDEF are
+       used for X conversions.  
+         
+       The precision, if any, gives the minimum number of digits that must
+       appear; if the converted value requires fewer digits, it is padded on
+       the left with zeros.  The default precision is 1.   When  0 is  printed
+       with an explicit precision 0, the output is empty.
+
+       p
+       The void * pointer argument is printed in hexadecimal 
+       (as if by %#x or %#lx).
+
+       a, A
+
+       (C99;  not  in  SUSv2,  but  added in SUSv3) For a conversion, the
+       `double` argument is converted to hexadecimal notation (using the
+           letters abcdef) in the style [-]0xh.hhhhp±; for A conversion the
+       prefix 0X, the letters ABCDEF, and the exponent separator P is used.
+       There is one hexadecimal digit before the decimal point, and the number
+       of digits after it is equal to the precision.  The default precision
+       suffices for an  exact  repre- sentation of the value if an exact
+       representation in base 2 exists and otherwise is sufficiently large to
+       distinguish values of type double.  The digit before the decimal point
+       is unspecified for nonnormalized numbers, and nonzero but otherwise
+       unspecified for normalized numbers.
+
+
+       f, F   
+       The `double  argument` is rounded and converted to decimal notation in
+       the style [-]ddd.ddd, where the number of digits after the
+       decimal-point character is equal to the precision specification.  If
+       the  precision  is missing,  it  is  taken as 6; if the precision is
+       explicitly zero, no decimal-point character appears.  If a decimal
+       point appears, at least one digit appears before it.
+
+       g, G
+       The `double argument` is converted in style f or e (or F or E for G
+           conversions). The precision specifies the number of significant
+       digits.  If the  precision  is  missing,  6  digits  are given;  if
+       the  precision is zero, it is treated as 1.  Style e is used if the
+       exponent from its conversion is less than -4 or greater than or equal
+       to the precision.  Trailing zeros are removed from the fractional part
+       of the result; a decimal point appears only if it is followed by at
+       least one digit.
+
+       s
+       
+       If no l modifier is present: The const char * argument is expected to
+       be a pointer to an array of character type (pointer to a string).
+       Characters from the array are written up  to  (but not  including)  a
+       terminating null byte ('\0'); if a precision is specified, no more than
+       the number specified are written.  If a precision is given, no null
+       byte need be present; if the precision is not specified, or is greater
+       than the size of the array, the array must contain a terminating null
+       byte.
+
+       If an l modifier is present: The const wchar_t * argument is expected
+       to be a pointer to an array of wide characters.  Wide characters from
+       the array are converted to multibyte characters (each  by a call to the
+           wcrtomb(3) function, with a conversion state starting in the
+           initial state before the first wide character), up to and including
+       a terminating null wide character.  The resulting multibyte characters
+       are written up to (but not including) the terminating null byte.  If a
+       precision is specified, no more bytes than the number specified are
+       written,  but no  partial  multibyte characters are written.  Note that
+       the precision determines the number of bytes written, not the number of
+       wide characters or screen positions.  The array must con‐ tain a
+       terminating null wide character, unless a precision is given and it is
+       so small that the number of bytes written exceeds it before the end of
+       the array is reached.
+
+
+{cxx-vaarg} cxx-variable-arguments cxx-cpp
+
+The va_arg, va_copy, va_end, and va_start `macros` provide a portable way to
+access the arguments to a function when the function takes a variable number
+of arguments. 
+
+There are two versions of the macros: The macros defined in STDARG.H conform
+to the ISO C99 standard; the macros defined in VARARGS.H are deprecated but
+are retained for backward compatibility with code that was written before the
+ANSI C89 standard. 
+
+
+STDARG(3) Linux Programmer's Manual
+
+NAME
+stdarg, va_start, va_arg, va_end, va_copy - variable argument lists
+
+SYNOPSIS
+ #include <stdarg.h>
+
+ void va_start(va_list ap, last);
+ type va_arg(va_list ap, `type`);
+ void va_end(va_list ap);
+ void va_copy(va_list dest, va_list src);
+
+DESCRIPTION
+
+A function may be called with a `varying number of arguments` of
+`varying types` 
+
+The include file <stdarg.h> declares a type va_list and defines three macros
+for stepping through a list of arguments whose number and types are not known
+to the called function.
+
+The called function must declare an object of type va_list which is used by
+the macros va_start(), va_arg(), and va_end().
+
+
+va_start() 
+
+The va_start() macro initializes `ap` for subsequent use by va_arg() and
+va_end(), and must be called first.
+
+The argument `last` is the name of the last argument `before` the variable
+argument list, that is, the last argument of 
+`which the calling function knows the type.`
+
+Because the address of this argument may be used in the va_start() macro, it
+should not be declared as a register variable, or as a function or an array
+type.
+
+
+va_arg()
+
+The va_arg() macro expands to an expression that has the type and value of the
+next argument in the call. The argument ap is the va_list ap initialized by
+va_start(). Each call to va_arg() modifies ap so that the next call returns
+the next argument. `The argument type is a type name specified` so that the
+type of a pointer to an object that has the specified type can be obtained
+simply by adding a * to type.
+
+The first use of the va_arg() macro after that of the va_start() macro returns
+the argument after last. Successive invocations return the values of the
+remaining arguments.
+
+  If there is no next argument, or if type is not compatible with the type of
+  the actual next argument (as promoted according to the default argument
+  promotions), `random errors will occur. *cxx-error*`
+
+If ap is passed to a function that uses va_arg(ap, type) then the value of ap
+is undefined after the return of that function.
+
+
+va_end()
+
+Each invocation of va_start() must be matched by a corresponding invocation of
+va_end() in the same function. After the call va_end(ap) the variable ap is
+undefined. Multiple traversals of the list, each bracketed by va_start() and
+va_end() are possible. va_end() may be a macro or a function.
+
+<ex>
+
+namespace cxx_cpp
+{
+  void argprint(int num_args, ...)
+  {
+    va_list ap;
+
+    // The argument `last` is the name of the last argument `before` the
+    // variable argument list, that is, the last argument of `which the calling
+    // function knows the type.`
+
+    va_start(ap, num_args);
+
+    // note that num_arg is valid arg to use
+
+    for (int i = 0; i < num_args; ++i)
+    {
+      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
+    }
+
+    va_end(ap);
+  }
+
+
+  // The function takes a string of format characters and prints out the
+  // argument associated with each format character `based on the type`
+
+  void xprint(char *fmt, ...)
+  {
+    va_list ap;
+    int d;
+    char c, *s;
+
+    va_start(ap, fmt);
+
+    while (*fmt)
+    {
+      switch (*fmt++)
+      {
+        case 's':
+          s = va_arg(ap, char *);
+          printf("string %s\n", s);
+          break;
+        
+        case 'd':
+          d = va_arg(ap, int);
+          printf("int %d\n", d);
+          break;
+
+        case 'c':
+
+          // c = va_arg(ap, char);
+          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed through ‘...’
+          //            c = va_arg(ap, char);
+          //                           ^
+          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to ‘va_arg’)
+          // cxx.cpp:7950:26: note: if this code is reached, the program will abort
+          //
+          // need a cast here since va_arg only takes fully promoted types
+
+          c = (char) va_arg(ap, int);
+          printf("char %c\n", c);
+          break;
+      }
+    }
+    va_end(ap);
+  }
+
+} // namespace
+
+
+// arg 0 is 10
+// arg 1 is 20
+// arg 2 is 30
+//
+// string foo
+// int 10
+// char a
+//
+// string foo
+// int 10
+// int 97
+
+TEST(Cpp, Vaarg)
+{
+  using namespace cxx_cpp;
+
+  argprint(3, 10, 20, 30);
+
+  xprint("sdc", "foo", 10, 'a');
+  xprint("sdd", "foo", 10, 'a');
+}
+
+
+<cxx-vprintf>
+
+#include <stdio.h>
+
+int printf(const char *format, ...);
+int fprintf(FILE *stream, const char *format, ...);
+int sprintf(char *str, const char *format, ...);
+int snprintf(char *str, size_t size, const char *format, ...);
+
+#include <stdarg.h>
+
+int vprintf(const char *format, va_list ap);
+int vfprintf(FILE *stream, const char *format, va_list ap);
+int vsprintf(char *str, const char *format, va_list ap);
+int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+
+The functions vprintf(), vfprintf(), vsprintf(), vsnprintf() are equivalent to
+the functions printf(), fprintf(), sprintf(), snprintf(), respectively, except
+that they are called with a `va_list instead of` a variable number of
+arguments. These functions do not call the va_end macro. Because they
+invoke the va_arg macro, the value of ap is undefined after the call. See
+stdarg(3).
+
+The functions snprintf() and vsnprintf() do not write more than size bytes
+(including the terminating null byte ('\0')). If the output was truncated due
+to this limit then the return value is the number of characters (excluding the
+    terminating null byte) which would have been written to the final string
+if enough space had been available. Thus, a return value of size or more means
+that the output was truncated.  (See also below under NOTES.) If an output
+error is encountered, a negative value is returned.
+
+
+{cxx-vaarg-cpp-vaarg} variadic-macros
+
+http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
+
+A `macro` can be declared to accept a variable number of arguments much as a
+function can. The syntax for defining the macro is similar to that of a
+function. Here is an example:
+
+     #define eprintf(...) fprintf (stderr, __VA_ARGS__)
+
+This kind of macro is called `variadic`. When the macro is invoked, all the
+tokens in its argument list after the last named argument (this eprintf macro
+    has none), including any commas, become the variable argument. This
+sequence of tokens replaces the identifier __VA_ARGS__ in the macro body
+wherever it appears. Thus, we have this expansion:
+
+     eprintf ("%s:%d: ", input_file, lineno)
+          ==>  fprintf (stderr, "%s:%d: ", input_file, lineno)
+
+The variable argument is completely macro-expanded before it is inserted into
+the macro expansion, just like an ordinary argument. You may use the '#' and
+'##' operators to stringify the variable argument or to paste its leading or
+trailing token with another token. (But see below for an important special
+    case for '##'.)
+
+If your macro is complicated, you may want `a more descriptive name` for the
+variable argument than __VA_ARGS__. CPP permits this, as an extension. You may
+write an argument name immediately before the '...'; that name is used for the
+variable argument. The eprintf macro above could be written
+
+     #define eprintf(args...) fprintf (stderr, args)
+
+
+<use-named-and-variable-args>
+
+You `can have named arguments as well as variable arguments` in a variadic
+macro. We could define eprintf like this, instead:
+
+     #define eprintf(format, ...) fprintf (stderr, format, __VA_ARGS__)
+
+This formulation looks more descriptive, but unfortunately it is `less
+flexible`: you must now supply at `least-one-argument` after the format string
+because in standard C, you cannot omit the comma separating the named argument
+`from` the variable arguments, because there will be an extra comma after the
+format string.
+
+*cxx-error* on for GCC 4.6 and 6.x when use:
+
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+eprintf("success!\n");
+
+cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+
+HOW to fix?
+
+TEST(Cpp, VaargMacro)
+{
+  eprintf("success!\n");
+}
+
+
+`the '##' token paste operator` has a special meaning when placed between a
+comma and a variable argument. If you write
+
+     #define eprintf(format, ...) fprintf (stderr, format, ##__VA_ARGS__)
+
+and the variable argument is left out when the eprintf macro is used, then the
+`comma before the '##' will be deleted.` 
+
+     eprintf ("success!\n")
+          ==> fprintf(stderr, "success!\n");
+
+// no napesapce effect but for visual effect
+namespace cxx_cpp
+{
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
+} // namespace
+
+
+// [ RUN      ] Cpp.VaargMacro
+// success!
+// [       OK ] Cpp.VaargMacro (0 ms)
+
+TEST(Cpp, VariableArgsMacro)
+{
+  eprintf("success!\n");
+}
+
+
+The above explanation is ambiguous about the case where the only macro
+parameter is a variable arguments parameter, as it is meaningless to try to
+distinguish whether no argument at all is an empty argument or a missing
+argument. In this case the C99 standard is clear that the comma must remain,
+however the existing GCC extension used to swallow the comma. So CPP retains
+the comma when conforming to a specific C standard, and drops it otherwise.
+
+Variadic macros are a new feature in C99. GNU CPP has supported them for a
+long time, but only with a named variable argument ('args...', not '...' and
+    __VA_ARGS__). If you are concerned with portability to previous versions
+of GCC, you should use only named variable arguments. On the other hand, if
+you are concerned with portability to other conforming implementations of C99,
+you should use only __VA_ARGS__.
+
+Previous versions of CPP implemented `the comma-deletion extension` much more
+generally. We have restricted it in this release to minimize the differences
+from C99. 
+
+To get the same effect with both this and previous versions of GCC, the token
+preceding the special '##' must be a comma, and there must be white space
+between that comma and whatever comes immediately before it:
+
+  #define eprintf(format, args...) fprintf (stderr, format , ##args)
+
+
+{case}
+
+Use:
+
+MHEGDebugInfo(eMHVdsm, "_mhvDsmEventCreate %d\n", num);
+
+#if ...
+
+#define MHEGDebugInfo(comp, ...) {BP_PRINT(MHEGDebugCompToBPComp(comp), CCDebugBP::INFO, __VA_ARGS__);\
+                                  MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__); }
+...
+
+#define MHEGOnlyDebugInfo(comp, ...) (MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__))
+...
+
+#else
+
+#define MHEGDebugInfo(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__))
+#define MHEGDebugDebug(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelDebug, __FUNCTION__, __VA_ARGS__))
+#define MHEGDebugWarning(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelWarning, __FUNCTION__, __VA_ARGS__))
+#define MHEGDebugMajor(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelMajor, __FUNCTION__, __VA_ARGS__))
+#define MHEGDebugFatal(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelFatal, __FUNCTION__, __VA_ARGS__))
+
+#endif
+
+void MHEGDebugTrace(MHEGComponent comp, MHEGLevel level, const char* functionName, ...)
+{
+  // Always send to BP print, at least for now.
+  if ((s_traceLevels[comp] >= level) && (s_traceLevels[comp] < eMHEGLevelOff))
+  {
+    va_list ap;
+    va_start(ap, functionName);
+    char *message = va_arg(ap, char*);
+    output(comp, level, functionName, message, ap);
+    va_end(ap);
+  }
+}
+
+#define LINE_LIMIT 1024
+static char temp_buffer[LINE_LIMIT + 1]; // Limit all strings to LINE_LIMIT
+
+void output(MHEGComponent comp, MHEGLevel level, const char* function, const char* string, va_list arg)
+{
+  AUTOLOCK();
+
+  // TODO, add support for timestamp.
+  // Check for space
+  // Construct final string
+  long int tick = PCTime::Tick();
+
+  // #define SNPRINTF snprintf
+
+  int pos = SNPRINTF(temp_buffer, LINE_LIMIT, "[%ld:%ld][%s][%s][%s] ", 
+      tick/1000, tick%1000, s_names[comp], s_traceLevelName[level], function);
+
+  // string is fmt
+
+  size_t len = vsnprintf(temp_buffer + pos, LINE_LIMIT - pos - 1, string, arg) + pos;
+
+  if (temp_buffer[len - 1] != '\n')
+  {
+    temp_buffer[len] = '\n';
+    len++;
+    temp_buffer[len] = '\0';
+  }
+
+  BP_PRINTR(CCDebug::DEFAULT, CCDebugBP::INFO, temp_buffer);
+}
+
+
+{case}
+
+From Tizen:
+
+__pServiceAppImpl is pointer from creating objcets.
+
+/*
+ * @param[in] NID         The Tizen namespace
+ * @param[in] condition   The condition that is expected to be true
+ * @param[in] r           The last result to set
+ * @param[in] ...         The message to display
+ */
+
+SysTryReturnResult(NID_APP, __pServiceAppImpl, E_OUT_OF_MEMORY, "[E_OUT_OF_MEMORY] Insufficient memory.");
+
+// *cxx-unlikely*
+
+#ifndef unlikely
+#define unlikely(x)  __builtin_expect(!!(x), 0)
+#endif
+
+#define SysTryReturnVoidResult(NID, condition, r, ...) \
+  do \
+  { \
+    if (unlikely(!(condition))) \
+    { \
+      SysLogException(NID, r, __VA_ARGS__); \
+      return; \
+    } \
+  } while (0);
+
+// nested variadic macro
+
+#define SysLogException(NID, r, ...)  SysLogExceptionInternal(NID, r, __PRETTY_FUNCTION__, __LINE__, __VA_ARGS__)
+
+
+void
+SysLogExceptionInternal(unsigned long nid, result r, const char* pFunction, int lineNumber, const char* pFormat, ...)
+{
+  va_list args;
+
+  SetLastResult(r);
+
+  if (!logInfo.platformExceptionEnabled)
+  {
+    return;
+  }
+
+  va_start(args, pFormat);
+  __PrintSysLog(static_cast<_LogType>(LOG_EXCEPTION), static_cast<LogID>(nid), pFunction, lineNumber, pFormat, args);
+  va_end(args);
+}
+
+void 
+__PrintSysLog(_LogType type, LogID id, const char* pFunction, int lineNumber, const char* pFormat, va_list args)
+{
+  if (!iniLoaded)
+  {
+    __InitializeLogInfo();
+  }
+
+  if (!__GetEnableInfo(static_cast<LogID>(id)))
+  {
+    return;
+  }
+
+  char logBody[LOG_LEN_MAX];
+  snprintf(logBody, LOG_LEN_MAX, "%s(%d) > %s", pFunction, lineNumber, pFormat);
+  logBody[LOG_LEN_MAX -1] = '\0';
+
+  char logTag[LOG_MODULE_NAME_LEN_MAX];
+
+  snprintf(logTag, LOG_MODULE_NAME_LEN_MAX, "%s", __GetModuleName(static_cast<LogID>(id)));
+  logTag[LOG_MODULE_NAME_LEN_MAX - 1] = '\0';
+
+  switch (type)
+  {
+    case static_cast<_LogType>(LOG_INFO):
+      LOG_VA(LOG_INFO, logTag, logBody, args);
+      break;
+
+    case static_cast<_LogType>(LOG_DEBUG):
+      LOG_VA(LOG_DEBUG, logTag, logBody, args);
+      break;
+
+    case static_cast<_LogType>(LOG_EXCEPTION):
+      ALOG_VA(LOG_ERROR, logTag, logBody, args);
+      break;
+
+    case static_cast<_LogType>(LOG_USER):
+      ALOG_VA(LOG_ERROR, logTag, logBody, args);
+      break;
+
+    default:
+      LOG_VA(LOG_DEBUG, LOG_TAG_NULL, logBody, args);
+      break;
+  }
+}
+
+#ifndef LOG_VA
+#define LOG_VA(priority, tag, fmt, args) \
+  vprint_log(D##priority, tag, fmt, args)
+#endif
+
+#define vprint_log(prio, tag, fmt...) \
+  __dlog_vprint(LOG_ID_MAIN, prio, tag, fmt)
+
+
+result
+ServiceApp::Execute(ServiceAppInstanceFactory pServiceAppFactory, const IList* pArguments)
+{
+  r = pAppImpl->Construct(pArguments);
+  SysTryCatch(NID_APP, !IsFailed(r), r = E_SYSTEM, E_SYSTEM, "[E_SYSTEM] %s.", GetErrorMessage(r));
+CATCH:
+  delete pServiceApp;
+
+  return r;
+}
+
+#define SysTryCatch(NID, condition, expr, r, ...) \
+  do \
+  { \
+    if (unlikely(!(condition))) { \
+      SysLogException(NID, r, __VA_ARGS__); \
+      expr; \
+      goto CATCH; \
+  } \
+} while (0);
+
+
+{case-example-two}
+
+_INFO("main:_terminate:leave\n");
+
+#ifndef _ERR
+#define _ERR(fmt, args...) LOGE("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
+#endif
+
+#ifndef _DBG
+#define _DBG(fmt, args...) LOGD("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
+#endif
+
+#ifndef _INFO
+#define _INFO(fmt, args...) LOGI("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
+#endif
+
+#ifndef LOGI
+#define LOGI(...) ((void)LOG(LOG_INFO, LOG_TAG, __VA_ARGS__))
+#endif
+
+#ifndef LOGE
+#define LOGE(...) ((void)LOG(LOG_ERROR, LOG_TAG, __VA_ARGS__))
+#endif
+
+#ifndef LOG
+#define LOG(priority, tag, ...) \
+  print_log(D##priority, tag, __VA_ARGS__)
+#endif
+
+#define print_log(prio, tag, fmt...) \
+  __dlog_print(LOG_ID_MAIN, prio, tag, fmt)
+
+int __dlog_vprint(log_id_t log_id, int prio, const char *tag, const char *fmt, va_list ap)
+{
+  char buf[LOG_BUF_SIZE];
+
+  vsnprintf(buf, LOG_BUF_SIZE, fmt, ap);
+
+  return write_to_log(log_id, prio, tag, buf);
+}
+
+int __dlog_print(log_id_t log_id, int prio, const char *tag, const char *fmt, ...)
+{
+  va_list ap;
+  char buf[LOG_BUF_SIZE];
+
+  va_start(ap, fmt);
+  vsnprintf(buf, LOG_BUF_SIZE, fmt, ap);
+  va_end(ap);
+
+  return write_to_log(log_id, prio, tag, buf);
+}
+
+static int __write_to_log_kernel(log_id_t log_id, log_priority prio, const char *tag, const char *msg)
+{
+	ssize_t ret;
+	int log_fd;
+	struct iovec vec[3];
+
+	if( log_id < LOG_ID_MAX )
+		log_fd = log_fds[log_id];
+	else
+		return -1; // for TC
+
+	if (!tag)
+		  tag = "";
+
+	vec[0].iov_base	= (unsigned char *) &prio;
+	vec[0].iov_len	= 1;
+	vec[1].iov_base	= (void *) tag;
+	vec[1].iov_len	= strlen(tag) + 1;
+	vec[2].iov_base	= (void *) msg;
+	vec[2].iov_len	= strlen(msg) + 1;
+
+   // *cxx-syscall*
+	ret = writev(log_fd, vec, 3);
+
+	return ret;
+}
+
+static int __dlog_init(log_id_t log_id, log_priority prio, const char *tag, const char *msg)
+{
+#ifdef HAVE_PTHREADS
+  pthread_mutex_lock(&log_init_lock);
+#endif
+  // get filtering info
+
+  // open device
+  if( write_to_log == __dlog_init)
+  {
+    log_fds[LOG_ID_MAIN] = open("/dev/"LOG_MAIN, O_WRONLY);
+    log_fds[LOG_ID_RADIO] = open("/dev/"LOG_RADIO, O_WRONLY);
+    log_fds[LOG_ID_SYSTEM] = open("/dev/"LOG_SYSTEM, O_WRONLY);
+
+    if( log_fds[LOG_ID_MAIN] < 0 || log_fds[LOG_ID_RADIO] < 0 )
+    {
+      fprintf(stderr, "open log dev is failed\n");
+      write_to_log = __write_to_log_null;
+    }
+    else
+      write_to_log = __write_to_log_kernel;
+
+    if( log_fds[LOG_ID_SYSTEM] < 0 )
+    {
+      log_fds[LOG_ID_SYSTEM] = log_fds[LOG_ID_MAIN];
+    }
+  }
+#ifdef HAVE_PTHREADS
+  pthread_mutex_unlock(&log_init_lock);
+#endif
+  return write_to_log(log_id, prio, tag, msg);
+}
+
+
+*cxx-vaarg-issue* *cxx-printf-issue* why-ellipses-dangerous
+http://www.learncpp.com/cpp-tutorial/714-ellipses-and-why-to-avoid-them/
+
+Two points:
+
+o no type checks on calling parameters
+
+o no checks on the number of calling parameters
+
+#include <cstdarg> // needed to use ellipses
+
+// The ellipses must be the last parameter
+double FindAverage(int nCount, ...)
+{
+  long lSum = 0;
+
+  // We access the ellipses through a va_list, so let's declare one
+  va_list list;
+
+  // We initialize the va_list using va_start. The first parameter is
+  // the list to initialize. The second parameter is the last non-ellipse
+  // parameter.
+  va_start(list, nCount);
+
+  // Loop nCount times
+  for (int nArg=0; nArg < nCount; nArg++)
+    // We use va_arg to get parameters out of our ellipses
+    // The first parameter is the va_list we're using
+    // The second parameter is the type of the parameter
+    lSum += va_arg(list, int);
+
+  // Cleanup the va_list when we're done.
+  va_end(list);
+
+  return static_cast<double>(lSum) / nCount;
+}
+ 
+int main()
+{
+  cout << FindAverage(5, 1, 2, 3, 4, 5) << endl;
+  cout << FindAverage(6, 1, 2, 3, 4, 5, 6) << endl;
+}
+
+Why ellipses are dangerous
+
+Ellipses offer the programmer a lot of flexibility to implement functions that
+can take a variable number of parameters. However, this flexibility comes with
+some very dangerous downsides.
+
+With regular function parameters, the compiler uses type checking to ensure
+the types of the function arguments match the types of the function parameters
+(or can be implicitly converted so they match). This helps ensure you don't
+pass a function an integer when it was expecting a string, or vice versa.
+However, note that ellipses parameters have no type declarations. When using
+ellipses, the compiler completely suspends type checking for ellipses
+parameters. This means it is possible to send arguments of any type to the
+ellipses! However, the downside is that the compiler will no longer be able to
+warn you if you call the function with ellipses arguments that do not make
+sense. When using the ellipses, it is completely up to the caller to ensure
+the function is called with ellipses arguments that the function can handle.
+Obviously that leaves quite a bit of room for error (especially if the caller
+    wasn't the one who wrote the function).
+
+Lets look at an example of a mistake that is pretty subtle:
+	
+cout << FindAverage(6, 1.0, 2, 3, 4, 5, 6) << endl;
+
+Although this may look harmless enough at first glance, see that the second
+argument (the first ellipse argument) is a double instead of an integer. This
+compiles fine, and produces a somewhat surprising result:
+
+1.78782e+008
+
+which is a REALLY big number. How did this happen?
+
+As you have learned in previous lessons, a computer stores all data as a
+sequence of bits. A variable's type tells the computer how to translate that
+sequence of bits into a meaningful value.  However, you just learned that the
+ellipses throw away the variable's type! Consequently, the only way to get a
+meaningful value back from the ellipses is to manually tell va_arg() what the
+expected type of the next parameter is. This is what the second parameter of
+va_arg() does. If the actual parameter type doesn't match the expected
+parameter type, bad things will usually happen.
+
+In the above FindAverage program, we told va_arg() that our variables are all
+expected to have a type of int. Consequently, each call to va_arg() will
+return the next sequence of bits translated as an integer.
+
+In this case, the problem is that the double we passed in as the first ellipse
+argument is 8 bytes, whereas va_arg(list, int) will only return 4 bytes of
+data with each call. Consequently, the first call to va_arg will only read the
+first 4 types of the double (producing a garbage result), and the second call
+to va_arg will read the second 4 bytes of the double (producing another
+    garbage result).  Thus, our overall result is garbage.
+
+Because type checking is suspended, the compiler won't even complain if we do
+something completely ridiculous, like this:
+	
+int nValue = 7; cout << FindAverage(6, 1.0, 2, "Hello, world!", 'G', &nValue,
+    &FindAverage) << endl;
+
+Believe it or not, this actually compiles just fine, and produces the
+following result on the author's machine:
+
+1.79766e+008
+
+This result epitomizes the phrase, "Garbage in, garbage out" which is a
+popular computer science phrase used primarily to call attention to the fact
+that computers, unlike humans, will unquestioningly process the most
+nonsensical of input data and produce nonsensical output (wikipedia).
+
+So, in summary, type checking on the parameters is suspended, and we have to
+trust the caller to pass in the right type of parameters. If they don't, the
+compiler won't complain; our program will just produce garbage (or maybe
+    crash).
+
+<second-problem>
+As if that wasn't dangerous enough, we run into a second potential problem.
+Not only do the ellipses throw away the type of the parameters, it also throws
+away the number of parameters in the ellipses!  This means we have to devise
+our own solution for keeping track of the number of parameters passed into the
+ellipses. Typically, this is done in one of two ways:
+
+o One of the fixed parameters is used as a parameter count (this is the
+    solution we use in the FindAverage example above)
+
+o The ellipse parameters are processed until a sentinel value is reached. A
+sentinel is a special value that is used to terminate a loop when it is
+encountered. For example, we could pick a sentinel value of 0, and continually
+process ellipse parameters until we find a 0 (which should be the last value).
+Sentinel values only work well if you can find a sentinel value that is not a
+legal data value. 
+
+However, even here we run into trouble. For example, consider the following call:
+
+For example:
+
+cout << FindAverage(6, 1, 2, 3, 4, 5) << endl;
+
+On the authors machine at the time of writing, this produced the result:
+
+699773
+
+What happened? We told FindAverage() we were going to give it 6 values, but we
+only gave it 5.  Consequently, the first five values that va_arg() returns
+were the ones we passed in. The 6th value it returns was a garbage value
+somewhere in the stack. Consequently, we got a garbage answer.
+
+When using a sentinel value, if the caller forgets to include the sentinel,
+     the loop will run continuously until it runs into garbage that matches
+     the sentinel (or crashes).
+
+Recommendations for safer use of ellipses
+
+First, if possible, do not use ellipses at all! Oftentimes, other reasonable
+solutions are available, even if they require slightly more work. For example,
+          in our FindAverage() program, we could have passed in a dynamically
+          sized array of integers instead. This would have provided both
+          strong type checking (to make sure the caller doesn't try to do
+              something nonsensical) while preserving the ability to pass a
+          variable number of integers to be averaged.
+
+Second, if you do use ellipses, do not mix expected argument types within your
+ellipses if possible.  Doing so vastly increases the possibility of the caller
+inadvertently passing in data of the wrong type and va_arg() producing a
+garbage result.
+
+Third, using a count parameter as part of the argument list is generally safer
+than using a sentinel as an ellipses parameter. This forces the user to pick
+an appropriate value for the count parameter, which ensures the ellipses loop
+will terminate after a reasonable number of iterations even if it produces a
+garbage value.
 
 
 ={============================================================================
@@ -6200,185 +7392,6 @@ Why work? Because operators returns reference of 'lhs' operand which is `cin`
 
 
 ={============================================================================
-*kt_dev_lang_008* type and printf
-
-<1>
-{
-  printf("ulong max from limits: %luL\n", ULLONG_MAX );
-  printf("ulong max from limits: %lluL\n", ULLONG_MAX );
-  cout << "ulong max from limits: " << ULLONG_MAX << endl;
-}
-
-ulong max from limits: 4294967295L            //         0xffffffff 
-ulong max from limits: 18446744073709551615L  // 0xffffffffffffffff
-ulong max from limits: 18446744073709551615
-
-This shows that printf outputs differently depending on specifier used.
-
-
-<2>
-{
-  unsigned long long umax = UINT_MAX;
-
-  printf("Maximum value of type unsigned int : %llu, 0x%llx\n\n",
-      umax, umax);
-}
-
-Maximum value of type unsigned int : 4294967295, 0xffffffff
-
-{
-  unsigned long long umax = UINT_MAX;
-
-  printf("Maximum value of type unsigned int : %u, 0x%llx\n\n",
-      umax, umax);
-}
-
-Maximum value of type unsigned int : 4294967295, 0xffffffff00000000
-
-Why different? printf bug?
-
-{
-  unsigned int umax = UINT_MAX;
-
-  printf("value of type unsigned int : %u, 0x%x\n\n",
-      umax, umax);
-}
-
-value of type unsigned int : 4294967295, 0xffffffff
-
-{
-  unsigned int umax = UINT_MAX;
-
-  printf("value of type unsigned int : %llu, 0x%llx\n\n",
-      umax, umax);
-}
-
-value of type unsigned int : 18446744073709551615, 0x10804875b
-
-
-note:
-Looks like that printf uses pointer depending on specifier used.
-
-
-<3>
-Started from a question that "What would happen when do UINT_MAX*16 and put the
-result back to unsigned int?"
-
-{
-  unsigned int umax = UINT_MAX;
-
-  printf("value of type unsigned int : %u, 0x%x \n", umax, umax);
-
-  unsigned long long ll = 16*umax;
-
-  or
-
-  unsigned int ll = 16*umax;
-
-  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
-}
-
-value of type unsigned int : 4294967295, 0xffffffff
-value of type unsigned long: 4294967280, 0xfffffff0
-
-
-<wrap-around>
-The result looks like done 16(2^4) shift regardless of type used. Why is that?
-This is due to *wrap-around*
-
-CPM P35.
-
-If we assign an out-of-range value to an object of unsigned type, the result is
-the 'remainder' of the value 'modulo' the number of values the 'target' type can
-hold. For example, 8-bit unsigned char can hold values from 0 through 255
-inclusive. If we assign a value outside this range, the compiler assigns the
-remainder of that value modulo 256. Therefore, assigning -1 to an unsigned char
-gives that object the value 256.
-
-{
-  unsigned int umax = UINT_MAX;
-
-  printf("value of type unsigned int : %u, 0x%x \n", umax, umax);
-
-  unsigned long long ll = 2*umax;
-
-  printf("value of type unsigned long: %llu, 0x%llx\n\n", ll, ll);
-}
-
-value of type unsigned int : 4294967295, 0xffffffff
-value of type unsigned long: 4294967294, 0xfffffffe
-
-
-{
-  unsigned long long umax = UINT_MAX;
-
-  printf("value of type unsigned int : %llu, 0x%llx \n", umax, umax);
-
-  unsigned long long ll = 2*umax;
-
-  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
-}
-
-value of type unsigned int : 4294967295, 0xffffffff
-value of type unsigned long: 8589934590, 0x1fffffffe
-
-The above shows that wrap-around happens before promotion.
-
-
-{
-  unsigned long long umax = UINT_MAX;
-
-  printf("value of type unsigned int : %llu, 0x%llx \n", umax, umax);
-
-  unsigned long long ll = 16*umax;
-
-  printf("value of type unsigned long: %llu, 0x%llx \n", ll, ll);
-}
-
-value of type unsigned int : 4294967295, 0xffffffff
-value of type unsigned long: 68719476720, 0xffffffff0
-
-
-
-<Q>
-Interesting thing found is that when use calculation to get MIN and MAX, cout
-prints out MIN without minus sign but printf do. When use real value as limits.h
-do, cout prints out minus sign.
-
-#include <iostream>
-#include <climits>
-#include <cstdio>
-
-using namespace std;
-
-#define MUINT_MAX (~(unsigned)0)
-
-// #define MINT_MAX ((unsigned)~0>>1)
-// #define MINT_MIN (-MINT_MAX-1)
-
-// taken from limits.h
-#define MINT_MIN  (-MINT_MAX - 1)
-#define MINT_MAX  2147483647
-
-int main()
-{
-  cout << "uint: " << 0 << " - " << UINT_MAX << endl;
-  cout << " int: " << INT_MIN << " - " << INT_MAX << endl;
-
-  cout << "uint: " << 0 << " ~ " << MUINT_MAX << endl;
-  cout << " int: " << -MINT_MAX-1 << " ~ " << MINT_MAX << endl;
-
-  printf("signed int : %4d ~ %4d \n", MINT_MIN, MINT_MAX );
-}
-
-uint: 0 - 4294967295
- int: -2147483648 - 2147483647
-uint: 0 ~ 4294967295
- int: -2147483648 ~ 2147483647            // note:
-signed int : -2147483648 ~ 2147483647 
-
-
-={============================================================================
 *kt_dev_lang_011* expr-literal
 
 To specify the type of a literal. Primus p40.
@@ -7672,995 +8685,6 @@ while( middle != end && *middle != sought )
 }
 
 // when no found, begin, end, and middle are the same.
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-printf-format cxx-vaarg
-
-<cxx-printf-format>
-
-       int printf(const char *format, ...);
-
-man 3 printf
-
-   Format of the format string
-
-       The format string is a character string, beginning and ending in its
-       initial shift state, if any. The format string is composed of zero or
-       more  directives: 
-       
-       ordinary  characters (not  %),  which  are copied unchanged to the
-       output stream; 
-       
-       and `conversion specifications`, each of which results in fetching zero
-       or more subsequent arguments. Each conversion specification is
-       introduced by the character `%`, and
-       
-       In between 
-
-       1. there may be (in this order) zero or more `flags`, 
-       2. an optional minimum `field width`, 
-       3. an optional `precision` 
-       4. an optional `length modifier`
-       5. `ends with a conversion specifier`
-
-   The length modifier
-
-       Here, "integer conversion" stands for d, i, o, u, x, or X conversion.
-
-       hh     
-       A following integer conversion corresponds to a signed char or unsigned
-       char argument, or a following n conversion corresponds to a pointer to
-       a signed char argument.
-
-       h
-       A following integer conversion corresponds to a short int or unsigned
-       short int argument, or a following n conversion corresponds to a
-       pointer to a short int argument.
-
-       l
-       (ell) A following integer conversion corresponds to a long int or
-       unsigned long int argument, or a following n conversion corresponds to
-       a pointer to a long int argument, or a following c conversion
-       corresponds to a wint_t argument, or a following s conversion
-       corresponds to a pointer to wchar_t argument.
-
-       ll
-       (ell-ell).  A following integer conversion corresponds to a long long
-       int or unsigned long long int argument, or a following n conversion
-       corresponds to a pointer to a long long int argu‐ ment.
-
-       L 
-       A following a, A, e, E, f, F, g, or G conversion corresponds to a long
-       double argument. (C99 allows %LF, but SUSv2 does not.)
-
-
-   The conversion specifier
-
-       A character that specifies the type of conversion to be applied.  The
-       conversion specifiers and their meanings are:
-
-       d, i
-       
-       The int argument is converted to signed decimal notation.  The
-       precision, if any, gives the minimum number of digits that must appear;
-       if the converted value requires fewer digits, it is padded on the left
-       with  zeros.  The default precision is 1.  When 0 is printed with an
-       explicit precision 0, the output is empty.
-
-       o, u, x, X 
-       
-       The  `unsigned-int` argument is converted to 
-
-       unsigned octal (o),
-
-       unsigned decimal (u), 
-
-       unsigned hexadecimal (x and X) notation. 
-       The letters abcdef are used for x conversions; the letters ABCDEF are
-       used for X conversions.  
-         
-       The precision, if any, gives the minimum number of digits that must
-       appear; if the converted value requires fewer digits, it is padded on
-       the left with zeros.  The default precision is 1.   When  0 is  printed
-       with an explicit precision 0, the output is empty.
-
-       p
-       The void * pointer argument is printed in hexadecimal 
-       (as if by %#x or %#lx).
-
-       a, A
-
-       (C99;  not  in  SUSv2,  but  added in SUSv3) For a conversion, the
-       `double` argument is converted to hexadecimal notation (using the
-           letters abcdef) in the style [-]0xh.hhhhp±; for A conversion the
-       prefix 0X, the letters ABCDEF, and the exponent separator P is used.
-       There is one hexadecimal digit before the decimal point, and the number
-       of digits after it is equal to the precision.  The default precision
-       suffices for an  exact  repre- sentation of the value if an exact
-       representation in base 2 exists and otherwise is sufficiently large to
-       distinguish values of type double.  The digit before the decimal point
-       is unspecified for nonnormalized numbers, and nonzero but otherwise
-       unspecified for normalized numbers.
-
-
-       f, F   
-       The `double  argument` is rounded and converted to decimal notation in
-       the style [-]ddd.ddd, where the number of digits after the
-       decimal-point character is equal to the precision specification.  If
-       the  precision  is missing,  it  is  taken as 6; if the precision is
-       explicitly zero, no decimal-point character appears.  If a decimal
-       point appears, at least one digit appears before it.
-
-       g, G
-       The `double argument` is converted in style f or e (or F or E for G
-           conversions). The precision specifies the number of significant
-       digits.  If the  precision  is  missing,  6  digits  are given;  if
-       the  precision is zero, it is treated as 1.  Style e is used if the
-       exponent from its conversion is less than -4 or greater than or equal
-       to the precision.  Trailing zeros are removed from the fractional part
-       of the result; a decimal point appears only if it is followed by at
-       least one digit.
-
-       s
-       
-       If no l modifier is present: The const char * argument is expected to
-       be a pointer to an array of character type (pointer to a string).
-       Characters from the array are written up  to  (but not  including)  a
-       terminating null byte ('\0'); if a precision is specified, no more than
-       the number specified are written.  If a precision is given, no null
-       byte need be present; if the precision is not specified, or is greater
-       than the size of the array, the array must contain a terminating null
-       byte.
-
-       If an l modifier is present: The const wchar_t * argument is expected
-       to be a pointer to an array of wide characters.  Wide characters from
-       the array are converted to multibyte characters (each  by a call to the
-           wcrtomb(3) function, with a conversion state starting in the
-           initial state before the first wide character), up to and including
-       a terminating null wide character.  The resulting multibyte characters
-       are written up to (but not including) the terminating null byte.  If a
-       precision is specified, no more bytes than the number specified are
-       written,  but no  partial  multibyte characters are written.  Note that
-       the precision determines the number of bytes written, not the number of
-       wide characters or screen positions.  The array must con‐ tain a
-       terminating null wide character, unless a precision is given and it is
-       so small that the number of bytes written exceeds it before the end of
-       the array is reached.
-
-<ex> <not-use-printf>
-
-#include <cstdio>
-#include <iostream>
-
-int main()
-{
-    double d_val = 3.14;
-    int i_val = d_val;
-    double d_vval = i_val;
-
-    std::cout << "d_val: " << d_val << ", i_val: " << i_val << std::endl;
-    std::cout << "d_val: " << d_val << ", i_val: " << i_val << ", d_vval: " << d_vval << std::endl;
-
-    printf ("d_val: %e, i_val: %e, \n", d_val, i_val );
-    printf ("d_val: %e, i_val: %e, d_vval: %e \n", d_val, i_val, d_vval);
-}
-
-d_val: 3.14, i_val: 3
-d_val: 3.14, i_val: 3, d_vval: 3
-d_val: 3.140000e+00, i_val: 3.034283e-86,
-d_val: 3.140000e+00, i_val: 3.000000e+00, d_vval: 0.000000e+00
-
-
-{cxx-vaarg} cxx-variable-arguments cxx-cpp
-
-The va_arg, va_copy, va_end, and va_start `macros` provide a portable way to
-access the arguments to a function when the function takes a variable number
-of arguments. 
-
-There are two versions of the macros: The macros defined in STDARG.H conform
-to the ISO C99 standard; the macros defined in VARARGS.H are deprecated but
-are retained for backward compatibility with code that was written before the
-ANSI C89 standard. 
-
-
-STDARG(3) Linux Programmer's Manual
-
-NAME
-stdarg, va_start, va_arg, va_end, va_copy - variable argument lists
-
-SYNOPSIS
- #include <stdarg.h>
-
- void va_start(va_list ap, last);
- type va_arg(va_list ap, `type`);
- void va_end(va_list ap);
- void va_copy(va_list dest, va_list src);
-
-DESCRIPTION
-
-A function may be called with a `varying number of arguments` of
-`varying types` 
-
-The include file <stdarg.h> declares a type va_list and defines three macros
-for stepping through a list of arguments whose number and types are not known
-to the called function.
-
-The called function must declare an object of type va_list which is used by
-the macros va_start(), va_arg(), and va_end().
-
-
-va_start() 
-
-The va_start() macro initializes `ap` for subsequent use by va_arg() and
-va_end(), and must be called first.
-
-The argument `last` is the name of the last argument `before` the variable
-argument list, that is, the last argument of 
-`which the calling function knows the type.`
-
-Because the address of this argument may be used in the va_start() macro, it
-should not be declared as a register variable, or as a function or an array
-type.
-
-
-va_arg()
-
-The va_arg() macro expands to an expression that has the type and value of the
-next argument in the call. The argument ap is the va_list ap initialized by
-va_start(). Each call to va_arg() modifies ap so that the next call returns
-the next argument. `The argument type is a type name specified` so that the
-type of a pointer to an object that has the specified type can be obtained
-simply by adding a * to type.
-
-The first use of the va_arg() macro after that of the va_start() macro returns
-the argument after last. Successive invocations return the values of the
-remaining arguments.
-
-  If there is no next argument, or if type is not compatible with the type of
-  the actual next argument (as promoted according to the default argument
-  promotions), `random errors will occur. *cxx-error*`
-
-If ap is passed to a function that uses va_arg(ap, type) then the value of ap
-is undefined after the return of that function.
-
-
-va_end()
-
-Each invocation of va_start() must be matched by a corresponding invocation of
-va_end() in the same function. After the call va_end(ap) the variable ap is
-undefined. Multiple traversals of the list, each bracketed by va_start() and
-va_end() are possible. va_end() may be a macro or a function.
-
-<ex>
-
-namespace cxx_cpp
-{
-  void argprint(int num_args, ...)
-  {
-    va_list ap;
-
-    // The argument `last` is the name of the last argument `before` the
-    // variable argument list, that is, the last argument of `which the calling
-    // function knows the type.`
-
-    va_start(ap, num_args);
-
-    // note that num_arg is valid arg to use
-
-    for (int i = 0; i < num_args; ++i)
-    {
-      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
-    }
-
-    va_end(ap);
-  }
-
-
-  // The function takes a string of format characters and prints out the
-  // argument associated with each format character based on the type.
-
-  void xprint(char *fmt, ...)
-  {
-    va_list ap;
-    int d;
-    char c, *s;
-
-    va_start(ap, fmt);
-
-    while (*fmt)
-    {
-      switch (*fmt++)
-      {
-        case 's':
-          s = va_arg(ap, char *);
-          printf("string %s\n", s);
-          break;
-        
-        case 'd':
-          d = va_arg(ap, int);
-          printf("int %d\n", d);
-          break;
-
-        case 'c':
-
-          // c = va_arg(ap, char);
-          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed through ‘...’
-          //            c = va_arg(ap, char);
-          //                           ^
-          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to ‘va_arg’)
-          // cxx.cpp:7950:26: note: if this code is reached, the program will abort
-          //
-          // need a cast here since va_arg only takes fully promoted types
-
-          c = (char) va_arg(ap, int);
-          printf("char %c\n", c);
-          break;
-      }
-    }
-    va_end(ap);
-  }
-
-} // namespace
-
-
-// arg 0 is 10
-// arg 1 is 20
-// arg 2 is 30
-//
-// string foo
-// int 10
-// char a
-//
-// string foo
-// int 10
-// int 97
-
-TEST(Cpp, Vaarg)
-{
-  using namespace cxx_cpp;
-
-  argprint(3, 10, 20, 30);
-
-  xprint("sdc", "foo", 10, 'a');
-  xprint("sdd", "foo", 10, 'a');
-}
-
-
-<cxx-vprintf>
-
-#include <stdio.h>
-
-int printf(const char *format, ...);
-int fprintf(FILE *stream, const char *format, ...);
-int sprintf(char *str, const char *format, ...);
-int snprintf(char *str, size_t size, const char *format, ...);
-
-#include <stdarg.h>
-
-int vprintf(const char *format, va_list ap);
-int vfprintf(FILE *stream, const char *format, va_list ap);
-int vsprintf(char *str, const char *format, va_list ap);
-int vsnprintf(char *str, size_t size, const char *format, va_list ap);
-
-The functions vprintf(), vfprintf(), vsprintf(), vsnprintf() are equivalent to
-the functions printf(), fprintf(), sprintf(), snprintf(), respectively, except
-that they are called with a `va_list instead of` a variable number of
-arguments. These functions do not call the va_end macro. Because they
-invoke the va_arg macro, the value of ap is undefined after the call. See
-stdarg(3).
-
-The functions snprintf() and vsnprintf() do not write more than size bytes
-(including the terminating null byte ('\0')). If the output was truncated due
-to this limit then the return value is the number of characters (excluding the
-    terminating null byte) which would have been written to the final string
-if enough space had been available. Thus, a return value of size or more means
-that the output was truncated.  (See also below under NOTES.) If an output
-error is encountered, a negative value is returned.
-
-
-{cxx-vaarg-cpp-vaarg} variadic-macros
-
-http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
-
-A `macro` can be declared to accept a variable number of arguments much as a
-function can. The syntax for defining the macro is similar to that of a
-function. Here is an example:
-
-     #define eprintf(...) fprintf (stderr, __VA_ARGS__)
-
-This kind of macro is called `variadic`. When the macro is invoked, all the
-tokens in its argument list after the last named argument (this eprintf macro
-    has none), including any commas, become the variable argument. This
-sequence of tokens replaces the identifier __VA_ARGS__ in the macro body
-wherever it appears. Thus, we have this expansion:
-
-     eprintf ("%s:%d: ", input_file, lineno)
-          ==>  fprintf (stderr, "%s:%d: ", input_file, lineno)
-
-The variable argument is completely macro-expanded before it is inserted into
-the macro expansion, just like an ordinary argument. You may use the '#' and
-'##' operators to stringify the variable argument or to paste its leading or
-trailing token with another token. (But see below for an important special
-    case for '##'.)
-
-If your macro is complicated, you may want `a more descriptive name` for the
-variable argument than __VA_ARGS__. CPP permits this, as an extension. You may
-write an argument name immediately before the '...'; that name is used for the
-variable argument. The eprintf macro above could be written
-
-     #define eprintf(args...) fprintf (stderr, args)
-
-
-<use-named-and-variable-args>
-
-You `can have named arguments as well as variable arguments` in a variadic
-macro. We could define eprintf like this, instead:
-
-     #define eprintf(format, ...) fprintf (stderr, format, __VA_ARGS__)
-
-This formulation looks more descriptive, but unfortunately it is `less
-flexible`: you must now supply at `least-one-argument` after the format string
-because in standard C, you cannot omit the comma separating the named argument
-`from` the variable arguments, because there will be an extra comma after the
-format string.
-
-*cxx-error* on for GCC 4.6 and 6.x when use:
-
-#define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
-eprintf("success!\n");
-
-cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
-  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
-
-HOW to fix?
-
-TEST(Cpp, VaargMacro)
-{
-  eprintf("success!\n");
-}
-
-
-
-`the '##' token paste operator` has a special meaning when placed between a
-comma and a variable argument. If you write
-
-     #define eprintf(format, ...) fprintf (stderr, format, ##__VA_ARGS__)
-
-and the variable argument is left out when the eprintf macro is used, then the
-`comma before the '##' will be deleted.` 
-
-     eprintf ("success!\n")
-          ==> fprintf(stderr, "success!\n");
-
-// no napesapce effect but for visual effect
-namespace cxx_cpp
-{
-#define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
-} // namespace
-
-
-// [ RUN      ] Cpp.VaargMacro
-// success!
-// [       OK ] Cpp.VaargMacro (0 ms)
-
-TEST(Cpp, VariableArgsMacro)
-{
-  eprintf("success!\n");
-}
-
-
-The above explanation is ambiguous about the case where the only macro
-parameter is a variable arguments parameter, as it is meaningless to try to
-distinguish whether no argument at all is an empty argument or a missing
-argument. In this case the C99 standard is clear that the comma must remain,
-however the existing GCC extension used to swallow the comma. So CPP retains
-the comma when conforming to a specific C standard, and drops it otherwise.
-
-Variadic macros are a new feature in C99. GNU CPP has supported them for a
-long time, but only with a named variable argument ('args...', not '...' and
-    __VA_ARGS__). If you are concerned with portability to previous versions
-of GCC, you should use only named variable arguments. On the other hand, if
-you are concerned with portability to other conforming implementations of C99,
-you should use only __VA_ARGS__.
-
-Previous versions of CPP implemented `the comma-deletion extension` much more
-generally. We have restricted it in this release to minimize the differences
-from C99. 
-
-To get the same effect with both this and previous versions of GCC, the token
-preceding the special '##' must be a comma, and there must be white space
-between that comma and whatever comes immediately before it:
-
-  #define eprintf(format, args...) fprintf (stderr, format , ##args)
-
-
-{case}
-
-Use:
-
-MHEGDebugInfo(eMHVdsm, "_mhvDsmEventCreate %d\n", num);
-
-#if ...
-
-#define MHEGDebugInfo(comp, ...) {BP_PRINT(MHEGDebugCompToBPComp(comp), CCDebugBP::INFO, __VA_ARGS__);\
-                                  MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__); }
-...
-
-#define MHEGOnlyDebugInfo(comp, ...) (MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__))
-...
-
-#else
-
-#define MHEGDebugInfo(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelInfo, __FUNCTION__, __VA_ARGS__))
-#define MHEGDebugDebug(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelDebug, __FUNCTION__, __VA_ARGS__))
-#define MHEGDebugWarning(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelWarning, __FUNCTION__, __VA_ARGS__))
-#define MHEGDebugMajor(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelMajor, __FUNCTION__, __VA_ARGS__))
-#define MHEGDebugFatal(comp, ...)(MHEGDebugTrace(comp, eMHEGLevelFatal, __FUNCTION__, __VA_ARGS__))
-
-#endif
-
-void MHEGDebugTrace(MHEGComponent comp, MHEGLevel level, const char* functionName, ...)
-{
-  // Always send to BP print, at least for now.
-  if ((s_traceLevels[comp] >= level) && (s_traceLevels[comp] < eMHEGLevelOff))
-  {
-    va_list ap;
-    va_start(ap, functionName);
-    char *message = va_arg(ap, char*);
-    output(comp, level, functionName, message, ap);
-    va_end(ap);
-  }
-}
-
-#define LINE_LIMIT 1024
-static char temp_buffer[LINE_LIMIT + 1]; // Limit all strings to LINE_LIMIT
-
-void output(MHEGComponent comp, MHEGLevel level, const char* function, const char* string, va_list arg)
-{
-  AUTOLOCK();
-
-  // TODO, add support for timestamp.
-  // Check for space
-  // Construct final string
-  long int tick = PCTime::Tick();
-
-  // #define SNPRINTF snprintf
-
-  int pos = SNPRINTF(temp_buffer, LINE_LIMIT, "[%ld:%ld][%s][%s][%s] ", 
-      tick/1000, tick%1000, s_names[comp], s_traceLevelName[level], function);
-
-  // string is fmt
-
-  size_t len = vsnprintf(temp_buffer + pos, LINE_LIMIT - pos - 1, string, arg) + pos;
-
-  if (temp_buffer[len - 1] != '\n')
-  {
-    temp_buffer[len] = '\n';
-    len++;
-    temp_buffer[len] = '\0';
-  }
-
-  BP_PRINTR(CCDebug::DEFAULT, CCDebugBP::INFO, temp_buffer);
-}
-
-
-{case}
-
-From Tizen:
-
-__pServiceAppImpl is pointer from creating objcets.
-
-/*
- * @param[in] NID         The Tizen namespace
- * @param[in] condition   The condition that is expected to be true
- * @param[in] r           The last result to set
- * @param[in] ...         The message to display
- */
-
-SysTryReturnResult(NID_APP, __pServiceAppImpl, E_OUT_OF_MEMORY, "[E_OUT_OF_MEMORY] Insufficient memory.");
-
-// *cxx-unlikely*
-
-#ifndef unlikely
-#define unlikely(x)  __builtin_expect(!!(x), 0)
-#endif
-
-#define SysTryReturnVoidResult(NID, condition, r, ...) \
-  do \
-  { \
-    if (unlikely(!(condition))) \
-    { \
-      SysLogException(NID, r, __VA_ARGS__); \
-      return; \
-    } \
-  } while (0);
-
-// nested variadic macro
-
-#define SysLogException(NID, r, ...)  SysLogExceptionInternal(NID, r, __PRETTY_FUNCTION__, __LINE__, __VA_ARGS__)
-
-
-void
-SysLogExceptionInternal(unsigned long nid, result r, const char* pFunction, int lineNumber, const char* pFormat, ...)
-{
-  va_list args;
-
-  SetLastResult(r);
-
-  if (!logInfo.platformExceptionEnabled)
-  {
-    return;
-  }
-
-  va_start(args, pFormat);
-  __PrintSysLog(static_cast<_LogType>(LOG_EXCEPTION), static_cast<LogID>(nid), pFunction, lineNumber, pFormat, args);
-  va_end(args);
-}
-
-void 
-__PrintSysLog(_LogType type, LogID id, const char* pFunction, int lineNumber, const char* pFormat, va_list args)
-{
-  if (!iniLoaded)
-  {
-    __InitializeLogInfo();
-  }
-
-  if (!__GetEnableInfo(static_cast<LogID>(id)))
-  {
-    return;
-  }
-
-  char logBody[LOG_LEN_MAX];
-  snprintf(logBody, LOG_LEN_MAX, "%s(%d) > %s", pFunction, lineNumber, pFormat);
-  logBody[LOG_LEN_MAX -1] = '\0';
-
-  char logTag[LOG_MODULE_NAME_LEN_MAX];
-
-  snprintf(logTag, LOG_MODULE_NAME_LEN_MAX, "%s", __GetModuleName(static_cast<LogID>(id)));
-  logTag[LOG_MODULE_NAME_LEN_MAX - 1] = '\0';
-
-  switch (type)
-  {
-    case static_cast<_LogType>(LOG_INFO):
-      LOG_VA(LOG_INFO, logTag, logBody, args);
-      break;
-
-    case static_cast<_LogType>(LOG_DEBUG):
-      LOG_VA(LOG_DEBUG, logTag, logBody, args);
-      break;
-
-    case static_cast<_LogType>(LOG_EXCEPTION):
-      ALOG_VA(LOG_ERROR, logTag, logBody, args);
-      break;
-
-    case static_cast<_LogType>(LOG_USER):
-      ALOG_VA(LOG_ERROR, logTag, logBody, args);
-      break;
-
-    default:
-      LOG_VA(LOG_DEBUG, LOG_TAG_NULL, logBody, args);
-      break;
-  }
-}
-
-#ifndef LOG_VA
-#define LOG_VA(priority, tag, fmt, args) \
-  vprint_log(D##priority, tag, fmt, args)
-#endif
-
-#define vprint_log(prio, tag, fmt...) \
-  __dlog_vprint(LOG_ID_MAIN, prio, tag, fmt)
-
-
-result
-ServiceApp::Execute(ServiceAppInstanceFactory pServiceAppFactory, const IList* pArguments)
-{
-  r = pAppImpl->Construct(pArguments);
-  SysTryCatch(NID_APP, !IsFailed(r), r = E_SYSTEM, E_SYSTEM, "[E_SYSTEM] %s.", GetErrorMessage(r));
-CATCH:
-  delete pServiceApp;
-
-  return r;
-}
-
-#define SysTryCatch(NID, condition, expr, r, ...) \
-  do \
-  { \
-    if (unlikely(!(condition))) { \
-      SysLogException(NID, r, __VA_ARGS__); \
-      expr; \
-      goto CATCH; \
-  } \
-} while (0);
-
-
-{case-example-two}
-
-_INFO("main:_terminate:leave\n");
-
-#ifndef _ERR
-#define _ERR(fmt, args...) LOGE("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
-#endif
-
-#ifndef _DBG
-#define _DBG(fmt, args...) LOGD("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
-#endif
-
-#ifndef _INFO
-#define _INFO(fmt, args...) LOGI("[%s:%d] "fmt"\n", __func__, __LINE__, ##args)
-#endif
-
-#ifndef LOGI
-#define LOGI(...) ((void)LOG(LOG_INFO, LOG_TAG, __VA_ARGS__))
-#endif
-
-#ifndef LOGE
-#define LOGE(...) ((void)LOG(LOG_ERROR, LOG_TAG, __VA_ARGS__))
-#endif
-
-#ifndef LOG
-#define LOG(priority, tag, ...) \
-  print_log(D##priority, tag, __VA_ARGS__)
-#endif
-
-#define print_log(prio, tag, fmt...) \
-  __dlog_print(LOG_ID_MAIN, prio, tag, fmt)
-
-int __dlog_vprint(log_id_t log_id, int prio, const char *tag, const char *fmt, va_list ap)
-{
-  char buf[LOG_BUF_SIZE];
-
-  vsnprintf(buf, LOG_BUF_SIZE, fmt, ap);
-
-  return write_to_log(log_id, prio, tag, buf);
-}
-
-int __dlog_print(log_id_t log_id, int prio, const char *tag, const char *fmt, ...)
-{
-  va_list ap;
-  char buf[LOG_BUF_SIZE];
-
-  va_start(ap, fmt);
-  vsnprintf(buf, LOG_BUF_SIZE, fmt, ap);
-  va_end(ap);
-
-  return write_to_log(log_id, prio, tag, buf);
-}
-
-static int __write_to_log_kernel(log_id_t log_id, log_priority prio, const char *tag, const char *msg)
-{
-	ssize_t ret;
-	int log_fd;
-	struct iovec vec[3];
-
-	if( log_id < LOG_ID_MAX )
-		log_fd = log_fds[log_id];
-	else
-		return -1; // for TC
-
-	if (!tag)
-		  tag = "";
-
-	vec[0].iov_base	= (unsigned char *) &prio;
-	vec[0].iov_len	= 1;
-	vec[1].iov_base	= (void *) tag;
-	vec[1].iov_len	= strlen(tag) + 1;
-	vec[2].iov_base	= (void *) msg;
-	vec[2].iov_len	= strlen(msg) + 1;
-
-   // *cxx-syscall*
-	ret = writev(log_fd, vec, 3);
-
-	return ret;
-}
-
-static int __dlog_init(log_id_t log_id, log_priority prio, const char *tag, const char *msg)
-{
-#ifdef HAVE_PTHREADS
-  pthread_mutex_lock(&log_init_lock);
-#endif
-  // get filtering info
-
-  // open device
-  if( write_to_log == __dlog_init)
-  {
-    log_fds[LOG_ID_MAIN] = open("/dev/"LOG_MAIN, O_WRONLY);
-    log_fds[LOG_ID_RADIO] = open("/dev/"LOG_RADIO, O_WRONLY);
-    log_fds[LOG_ID_SYSTEM] = open("/dev/"LOG_SYSTEM, O_WRONLY);
-
-    if( log_fds[LOG_ID_MAIN] < 0 || log_fds[LOG_ID_RADIO] < 0 )
-    {
-      fprintf(stderr, "open log dev is failed\n");
-      write_to_log = __write_to_log_null;
-    }
-    else
-      write_to_log = __write_to_log_kernel;
-
-    if( log_fds[LOG_ID_SYSTEM] < 0 )
-    {
-      log_fds[LOG_ID_SYSTEM] = log_fds[LOG_ID_MAIN];
-    }
-  }
-#ifdef HAVE_PTHREADS
-  pthread_mutex_unlock(&log_init_lock);
-#endif
-  return write_to_log(log_id, prio, tag, msg);
-}
-
-
-{why-ellipses-dangerous}
-http://www.learncpp.com/cpp-tutorial/714-ellipses-and-why-to-avoid-them/
-
-Two points:
-
-o no type checks on calling parameters
-
-o no checks on the number of calling parameters
-
-#include <cstdarg> // needed to use ellipses
-
-// The ellipses must be the last parameter
-double FindAverage(int nCount, ...)
-{
-  long lSum = 0;
-
-  // We access the ellipses through a va_list, so let's declare one
-  va_list list;
-
-  // We initialize the va_list using va_start. The first parameter is
-  // the list to initialize. The second parameter is the last non-ellipse
-  // parameter.
-  va_start(list, nCount);
-
-  // Loop nCount times
-  for (int nArg=0; nArg < nCount; nArg++)
-    // We use va_arg to get parameters out of our ellipses
-    // The first parameter is the va_list we're using
-    // The second parameter is the type of the parameter
-    lSum += va_arg(list, int);
-
-  // Cleanup the va_list when we're done.
-  va_end(list);
-
-  return static_cast<double>(lSum) / nCount;
-}
- 
-int main()
-{
-  cout << FindAverage(5, 1, 2, 3, 4, 5) << endl;
-  cout << FindAverage(6, 1, 2, 3, 4, 5, 6) << endl;
-}
-
-Why ellipses are dangerous
-
-Ellipses offer the programmer a lot of flexibility to implement functions that
-can take a variable number of parameters. However, this flexibility comes with
-some very dangerous downsides.
-
-With regular function parameters, the compiler uses type checking to ensure
-the types of the function arguments match the types of the function parameters
-(or can be implicitly converted so they match). This helps ensure you don't
-pass a function an integer when it was expecting a string, or vice versa.
-However, note that ellipses parameters have no type declarations. When using
-ellipses, the compiler completely suspends type checking for ellipses
-parameters. This means it is possible to send arguments of any type to the
-ellipses! However, the downside is that the compiler will no longer be able to
-warn you if you call the function with ellipses arguments that do not make
-sense. When using the ellipses, it is completely up to the caller to ensure
-the function is called with ellipses arguments that the function can handle.
-Obviously that leaves quite a bit of room for error (especially if the caller
-    wasn't the one who wrote the function).
-
-Lets look at an example of a mistake that is pretty subtle:
-	
-cout << FindAverage(6, 1.0, 2, 3, 4, 5, 6) << endl;
-
-Although this may look harmless enough at first glance, see that the second
-argument (the first ellipse argument) is a double instead of an integer. This
-compiles fine, and produces a somewhat surprising result:
-
-1.78782e+008
-
-which is a REALLY big number. How did this happen?
-
-As you have learned in previous lessons, a computer stores all data as a
-sequence of bits. A variable's type tells the computer how to translate that
-sequence of bits into a meaningful value.  However, you just learned that the
-ellipses throw away the variable's type! Consequently, the only way to get a
-meaningful value back from the ellipses is to manually tell va_arg() what the
-expected type of the next parameter is. This is what the second parameter of
-va_arg() does. If the actual parameter type doesn't match the expected
-parameter type, bad things will usually happen.
-
-In the above FindAverage program, we told va_arg() that our variables are all
-expected to have a type of int. Consequently, each call to va_arg() will
-return the next sequence of bits translated as an integer.
-
-In this case, the problem is that the double we passed in as the first ellipse
-argument is 8 bytes, whereas va_arg(list, int) will only return 4 bytes of
-data with each call. Consequently, the first call to va_arg will only read the
-first 4 types of the double (producing a garbage result), and the second call
-to va_arg will read the second 4 bytes of the double (producing another
-    garbage result).  Thus, our overall result is garbage.
-
-Because type checking is suspended, the compiler won't even complain if we do
-something completely ridiculous, like this:
-	
-int nValue = 7; cout << FindAverage(6, 1.0, 2, "Hello, world!", 'G', &nValue,
-    &FindAverage) << endl;
-
-Believe it or not, this actually compiles just fine, and produces the
-following result on the author's machine:
-
-1.79766e+008
-
-This result epitomizes the phrase, "Garbage in, garbage out" which is a
-popular computer science phrase used primarily to call attention to the fact
-that computers, unlike humans, will unquestioningly process the most
-nonsensical of input data and produce nonsensical output (wikipedia).
-
-So, in summary, type checking on the parameters is suspended, and we have to
-trust the caller to pass in the right type of parameters. If they don't, the
-compiler won't complain; our program will just produce garbage (or maybe
-    crash).
-
-<second-problem>
-As if that wasn't dangerous enough, we run into a second potential problem.
-Not only do the ellipses throw away the type of the parameters, it also throws
-away the number of parameters in the ellipses!  This means we have to devise
-our own solution for keeping track of the number of parameters passed into the
-ellipses. Typically, this is done in one of two ways:
-
-o One of the fixed parameters is used as a parameter count (this is the
-    solution we use in the FindAverage example above)
-
-o The ellipse parameters are processed until a sentinel value is reached. A
-sentinel is a special value that is used to terminate a loop when it is
-encountered. For example, we could pick a sentinel value of 0, and continually
-process ellipse parameters until we find a 0 (which should be the last value).
-Sentinel values only work well if you can find a sentinel value that is not a
-legal data value. 
-
-However, even here we run into trouble. For example, consider the following call:
-
-For example:
-
-cout << FindAverage(6, 1, 2, 3, 4, 5) << endl;
-
-On the authors machine at the time of writing, this produced the result:
-
-699773
-
-What happened? We told FindAverage() we were going to give it 6 values, but we
-only gave it 5.  Consequently, the first five values that va_arg() returns
-were the ones we passed in. The 6th value it returns was a garbage value
-somewhere in the stack. Consequently, we got a garbage answer.
-
-When using a sentinel value, if the caller forgets to include the sentinel,
-     the loop will run continuously until it runs into garbage that matches
-     the sentinel (or crashes).
-
-Recommendations for safer use of ellipses
-
-First, if possible, do not use ellipses at all! Oftentimes, other reasonable
-solutions are available, even if they require slightly more work. For example,
-          in our FindAverage() program, we could have passed in a dynamically
-          sized array of integers instead. This would have provided both
-          strong type checking (to make sure the caller doesn't try to do
-              something nonsensical) while preserving the ability to pass a
-          variable number of integers to be averaged.
-
-Second, if you do use ellipses, do not mix expected argument types within your
-ellipses if possible.  Doing so vastly increases the possibility of the caller
-inadvertently passing in data of the wrong type and va_arg() producing a
-garbage result.
-
-Third, using a count parameter as part of the argument list is generally safer
-than using a sentinel as an ellipses parameter. This forces the user to pick
-an appropriate value for the count parameter, which ensures the ellipses loop
-will terminate after a reasonable number of iterations even if it produces a
-garbage value.
 
 
 ={============================================================================
@@ -17774,10 +17798,11 @@ So seperate Disc_quote to represent `the general discount concept`, not a
 concreate discount strategy, and make it abstract base class to prevent users
 creating a object of this type.
 
-class Disc_quote : public Quote {
+class Discount_quote : public Quote {
+  
   public:
-    Disc_quote() = default;
-    Disc_quote(const std::string& book, double price, std::size_t qty, double disc):
+    Discount_quote() = default;
+    Disccount_quote(const std::string& book, double price, std::size_t qty, double disc):
       Quote(book, price), quantity(qty), discount(disc) {}
 
     // *cxx-pure-virtual-function*
@@ -17788,7 +17813,7 @@ class Disc_quote : public Quote {
     double discount = 0.0;
 };
 
-class Bulk_quote : public Disc_quote {
+class Bulk_quote : public Discount_quote {
   ...
 };
 
@@ -17833,8 +17858,6 @@ auxiliary class to help manage complexity that pointer use impose.
 
 <ex>
 
-CXXPP, Quote
-
 1. use size(count) and head only
 2. in push, no full check since it overwrites and in pop, it simply
 calculates first from head substracing size.
@@ -17871,11 +17894,11 @@ namespace case_quote
     public:
 
       // *cxx-ctor*
-      // Why need to have constructors in abstract class although cannot
-      // define objects of this type directly? Becuase ctors in classes
-      // derived from Disc_quote will use the Disc_quote ctor to construct
-      // the Disc_quote part of their objects. Default ctor default
-      // initialize those members.
+      // Why need to have constructors in abstract class although cannot define
+      // objects of this type directly? Becuase ctors in classes derived from
+      // Discount_quote will use the Discount_quote ctor to construct the
+      // Disc_quote part of their objects. Default ctor default initialize those
+      // members.
 
       Discount_Quote() : quantity_(0), discount_(0.0) {}
       Discount_Quote(string const& book, double price, 
@@ -18121,7 +18144,7 @@ TEST_F(BulkQuoteTest, CheckTotal_4)
 }
 
 
-{cxx-virtual-copy} {cxx-clone} // RCPR 633
+{cxx-virtual-copy} *cxx-clone* CPR-633
 
 As seen, the user has to use shared_ptr to add items:
 
@@ -18135,19 +18158,20 @@ As seen, the user has to use shared_ptr to add items:
 }
 
 
-How can allow the user to add items like?
+To allow the user to add items like:
 
 sale.add_item(Quote("def", 35));
 sale.add_item(Bulk_quote("678", 55, 5, .25));
 
-So can change add_item() as:
+
+Change add_item() as:
 
 void add_item(const Quote &sale);    // copy version
 void add_item(Quote &&sale);         // move version
 
 void add_item( const Quote &sale )
 {
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote(sale)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote(sale)));
 }
 
 This won't do right thing. Only handles Quote even if passes Bulke_quote and

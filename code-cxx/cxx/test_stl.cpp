@@ -741,8 +741,7 @@ TEST(Iterator, StreamIterator)
 //  size()    : 4
 //  capacity(): 4
 
-// ={=
-TEST(CxxVector, seeCapacity)
+TEST(CxxVector, check_capacity)
 {
   // create empty vector for strings
   vector<string> sentence;
@@ -806,7 +805,6 @@ private:
   vector<int> icoll;
 };
 
-// ={=
 TEST(CxxVector, check_ctor)
 {
   {
@@ -901,8 +899,7 @@ void GetVectorArg(const vector<int> &coll)
   ASSERT_THAT(coll_.size(), 6);
 }
 
-// ={=
-TEST(Vector, CopyAndMoveAssign)
+TEST(CxxVector, check_assign)
 {
   // assign
   {
@@ -932,10 +929,19 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
-  // move
+  // assign
   {
     vector<int> coll1{1, 2, 3, 4, 5, 6};
-    vector<int> coll2{};
+    GetVectorArg(coll1);
+  }
+}
+
+TEST(CxxVector, check_move)
+{
+  // move
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll2{};
 
     ASSERT_THAT(coll1.size(), 6);
     ASSERT_THAT(coll2.size(), 0);
@@ -946,10 +952,29 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
-  // assign
+  // cxx-algo-move
+  // OutputIterator
+  // move (InputIterator sourceBeg, InputIterator sourceEnd,
+  //        OutputIterator destBeg)
+
   {
-    vector<int> coll1{1, 2, 3, 4, 5, 6};
-    GetVectorArg(coll1);
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll2{};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+
+    std::move(coll1.begin(), coll1.end(), std::back_inserter(coll2));
+
+    // Note that the elements in coll1 have an undefined state after their first
+    // output because move() is used. However, coll1 still has the size of 6
+    // elements
+    //
+    // so coll1 do not change and that may explain why can use const iterator on
+    // move algorithm.
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 6);
   }
 }
 
@@ -1850,7 +1875,7 @@ TEST(CxxQueue, check_operation)
 // ={=========================================================================
 // cxx-set
 
-TEST(StlCollSet, check_insert_and_emplace)
+TEST(StlSet, check_insert_and_emplace)
 {
   std::set<int> coll1{};
 
@@ -1867,7 +1892,7 @@ TEST(StlCollSet, check_insert_and_emplace)
   EXPECT_THAT(coll2, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
 }
 
-TEST(StlCollSet, check_order)
+TEST(StlSet, check_order)
 {
   {
     // cxx-less <
@@ -1882,10 +1907,10 @@ TEST(StlCollSet, check_order)
   }
 }
 
-TEST(StlCollSet, check_assign)
+TEST(StlSet, check_assign)
 {
   std::set<int> coll1{13, 9, 10, 2, 11, 12, 8, 7};
-  EXPECT_THAT(coll1.size(), 8); 
+  EXPECT_THAT(coll1.size(), 8);
 
   std::set<int> coll2{4, 5, 6};
   EXPECT_THAT(coll2.size(), 3);
@@ -1896,7 +1921,7 @@ TEST(StlCollSet, check_assign)
   EXPECT_THAT(coll2, ElementsAre(4, 5, 6));
 }
 
-TEST(StlCollSet, check_duplicate)
+TEST(StlSet, check_duplicate)
 {
   {
     std::set<int> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
@@ -1934,7 +1959,7 @@ TEST(StlCollSet, check_duplicate)
   }
 }
 
-TEST(StlCollSet, check_search)
+TEST(StlSet, check_search)
 {
   {
     std::set<int> coll;
@@ -2000,7 +2025,7 @@ TEST(StlCollSet, check_search)
   }
 }
 
-TEST(StlCollSet, check_erase)
+TEST(StlSet, check_erase)
 {
   // if there is match at the beginning, removes them
   {
@@ -2030,6 +2055,24 @@ TEST(StlCollSet, check_erase)
     // same as before
     EXPECT_THAT(coll, ElementsAreArray({2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7}));
   }
+}
+
+// cxx-17
+TEST(StlSet, check_merge)
+{
+  std::set<int> coll1{5, 6, 7, 8};
+  std::set<int> coll2{3, 4, 5, 6};
+
+  coll1.merge(coll2);
+
+  EXPECT_THAT(coll1.size(), 6);
+  EXPECT_THAT(coll1, ElementsAreArray({3, 4, 5, 6, 7, 8}));
+
+  // If there is an element in *this with key equivalent to the key of an
+  // element from source, then that element is not extracted from source.
+
+  EXPECT_THAT(coll2.size(), 2);
+  EXPECT_THAT(coll2, ElementsAreArray({5, 6}));
 }
 
 // ={=========================================================================

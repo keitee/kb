@@ -1125,11 +1125,11 @@ namespace case_quote
 
   public:
     // *cxx-ctor*
-    // Why need to have constructors in abstract class although cannot
-    // define objects of this type directly? Becuase ctors in classes
-    // derived from Disc_quote will use the Disc_quote ctor to construct
-    // the Disc_quote part of their objects. Default ctor default
-    // initialize those members.
+    // Why need to have constructors in abstract class although cannot define
+    // objects of this type directly? Becuase ctors in classes derived from
+    // Discount_quote will use the Discount_quote ctor to construct the
+    // Disc_quote part of their objects. Default ctor default initialize those
+    // members.
 
     Discount_Quote()
         : quantity_(0)
@@ -1186,79 +1186,84 @@ namespace case_quote
   }
 } // namespace case_quote
 
-// To use *gtest-fixture* as a driver than using use user class directly:
-//
-// class Basket
-// {
-//     public:
-//         Basket() : items(compare) {}
-//
-//         void add_item(const shared_ptr<Quote> &item);
-//
-//         double total_receipt(ostream &os) const;
-//
-//     private:
-//         static bool compare(const shared_ptr<Quote> lhs, const
-//         shared_ptr<Quote> rhs) { return lhs->isbn() < rhs->isbn(); }
-//
-//         // using comp = bool (*)(const shared_ptr<Quote> lhs, const
-//         shared_ptr<Quote> rhs);
-//         // multiset<shared_ptr<Quote>, comp> items;
-//
-//         using comp = bool (const shared_ptr<Quote> lhs, const
-//         shared_ptr<Quote> rhs); multiset<shared_ptr<Quote>, comp*> items;
-// };
-//
-// void Basket::add_item(const shared_ptr<Quote> &item)
-// {
-//     cout << "basket::add_item::copy version" << endl;
-//     items.insert(item);
-// }
-//
-// double Basket::total_receipt(ostream &os) const
-// {
-//     for (auto iter = items.cbegin(); iter != items.cend();
-//             iter = items.upper_bound(*iter))
-//     {
-//         os << "isbn : " << (*iter)->isbn()
-//             << ", sold : " << items.count(*iter)
-//             << ", total sales: " << (*iter)->net_price( items.count(*iter))
-//             << endl;
-//     }
-// }
-//
-// int main()
-// {
-//     Basket sale;
-//
-//     // Quote sales which has no discount. 45*3 = 135
-//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-//     sale.add_item(make_shared<Quote>("123", 45));
-//
-//     // minimum 3 and 15% discount. no discount 45*2 = 90
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-//
-//     // Bulk_quote sales which has discount: minimum 3 and 15% discount
-//     // 35*4*(1-.15) = 119
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-//
-//     // Bulk_quote sales which has discount: minimum 5 and 25% discount
-//     // 35*6*(1-.25) = 157.5
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-//
-//     sale.display(cout);
-//     sale.total_receipt(cout);
-// }
+#if 0
+when use it directly than using *gtest-fixture*:
+
+class Basket
+{
+  public:
+    Basket() : items(compare) {}
+
+    void add_item(const shared_ptr<Quote> &item);
+
+    double total_receipt(ostream &os) const;
+
+  private:
+    static bool compare(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs) 
+    { 
+      return lhs->isbn() < rhs->isbn(); 
+    }
+
+    // using comp = bool (*)(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+    // multiset<shared_ptr<Quote>, comp> items;
+
+    using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs); 
+
+    multiset<shared_ptr<Quote>, comp*> items;
+};
+
+void Basket::add_item(const shared_ptr<Quote> &item)
+{
+  cout << "basket::add_item::copy version" << endl;
+  items.insert(item);
+}
+
+double Basket::total_receipt(ostream &os) const
+{
+  for (auto iter = items.cbegin(); 
+      iter != items.cend();
+      iter = items.upper_bound(*iter))
+  {
+    os << "isbn : " << (*iter)->isbn()
+      << ", sold : " << items.count(*iter)
+      << ", total sales: " << (*iter)->net_price( items.count(*iter))
+      << endl;
+  }
+}
+
+int main()
+{
+   Basket sale;
+
+   // Quote sales which has no discount. 45*3 = 135
+   sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+   sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+   sale.add_item(make_shared<Quote>("123", 45));
+
+   // minimum 3 and 15% discount. no discount 45*2 = 90
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+
+   // Bulk_quote sales which has discount: minimum 3 and 15% discount
+   // 35*4*(1-.15) = 119
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+
+   // Bulk_quote sales which has discount: minimum 5 and 25% discount
+   // 35*6*(1-.25) = 157.5
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+   sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+
+   sale.display(cout);
+   sale.total_receipt(cout);
+}
+#endif
 
 // *gmock-error*
 // must use different name on fixture and other tests
@@ -1274,6 +1279,8 @@ namespace case_quote
 // want to change the TEST to TEST_F or move it to another test
 // case.
 // [  FAILED  ] CxxCaseQuote.MockQuote (3 ms)
+
+// use fixture and real quotes
 
 class CxxCaseQuoteX : public ::testing::Test
 {
@@ -1310,15 +1317,23 @@ protected:
     return total;
   }
 
-  static bool compare(std::shared_ptr<Quote> const lhs,
-                      std::shared_ptr<Quote> const rhs)
+  // why not const &?
+  // static bool compare(const std::shared_ptr<Quote> lhs,
+  //                     const std::shared_ptr<Quote> rhs)
+  // {
+  //   return lhs->isbn() < rhs->isbn();
+  // }
+
+  static bool compare(const std::shared_ptr<Quote> &lhs,
+                      const std::shared_ptr<Quote> &rhs)
   {
     return lhs->isbn() < rhs->isbn();
   }
 
-  using comp = bool(std::shared_ptr<Quote> const lhs,
-                    std::shared_ptr<Quote> const rhs);
+  using comp = bool(const std::shared_ptr<Quote> &lhs,
+                    const std::shared_ptr<Quote> &rhs);
 
+  // NOTE: unique_ptr??
   std::multiset<std::shared_ptr<Quote>, comp *> items_;
 };
 
@@ -1385,7 +1400,7 @@ TEST_F(CxxCaseQuoteX, CheckTotal_4)
   items_.clear();
 }
 
-// To test user, driver class, Basket.
+// To test user(driver class), Basket. not use fixture and mock out quotes.
 
 namespace case_quote
 {
@@ -1421,7 +1436,7 @@ namespace case_quote
         : items_{compare}
     {}
 
-    void add_item(std::shared_ptr<Quote> const &item)
+    void add_item(const std::shared_ptr<Quote> &item)
     {
       cout << "basket::add_item(shard_ptr)" << endl;
       items_.insert(item);
@@ -1452,7 +1467,7 @@ namespace case_quote
     using comp = bool(const std::shared_ptr<Quote>,
                       const std::shared_ptr<Quote>);
 
-    std::multiset<shared_ptr<Quote>, comp *> items_;
+    std::multiset<std::shared_ptr<Quote>, comp *> items_;
   };
 
 } // namespace case_quote
