@@ -28,8 +28,8 @@ namespace
 {
   // CXXSLR 18.1 The High-Level Interface: async() and Futures
   //
-  // To visualize what happens, we simulate the complex processings in func1() and
-  // func2() by calling doSomething(),
+  // To visualize what happens, we simulate the complex processings in func1()
+  // and func2() by calling doSomething(),
 
   int doSomething(char c)
   {
@@ -442,7 +442,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, see_thread_name)
+TEST(CConThread, check_thread_name)
 {
   using namespace cxx_thread;
 
@@ -474,7 +474,7 @@ namespace cxx_thread
 
 // show how arg and return value from thread are used
 
-TEST(CConThread, run_thread)
+TEST(CConThread, check_arg)
 {
   using namespace cxx_thread;
 
@@ -992,7 +992,7 @@ namespace cxx_async
 
 } // namespace cxx_async
 
-TEST(CConAsync, run_member_function)
+TEST(CConAsync, check_member_function)
 {
   using namespace cxx_async;
 
@@ -1000,9 +1000,15 @@ TEST(CConAsync, run_member_function)
     Foo foo;
 
     auto result = std::async(&Foo::update_value, &foo);
-    // since it's not run yet
+
+    // if async do not run yet, then succeed. However, it runs it under gdb,
+    // async thread spawns and this check fails.
+    //
+    // as the default launch option says, it may never actually run.
+
     EXPECT_THAT(foo.get_value(), 10);
 
+    // now runs
     result.get();
 
     // run and expect the update
@@ -1018,7 +1024,8 @@ namespace cxx_async
   {
     this_thread::sleep_for(chrono::milliseconds(100));
     // std::cout << "find_short(100ms) ends" << std::endl;
-    return sum + 90;
+    sum += 90;
+    return sum;
   }
 
   void do_long()
@@ -1032,7 +1039,8 @@ namespace cxx_async
   {
     this_thread::sleep_for(chrono::seconds(5));
     // std::cout << "find_long(5s) ends" << std::endl;
-    return sum + 90;
+    sum += 90;
+    return sum;
   }
 
   void do_short()
@@ -1045,48 +1053,98 @@ namespace cxx_async
 } // namespace cxx_async
 
 // which one runs first? answer can be either 90 or 100?
-// async finishes first since do_long takes 5 secs, so sum is 90
-TEST(CConAsync, check_launch_policy1)
+//
+// Note, however, that this applies only when no data race occurs, which means
+// that two threads concurrently use the same data resulting in undefined
+// behavior
+
+TEST(CConAsync, check_launch_policy_1)
 {
   using namespace cxx_async;
 
+  // since it's global
+  sum = 0;
+
+  // changes sum, side-effect
   std::future<int> result = std::async(find_short);
+
+  // async not run yet.
+  EXPECT_THAT(sum, 0);
+
   do_long();
+
+  EXPECT_THAT(sum, 10);
+
   // std::cout << "wait for results in main" << std::endl;
+
+  // async finishes first since do_long takes 5 secs, so result is 90
+  // this means async runs on thread before do_long()
   EXPECT_THAT(result.get(), 90);
+
+  EXPECT_THAT(sum, 10);
 }
 
-// aync finishes later son sum is 100
-TEST(CConAsync, check_launch_policy2)
+TEST(CConAsync, check_launch_policy_2)
 {
   using namespace cxx_async;
 
+  // since it's global
+  sum = 0;
+
+  // changes sum, side-effect
   std::future<int> result = std::async(find_long);
+
+  EXPECT_THAT(sum, 0);
+
   do_short();
-  // std::cout << "wait for results in main" << std::endl;
+
+  EXPECT_THAT(sum, 10);
+
+  // this time, aync finishes later so sum is 100
   EXPECT_THAT(result.get(), 100);
+
+  // see that sum changed
+  EXPECT_THAT(sum, 100);
 }
 
-// async do not run since do not use result
-TEST(CConAsync, check_launch_policy3)
+// async runs sequentially
+TEST(CConAsync, check_launch_policy_3)
 {
   using namespace cxx_async;
 
+  // since it's global
+  sum = 0;
+
+  // changes sum, side-effect
   std::async(find_long);
+
+  EXPECT_THAT(sum, 90);
+
   do_short();
+
   // std::cout << "wait for results in main" << std::endl;
   EXPECT_THAT(sum, 10);
 }
 
-// do not use result and async runs since use future
-TEST(CConAsync, check_launch_policy4)
+// still async runs sequentially
+TEST(CConAsync, check_launch_policy_4)
 {
   using namespace cxx_async;
 
-  auto result = std::async(find_long);
+  // since it's global
+  sum = 0;
+
+  // changes sum, side-effect
+  std::async(std::launch::async, find_long);
+
+  EXPECT_THAT(sum, 90);
+
   do_short();
+
+  EXPECT_THAT(sum, 10);
+
   // std::cout << "wait for results in main" << std::endl;
-  EXPECT_THAT(result.get(), 100);
+  EXPECT_THAT(sum, 10);
 }
 
 // Using Launch Policies
@@ -1137,8 +1195,8 @@ TEST(CConAsync, check_launch_policy4)
 //
 // this is `sequential` so can see either sequential or parallel output.
 
-// parallel on workstation
-TEST(CConAsync, check_launch_policy11)
+// run parallel on workstation
+TEST(CConAsync, check_launch_policy_11)
 {
   // async
   std::future<int> result1(std::async([] { return doSomething('.'); }));
@@ -1164,8 +1222,8 @@ TEST(CConAsync, check_launch_policy11)
 // +++++
 // [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
-// parallel on workstation
-TEST(CConAsync, check_launch_policy12)
+// run parallel on workstation
+TEST(CConAsync, check_launch_policy_12)
 {
   std::future<int> result1(
     std::async(std::launch::async, [] { return doSomething('.'); }));
@@ -1204,20 +1262,20 @@ TEST(CConAsync, check_launch_policy12)
 // ++++++++++
 // [       OK ] CConAsync.check_launch_policy3 (7062 ms)
 
-// serial on workstation
-TEST(CConAsync, check_launch_policy13)
+// run serial on workstation
+TEST(CConAsync, check_launch_policy_13)
 {
-  std::async(launch::async, [] { return doSomething('.'); });
+  std::async(std::launch::async, [] { return doSomething('.'); });
 
   doSomething('+');
 }
 
 // parallel on workstation
 // not use future return but have future to make it runs parallel
-TEST(CConAsync, check_launch_policy14)
+TEST(CConAsync, check_launch_policy_14)
 {
   std::future<int> result1(
-    std::async(launch::async, [] { return doSomething('.'); }));
+    std::async(std::launch::async, [] { return doSomething('.'); }));
 
   doSomething('+');
 }
@@ -1241,7 +1299,7 @@ TEST(CConAsync, check_launch_policy14)
 // done
 
 // both runs parallel on workstation
-TEST(CConAsync, check_launch_policy21)
+TEST(CConAsync, check_launch_policy_21)
 {
   {
     std::cout << "starting 2 operations synchronously" << std::endl;
@@ -1281,7 +1339,7 @@ TEST(CConAsync, check_launch_policy21)
   }
 }
 
-TEST(CConAsync, check_launch_policy22)
+TEST(CConAsync, check_launch_policy_22)
 {
   {
     string const waits{"\\|/-"};
@@ -1323,6 +1381,32 @@ TEST(CConAsync, check_launch_policy22)
     }
     cout << "done" << endl;
   }
+}
+
+namespace cxx_async
+{
+  void make_async()
+  {
+    auto f = std::async(std::launch::async, do_long);
+  }
+}
+
+// if think that make_async() makes a thread and then execute next line right
+// after make_async(), that's wrong. make_asymc() waits for async thread ends so
+// sum is always 20.
+
+TEST(CConAsync, check_scope)
+{
+  using namespace cxx_async;
+
+  // since it's global
+  sum = 0;
+
+  make_async();
+
+  sum += 10;
+
+  EXPECT_THAT(sum, 20);
 }
 
 // ={=========================================================================
@@ -3492,11 +3576,10 @@ TEST(CConRace, ThreadSafeStack)
 }
 
 // ={=========================================================================
-// cxx-future
+// cxx-future cxx-promise
 
 TEST(CConFuture, SetPromise)
 {
-
   // (not true)
   // If you destroy the std::promise without setting a value, an exception is
   // stored instead.

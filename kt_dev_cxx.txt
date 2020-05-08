@@ -294,7 +294,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-atomic
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
 *kt_dev_cxx_0000* cxx-ccon-task-model cxx-future cxx-async
-*kt_dev_cxx_0000* cxx-ccon-promise
+*kt_dev_cxx_0000* cxx-ccon-promise cxx-promise
 *kt_dev_cxx_0000* cxx-ccon-packaged-task
 *kt_dev_cxx_0000* cxx-con-lock-based-data-structure
 *kt_dev_cxx_0000* cxx-ccon-other-paradigm cxx-fsm
@@ -55314,7 +55314,7 @@ strm is an sstream that holds a copy of the string s.
 
 std::basic_string<CharT,Traits,Allocator> str() const;
 strm.str();
-return a copy of cxx-string that strm holds. Returns the buffer as a string
+`return a copy of cxx-string` that strm holds. Returns the buffer as a string
 
 strm.str(string);       
 copies the string s into strm. Sets the contents of the buffer to string and
@@ -55338,25 +55338,148 @@ Sets a new value for the stream's internal error state flags.
 
 
 <ex>
-// string-stringstream
-
-// note that os, buffer, has all inputs from << and seek() moves writing pos.
-// do *cxx-string-convert-to-string*
-
-TEST(StringStream, UseOutputStringStream)
+TEST(StringConverison, check_stringstream)
 {
-  ostringstream os;
+  // note that os, buffer, has all inputs from << and seek() moves writing pos.
+  // *cxx-string-convert-to-string*
 
-  os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
-  EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
+  // to string
+  {
+    std::ostringstream os;
 
-  bitset<15> bit_set(5789);
-  os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
-  EXPECT_EQ(os.str(), "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+    os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
+    EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
 
-  os.seekp(0);
-  os << "octal : " << oct << 15;
-  EXPECT_EQ(os.str(), "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+    bitset<15> bit_set(5789);
+    os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
+    EXPECT_EQ(
+      os.str(),
+      "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+
+    os.seekp(0);
+    os << "octal : " << oct << 15;
+    EXPECT_EQ(
+      os.str(),
+      "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+  }
+
+  // to string in hex
+  {
+    std::ostringstream os;
+    // os << "0x" << hex << 16;
+    os << std::hex << 16;
+    EXPECT_THAT(os.str(), "10");
+  }
+
+  // input integer to hex string
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << hex << value;
+    EXPECT_THAT(os.str(), "3ad0");
+  }
+
+  // input integer and add some. to string
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << 5000 + value;
+    EXPECT_THAT(os.str(), "20056");
+  }
+
+  // to string
+  {
+    std::stringstream ss;
+    std::vector<string> string_vector{};
+
+    for (int i = 0; i < 4; ++i)
+    {
+      ss << "player " << i;
+      string_vector.push_back(string(ss.str()));
+      ss.str("");
+    }
+
+    EXPECT_THAT(string_vector,
+                ElementsAre("player 0", "player 1", "player 2", "player 3"));
+  }
+
+  // to number
+  {
+    // The following lines read the integer x with the value 3 and the
+    // floating-point f with the value 0.7 from the stringstream:
+
+    int x{};
+    float f{};
+
+    istringstream is{"3.7"};
+
+    // or
+    // string input{"3.7"};
+    // stringstream is(input);
+    //
+    // or
+    // string input{"3.7"};
+    // stringstream is;
+    // is.str(input);
+
+    is >> x >> f;
+
+    ASSERT_THAT(x, Eq(3));
+    ASSERT_THAT(f, FloatEq(0.7));
+  }
+
+  // to number
+  {
+    stringstream is{"1 2 3 4"};
+    int value{};
+    vector<int> coll{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4));
+  }
+
+  // to number
+  {
+    stringstream is{"1234"};
+    int value{};
+
+    is >> setw(2) >> value;
+
+    // actually was 1234
+    // EXPECT_THAT(value, 12);
+  }
+
+  // to number
+  {
+    string coll{"10101"};
+    string token = coll.substr(0, 1);
+    EXPECT_EQ(stoi(token), 1);
+  }
+
+  // to number
+  {
+    string coll{"10101"};
+    stringstream is{coll.substr(0, 1)};
+    int value{};
+    is >> value;
+    EXPECT_EQ(value, 1);
+  }
+
+  // to number(hex)
+  {
+    stringstream is{"fabc"};
+    int value{};
+
+    is >> hex >> value;
+
+    EXPECT_THAT(value, 64188);
+  }
 }
 
 
@@ -62589,6 +62712,14 @@ int main()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-thread
 
+CXXSLR-18.2.1 Class std::thread
+
+`Class thread doesn’t have a launch policy.` The C++ standard library always
+tries to start the passed functionality in a new thread. If this isn’t
+possible, it throws a std::system_error (see Section 4.3.1, page 43) with the
+error code resource_unavailable_try_again (see Sec- tion 4.3.2, page 45).
+
+
 2.1.1 Launching a thread
 
 threads are started by constructing a std::thread object that specifies the
@@ -65175,9 +65306,10 @@ task 1                             task 2:
 ---------------                    ------------------------------------------
 get() -> future  <->  value   <->  promise    <- set_value(), set_exception()
 
-The value is known as "shared state". In addition to the return value or
-exception, it contains the information needed for two threads to safely exchange
-the information. For example:
+The value is known as `shared state` 
+
+In addition to the return value or exception, it contains the information
+needed for two threads to safely exchange the information. For example:
 
 o A ready bit to indicate whether a value or exception is ready to be
   extracted by a future.
@@ -65186,9 +65318,9 @@ An implementation can take action on a shared state:
 
 o Make ready: `set the 'ready bit' and unblock` any waiting threads.
 
-  "Please note `the absence of explicit mention of locks` in this code: we are
-  able `to concentrate on tasks to be done, rather than on the mechanisms` used
-  to manage their communication."
+note `the absence of explicit mention of locks` in this code: 
+we are able `to concentrate on tasks to be done, rather than on the mechanisms` 
+used to manage their communication.
 
 
 *cxx-future*
@@ -65240,7 +65372,7 @@ be used where there's no associated data.
 
 <ex>
 
-future fu {fu2};
+std::future fu{fu2};
 
 Move constructor: fu gets fu2's shared state, if any; fu2 no longer has a shared
 state; noexcept
@@ -65275,9 +65407,9 @@ Although std::future handles all the synchronization necessary to transfer data
 from one thread to another, calls to the member functions of a particular
 std::future instance `are not synchronized` with each other. If you access a
 single std::future object from multiple threads without additional
-synchronization, you have a data race and undefined behavior. 
+synchronization, you have a data race *cxx-race* and undefined behavior. 
 
-This is by design, std::future models unique ownership of the asynchronous
+This is by design, `std::future models unique ownership` of the asynchronous
 result, and the one-shot nature of get() makes such concurrent access pointless
 anyway; only one thread can retrieve the value, because after the first call to
 get() there’s no value left to retrieve.
@@ -65323,9 +65455,30 @@ assert(sf.valid());
 
 {cxx-async}
 
+a high-level interface allows you to start a thread including passing
+arguments and dealing with results and exceptions, which is based on a couple
+of low-level interfaces for each of these aspects. On the other hand, there
+are also low-level features, such as mutexes or even atomics dealing with
+relaxed memory orders.
+
+*why-async*
+the use of std::async makes it easy to divide algorithms into tasks that can
+be run concurrently.
+
+C++ SLR 18. Thus, you have the same behavior but the `chance` of better
+performance because f might run in parallel before the outcome of f is needed.
+
+
+*cxx-race* still can happen
+
+Note, however, that this applies only when no data race occurs, which means
+that two threads concurrently use the same data resulting in undefined
+behavior
+
+
 4.2.1 Returning values from background tasks
 
-std::thread doesn't provide an easy means of returning a value from such a
+`std::thread doesn't provide an easy means of returning a value` from such a
 task. This is where the std::async function template declared in the future
 header, comes in.
 
@@ -65339,7 +65492,7 @@ header, comes in.
 
 `std::async` start an asynchronous task for which you don't need the result
 right away. Rather than giving you back a std::thread object to wait on,
-`std::async returns a std::future object`, which will eventually hold the
+`std::async returns a std::future object`, which will eventually `hold` the
 return value of the function. 
 
 When you need the value, you just call get() on the future, and the thread
@@ -65397,14 +65550,19 @@ thread, or whether the task runs synchronously when the future is waited for.
 
 You can specify which to use with an `additional parameter to std::async.` 
 
-std::launch::deferred
+This is of the type std::launch:
+
+o std::launch::deferred
+to indicate that the function call is to be deferred until either wait() or
+get() is called on the future
+
+o `std::launch::async`
+to indicate that the function must be run on its own thread, 
 
 *cxx-async-default*
-This is of the type std::launch, std::launch::deferred to indicate that the
-function call is to be deferred until either wait() or get() is called on the
-future, `std::launch::async` to indicate that the function must be run on its
-own thread, or `std::launch::deferred | std::launch::async` to indicate that the
-implementation may choose. This last option is `the default`
+o `std::launch::deferred | std::launch::async` 
+to indicate that the implementation may choose. This last option is the
+default
 
 If the function call is deferred, it `may never actually run` because it is
 guaranteed that func1() never gets called without get() or wait()
@@ -65417,7 +65575,7 @@ resource_unavailable_try_again, which is equivalent to the POSIX errno EAGAIN
 (see Section 4.3.2, page 45).
 
 
-// Why deffered?
+Why deffered?
 
 explicitly requesting a deferred launch policy might help to simulate the
 behavior of async() on a single-threaded environment or simplify debugging
@@ -65456,10 +65614,13 @@ see test_ccon for test cases.
 
 
 *cxx-future-wait*
-CXXSRL-18.1.2 
+CXXSLR-18.1.2 
 
 You can call get() for a future<> `only once.` After get(), the future is in
 an invalid state, which can be checked only by calling valid() for the future.
+
+But futures also provide an interface to wait for a background operation to
+finish without processing its outcome.
 
 f.wait()
 
@@ -65523,111 +65684,24 @@ By passing a zero duration or a timepoint that has passed, you can simply
 "poll" to see whether a background task has started and/or is (still) running:
 
 
-<ex>
+{cxx-future-scope} care-with-future-scope
 
-// starting 2 operations synchronously
-// 
-// ..........
-// ++++++++++
-// 
-// done
-// starting 2 operations asynchronously
-// 
-// deffered
-// -..
-// 
-// +++++
-// 
-// done
+CXXSLR-18.1 Using Launch Policies
 
-TEST(CConAsync, Status)
-{
-  {
-    cout << "starting 2 operations synchronously" << endl;
-
-    // start two loops in the background printing characters . or +
-    auto f1 = async([]{ doSomething('.'); });
-    auto f2 = async([]{ doSomething('+'); });
-
-    // if at least one of the background tasks is running
-    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
-        f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
-    {
-      cout << "\ndeffered" << endl;
-
-      // poll until at least one of the loops finished
-      while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
-          f2.wait_for(chrono::seconds(0)) != future_status::ready) 
-      {
-        //...;
-        cout << "yield,";
-        this_thread::yield();  // hint to reschedule to the next thread
-      }
-    }
-    cout.put('\n').flush();
-
-    // wait for all loops to be finished and process any exception
-    try {
-      f1.get();
-      f2.get();
-    }
-    catch (const exception& e) {
-      cout << "\nEXCEPTION: " << e.what() << endl;
-    }
-    cout << "\ndone" << endl;
-  }
-
-  {
-    string const waits{"\\|/-"};
-    int i{};
-
-    cout << "starting 2 operations asynchronously" << endl;
-
-    // start two loops in the background printing characters . or +
-    auto f1 = async(std::launch::async, []{ doSomething('.'); });
-    auto f2 = async(std::launch::async, []{ doSomething('+'); });
-
-    // if at least one of the background tasks is running
-    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
-        f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
-    {
-      cout << "\ndeffered" << endl;
-
-      // poll until at least one of the loops finished
-      while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
-          f2.wait_for(chrono::seconds(0)) != future_status::ready) 
-      {
-        //...;
-        cout << flush << "\r" << waits[i%4];
-        ++i;
-
-        this_thread::yield();  // hint to reschedule to the next thread
-      }
-    }
-    cout.put('\n').flush();
-
-    // wait for all loops to be finished and process any exception
-    try {
-      f1.get();
-      f2.get();
-    }
-    catch (const exception& e) {
-      cout << "\nEXCEPTION: " << e.what() << endl;
-    }
-    cout << "\ndone" << endl;
-  }
-}
-
-
-{care-with-future-scope}
 With the async launch policy, you don't necessarily have to call get() anymore
-because, if the lifetime of the returned future ends, the program will wait for
-func1() to finish. Thus, if you don’t call get(), leaving the scope of the
-future object (here the end of main()) will wait for the background task to end.
-Nevertheless, also calling get() here before a program ends makes the behavior
-clearer.
+because, if the lifetime of the returned future ends, the program will wait
+for func1() to finish. Thus, if you don’t call get(), leaving the scope of the
+future object (here the end of main()) will wait for the background task to
+end.  Nevertheless, also calling get() here before a program ends makes the
+behavior clearer.
 
-From C++ SLR 18 Waiting and polling
+
+CXXSLR-18.1 Waiting and polling
+
+// outside declared because lifetime of accurateComputation() might exceed
+// lifetime of bestResultInTime()
+
+std::future<int> f;
 
 int bestResultInTime()
 {
@@ -65652,11 +65726,36 @@ int bestResultInTime()
 
 Note that the future f can't be a local object declared inside
 bestResultInTime() because when the time was too short to finish
-accurateComputation(), bestResultInTime() returns and the destructor of the
-future would block until that asynchronous task has finished.
+accurateComputation(), bestResultInTime() returns and 
+`the destructor of the future would block` until that asynchronous task has
+finished.
 
-So "also calling get() here before a program ends makes the behavior clearer."
-is not always clear.
+
+namespace cxx_async
+{
+  void make_async()
+  {
+    auto f = std::async(std::launch::async, do_long);
+  }
+}
+
+// if think that make_async() makes a thread and then execute next line right
+// after make_async(), that's wrong. make_asymc() waits for async thread ends so
+// sum is always 20.
+
+TEST(CConAsync, check_scope)
+{
+  using namespace cxx_async;
+
+  // since it's global
+  sum = 0;
+
+  make_async();
+
+  sum += 10;
+
+  EXPECT_THAT(sum, 20);
+}
 
 
 {with-exception}
@@ -65737,14 +65836,6 @@ starting func1() in background and func2() in foreground:
 ++++++++++terminate called after throwing an instance of 'std::system_error'
   what():  Unknown error 4294967295
 Aborted
-
-
-{why-async}
-the use of std::async makes it easy to divide algorithms into tasks that can be
-run concurrently.
-
-C++ SLR 18. Thus, you have the same behavior but the 'chance' of better
-performance because f might run in parallel before the outcome of f is needed.
 
 
 ={============================================================================
@@ -65930,13 +66021,9 @@ std::async is not the only way to associate a std::future with a task; you can
 also do it by wrapping the task in an instance of the std::packaged_task<>
 class template which is a higher-level abstraction
 
-std::packaged_task<> ties a future to a function or callable object. When the
-std:: packaged_task<> object is invoked, it calls the associated function or
-callable object and makes the future ready, with the return value stored as
-the associated data.
+std::packaged_task<> ties a future to a function or callable object. 
 
-
-A packaged_task holds a 'task' and a future/promise 'pair'.
+A packaged_task holds a `task and a future/promise pair.`
 
 task 1                             packaged_task: 
                                                                   task 2:
