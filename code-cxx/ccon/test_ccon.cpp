@@ -1,3 +1,4 @@
+#include <chrono>
 #include <exception>
 #include <future>
 #include <iostream>
@@ -75,13 +76,14 @@ TEST(CConThread, check_identity)
   using namespace cxx_thread;
 
   // 42.2.1
-  // a thread can have its id be id{} if is has not had a task assigned
+  // a thread can have its id be id{} if is has not had a task assigned; that
+  // is, does not represent a thread of execution
   {
     std::thread t;
     EXPECT_THAT(t.get_id(), std::thread::id{});
   }
 
-  // see that get_id() equals to this_thread::get_id()
+  // see that t.get_id() equals to this_thread::get_id()
   {
     std::ostringstream os1;
     std::ostringstream os2;
@@ -94,7 +96,7 @@ TEST(CConThread, check_identity)
     EXPECT_THAT(os1.str(), os2.str());
   }
 
-  // see that get_id() equals to native_handle()
+  // see that t.get_id() equals to native_handle()
   {
     std::ostringstream os1;
     std::ostringstream os2;
@@ -131,6 +133,16 @@ TEST(CConThread, check_identity)
 
     EXPECT_THAT(t.get_id(), std::thread::id{});
   }
+}
+
+// [ RUN      ] CConThread.check_hardware_concurrency
+// hardware concurrency: 12
+// [       OK ] CConThread.check_hardware_concurrency (0 ms)
+
+TEST(CConThread, check_hardware_concurrency)
+{
+  std::cout << "hardware concurrency: " << std::thread::hardware_concurrency()
+            << std::endl;
 }
 
 namespace cxx_thread
@@ -184,6 +196,12 @@ TEST(CConThread, check_tid_and_pid)
     EXPECT_THAT((long)res, 11);
   }
 }
+
+// as with TEST(CConAsync, check_launch_policy_1), thread starts `immediately`
+// and there is no `start the thread` operation.
+// TEST(CConThread, check_launch_policy)
+// {
+// }
 
 // true if the thread object identifies an active thread of execution, false
 // otherwise
@@ -530,16 +548,21 @@ TEST(CConThread, check_arg)
   //   //          ^
   //   // makefile:58: recipe for target 'ccon.o' failed
   //   // make: *** [ccon.o] Error 1
-
+  //
   //   std::thread t(use_reference, value);
   //   t.join();
-
+  //
   //   EXPECT_THAT(value, 201);
   // }
   //
   // TODO:
   // to understand this error, have to understand cxx-bind in
   // /usr/include/c++/4.9/functional since cxx-thread uses __bind_simple()
+  //
+  // C++PL 42.2.2
+  // thread constructors are `variadic templates`. the problem is that the
+  // variadic template uses bind(), so that a reference is by default
+  // dereferenced and the result copied.
 
   // use std::ref
   {
@@ -572,7 +595,7 @@ TEST(CConThread, check_arg)
   }
 }
 
-TEST(CConThread, run_thread_many)
+TEST(CConThread, check_run_many_thread)
 {
   using namespace cxx_thread;
 
@@ -648,7 +671,7 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
-TEST(CConThread, see_membur_function)
+TEST(CConThread, check_membur_function)
 {
   using namespace cxx_thread;
 
@@ -687,7 +710,7 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
-TEST(CConThread, see_priority1)
+TEST(CConThread, check_priority_1)
 {
   using namespace cxx_thread;
 
@@ -723,7 +746,7 @@ TEST(CConThread, see_priority1)
   t2.join();
 }
 
-TEST(CConThread, see_priority2)
+TEST(CConThread, check_priority_2)
 {
   using namespace cxx_thread;
 
@@ -784,7 +807,6 @@ TEST(CConThread, see_priority2)
 
 namespace cxx_thread
 {
-
   class IntegerSequence
   {
   public:
@@ -834,7 +856,7 @@ namespace cxx_thread
     unsigned long const num_threads =
       std::min(hardware_threads > 1 ? hardware_threads : 4, max_thread);
 
-    // block size per thread
+    // # of item per thread
     unsigned long const block_size = length / num_threads;
 
     // to launch one fewer than num_threads since you have main thread
@@ -873,28 +895,71 @@ namespace cxx_thread
 
     return std::accumulate(results.begin(), results.end(), init);
   }
-
 } // namespace cxx_thread
 
-TEST(CConThread, ParallelAccumulate)
+TEST(CConThread, check_parallel_accumulate_1)
 {
   using namespace cxx_thread;
 
-  std::vector<int> coll;
+  auto f = [](const unsigned long &length) -> unsigned long {
+    // minimum block size per thread
+    unsigned long const min_per_thread = 25;
+    unsigned long const max_thread =
+      (length + min_per_thread - 1) / min_per_thread;
 
-  std::generate_n(back_inserter(coll), 10000, IntegerSequence(0));
+    return max_thread;
+  };
 
-  auto coll_sum = parallel_accumulate(coll.begin(), coll.end(), 0);
+  std::cout << "f(25)= " << f(25) << std::endl;
+  std::cout << "f(49)= " << f(49) << std::endl;
+  std::cout << "f(50)= " << f(50) << std::endl;
+  std::cout << "f(1000)= " << f(1000) << std::endl;
+}
 
-  std::vector<int> result;
+// [ RUN      ] CConThread.check_parallel_accumulate_2
+// 913 milliseconds passed
+// 5995 milliseconds passed
+// [       OK ] CConThread.check_parallel_accumulate_2 (43550 ms)
 
-  // since IntegerSequence starts from value 1.
-  for (int i = 1; i <= 10000; ++i)
-    result.push_back(i);
+TEST(CConThread, check_parallel_accumulate_2)
+{
+  using namespace cxx_thread;
 
-  auto result_sum = std::accumulate(result.begin(), result.end(), 0);
+  const int NUM_OF_ELEMENTS{1000000000};
 
-  EXPECT_THAT(coll_sum, result_sum);
+  // parallel version
+  {
+    std::vector<int> coll;
+
+    std::generate_n(back_inserter(coll), NUM_OF_ELEMENTS, IntegerSequence(0));
+
+    auto t1       = std::chrono::steady_clock::now();
+    auto coll_sum = parallel_accumulate(coll.begin(), coll.end(), 0);
+    auto t2       = std::chrono::steady_clock::now();
+
+    std::cout
+      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
+      << " milliseconds passed\n";
+  }
+
+  // sequential version
+  {
+    std::vector<int> result;
+
+    // since IntegerSequence starts from value 1.
+    for (int i = 1; i <= NUM_OF_ELEMENTS; ++i)
+      result.push_back(i);
+
+    auto t1         = std::chrono::steady_clock::now();
+    auto result_sum = std::accumulate(result.begin(), result.end(), 0);
+    auto t2         = std::chrono::steady_clock::now();
+
+    std::cout
+      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()
+      << " milliseconds passed\n";
+  }
+
+  // EXPECT_THAT(coll_sum, result_sum);
 }
 
 // ={=========================================================================
@@ -912,7 +977,7 @@ namespace cxx_thread_local
   {
     s += name;
 
-    // protect std::cout
+    // protect std::cout which is global
     std::lock_guard<std::mutex> lock(m);
     std::cout << s << std::endl;
     std::cout << "&s: " << &s << std::endl;
@@ -956,7 +1021,7 @@ namespace cxx_thread_local
 //
 // [       OK ] CConThread.ThreadLocal (2 ms)
 
-TEST(CConThread, ThreadLocal)
+TEST(CConThread, check_thread_local)
 {
   using namespace cxx_thread_local;
 
@@ -983,7 +1048,16 @@ namespace cxx_async
     Foo(int value = 10)
         : value_(value)
     {}
-    void update_value() { value_ += 10; };
+
+    // void update_value() { value_ += 10; };
+
+    // changed to return value
+    int update_value()
+    {
+      value_ += 10;
+      return value_;
+    };
+
     int get_value() { return value_; }
 
   private:
@@ -1006,10 +1080,14 @@ TEST(CConAsync, check_member_function)
     //
     // as the default launch option says, it may never actually run.
 
+    // default is 10
     EXPECT_THAT(foo.get_value(), 10);
 
-    // now runs
-    result.get();
+    // // now runs
+    // result.get();
+
+    // now runs and gets result
+    EXPECT_THAT(result.get(), 20);
 
     // run and expect the update
     EXPECT_THAT(foo.get_value(), 20);
@@ -1385,11 +1463,8 @@ TEST(CConAsync, check_launch_policy_22)
 
 namespace cxx_async
 {
-  void make_async()
-  {
-    auto f = std::async(std::launch::async, do_long);
-  }
-}
+  void make_async() { auto f = std::async(std::launch::async, do_long); }
+} // namespace cxx_async
 
 // if think that make_async() makes a thread and then execute next line right
 // after make_async(), that's wrong. make_asymc() waits for async thread ends so
@@ -1443,7 +1518,7 @@ namespace cxx_sync
   }
 } // namespace cxx_sync
 
-TEST(CConSync, ShowRaceCondition_1)
+TEST(CConSync, check_race_1)
 {
   using namespace cxx_sync;
 
@@ -1470,7 +1545,7 @@ TEST(CConSync, ShowRaceCondition_1)
 }
 
 // still shows race
-TEST(CConSync, ShowRaceCondition_2)
+TEST(CConSync, check_race_2)
 {
   using namespace cxx_sync;
 
@@ -2382,6 +2457,36 @@ TEST(CConCondition, ProducerAndConsumer_LPI_CondVar)
 
 namespace cxx_condition
 {
+  // C++PL 1232
+  // shows basically the implementation of `this_thread::wait_for()`
+  void simple_timer(int delay)
+  {
+    std::condition_variable timer;
+    std::mutex mtx;
+
+    auto t0 = std::chrono::steady_clock::now();
+    std::unique_lock<std::mutex> lck(mtx);
+    timer.wait_for(lck, std::chrono::milliseconds{delay});
+    auto t1 = std::chrono::steady_clock::now();
+    std::cout
+      << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()
+      << " milliseconds passed\n";
+  }
+} // namespace cxx_condition
+
+// [ RUN      ] CConCondition.check_wait_for_implementation
+// 100 milliseconds passed
+// [       OK ] CConCondition.check_wait_for_implementation (100 ms)
+
+TEST(CConCondition, check_wait_for_implementation)
+{
+  using namespace cxx_condition;
+
+  simple_timer(100);
+}
+
+namespace cxx_condition
+{
   // to have all in a single object
   struct ConditionWait
   {
@@ -3139,7 +3244,7 @@ TEST(DISABLED_CConCondition, see_condition_error_5)
 //   std::thread c1(&consumer, q);
 // }
 
-TEST(CConCondition, eventfd)
+TEST(CConCondition, check_eventfd)
 {
   std::string result{};
 
@@ -3578,38 +3683,83 @@ TEST(CConRace, ThreadSafeStack)
 // ={=========================================================================
 // cxx-future cxx-promise
 
-TEST(CConFuture, SetPromise)
+// (not true)
+// If you destroy the std::promise without setting a value, an exception is
+// stored instead.
+
+// blocks forever since there is no set.
+TEST(CConFuture, DISABLED_check_promise_1)
 {
-  // (not true)
-  // If you destroy the std::promise without setting a value, an exception is
-  // stored instead.
+  std::promise<int> prom;
+  auto f     = prom.get_future();
+  auto value = f.get();
+}
 
-  // this blocks forever
-  // {
-  //   std::promise<int> prom;
-  //   auto f = prom.get_future();
-  //   auto value = f.get();
-  // }
-
+TEST(CConFuture, check_promise_2)
+{
   {
     std::promise<int> prom;
     auto f = prom.get_future();
+
     prom.set_value(10);
+
     auto value = f.get();
     EXPECT_THAT(value, 10);
   }
 
-  // there are 'no' copy operations for a promise. A set function throws
-  // future_error if a value or exception is already set.
-  // C++ exception with description
-  // "std::future_error: Promise already satisfied" thrown in the test body.
+  // there are 'no' copy operations for a promise.
+  //
+  // A set function throws future_error if a value or exception is already set.
+  // C++ exception with description "std::future_error: Promise already
+  // satisfied" thrown in the test body.
 
   {
     std::promise<int> prom;
     auto f = prom.get_future();
+
     prom.set_value(10);
+
     EXPECT_THROW(prom.set_value(10), std::exception);
   }
+}
+
+// copied from "TEST(CConCondition, check_eventfd)" and to see cxx-future can do
+// the same
+
+TEST(CConFuture, check_promise_3)
+{
+  std::promise<std::string> prom{};
+  auto f = prom.get_future();
+
+  auto f1 = std::async(std::launch::async, [&] {
+    // std::cout << "f1 waits " << std::endl;
+
+    // get value from f2 thread
+    auto value = f.get();
+
+    value += "+READ";
+
+    // std::cout << "f1 writes " << value << std::endl;
+
+    return value;
+  });
+
+  // thread to set prom
+  auto f2 = std::async(std::launch::async, [&] {
+    this_thread::sleep_for(chrono::milliseconds(3000));
+
+    prom.set_value("WRITE");
+
+    // std::cout << "f2 writes done" << std::endl;
+
+    return;
+  });
+
+  // f1.get();
+  f2.get();
+
+  // since reads wait for write done
+  EXPECT_THAT(f1.get(), "WRITE+READ");
 }
 
 namespace cxx_future
