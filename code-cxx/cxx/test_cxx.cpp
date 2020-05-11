@@ -343,6 +343,23 @@ TEST(CxxMemoryModel, check_allocator)
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
+namespace
+{
+  enum State
+  {
+    IdleState,
+    StartedState,
+    PlayingSuperState,
+    PendingState,
+    PlayingState,
+    BlockedState,
+    StoppedState
+  };
+}
+
+// NOTE that "enum to int" has no compile error but "int to enum" causes compile
+// error see cxx-static-cast
+
 TEST(CxxType, check_size)
 {
 #if defined(__LP64__) || defined(_LP64)
@@ -356,6 +373,8 @@ TEST(CxxType, check_size)
 #else
   std::cout << "__x86_32__ " << std::endl;
 #endif
+
+  std::cout << "size of (enum) is               : " << sizeof(State) << std::endl;
 
   std::cout << "size of (int) is                : " << sizeof(int) << std::endl;
   std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int)
@@ -5155,7 +5174,7 @@ TEST(CxxCallable, Pointer)
 }
 
 // cxx-lambda
-TEST(CxxCallable, lambda_capture_and_return)
+TEST(CxxCallable, check_lambda_capture_and_return)
 {
   {
     auto func = []() {
@@ -5218,10 +5237,27 @@ TEST(CxxCallable, lambda_capture_and_return)
     EXPECT_THAT(x, 77);
     EXPECT_THAT(y, 44);
   }
+
+  // same as above but use cxx-lambda-arg
+  {
+    int x = 42;
+    int y = 42;
+
+    auto func = [] (const int first, int &second) {
+      ++second;
+    };
+
+    x = 77;
+    func(x, y);
+    func(x, y);
+
+    EXPECT_THAT(x, 77);
+    EXPECT_THAT(y, 44);
+  }
 }
 
 // cxx-lambda
-TEST(CxxCallable, lambda_capture_mutable)
+TEST(CxxCallable, check_lambda_capture_mutable)
 {
   // To have a mixture of passing by value and passing by reference, you can
   // declare the lambda as mutable. In that case, objects are passed by value,
@@ -5349,6 +5385,7 @@ namespace cxx_function_lambda
 
     vector<string> result{};
 
+    // *cxx-lambda-arg*
     for_each(wc, words.end(), [&](string const &e) { result.push_back(e); });
 
     EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));

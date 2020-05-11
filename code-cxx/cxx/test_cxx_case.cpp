@@ -1343,9 +1343,9 @@ TEST_F(CxxCaseQuoteX, CheckTotal_1)
   // using namespace case_quote;
 
   // Quote("book no", price)
-  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
-  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
-  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(std::shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(std::shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(std::shared_ptr<Quote>(new Quote("123", 45)));
 
   // Quote sales which has no discount. 45*3 = 135
   EXPECT_THAT(total_receipt(), 135);
@@ -1357,8 +1357,8 @@ TEST_F(CxxCaseQuoteX, CheckTotal_2)
 {
   using namespace case_quote;
 
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
 
   // minimum 3 to have 15% discount. 2 books so no discount 45*2 = 90
   EXPECT_THAT(total_receipt(), 90);
@@ -1370,10 +1370,10 @@ TEST_F(CxxCaseQuoteX, CheckTotal_3)
 {
   using namespace case_quote;
 
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
 
   // Bulk_quote sales which has discount: minimum 3 and 15% discount
   // 35*4*(1-.15) = 119
@@ -1386,12 +1386,12 @@ TEST_F(CxxCaseQuoteX, CheckTotal_4)
 {
   using namespace case_quote;
 
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
-  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(std::shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
 
   // Bulk_quote sales which has discount: minimum 5 and 25% discount
   // 35*6*(1-.25) = 157.5
@@ -1570,7 +1570,7 @@ namespace case_quote_clone
 
     // *cxx-clone* *cxx-move* copy version
     // *cxx-reference-qualifier*
-    // note: shall have `const or see *cxx-const-to-nonconst-error*
+    // note: shall have `const` or see *cxx-const-to-nonconst-error*
     // note: if there's no move verison, copy version will be used instead
     virtual Quote *clone() const &
     {
