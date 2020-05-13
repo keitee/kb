@@ -1070,7 +1070,7 @@ TEST(String, check_cstring_1)
   EXPECT_THAT(strlen(s1), 16);  // not include null
   EXPECT_THAT(coll.size(), 16); // not include null
 
-  // c_str() include a null? yes.
+  // c_str() include a null? yes but note that size() do not include a null.
   EXPECT_THAT(strlen(coll.c_str()), 16);
   EXPECT_THAT(coll.size(), 16);
   // int memcmp(const void *s1, const void *s2, size_t n);

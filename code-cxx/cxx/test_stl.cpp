@@ -2078,7 +2078,7 @@ TEST(StlSet, check_merge)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxMap, map_FindAndAccess)
+TEST(CxxMap, check_find)
 {
   {
     std::map<float, float>
@@ -2091,7 +2091,7 @@ TEST(CxxMap, map_FindAndAccess)
       // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
 
       auto it = coll.find(3.0);
-      EXPECT_THAT(*it, make_pair(3, 2));
+      EXPECT_THAT(*it, std::make_pair(3, 2));
 
       EXPECT_THAT(it->first, 3);
       EXPECT_THAT(it->second, 2);
@@ -2122,15 +2122,17 @@ TEST(CxxMap, map_FindAndAccess)
   }
 }
 
-TEST(CxxMap, map_Const)
+TEST(CxxMap, check_access_on_const)
 {
-  // cannot be a const map since operator[] is for non-const.
+  // cannot be a const map since operator[] is for non-const
+  // also note that key is const
   {
     std::map<unsigned int, std::string> coll{{1, "one"},
                                              {2, "two"},
                                              {3, "three"},
                                              {4, "four"}};
 
+    // can change
     coll[3] = "threee";
     coll[3] = "threeee";
     coll[3] = "threeeee";
@@ -2138,17 +2140,19 @@ TEST(CxxMap, map_Const)
 
     ASSERT_THAT(coll[3], Eq("threeeeee"));
 
+    // same as above? no
+    // not changed since cxx-set and cxx-map do not allow duplicates and nothing
+    // happens when key is already exist
+
     coll.insert({3, "third"});
     coll.insert({3, "thirdd"});
     coll.insert({3, "thirddd"});
     coll.insert({3, "thirdddd"});
 
-    // not changed since cxx-set and cxx-map do not allow duplicates and nothing
-    // happens when key is already exist
-
     ASSERT_THAT(coll[3], Eq("threeeeee"));
   }
 
+  // However, can use at() on const
   {
     const std::map<float, float>
       coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
@@ -2159,7 +2163,7 @@ TEST(CxxMap, map_Const)
     // {
     //   EXPECT_THAT(coll[1], 7);
     // }
-
+    //
     // okay as: bits/stl_map.h
     // const mapped_type&
     // at(const key_type& __k) const
@@ -2170,7 +2174,7 @@ TEST(CxxMap, map_Const)
   }
 }
 
-TEST(CxxMap, map_Iterate)
+TEST(CxxMap, check_sorted)
 {
   {
     std::map<unsigned int, std::string> coll{};
@@ -2190,12 +2194,13 @@ TEST(CxxMap, map_Iterate)
       ret.push_back(it->second);
     }
 
-    // as cxx-map is "sorted"
+    // as cxx-map is "sorted" on key, which is integer
     EXPECT_THAT(
       ret,
       ElementsAre("string4", "string3", "string2", "string1", "string0"));
   }
 
+  // same as above
   {
     std::map<unsigned int, std::string> coll{};
     std::vector<std::string> ret{};
@@ -2227,6 +2232,7 @@ TEST(CxxMap, map_Iterate)
       ElementsAre("string4", "string3", "string2", "string1", "string0"));
   }
 
+  // same as above and use cxx-range-for
   {
     std::map<unsigned int, std::string> coll{};
     std::vector<std::string> ret{};
@@ -2250,6 +2256,178 @@ TEST(CxxMap, map_Iterate)
       ElementsAre("string4", "string3", "string2", "string1", "string0"));
   }
 }
+
+TEST(CxxMap, check_sorted_custom_compare)
+{
+  // use cxx-less by default on string
+  {
+    std::map<std::string, unsigned int> coll{};
+    std::vector<int> ret{};
+
+    // can do in single shot
+    coll.insert({{"C", 2},
+                 {"E", 4},
+                 {"A", 0},
+                 {"D", 3},
+                 {"B", 1}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    EXPECT_THAT(ret, ElementsAre(0, 1, 2, 3, 4));
+  }
+
+  // do the apposit.
+  {
+    struct CustomComp
+    {
+      bool operator()(const std::string &lhs, const std::string &rhs)
+      {
+        // would be if it was cxx-less
+        // return lhs < rhs;
+
+        // to make opposite
+        return lhs > rhs;
+      }
+    };
+
+    std::map<std::string, unsigned int, CustomComp> coll{};
+    std::vector<int> ret{};
+
+    // can do in single shot
+    coll.insert({{"C", 2},
+                 {"E", 4},
+                 {"A", 0},
+                 {"D", 3},
+                 {"B", 1}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // now it's reversed
+    EXPECT_THAT(ret, ElementsAre(4, 3, 2, 1, 0));
+  }
+
+  // same but not use custom compare
+  {
+    std::map<std::string, unsigned int, std::greater<std::string>> coll{};
+    std::vector<int> ret{};
+
+    // can do in single shot
+    coll.insert({{"C", 2},
+                 {"E", 4},
+                 {"A", 0},
+                 {"D", 3},
+                 {"B", 1}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // now it's reversed
+    EXPECT_THAT(ret, ElementsAre(4, 3, 2, 1, 0));
+  }
+
+  // sorted by case of string
+  {
+    std::map<std::string, std::string> coll{};
+    std::vector<std::string> ret{};
+
+    // can do in single shot
+    coll.insert({{"one", "one"},
+                 {"One", "One"},
+                 {"Onwards", "Onwards"},
+                 {"oragne", "orange"},
+                 {"Paris", "Paris"}});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    EXPECT_THAT(ret, ElementsAre("One", "Onwards", "Paris", "one", "orange"));
+  }
+
+  // sorted by less and non-case
+  {
+    // strcasecmp, strncasecmp - compare two strings ignoring case
+    //
+    // #include <strings.h>
+    //
+    // int strcasecmp(const char *s1, const char *s2);
+    //
+    // int strncasecmp(const char *s1, const char *s2, size_t n);
+
+    struct CustomComp
+    {
+      bool operator()(const std::string &lhs, const std::string &rhs)
+      {
+        return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
+      }
+    };
+
+    std::map<std::string, std::string, CustomComp> coll{};
+    std::vector<std::string> ret{};
+
+    // can do in single shot
+    coll.insert({{"one", "one"},
+                 {"One", "One"},
+                 {"Onwards", "Onwards"},
+                 {"oragne", "orange"},
+                 {"Paris", "Paris"}});
+
+    // NOTE: it is 4 since non-case comp makes duplcates so comp do affect not
+    // only the order but also `insert`
+    ASSERT_THAT(coll.size(), 4);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // so "sorted" by non-case
+    EXPECT_THAT(ret, ElementsAre("one", "Onwards", "orange", "Paris"));
+  }
+}
+
+// Q: what if:
+//
+// o string key which used to find an item in a map.
+// o item is a struct which has time field.
+// o want to sort them out on this time field as well.
+//
+// even if use custom compare, it still uses key type.
+//
+// one solution is:
+//
+// make a set<std::pair<key, elem>> using custom compare on the fly so that all
+// elems are sorted time field. 
+//
+// get a key for the first in the set which is the oldest and want to delete it. 
+//
+// use that key to remove item in the map.
+//
+// TEST(CxxMap, check_sorted_custom_compare) { }
+//
+// any better way??
 
 TEST(CxxMap, map_Copy)
 {
@@ -2352,135 +2530,6 @@ TEST(CxxMap, map_multi_EqualRange)
                 ElementsAre("Sot-Weed Factor",
                             "Lost in the Funhouse",
                             "A way to success"));
-  }
-}
-
-TEST(CxxMap, map_Compare)
-{
-  // use cxx-less by default
-  {
-    std::map<std::string, unsigned int> coll{};
-    std::vector<int> ret{};
-
-    // can do in single shot
-    coll.insert({{"stringA", 0},
-                 {"stringB", 1},
-                 {"stringC", 2},
-                 {"stringD", 3},
-                 {"stringE", 4}});
-
-    ASSERT_THAT(coll.size(), 5);
-
-    auto it = coll.begin();
-    for (; it != coll.end(); ++it)
-    {
-      ret.push_back(it->second);
-    }
-
-    // so "sorted"
-    EXPECT_THAT(ret, ElementsAre(0, 1, 2, 3, 4));
-  }
-
-  {
-    struct CustomComp
-    {
-      bool operator()(const std::string &lhs, const std::string &rhs)
-      {
-        // would be if it was cxx-less
-        // return lhs < rhs;
-
-        // to make opposite
-        return lhs > rhs;
-      }
-    };
-
-    std::map<std::string, unsigned int, CustomComp> coll{};
-    std::vector<int> ret{};
-
-    // can do in single shot
-    coll.insert({{"stringA", 0},
-                 {"stringB", 1},
-                 {"stringC", 2},
-                 {"stringD", 3},
-                 {"stringE", 4}});
-
-    ASSERT_THAT(coll.size(), 5);
-
-    auto it = coll.begin();
-    for (; it != coll.end(); ++it)
-    {
-      ret.push_back(it->second);
-    }
-
-    // now it's reversed
-    EXPECT_THAT(ret, ElementsAre(4, 3, 2, 1, 0));
-  }
-
-  // sorted by case
-  {
-    std::map<std::string, std::string> coll{};
-    std::vector<std::string> ret{};
-
-    // can do in single shot
-    coll.insert({{"one", "one"},
-                 {"One", "One"},
-                 {"Onwards", "Onwards"},
-                 {"oragne", "orange"},
-                 {"Paris", "Paris"}});
-
-    ASSERT_THAT(coll.size(), 5);
-
-    auto it = coll.begin();
-    for (; it != coll.end(); ++it)
-    {
-      ret.push_back(it->second);
-    }
-
-    // so "sorted" by case
-    EXPECT_THAT(ret, ElementsAre("One", "Onwards", "Paris", "one", "orange"));
-  }
-
-  // sorted by less and non-case
-  {
-
-    // strcasecmp, strncasecmp - compare two strings ignoring case
-    //
-    // #include <strings.h>
-    //
-    // int strcasecmp(const char *s1, const char *s2);
-    //
-    // int strncasecmp(const char *s1, const char *s2, size_t n);
-
-    struct CustomComp
-    {
-      bool operator()(const std::string &lhs, const std::string &rhs)
-      {
-        return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
-      }
-    };
-
-    std::map<std::string, std::string, CustomComp> coll{};
-    std::vector<std::string> ret{};
-
-    // can do in single shot
-    coll.insert({{"one", "one"},
-                 {"One", "One"},
-                 {"Onwards", "Onwards"},
-                 {"oragne", "orange"},
-                 {"Paris", "Paris"}});
-
-    // NOTE: it is 4 since non-case comp makes duplcates so comp do affect not
-    // only the order but also `insert`
-    ASSERT_THAT(coll.size(), 4);
-
-    auto it = coll.begin();
-    for (; it != coll.end(); ++it)
-    {
-      ret.push_back(it->second);
-    }
-
-    // so "sorted" by non-case
-    EXPECT_THAT(ret, ElementsAre("one", "Onwards", "orange", "Paris"));
   }
 }
 

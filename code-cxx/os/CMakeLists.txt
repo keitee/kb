@@ -200,5 +200,9 @@ target_link_libraries(lpi-sem-client ${LIBS} "-lpthread")
 add_executable(lpi-flock "lpi_flock.cpp" "lpi_lib.cpp")
 target_link_libraries(lpi-flock ${LIBS})
 
+# lpi-flock-fcntl
+add_executable(lpi-flock-fcntl "lpi_flock_fcntl.cpp" "lpi_lib.cpp")
+target_link_libraries(lpi-flock-fcntl ${LIBS})
+
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

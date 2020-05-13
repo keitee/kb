@@ -2339,7 +2339,7 @@ namespace cxx_case_base64
 
   // o no output buffer size check
 
-  void base64_encode(const unsigned char *src, int src_len, char *dst)
+  void base64_encode_debug(const unsigned char *src, int src_len, char *dst)
   {
     static const char *b64 =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2401,6 +2401,41 @@ namespace cxx_case_base64
     }
 
     // fill a null
+    dst[j++] = '\0';
+  }
+
+  void base64_encode(const unsigned char *src, int src_len, char *dst)
+  {
+    static const char *b64 =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    int i, j, a, b, c;
+
+    for (i = j = 0; i < src_len; i += 3)
+    {
+      a = src[i];
+      b = i + 1 >= src_len ? 0 : src[i + 1];
+      c = i + 2 >= src_len ? 0 : src[i + 2];
+
+      dst[j++] = (b64[a >> 2]);
+      dst[j++] = (b64[((a & 3) << 4) | (b >> 4)]);
+
+      if (i + 1 < src_len)
+      {
+        dst[j++] = (b64[((b & 15) << 2) | (c >> 6)]);
+      }
+
+      if (i + 2 < src_len)
+      {
+        dst[j++] = (b64[c & 63]);
+      }
+    } // for end
+
+    while (j % 4 != 0)
+    {
+      dst[j++] = '=';
+    }
+
     dst[j++] = '\0';
   }
 
@@ -2591,6 +2626,7 @@ TEST(CxxCaseBase64, check_decode_1)
     std::string input{"&streamtype=1"};
     char output[1000] = {0};
 
+    // NOTE: +1 to include a null to encode
     base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
                   input.length() + 1,
                   output);
@@ -2682,6 +2718,65 @@ TEST(CxxCaseBase64, check_decode_2)
 
     std::cout << "output: " << output << std::endl;
   }
+}
+
+TEST(CxxCaseBase64, check_decode_3)
+{
+  using namespace cxx_case_base64;
+
+  {
+    // src_len is 14 which includes a null since std::string.data()
+    //                "0123456789012"
+    std::string input{"&streamtype=1"};
+    char output[1000] = {0};
+
+    EXPECT_THAT(input.size(), 13);
+    EXPECT_THAT(sizeof(output), 1000);
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.size() + 1,
+                  output);
+
+    //                 "01234567890123456789"
+    char converted[] = "JnN0cmVhbXR5cGU9MQA=";
+    // std::cout << "output: " << output << std::endl;
+
+    // includes a null
+    EXPECT_THAT(sizeof(converted), 21);
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    // expected and result are same?
+    EXPECT_THAT(memcmp(converted, result.c_str(), sizeof(converted)), 0);
+
+    // not includes a null
+    EXPECT_THAT(result.size(), 20);
+    EXPECT_THAT(strlen(result.c_str()), 20);
+  }
+}
+
+TEST(CxxCaseBase64, check_decode_4)
+{
+  using namespace cxx_case_base64;
+
+  std::string input{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+  std::string expected{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEA"};
+
+  char output[1000] = {0};
+
+  base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+      input.size() + 1,
+      output);
+
+  // std::cout << "output: " << output << std::endl;
+
+  // copy ouput to std::string
+  std::string result{output};
+
+  EXPECT_THAT(result.size(), 332);
+
+  EXPECT_THAT(expected, result);
 }
 
 // ={=========================================================================
