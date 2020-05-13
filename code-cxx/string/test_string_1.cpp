@@ -1051,27 +1051,71 @@ TEST(CxxString, StringClear)
 // ={=========================================================================
 // string-cstring
 
-TEST(String, CompareStringAndCstring)
+TEST(String, check_cstring_1)
 {
-  string sz{"zoo"};
+  // do not include a null
+  std::string sz{"zoo"};
   EXPECT_EQ(sz.size(), 3);
 
+  // include a null
   char cs[] = "zoo";
   EXPECT_EQ(strlen(cs), 3);
+  EXPECT_EQ(sizeof(cs), 4);
   EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
 
-  const char *s1  = "this is first message";
-  const char s2[] = "this is first message";
+  // there is std::string ctor(const char*)
+  const char s1[]  = "0123456789012345";
+  std::string coll{s1};
+  EXPECT_THAT(sizeof(s1), 17);  // s1 is array
+  EXPECT_THAT(strlen(s1), 16);  // not include null
+  EXPECT_THAT(coll.size(), 16); // not include null
 
-  EXPECT_THAT(sizeof(s1), 8);                  // pointer
-  EXPECT_THAT(sizeof s1, 8);                   // pointer
-  EXPECT_THAT(sizeof *s1, 1);                  // byte
-  EXPECT_THAT(sizeof(s2), 22);                 // array
-  EXPECT_THAT(sizeof(s2) / sizeof(s2[0]), 22); // array
-  EXPECT_THAT(strlen(s2), 21);
+  // c_str() include a null? yes.
+  EXPECT_THAT(strlen(coll.c_str()), 16);
+  EXPECT_THAT(coll.size(), 16);
+  // int memcmp(const void *s1, const void *s2, size_t n);
+  EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
+  EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size()+1), 0);
+}
 
-  string ss{s1};
-  EXPECT_THAT(ss.size(), 21); // string
+// when construct a string from array, it will copy up to null?
+TEST(String, check_cstring_2)
+{
+  {
+    // src_len is 14 which includes a null since std::string.data()
+    //                "0123456789012"
+    std::string input{"&streamtype=1"};
+    char output[256] = {0};
+
+    EXPECT_THAT(input.size(), 13);
+    EXPECT_THAT(strlen(input.c_str()), 13);
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // char *strcpy(char *dest, const char *src);
+    // which understand a cstring.
+    strcpy(output, input.c_str());
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // size of result?
+    std::string result{output};
+
+    EXPECT_THAT(input, result);
+
+    EXPECT_THAT(result.size(), 13);
+    EXPECT_THAT(strlen(result.c_str()), 13);
+  }
+}
+
+TEST(String, OutputCstring)
+{
+  ostringstream os;
+
+  char s1[] = "this is first message";
+  // cout << s1 << endl;
+  os << s1 << endl;
+  EXPECT_EQ(os.str(), "this is first message\n");
 }
 
 // return bool if source and target are the same from the end.
@@ -1132,20 +1176,25 @@ TEST(String, CompareStringFromEnd)
   EXPECT_EQ(false, strend_02(s1, t2));
 }
 
-// why this works? since there is std::string ctor(const char*)
 
-TEST(String, OutputCstring)
-{
-  ostringstream os;
+/* ={=========================================================================
+  string-conversion
 
-  char s1[] = "this is first message";
-  // cout << s1 << endl;
-  os << s1 << endl;
-  EXPECT_EQ(os.str(), "this is first message\n");
-}
+Defined in header <string>
 
-// ={=========================================================================
-// string-conversion
+int       stoi( const std::string& str, std::size_t* pos = 0, int base = 10 );
+int       stoi( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
+(1)	(since C++11)
+
+long      stol( const std::string& str, std::size_t* pos = 0, int base = 10 );
+long      stol( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
+(2)	(since C++11)
+
+long long stoll( const std::string& str, std::size_t* pos = 0, int base = 10 );
+long long stoll( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
+(3)	(since C++11)
+
+*/
 
 TEST(StringConverison, check_functions)
 {

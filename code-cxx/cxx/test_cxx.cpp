@@ -374,7 +374,8 @@ TEST(CxxType, check_size)
   std::cout << "__x86_32__ " << std::endl;
 #endif
 
-  std::cout << "size of (enum) is               : " << sizeof(State) << std::endl;
+  std::cout << "size of (enum) is               : " << sizeof(State)
+            << std::endl;
 
   std::cout << "size of (int) is                : " << sizeof(int) << std::endl;
   std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int)
@@ -895,7 +896,7 @@ TEST(CxxType, show_variant_map)
 // ={=========================================================================
 // cxx-array cxx-sizeof
 
-TEST(CxxSize, see_sizeof)
+TEST(CxxSize, check_sizeof)
 {
   using namespace use_sizeof;
 
@@ -913,9 +914,10 @@ TEST(CxxSize, see_sizeof)
     // char *s1 = "this is first message"; is a pointer
   }
 
-  char s2[]   = "this is first message";
+  char s2[]   = "012345678901234567890";
   int arr[20] = {33};
 
+  // includes a null
   EXPECT_EQ(sizeof(s2), 22);
   EXPECT_EQ(sizeof s2, 22);
 
@@ -964,6 +966,19 @@ TEST(CxxSize, see_sizeof)
 
     EXPECT_THAT(sizeof(EventPayload), 32);
     EXPECT_THAT(sizeof(EventPayload *), 8);
+  }
+
+  // todo: cleanup
+  {
+    const char *s1  = "this is first message";
+    const char s2[] = "this is first message";
+
+    EXPECT_THAT(sizeof(s1), 8);                  // pointer
+    EXPECT_THAT(sizeof s1, 8);                   // pointer
+    EXPECT_THAT(sizeof *s1, 1);                  // byte
+    EXPECT_THAT(sizeof(s2), 22);                 // array
+    EXPECT_THAT(sizeof(s2) / sizeof(s2[0]), 22); // array
+    EXPECT_THAT(strlen(s2), 21);
   }
 }
 
@@ -5026,7 +5041,7 @@ namespace cxx_callable
       // m_private.invoke(f);
 
       // ok:
-      m_private.invoke(std::move(f));
+      return m_private.invoke(std::move(f));
     }
 
     template <typename F>
@@ -5174,7 +5189,7 @@ TEST(CxxCallable, Pointer)
 }
 
 // cxx-lambda
-TEST(CxxCallable, check_lambda_capture_and_return)
+TEST(CxxCallable, check_lambda_capture_and_return_1)
 {
   {
     auto func = []() {
@@ -5243,9 +5258,7 @@ TEST(CxxCallable, check_lambda_capture_and_return)
     int x = 42;
     int y = 42;
 
-    auto func = [] (const int first, int &second) {
-      ++second;
-    };
+    auto func = [](const int first, int &second) { ++second; };
 
     x = 77;
     func(x, y);
@@ -5253,6 +5266,46 @@ TEST(CxxCallable, check_lambda_capture_and_return)
 
     EXPECT_THAT(x, 77);
     EXPECT_THAT(y, 44);
+  }
+}
+
+// the both causes:
+// warning: control reaches end of non-void function [-Wreturn-type]
+//
+// the case was when thought it's lambda returning nothing, causes this warning
+// and it turns out that somewhere in the middle of lambda, there is code return
+// boolean so warning.
+//
+// If add "return;" at the end of lambda to say it returns nothing, becomes
+// error
+// error: inconsistent types ‘bool’ and ‘void’ deduced for lambda return type
+
+TEST(CxxCallable, check_lambda_capture_and_return_2)
+{
+  {
+    auto f1 = [] {
+      std::string value{"this is a callback"};
+
+      if (value.empty())
+        return true;
+
+      // return;
+    };
+
+    f1();
+  }
+
+  {
+    auto f1 = [] {
+      std::string value{"this is a callback"};
+
+      if (!value.empty())
+        return true;
+
+      std::cout << "value: " << value << std::endl;
+    };
+
+    f1();
   }
 }
 
@@ -5544,25 +5597,23 @@ namespace cxx_callable
     }
   };
 
-  class Worker1
-  {
-  private:
-    const std::string waits_{"\\|/-"};
-    int count_{0};
-
-  public:
-    void *run(void *)
-    {
-      while (count_ < 1000)
-      {
-        std::cout << flush << "\r" << waits_[count_ % 5];
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        ++count_;
-      }
-
-      std::cout << std::endl;
-    }
-  };
+  // class Worker1
+  // {
+  // private:
+  //   const std::string waits_{"\\|/-"};
+  //   int count_{0};
+  // public:
+  //   void *run(void *)
+  //   {
+  //     while (count_ < 1000)
+  //     {
+  //       std::cout << flush << "\r" << waits_[count_ % 5];
+  //       std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  //       ++count_;
+  //     }
+  //     std::cout << std::endl;
+  //   }
+  // };
 
   // int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
   // void*(*start_routine) (void *), void *arg);
@@ -8216,6 +8267,7 @@ namespace cxx_move
       std::cout << "Move1 &operator=(const Move &rhs)" << std::endl;
       m_name  = rhs.m_name;
       m_value = rhs.m_value;
+      return *this;
     }
 
     // NOTE: std::string m_name uses its copy ctor
@@ -8232,6 +8284,7 @@ namespace cxx_move
       std::cout << "Move1 &operator=(Move &&rhs)" << std::endl;
       m_name  = rhs.m_name;
       m_value = rhs.m_value;
+      return *this;
     }
 
     bool isNameEmpty() const { return m_name.empty(); }

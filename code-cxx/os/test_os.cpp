@@ -15,10 +15,10 @@
 
 #include <fcntl.h>
 #include <fnmatch.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include <sys/prctl.h>
 #include <sys/uio.h> // readv()
-#include <semaphore.h>
-#include <pthread.h>
 
 // #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from <stdio.h> */
 //
@@ -46,6 +46,115 @@ using namespace testing;
 // (gdb) b
 // PatternObserver_sendNotificationWithCallerDispatcherButRaiseException_Test::TestBody()
 //
+
+/*
+={=============================================================================
+os-time
+
+time() system call returns the number of seconds since the Epoch. i.e., the
+same value that gettimeofday() returns in the tv_sec field of its tv argument.
+
+#include <time.h>
+time_t time(time_t *timep);
+Returns number of seconds since the Epoch,or (time_t) -1 on error
+
+Since time() returns the same value in two ways, we often simply use the
+following call without error checking:
+
+t = time(NULL);
+
+
+struct tm *localtime(const time_t *timep);
+
+The *call-gmtime()* and *call-localtime()* functions convert a time_t value
+into a so-called brokendown time. The broken-down time is placed in a
+statically allocated structure whose address is returned as the function
+result.
+
+Unlike gmtime(), `localtime() takes into account timezone and DST settings` to
+return a broken-down time corresponding to the system's local time.
+
+
+size_t strftime(char *outstr, size_t maxsize, const char *format, const struct
+    tm *timeptr);
+
+The *call-strftime()* function provides us with more precise control when
+converting a broken-down time into printable form. Given a broken-down time
+pointed to by timeptr, strftime() places a corresponding null-terminated,
+date-plus-time string in the buffer pointed to by outstr.
+
+       %c     The preferred date and time representation for the current locale.
+       %T     The time in 24-hour notation (%H:%M:%S).  (SU)
+
+
+char * currTime(const char *format);
+Return a string containing the current time formatted according to the
+specification in 'format' (see strftime(3) for specifiers). If 'format' is
+NULL, we use "%c" as a specifier (which gives the date and time as for
+ctime(3), but without the trailing newline). Returns NULL on error.
+
+*/
+
+TEST(OsTime, check_time)
+{
+  // taken from
+  // char * currTime(const char *format);
+
+  auto currTime1 = [](const char *format) -> char * {
+    // #define BUF_SIZE 1000
+    const int BUF_SIZE = 1000;
+
+    char buf[BUF_SIZE]; /* Nonreentrant */
+    time_t t;
+    struct tm *tm;
+    size_t s;
+
+    // get time_t
+    t = time(NULL);
+
+    // convert time_t to tm which is broken-down time.
+    tm = localtime(&t);
+    if (tm == NULL)
+    {
+      errExit("localtime() failed");
+    }
+
+    s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
+
+    return (s == 0) ? NULL : buf;
+  };
+
+  // use gmtime()
+  auto currTime2 = [](const char *format) -> char * {
+    // #define BUF_SIZE 1000
+    const int BUF_SIZE = 1000;
+
+    char buf[BUF_SIZE]; /* Nonreentrant */
+    time_t t;
+    struct tm *tm;
+    size_t s;
+
+    // get time_t
+    t = time(NULL);
+
+    // convert time_t to tm which is broken-down time.
+    tm = gmtime(&t);
+    if (tm == NULL)
+    {
+      errExit("localtime() failed");
+    }
+
+    s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
+
+    return (s == 0) ? NULL : buf;
+  };
+
+  std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
+  std::cout << R"(currTime1("%T") : )" << currTime1("%T") << std::endl;
+
+  std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
+  std::cout << "currTime2(NULL) : " << currTime2(NULL) << std::endl;
+}
 
 /*
 ={=============================================================================
@@ -1194,21 +1303,31 @@ TEST(OsAnsi, color)
 {
   // green text
   // all attributes off, greeen + message + back to the default.
-  std::cout << "\033[0;32m" "this is ansi color coded text" << "\033[m" << std::endl;
+  std::cout << "\033[0;32m"
+               "this is ansi color coded text"
+            << "\033[m" << std::endl;
 
-  std::cout << ESC << "[0;32" << EOE << "this is ansi color coded text" << ESC << EOE << std::endl;
+  std::cout << ESC << "[0;32" << EOE << "this is ansi color coded text" << ESC
+            << EOE << std::endl;
 
   // underscored red on white
-  std::cout << "\033[4;31;47m" "this is ansi color coded text" << "\033[m" << std::endl;
+  std::cout << "\033[4;31;47m"
+               "this is ansi color coded text"
+            << "\033[m" << std::endl;
 
   // bold red
-  std::cout << "\033[" DEFAULT_COLOR "mthis is ansi color coded text" << "\033[m" << std::endl;
+  std::cout << "\033[" DEFAULT_COLOR "mthis is ansi color coded text"
+            << "\033[m" << std::endl;
 
   // underscored red on white
-  std::cout << "\033[1;32m" "this is ansi color coded text" << "\033[m" << std::endl;
+  std::cout << "\033[1;32m"
+               "this is ansi color coded text"
+            << "\033[m" << std::endl;
 
   // underscored red on white
-  printf("\033[1;32m" "this is ansi color coded text\n" "\033[m");
+  printf("\033[1;32m"
+         "this is ansi color coded text\n"
+         "\033[m");
 }
 
 /*
@@ -1251,7 +1370,7 @@ namespace os_sem
 
     return nullptr;
   }
-}
+} // namespace os_sem
 
 // see `sem` is global
 
@@ -1357,7 +1476,7 @@ TEST(OsSem, sem_unnamed2)
 
 // ={=========================================================================
 int main(int argc, char **argv)
-  {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+{
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

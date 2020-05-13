@@ -83,7 +83,7 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 
-add_compile_options("-g")
+add_compile_options("-g;-Wall")
 
 # to use static library
 #

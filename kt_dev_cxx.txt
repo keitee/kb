@@ -3538,7 +3538,7 @@ The summary is that for `unsigned`, `zero-filled` when do `right-shift`.
 http://msdn.microsoft.com/en-us/library/336xbhcz.aspx
 
 The `left-shift` causes that the bit positions that have been vacated by the
-shift operation are zero-filled. 
+shift operation are `zero-filled.` 
 
 The `right-shift` causes the bit pattern in shift expression to be shifted to
 the right by the number of positions specified by additive-expression. 
@@ -53294,12 +53294,11 @@ TEST(String, Const)
 
 13.2.4 Strings and C-Strings
 
-*cxx-remember* *cxx-cstring*
-  `strings` do not provide a special meaning for the character ’\0’, which is
-  used as a special character in an ordinary C-string to mark the end of the
-  string. The character '\0' may be part of a string just like every other
-  character.
-
+*cxx-remember* *cxx-cstring* *cxx-null*
+`cxx-string` do not provide a special meaning for the character ’\0’, which is
+used as a special character in an ordinary C-string to mark the end of the
+string. The character '\0' may be part of a string just like every other
+character.
 
 If you use an old-style null pointer (NULL) instead of nullptr or a char*
 parameter, strange behavior results. The reason is that NULL has an integral
@@ -53329,8 +53328,64 @@ the caller. An ’\0’ character is 'not' appended.
 
 note: 
 data() and c_str() return an array that is `owned` by the string. Thus, the
-caller must not modify or free the memory. note: seems not possible since it
-is const?
+caller must not modify or free the memory. seems not possible since it is const?
+
+TEST(String, check_cstring_1)
+{
+  // do not include a null
+  std::string sz{"zoo"};
+  EXPECT_EQ(sz.size(), 3);
+
+  // include a null
+  char cs[] = "zoo";
+  EXPECT_EQ(strlen(cs), 3);
+  EXPECT_EQ(sizeof(cs), 4);
+  EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
+
+  // there is std::string ctor(const char*)
+  const char s1[]  = "0123456789012345";
+  std::string coll{s1};
+  EXPECT_THAT(sizeof(s1), 17);  // s1 is array
+  EXPECT_THAT(strlen(s1), 16);  // not include null
+  EXPECT_THAT(coll.size(), 16); // not include null
+
+  // c_str() include a null? yes.
+  EXPECT_THAT(strlen(coll.c_str()), 16);
+  EXPECT_THAT(coll.size(), 16);
+  // int memcmp(const void *s1, const void *s2, size_t n);
+  EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
+  EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size()+1), 0);
+}
+
+// when construct a string from array, it will copy up to null?
+TEST(String, check_cstring_2)
+{
+  {
+    // src_len is 14 which includes a null since std::string.data()
+    //                "0123456789012"
+    std::string input{"&streamtype=1"};
+    char output[256] = {0};
+
+    EXPECT_THAT(input.size(), 13);
+    EXPECT_THAT(strlen(input.c_str()), 13);
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // char *strcpy(char *dest, const char *src);
+    // which understand a cstring.
+    strcpy(output, input.c_str());
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // size of result?
+    std::string result{output};
+
+    EXPECT_THAT(input, result);
+
+    EXPECT_THAT(result.size(), 13);
+    EXPECT_THAT(strlen(result.c_str()), 13);
+  }
+}
 
 
 {can-be-invalidated} cxx-iter-invalidated <string-reallocation>

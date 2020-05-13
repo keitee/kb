@@ -2152,6 +2152,538 @@ TEST(CxxCaseQueue, check_ccon_queue_2)
   EXPECT_THAT(message->message_.name_, "simple_message");
 }
 
+/*
+={=============================================================================
+cxx-base64
+
+https://www.base64encode.org/
+
+Base64 encoding schemes are commonly used when there is a need to encode binary
+data that needs be stored and transferred over media that are designed to deal
+with textual data. This is to ensure that the data remains intact without
+modification during transport. Base64 is used commonly in a number of
+applications including email via MIME, and storing complex data in XML or JSON.
+
+
+Details of the Base64 encoding
+
+Base64 is a generic term for a number of similar encoding schemes that encode
+binary data by treating it numerically and translating it into a base 64
+representation. The Base64 term originates from a specific MIME content transfer
+encoding.
+
+Design
+
+`The particular choice of characters` to make up the 64 characters required for
+base varies between implementations. 
+
+The general rule is to choose a set of 64 characters that is both part of a
+subset common to most encodings, and also printable. This combination leaves the
+data unlikely to be modified in transit through systems, such as email, which
+were traditionally not 8-bit clean. 
+
+For example, MIME's Base64 implementation uses A-Z, a-z, and 0-9 for the first
+62 values, "+" and "/" for the last two.
+
+Other variations, usually derived from Base64, share this property but differ in
+the symbols chosen for the last two values; an example is the URL and file name
+safe (RFC 4648 / Base64URL) variant, which uses "-" and "_".
+
+
+Example
+
+A quote snippet from Thomas Hobbes's Leviathan:
+
+"Man is distinguished, not only by his reason, but ..."
+
+represented as an ASCII byte sequence is encoded in MIME's Base64 scheme as follows:
+
+keitee@kit-ubuntu:~/works/coreutils$ echo "Man is distinguished, not only by his reason, but ..." | base64
+TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCAuLi4K
+
+
+In the above quote the encoded value of "Man" is "TWFu". Encoded in ASCII, M, a,
+n are stored as the bytes 77, 97, 110, which are 01001101, 01100001, 01101110 in
+base 2. These three bytes are joined together in a 24 bit buffer producing
+010011010110000101101110. Packs of 6 bits (6 bits have a maximum of 64 different
+binary values) are converted into 4 numbers (24 = 4 * 6 bits) which are then
+converted to their corresponding values in Base64.
+
+Text content    : M         a         n
+ASCII           : 77        97        110
+Bit pattern     : 01001101  01100001  01101110
+                : 010011 010110 000101 101110
+
+// from python
+>>> int("010011", 2)
+19
+>>> int("010110", 2)
+22
+>>> int("000101", 2)
+5
+>>> int("101110", 2)
+46
+
+Index           : 19  22  5   46
+Base64-encoded  : T   W   F   u
+
+As this example illustrates, Base64 encoding converts 3 uncoded bytes (in this
+case, ASCII characters) into 4 encoded ASCII characters.
+
+command line to encode/decode
+
+keitee@kit-ubuntu:~/works/coreutils$ echo "&streamtype=1" | base64
+JnN0cmVhbXR5cGU9MQo=
+
+keitee@kit-ubuntu:~/works/coreutils$ echo "JnN0cmVhbXR5cGU9MQo=" | base64 -d
+&streamtype=1
+
+
+https://nachtimwald.com/2017/11/18/base64-encode-and-decode-in-c/
+
+Base64 Encode and Decode in C
+
+Posted on November 18, 2017 ~ John
+
+Introduction
+
+A very popular way to encode binary data is Base64. The basis of this is an
+encoding table. As you might expect, there are 64 total characters that go into
+the tale. There are multiple implementations of base64 with slight differences.
+They are all the same except for the last two characters and line ending
+requirements. The first 62 characters are always
+“ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789”. PEM and MIME
+encoding are the most common and use “+/” as the last two characters. PEM and
+MIME may use the same characters but they have different maximum line lengths.
+I’m going to implement PEM/MINE but I’m not going to implement new line support.
+
+Properties
+
+Size
+
+In Base64 encoding, 3 binary bytes are represented as 4 characters. This gives
+us a 4:3 ratio, meaning there is 33% overhead for base64. To get the number of
+base64 characters needed for a given binary data blob, take the length of input
+and round up to the nearest multiple of 3. Then, divide by 3 to get the number
+of 3 byte blocks. Multiply by 4 to get the number of base64 characters.
+
+The date for each set of 3 binary bytes is spread over 4 characters giving us 6
+bits per character. 3 bytes total 24 bits (3*8=24). There 4 characters for the
+24 bits (24/4=6). Think of it this way 3/4 (putting 3 bytes into 4) means the
+data is split 75% from each byte to span 4 bytes. Thus, 6 bits utilized per
+character.
+
+
+Padding
+
+Base64 works in blocks of 3 bytes. Implementations such as PEM require padding
+using = character. Padding keeps the correct number of characters when there are
+not enough bytes in the sequence. Ending with a single = means the last binary
+sequence contains 2 bytes. Ending with == means it contains 1 byte.
+
+this code is from mongoose.c and examples are:
+
+  unsigned char sha[20];
+  char b64_sha[30];
+  mg_base64_encode(sha, sizeof(sha), b64_sha);
+
+*/
+
+namespace cxx_case_base64
+{
+#define BASE64_ENCODE_BODY                                                     \
+  static const char *b64 =                                                     \
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";        \
+  int i, j, a, b, c;                                                           \
+                                                                               \
+  for (i = j = 0; i < src_len; i += 3)                                         \
+  {                                                                            \
+    a = src[i];                                                                \
+    b = i + 1 >= src_len ? 0 : src[i + 1];                                     \
+    c = i + 2 >= src_len ? 0 : src[i + 2];                                     \
+                                                                               \
+    BASE64_OUT(b64[a >> 2]);                                                   \
+    BASE64_OUT(b64[((a & 3) << 4) | (b >> 4)]);                                \
+    if (i + 1 < src_len)                                                       \
+    {                                                                          \
+      BASE64_OUT(b64[(b & 15) << 2 | (c >> 6)]);                               \
+    }                                                                          \
+    if (i + 2 < src_len)                                                       \
+    {                                                                          \
+      BASE64_OUT(b64[c & 63]);                                                 \
+    }                                                                          \
+  }                                                                            \
+                                                                               \
+  while (j % 4 != 0)                                                           \
+  {                                                                            \
+    BASE64_OUT('=');                                                           \
+  }                                                                            \
+  BASE64_FLUSH()
+
+#define BASE64_OUT(ch)                                                         \
+  do                                                                           \
+  {                                                                            \
+    dst[j++] = (ch);                                                           \
+  } while (0)
+
+#define BASE64_FLUSH()                                                         \
+  do                                                                           \
+  {                                                                            \
+    dst[j++] = '\0';                                                           \
+  } while (0)
+
+  void cs_base64_encode(const unsigned char *src, int src_len, char *dst)
+  {
+    BASE64_ENCODE_BODY;
+  }
+
+  // o no output buffer size check
+
+  void base64_encode(const unsigned char *src, int src_len, char *dst)
+  {
+    static const char *b64 =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    int i, j, a, b, c;
+
+    std::cout << "input len is: " << src_len << std::endl;
+
+    for (i = j = 0; i < src_len; i += 3)
+    {
+      // pick three chars if *possible*
+      a = src[i];
+      b = i + 1 >= src_len ? 0 : src[i + 1];
+      c = i + 2 >= src_len ? 0 : src[i + 2];
+
+      if (a == '\0')
+        std::cout << "a is null at i: " << i << std::endl;
+
+      if (b == '\0')
+        std::cout << "b is null at i+1: " << i + 1 << std::endl;
+
+      if (c == '\0')
+        std::cout << "c is null at i+2: " << i + 2 << std::endl;
+
+      // take the first 6 bits from the first char. convert and save it
+      // BASE64_OUT(b64[a >> 2]);
+      dst[j++] = (b64[a >> 2]);
+
+      // take 2 bits from the first char and take 4 bits from the second.
+      // convert and save it.
+      // 3 is 11b
+      dst[j++] = (b64[((a & 3) << 4) | (b >> 4)]);
+
+      // since fully used the first char.
+      //
+      // NOTE: Why check again if the second char is in the valid input range?
+      // input includes a null, '\0', and is included in encoding. However, if i
+      // goes over the input length, set input char with 0 in the picking char
+      // code above. this second check prevent processing those chars so filled
+      // with a padding.
+
+      if (i + 1 < src_len)
+      {
+        // take 4 bits from the second and 2 bits from the third
+        dst[j++] = (b64[((b & 15) << 2) | (c >> 6)]);
+      }
+
+      if (i + 2 < src_len)
+      {
+        // take 6 bits from the third
+        dst[j++] = (b64[c & 63]);
+      }
+    } // for end
+
+    // fill a padding char
+    while (j % 4 != 0)
+    {
+      dst[j++] = '=';
+    }
+
+    // fill a null
+    dst[j++] = '\0';
+  }
+
+  // https://nachtimwald.com/2017/11/18/base64-encode-and-decode-in-c/
+  const char b64chars[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  size_t b64_encoded_size(size_t inlen)
+  {
+    size_t ret;
+
+    ret = inlen;
+    if (inlen % 3 != 0)
+      ret += 3 - (inlen % 3);
+    ret /= 3;
+    ret *= 4;
+
+    return ret;
+  }
+
+  char *b64_encode_2(const unsigned char *in, size_t len)
+  {
+    char *out;
+    size_t elen;
+    size_t i;
+    size_t j;
+    size_t v;
+
+    if (in == NULL || len == 0)
+      return NULL;
+
+    elen      = b64_encoded_size(len);
+    out       = (char *)malloc(elen + 1);
+    out[elen] = '\0';
+
+    for (i = 0, j = 0; i < len; i += 3, j += 4)
+    {
+      v = in[i];
+      v = i + 1 < len ? v << 8 | in[i + 1] : v << 8;
+      v = i + 2 < len ? v << 8 | in[i + 2] : v << 8;
+
+      out[j]     = b64chars[(v >> 18) & 0x3F];
+      out[j + 1] = b64chars[(v >> 12) & 0x3F];
+      if (i + 1 < len)
+      {
+        out[j + 2] = b64chars[(v >> 6) & 0x3F];
+      }
+      else
+      {
+        out[j + 2] = '=';
+      }
+      if (i + 2 < len)
+      {
+        out[j + 3] = b64chars[v & 0x3F];
+      }
+      else
+      {
+        out[j + 3] = '=';
+      }
+    }
+
+    return out;
+  }
+
+  // https://github.com/joedf/base64.c/blob/master/base64.c
+  unsigned char b64_chr[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  unsigned int b64_encode_3(const unsigned char* in, unsigned int in_len, unsigned char* out) {
+
+    unsigned int i=0, j=0, k=0, s[3];
+
+    for (i=0;i<in_len;i++) {
+      s[j++]=*(in+i);
+      if (j==3) {
+        out[k+0] = b64_chr[ (s[0]&255)>>2 ];
+        out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
+        out[k+2] = b64_chr[ ((s[1]&0x0F)<<2)+((s[2]&0xC0)>>6) ];
+        out[k+3] = b64_chr[ s[2]&0x3F ];
+        j=0; k+=4;
+      }
+    }
+
+    if (j) {
+      if (j==1)
+        s[1] = 0;
+      out[k+0] = b64_chr[ (s[0]&255)>>2 ];
+      out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
+      if (j==2)
+        out[k+2] = b64_chr[ ((s[1]&0x0F)<<2) ];
+      else
+        out[k+2] = '=';
+      out[k+3] = '=';
+      k+=4;
+    }
+
+    out[k] = '\0';
+
+    return k;
+  }
+
+} // namespace cxx_case_base64
+
+// [ RUN      ] CxxCaseBase64.check_decode_1
+// output: JnN0cmVhbXR5cGU9MQA=
+//
+// input len is: 14
+// b is null at i+1: 13
+// c is null at i+2: 14
+// output: JnN0cmVhbXR5cGU9MQA=
+//
+// input len is: 3
+// c is null at i+2: 2
+// output: JnMA
+//
+// input len is: 2
+// b is null at i+1: 1
+// c is null at i+2: 2
+// output: JgA=
+//
+// input len is: 13
+// b is null at i+1: 13
+// c is null at i+2: 14
+// output: JnN0cmVhbXR5cGU9MQ==
+//
+// [       OK ] CxxCaseBase64.check_decode_1 (0 ms)
+
+TEST(CxxCaseBase64, check_decode_1)
+{
+  using namespace cxx_case_base64;
+
+  {
+    const unsigned char input[] = "&streamtype=1";
+    char output[1000]           = {0};
+
+    cs_base64_encode(input, sizeof(input), output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  {
+    // src_len is 14 which includes a null
+    //                            "012.345.678.901.2"
+    const unsigned char input[] = "&streamtype=1";
+    char output[1000]           = {0};
+
+    base64_encode(input, sizeof(input), output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  // to show it handles a null
+  {
+    // src_len is 3 which includes a null
+    //                            "01"
+    const unsigned char input[] = "&s";
+    char output[1000]           = {0};
+
+    base64_encode(input, sizeof(input), output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  // to show it handles a null
+  {
+    // src_len is 2 which includes a null
+    //                            "0"
+    const unsigned char input[] = "&";
+    char output[1000]           = {0};
+
+    base64_encode(input, sizeof(input), output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  // {
+  //   std::string input{"&streamtype=1"};
+  //   char output[1000] = {0};
+  //
+  //   cs_base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
+  //                    input.length(),
+  //                    output);
+  //
+  //   std::cout << "output: " << output << std::endl;
+  // }
+  {
+    // src_len is 14 which includes a null since std::string.data()
+    //               "012.345.678.901.2"
+    std::string input{"&streamtype=1"};
+    char output[1000] = {0};
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
+                  input.length() + 1,
+                  output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+}
+
+// $ echo "ABC123Test Lets Try this' input and see What happens" | base64
+// QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwo=
+//
+// https://www.base64encode.org/
+// QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwo=
+//
+// from base64 man:
+// The  data  are  encoded  as  described  for  the base64 alphabet in RFC 4648.
+
+//[ RUN      ] CxxCaseBase64.check_decode_2
+// input len is: 53
+// b is null at i+1: 52
+// c is null at i+2: 53
+// output: QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwA=
+// output: QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucw==
+// [       OK ] CxxCaseBase64.check_decode_2 (0 ms)
+//
+// which one is correct?
+//
+// https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
+// Base64 encoding/decoding (RFC1341)
+// Copyright (c) 2005-2011, Jouni Malinen <j@w1.fi>
+//
+// https://www.base64encode.org/
+// Split lines into chunks: 
+// The encoded data will be a continuous text without any whitespaces, check
+// this option if you want to break it up into multiple lines. The applied
+// character limit is defined in the MIME (RFC 2045) specification, which states
+// that the encoded lines must be no more than 76 characters long. (*)
+//
+// Perform URL safe encoding: 
+// Using standard Base64 in URLs requires encoding of "+", "/" and "="
+// characters into their percent-encoded form, which makes the string
+// unnecessarily longer. Enable this option to encode into an URL and file name
+// friendly Base64 variant (RFC 4648 / Base64URL) where the "+" and "/"
+// characters are respectively replaced by "-" and "_", as well as the padding
+// "=" signs are omitted.
+//
+// Have tried couple of codes from googling and all showed the same result as
+// decode_1 result. seems there are many RFC or old/new RFC.
+//
+//
+// https://tools.ietf.org/html/rfc4648
+//
+// This and references in the site shows the correct result as base64.
+// http://libb64.sourceforge.net/
+// one of the references is base64 in GNU coreutils.
+
+TEST(CxxCaseBase64, check_decode_2)
+{
+  using namespace cxx_case_base64;
+
+  {
+    const unsigned char input[] =
+      "ABC123Test Lets Try this' input and see What happens";
+    char output[1000] = {0};
+
+    base64_encode(input, sizeof(input), output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  {
+    const unsigned char input[] =
+      "ABC123Test Lets Try this' input and see What happens";
+
+    char *output = b64_encode_2(input, strlen((const char *)input));
+    // char *output = b64_encode_2(input, strlen((const char *)input+1));
+
+    std::cout << "output: " << output << std::endl;
+
+    free(output);
+  }
+
+  {
+    const unsigned char input[] =
+      "ABC123Test Lets Try this' input and see What happens";
+    char output[1000] = {0};
+
+    b64_encode_3(input, sizeof(input), (unsigned char *)output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

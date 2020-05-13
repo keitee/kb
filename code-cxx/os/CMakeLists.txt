@@ -176,7 +176,7 @@ set(LIBS libcxx.a)
 link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
-# ex
+# test_os
 add_executable(${PROJECT_NAME} "test_os.cpp")
 ## cause link errors to Boost::thread
 ## target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
@@ -194,6 +194,11 @@ add_executable(lpi-sem-server "lpi_sem_server.cpp")
 target_link_libraries(lpi-sem-server ${LIBS} "-lpthread")
 add_executable(lpi-sem-client "lpi_sem_client.cpp")
 target_link_libraries(lpi-sem-client ${LIBS} "-lpthread")
+
+
+# lpi-flock
+add_executable(lpi-flock "lpi_flock.cpp" "lpi_lib.cpp")
+target_link_libraries(lpi-flock ${LIBS})
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
