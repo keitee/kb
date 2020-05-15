@@ -139,6 +139,67 @@ Create file alice.json with the following contents:
     ]
 }
 
+
+Deprecated
+
+http://open-source-parsers.github.io/jsoncpp-docs/doxygen/deprecated.html
+
+when use writer:
+
+// write() to std::string
+// http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_styled_writer.html
+// virtual std::string write(const Value &root); // write JSON object to a
+// string
+// std::cout << writer.write(servicelist) << std::endl;
+
+use writer
+
+Json::StyledWriter writer;
+std::string response;
+response.assign(writer.write(servicelist));
+
+However, it's in the deprecated list:
+
+Class Json::StyledWriter
+Use StreamWriterBuilder.
+
+Class Json::Reader
+Use CharReader and CharReaderBuilder.
+
+
+use stringstream for reading and writing.
+
+std::ostringstream oss;
+oss << servicelist;
+std::string response;
+response.assign(oss.str());
+
+
+include/json/config.h
+140:using OStream = std::ostream;
+148:using JSONCPP_OSTREAM = Json::OStream;
+
+//jsoncpp/src/lib_json/json_writer.cpp
+
+OStream& operator<<(OStream& sout, Value const& root) {
+  StreamWriterBuilder builder;
+  StreamWriterPtr const writer(builder.newStreamWriter());
+  writer->write(root, &sout);
+  return sout;
+}
+
+//jsoncpp/src/lib_json/json_reader.cpp
+
+IStream& operator>>(IStream& sin, Value& root) {
+  CharReaderBuilder b;
+  String errs;
+  bool ok = parseFromStream(b, sin, &root, &errs);
+  if (!ok) {
+    throwRuntimeError(errs);
+  }
+  return sin;
+}
+
 */
 
 // [ RUN      ] CxxJSON.ex1
@@ -253,6 +314,66 @@ TEST(CxxJSON, jsoncpp_ex1)
   }
 }
 
+// read json file but use stringstream
+
+TEST(CxxJSON, jsoncpp_ex1_1)
+{
+  {
+    std::ifstream ifs("../alice.json");
+
+    // Json::Reader reader;
+    // Json::Value root;
+    // reader.parse(ifs, root);
+
+    Json::Value root;
+    ifs >> root;
+
+    // check
+    EXPECT_THAT(root.isMember("year"), true);
+    EXPECT_THAT(root.isMember("book"), true);
+
+    // check if it's string
+    {
+      const Json::Value &book = root["book"];
+      EXPECT_THAT(book.isString(), true);
+    }
+
+    // access map
+    // std::string asString() const
+    std::cout << "year: " << root["year"].asUInt() << std::endl;
+    std::cout << "book: " << root["book"].asString() << std::endl;
+    std::cout << "year: " << root["year"].asUInt() << std::endl;
+
+    // Json::Value is `variant`
+    const Json::Value &book = root["book"];
+    std::cout << "book: " << book.asString() << std::endl;
+
+    const Json::Value &year = root["year"];
+    std::cout << "year: " << year.asUInt() << std::endl;
+
+    // `characters` maps to array
+    const Json::Value &chars = root["characters"];
+
+    // each array element is a map.
+    for (int i = 0; i < chars.size(); i++)
+    {
+      const Json::Value &object = chars[i];
+
+      // bool Json::Value::isObject	() const
+
+      if (object.isObject() && !object.empty())
+      {
+        std::cout << "i : " << i << " is object and not empty" << std::endl;
+      }
+
+      std::cout << "characters:    name: " << chars[i]["name"].asString()
+                << std::endl;
+      std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
+                << std::endl;
+    }
+  }
+}
+
 // what does `empty` mean?
 //
 // {
@@ -284,7 +405,7 @@ TEST(CxxJSON, jsoncpp_ex1)
 // characters: chapter: 7
 // [       OK ] CxxJSON.jsoncpp_ex1_1 (0 ms)
 
-TEST(CxxJSON, jsoncpp_ex1_1)
+TEST(CxxJSON, jsoncpp_ex1_2)
 {
   {
     std::ifstream ifs("../alice_empty.json");
@@ -1030,6 +1151,51 @@ TEST(CxxJSON, jsoncpp_ex6)
   // response.assign(writer.write(servicelist).c_str());
 
   response.assign(writer.write(servicelist));
+
+  std::cout << response << std::endl;
+}
+
+// use stringstream instead and see commment about deprecated list above
+
+TEST(CxxJSON, jsoncpp_ex6_1)
+{
+  Json::Value servicelist;
+
+  servicelist["documentId"] = "1563970127340";
+  servicelist["version"] = 1;
+
+  Json::Value service1;
+  service1["dvbtriplet"] = "318.4.8583"; 
+
+  service1["servicetypes"] = Json::Value(Json::arrayValue);
+  service1["servicetypes"].append("DTT");
+  service1["servicetypes"].append("OTT");
+
+  service1["c"] = "21";
+  service1["t"] = "Rai 4";
+  service1["sid"] = "M13e-4-2187";
+  service1["sf"] = "sd";
+  service1["xsg"] = 8;
+
+  Json::Value service2;
+  service2["dvbtriplet"] = "318.4.8585"; 
+  service2["servicetypes"] = Json::Value(Json::arrayValue);
+  service2["servicetypes"].append("DTT");
+  service2["c"] = "24";
+  service2["t"] = "Rai Movie";
+  service2["sid"] = "M13e-4-2189";
+  service2["sf"] = "sd";
+  service2["xsg"] = 8;
+
+  servicelist["services"] = Json::Value(Json::arrayValue);
+  servicelist["services"].append(service1);
+  servicelist["services"].append(service2);
+
+  // use
+  std::string response;
+  std::ostringstream oss;
+  oss << servicelist;
+  response.assign(oss.str());
 
   std::cout << response << std::endl;
 }

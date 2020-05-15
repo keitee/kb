@@ -501,7 +501,7 @@
 
 *kt_linux_core_200* os-io-model
 *kt_linux_core_201* linux-io-ioctl
-|kt_linux_core_201| linux-io-extended open-file-table
+|kt_linux_core_201| os-io-extended open-file-table
 |kt_linux_core_202| os-io-non-blocking os-io-poll
 *kt_linux_core_203* linux-io-fs driver-api
 *kt_linux_core_203* linux-io-fs-vfs
@@ -529,6 +529,7 @@
 *kt_linux_core_0000* os-ipc-socket os-socket
 *kt_linux_core_0000* os-ipc-socket os-socket-unix
 *kt_linux_core_0000* os-ipc-socket-internet os-socket-internet 
+*kt_linux_core_0000* os-pipe
 *kt_linux_core_0000* linux-ipc-pipe
 *kt_linux_core_0000* linux-ipc-pipe-check-setup
 |kt_linux_core_0000| linux-ipc-fifo
@@ -904,7 +905,7 @@ if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router ||
 ={============================================================================
 *kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 
-3.2.2 Pipelines *sh-pipe*
+3.2.2 Pipelines *sh-pipe* *os-pipe*
 
 A pipeline is a sequence of simple commands separated by one of the control
 `operators | or |&.`
@@ -1061,10 +1062,12 @@ to a single stream.
 ()
 ( list )
 
-Placing a list of commands between `parentheses` causes a
-`subshell-environment` to be created, and each of the commands in list to be
-executed `in that subshell` Since the list is executed in a subshell, variable
-assignments do not remain in effect after the subshell completes.
+Placing a list of commands between `parentheses` causes a `subshell environment` 
+to be created, 
+and each of the commands in list to be executed `in that subshell` 
+
+Since the list is executed in a subshell, variable assignments do not remain
+in effect after the subshell completes.
 
 <ex>
 $ global strlen                 # strlen() is not found
@@ -3895,6 +3898,10 @@ or
 
 ``command`` 
 
+<ex>
+week=``date '+%W'``             # The week of the year (0..53).
+
+
 Bash performs the expansion by executing COMMAND in a `subshell` environment
 and replacing the command substitution with the standard output of the
 command, with any trailing newlines deleted.
@@ -3904,7 +3911,7 @@ Embedded newlines are not deleted, but may be removed during `word splitting`
 The command substitution $(cat file) can be replaced by the equivalent but
 faster $(< file).
 
-When the `old-style backquote` form of substitution is used, backslash retains
+When the `old-style sh-backquote` form of substitution is used, backslash retains
 its literal meaning except when followed by ‘$’, ‘`’, or ‘\’. The first
 backquote not preceded by a backslash terminates the command substitution.
 When using the $(command) form, all characters between the parentheses make up
@@ -51175,12 +51182,12 @@ DESCRIPTION
 
 
 ={============================================================================
-*kt_linux_core_201* linux-io-extended
+*kt_linux_core_201* os-io-extended
 
 LPI 5 File I/O: Futher Details
 
-{automicity}
-All system calls are executed atomically. By this, we mean that the kernel
+*os-call*
+All system calls are executed `atomically.` By this, we mean that the kernel
 guarantees that all of the steps in a system call are completed as a single
 operation, without being interrupted by another process or thread.
 
@@ -51231,7 +51238,7 @@ note: man 2 open shows
               done without a race condition.
 
 
-{fcntl}
+*call-fcntl*
 
 5.2 File Control Operations: fcntl()
 
@@ -51258,45 +51265,47 @@ following cases:
   socket.
 
 
-{file-descriptors-and-open-files} *open-file-table*
-
+*os-fd* *os-file-open-table*
 5.4 Relationship Between File Descriptors and Open Files
 
 It is possible-and useful-to have multiple descriptors referring to the same
-open file. These file descriptors may be open in the same process or in
-different processes. Three data structures maintained by the 'kernel':
+open file. These file descriptors may be open in `the same process` or in
+`different processes.` Three data structures maintained by the kernel:
 
 File descriptor   ->  Open file   ->    i-node table
     table               table
-    fd x 					(system-wide) 		(system-wide)
-
+fd x (per-process)    (system-wide)     (system-wide)
+  
 
 1. the `per-process open file descriptor table`
 
-  * a set of flags controlling the operation of the file descriptor (there is
+Each entry in this table records information about a single file descriptor,
+including:
+
+  o a set of flags controlling the operation of the file descriptor (there is
     just one such flag, the close-on-exec flag, which we describe in Section
     27.4); and
 
-  * a reference to the open file description.
+  o a reference to the open file description.
 
 
-2. the `system-wide` table of open file `descriptions`, `open file table`
+2. the `system-wide` table of `open file descriptions` 
 
-An open file description stores all information relating to an open file,
+An open file `description` stores all information relating to an open file,
 including:
 
-  * the current file offset (as updated by read() and write(), or explicitly
+  o the current file offset (as updated by read() and write(), or explicitly
     modified using lseek());
 
-  * status flags specified when opening the file (i.e., the flags argument to
+  o status flags specified when opening the file (i.e., the flags argument to
     open());
  
-  * the file access mode (read-only, write-only, or read-write, as specified
+  o the file access mode (read-only, write-only, or read-write, as specified
     in open());
 
-  * settings relating to signal-driven I/O (Section 63.3); and
+  o settings relating to signal-driven I/O (Section 63.3); and
 
-  * a reference to the i-node object for this file.
+  o a reference to the i-node object for this file.
 
 
 3. the file system `i-node table`
@@ -51304,19 +51313,22 @@ including:
 Each file system has a table of i-nodes for all files residing in the file
 system. The i-node for each file includes the following information:
 
-  * file type (e.g., regular file, socket, or FIFO) and permissions;
-  * a pointer to a list of locks held on this file; and
-  * various properties of the file, including its size and timestamps relating
+  o file type (e.g., regular file, socket, or FIFO) and permissions;
+
+  o a pointer to a list of locks held on this file; and
+
+  o various properties of the file, including its size and timestamps relating
     to different types of file operations.
 
 
 Figure 5-2: Relationship between file descriptors, open file descriptions, and
 i-nodes
 
+
 <when-the-same-process-has-multiple-descriptors-for-the-same-file>
 In process A, descriptors 1 and 20 both, fd 1 and fd 20, refer to the same
 open file `description` (labeled 23). This situation may arise as a result of a
-call to dup(), dup2(), or fcntl() (see Section 5.5).
+call to *call-dup* dup2(), or fcntl() (see Section 5.5).
 
 <when-different-process-has-descriptor-for-the-same-file>
 Descriptor 2 of process A and descriptor 2 of process B refer to a single open
@@ -51329,11 +51341,9 @@ passed an open descriptor to another process using a UNIX domain socket
 Finally, we see that descriptor 0 of process A and descriptor 3 of process B
 refer to different open file descriptions, but that these descriptions refer
 to the same i-node table entry (1976)-in other words, to the same file. This
-occurs because each process independently called `open()` for the same file. A
+occurs because each process `independently called open()` for the same file. A
 similar situation could occur if a single process opened `the same file twice`
 
-
-{duplicating-descriptors}
 
 5.5 Duplicating File Descriptors
 
@@ -51347,11 +51357,11 @@ descriptor 2 so that it refers to the same open file description as file
 descriptor 1.
 
 Note that it is not sufficient for the shell simply to open the results.log
-file twice since this makes two descriptors and descriptions: 
+file twice; once on descriptor 1 and once on descriptor 2.
 
-One reason for this is that the two file descriptors would not share a file
-offset pointer, and hence could end up overwriting each other's output. (Since
-    uses different description)
+One reason for this is that the two file descriptors would `not share` a file
+offset pointer, and hence could end up overwriting each other's output. 
+(Since uses different description)
 
 Another reason is that the file may not be a disk file. Consider the following
 command, which sends standard error down the same pipe as standard output:
@@ -51360,8 +51370,8 @@ command, which sends standard error down the same pipe as standard output:
 $ ./myscript 2>&1 | less
 
 
-<call-dup>
-The dup() call takes oldfd, an open file descriptor, and returns a new
+*call-dup*
+The dup() call takes `oldfd`, an open file descriptor, and returns a new
 descriptor that refers to the `same open file description` The new descriptor
 is guaranteed to be `the lowest unused file descriptor`
 
@@ -51372,13 +51382,14 @@ int dup2(int oldfd, int newfd);
 
 Returns (new) file descriptor on success, or -1 on error
 
+
+Suppose we make the following call:
+
 newfd = dup(1);
 
-The dup2() system call makes a duplicate of the file descriptor given in oldfd
-using the descriptor number `supplied` in newfd. If the file descriptor
-specified in newfd is already open, dup2() 'closes' it first. Any error that
-occurs during this close is silently ignored; safer programming practice is to
-explicitly close() newfd if it is open before the call to dup2().
+Assuming the normal situation where the shell has opened file descriptors 0,
+1, and 2 on the program’s behalf, and no other descriptors are in use, dup()
+will create the duplicate of descriptor 1 using file 3.
 
 If we wanted the duplicate to be descriptor 2, we could use the following
 technique:
@@ -51386,9 +51397,105 @@ technique:
 close(2);         /* Frees file descriptor 2 */
 newfd = dup(1);   /* Should reuse file descriptor 2 */
 
-We could simplify the preceding calls to close() and dup() to the following:
+This code works only if descriptor 0 was open. (because 0 is not open, 0 will
+be used since return `the lowest`)
 
-dup2(1, 2);
+To make the above code simpler, and to ensure we always get the file
+descriptor we want, we can use dup2().
+
+dup2(pfd[1], STDOUT_FILENO); 
+
+The dup2() system call makes a duplicate of the file descriptor given in oldfd
+using the descriptor number `supplied` in newfd. If the file descriptor
+specified in newfd is already open, dup2() `closes newfd first.` Any error that
+occurs during this close is silently ignored; safer programming practice is to
+explicitly close() newfd if it is open before the call to dup2().
+
+After duplicating pfd[1], we now have two file descriptors referring to the
+write end of the pipe: descriptor 1 and pfd[1]. Since unused pipe file
+descriptors `should be closed,` after the dup2() call, we close the superfluous
+descriptor: 
+
+close(pfd[1]);
+
+The code we have shown so far relies on standard output having been previously
+open. Suppose that, prior to the pipe() call, standard input and standard
+output had both been closed. In this case, pipe() would have allocated these
+two descriptors to the pipe, perhaps with pfd[0] having the value 0 and pfd[1]
+having the value 1. Consequently, the preceding dup2() and close() calls would
+be equivalent to the following:
+
+dup2(1, 1); /* Does nothing */
+close(1); /* Closes sole descriptor for write end of pipe */
+
+Therefore, it is `good defensive programming practice` to bracket these calls
+with an if statement of the following form:
+
+if (pfd[1] != STDOUT_FILENO) {
+ dup2(pfd[1], STDOUT_FILENO);
+ close(pfd[1]);
+}
+
+
+44.4 Using Pipes to Connect Filters
+
+When a pipe is created, the file descriptors used for the two ends of the pipe
+are the next lowest-numbered descriptors available. Since, in normal
+circumstances, descriptors 0, 1, and 2 are already in use for a process, some
+higher-numbered descriptors will be allocated for the pipe. So how do we bring
+about the situation shown in Figure 44-1, where two filters (i.e., programs that
+read from stdin and write to stdout) are connected using a pipe, such that the
+standard output of one program is directed into the pipe and the standard input
+of the other is taken from the pipe? And in particular, how can we do this
+without modifying the code of the filters themselves?
+
+
+ls                        pipe                           wc
+(os-stdout, fd 1)    ->   unidirectional byte stream  -> (stdin, fd 0)
+pipe(pfd[2]);             `write end`      `read end`     pipe(pfd[2]);
+
+
+*call-dup*
+The answer is to use the techniques described in Section 5.5 for duplicating
+file descriptors. Traditionally, the following series of calls was used to
+accomplish the desired result:
+
+int pfd[2];
+
+// Allocates (say) file descriptors 3 and 4 for pipe. 
+
+// Other steps here, e.g., fork()
+
+pipe(pfd); 
+
+// Free file descriptor 1
+close(STDOUT_FILENO); 
+
+// Duplication uses lowest free file descriptor, i.e., fd 1
+dup(pfd[1]); 
+
+The end result of the above steps is that the process’s standard output is bound
+to the write end of the pipe. 
+
+
+Note that these steps depend on the assumption that file descriptors 0, 1, and 2
+for a process are already open. (The shell normally ensures this for each
+program it executes.) 
+
+If file descriptor 0 was already closed prior to the above steps, then we would
+erroneously bind the process’s standard input to the write end of the pipe.  
+
+To avoid this possibility, we can replace the calls to close() and dup() with
+the following dup2() call, which allows us to explicitly specify the descriptor
+to be bound to the pipe end:
+
+// Close descriptor 1, and reopen bound to write end of pipe
+dup2(pfd[1], STDOUT_FILENO);
+
+
+// skipped
+// newfd = fcntl(oldfd, F_DUPFD, startfd); 
+// dup3()
 
 
 <syscall-pread>
@@ -56045,10 +56152,17 @@ struct sockaddr_storage {
 
 
 ={============================================================================
-*kt_linux_core_101* linux-ipc-pipe
+*kt_linux_core_0000* os-pipe
 
-{ipc-pipe}
-pipe is `unnamed-fifo` and is an early form that can be used
+44.1 Overview
+
+Pipes can be used to pass data between related processes (the meaning of
+    related will become clear later). 
+
+FIFOs are a variation on the pipe concept. The important difference is that
+FIFOs can be used for communication between any processes.
+
+*os-pipe* is `unnamed fifo` and is an early form that can be used
 `related-processes` such as parent and child. In other words, created using
 fork() call. 
 
@@ -56058,12 +56172,12 @@ and write.
 $ ls | wc -l
 
 ls                          pipe                           wc
-(stdout, fd 1)    ->        unidirectional byte stream  -> (stdin, fd 0)
+(os-stdout, fd 1)    ->     unidirectional byte stream  -> (stdin, fd 0)
                   `write end`                             `read end`
                   of pipe                               of pipe
 
 
-<byte-stream-and-sequential> LPI 44.1
+<byte-stream-and-sequential>
 When we say that a pipe is a byte stream, we mean that there is no concept of
 `messages` or message boundaries when using a pipe. 
 
@@ -56075,7 +56189,17 @@ from a pipe in exactly the order they were written. It is not possible to
 randomly access the data in a pipe using lseek().
 
 
-<ipc-pipe-block-on-read> *sync-deadlock*
+*os-socket*
+Bidirectional pipes are not specified by any UNIX standards, so that, even on
+implementations where they are provided, it is best to avoid reliance on their
+semantics. As an alternative, we can use UNIX domain stream socket pairs
+(created using the socketpair() system call described in Section 57.5), which
+provide a standardized bidirectional communication mechanism that is
+semantically equivalent to stream pipes.
+
+
+Reading from a pipe *os-sync-deadlock*
+
 Attempts to read from a pipe that is currently empty `block` until at least
 one byte has been written to the pipe. 
 
@@ -56084,33 +56208,51 @@ will see end-of-file (i.e., read() returns 0) once it has read all remaining
 data in the pipe.
 
 
-<block-on-write> <limited-capacity> LPI-44 *sync-deadlock*
-A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a
-maximum capacity. Once a pipe is full, further writes to the pipe 'block'
+*os-sync*
+Writes of up to PIPE_BUF bytes are guaranteed to be atomic
+
+On Linux 2.2, pipe writes of any size are atomic, unless interrupted by a
+signal handler. On Linux 2.4 and later, any write greater than `PIPE_BUF`
+bytes may be interleaved with writes by other processes. (The kernel code
+    implementing pipes underwent substantial changes between kernel versions
+    2.2 and 2.4.)
+
+
+Pipes have a limited capacity *os-sync-deadlock*
+
+`A pipe is simply a buffer maintained in kernel memory.` This buffer has a
+maximum capacity. Once a pipe is full, further writes to the pipe `block`
 until the reader removes some data from the pipe.
 
 If employing two pipes for bi-directional buffer, then we need to be wary of
 deadlocks that may occur if both processes block while trying to read from
 empty pipes OR while trying to write to pipes that are already full.
 
-
-<ipc-pipe-use-large-buffer-size>
 SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels
 before 2.6.11, the pipe capacity is the same as the system page size (e.g.,
     4096 bytes on x86-32); since Linux 2.6.11, the pipe capacity is 65,536
 bytes. Other UNIX implementations have different pipe capacities.
+
+In general, an application never needs to know the exact capacity of a pipe.
+If we want to prevent the writer process(es) from blocking, the process(es)
+reading from the pipe should be designed to read data as soon as it is
+available.
 
 This means that pipe is `kernel resource meaning` that there is copy between
 kernel and process. In theory, there is no reason why a pipe couldn't operate
 with smaller capacities, even with a single-byte buffer. 
 
 The reason for employing large buffer sizes is efficiency: each time a writer
-fills the pipe, the kernel must perform a context switch to allow the reader
+fills the pipe, the kernel must perform a `context switch` to allow the reader
 to be scheduled so that it can empty some data from the pipe. Employing a
 larger buffer size means that fewer context switches are required.
 
+Starting with Linux 2.6.35, the capacity of a pipe can be modified. The
+Linux-specific call fcntl(fd, F_SETPIPE_SZ, size) changes the capacity of the
+pipe referred to by fd to be at least size bytes.
 
-<ipc-pipe-api>
+
+*os-pipe-api*
 
 #include <unistd.h>
 int pipe(int filedes[2]);        Returns 0 on success, or -1 on error
@@ -56118,8 +56260,7 @@ int pipe(int filedes[2]);        Returns 0 on success, or -1 on error
 As with any file descriptor, we can use the read() and write() system calls to
 perform I/O on the pipe.
 
-
-<set-up-pipe>
+<ex>
 Parent gets two fds from a pipe() call which are fd[0] for read and fd[1] for
 write. Create a child via fork() and the child process inherits copies of its
 parent's file descriptors. Close unused fds to create a single channel between
@@ -56159,18 +56300,26 @@ switch (fork()) { /* Create a child process */
 }
 
 
-<ipc-pipe-read-and-write>
+Closing unused pipe file descriptors
+
+Closing unused pipe file descriptors is more than a matter of ensuring that a
+process doesn’t exhaust `its limited set of file descriptors` - it is
+essential to the correct use of pipes. We now consider 
+
+`why the unused file descriptors for both the read and write ends of the pipe`
+must be closed.
+
 `If the reading process` doesn't close the write end of the pipe, then, after
 the other process closes its write descriptor, the reader won't see
-end-of-file, even after it has read all data from the pipe. 
+end-of-file, even after it has read all data from the pipe. Instead, a read()
+  would block waiting for data, because the kernel knows that there is still
+  at least one write descriptor open for the pipe. 
 
-Instead, a read() would block waiting for data, because the kernel knows that
-there is still at least one write descriptor open for the pipe. That this
-descriptor is held open by the reading process itself is irrelevant; in
-theory, that process could still write to the pipe, even if it is blocked
+That this descriptor is held open by the reading process itself is irrelevant;
+in theory, that process could still write to the pipe, even if it is blocked
 trying to read. For example, the read() might be interrupted by a signal
 handler that writes data to the pipe. (This is a realistic scenario, as we’ll
-see in Section 63.5.2.)
+    see in Section 63.5.2.)
 
 `If the writing process` doesn't close the read end of the pipe, then, even
 after the other process closes the read end of the pipe, the writing process
@@ -56178,7 +56327,7 @@ will still be able to write to the pipe.  Eventually, the writing process will
 fill the pipe, and a further attempt to write will block indefinitely.
 
 
-<os-pipe-broken-pipe> *sigpipe*
+*os-pipe-broken-pipe* *os-sigpipe*
 When a process tries to write to a pipe for `which no process has an open read`
 descriptor, the kernel sends the SIGPIPE signal to the writing process. By
 default, this signal kills a process. A process can instead arrange to catch
@@ -56210,34 +56359,56 @@ technique that described in Section 61.13.3) makes it possible to pass a
 file descriptor for a pipe to an unrelated process.
 
 
-<ex> to-create-pipe
-*call-popen* call which simplfies pipe creation, fork, reading/writing setting.
-However, need to set problem to fork in the command line.
+44.5 Talking to a Shell Command via a Pipe: popen()
 
-The C standard I/O library popen(3) makes it easy for the application
-programmer to open a pipe to an external process.
+A common use for pipes is to execute a shell command and either read its
+output or send it some input. The popen() and pclose() functions are provided
+to simplify this task.
+
+Using popen() offers convenience. It builds the pipe, performs descriptor
+duplication, closes unused descriptors, and handles all of the details of
+fork() and exec() on our behalf.
+
+In addition, shell processing is performed on the command. This convenience
+comes `at the cost of efficiency.` At least two extra processes must be created:
+one for the shell and one or more for the command(s) executed by the shell. 
+
+While there are several similarities between system() and popen() plus
+pclose(), there are also significant differences. These stem from the fact
+that, with *call-system* , the execution of the shell command is encapsulated
+within a single function call, whereas with popen(), the calling process runs
+`in parallel` with the shell command and then calls pclose(). 
+
 
 #include <stdio.h>
 FILE *popen(const char *command, const char *mode);
+Returns file stream, or NULL on error
+
 int pclose(FILE *stream);
+Returns termination status of child process, or –1 on error
 
-The argument command must be a command that is acceptable to the UNIX shell.
-The second argument mode must be the C string "r" for reading or "w" for
-writing.  No other combination, such as "w+", is acceptable. 
+The popen() function 
 
-(reading example)
+o `creates a pipe`, 
+o `and then forks a child process that execs a shell`, 
+o `which in turn creates a child process to execute the string given in command.`
 
-FILE *p;
-char cmd[1000];
+The mode argument is a string that determines whether the calling process will
+read from the pipe (mode is r) or write to it (mode is w). 
 
-/* argv[2] is fname */
-sprintf(cmd,"grep 'Time has been updated to (Year:Month' %s | head -1",argv[2]);
-p=popen(cmd,"r");
-fgets(tmp,sizeof(tmp),p);
-pclose(p);
+mode r:
+                          /bin/sh (child shell)
 
-After all, the reason that can use pipe between parent/child is that fds are
-shared.
+                       /          \ 
+calling process   <-  pipe        pipe    <-  command
+stdin                 read        write       stdout
+
+
+After the popen() call, the calling process uses the pipe to read the output
+of command or to send input to it. 
+
+Once I/O is complete, the pclose() function is used to close the pipe and 
+`wait for the child shell` to terminate. 
 
 
 ={============================================================================
@@ -90230,6 +90401,10 @@ o Process time: This is the amount of CPU time used by a process. Measuring
   program or algorithm.
 
 
+*os-time-dst*
+the daylight saving time (DST) regime
+
+
 {os-time-timet} *os-time-timet*
 On 32-bit Linux systems, `time_t, which is a signed integer`, can represent
 dates in the range 13 December 1901 20:45:52 to 19 January 2038 03:14:07.
@@ -90298,6 +90473,8 @@ could be implemented as a library function that calls gettimeofday().
 
 ={============================================================================
 *kt_linux_core_601* os-time-conversion
+
+10.2 Time-Conversion Functions
 
 Shows the functions used to convert between `time_t` values and other time
 formats, including printable representations. These functions shield us from
@@ -90373,7 +90550,7 @@ struct tm {
     int tm_year;     /* Year since 1900 */   note: 1900 but not 1970
     int tm_wday;     /* Day of the week (Sunday = 0)*/
     int tm_yday;     /* Day in the year (0-365; 1 Jan = 0)*/
-    int tm_isdst;    /* Daylight saving time flag
+    int tm_isdst;    /* Daylight saving time flag   *os-time-dst*
                      > 0: DST is in effect;
                      = 0: DST is not effect;
                      < 0: DST information not available */
@@ -90384,6 +90561,22 @@ When using the gmtime function, be sure to check its return value. If the
 computer running the code doesn’t have a local time zone defined, the gmtime
 function will be unable to compute the UTC time, and will return 0. If you
 pass 0 to the asctime function, undefined behavior will result.
+
+
+*os-time-mktime*
+
+The mktime() function translates a broken-down time, expressed as local time,
+into a time_t value, which is returned as the function result
+
+#include <time.h>
+
+time_t mktime(struct tm *timeptr);
+Returns seconds since the Epoch corresponding to timeptr on success, or
+(time_t) -1 on error
+
+The timezone setting is used by mktime() when performing the translation. In
+addition, the DST setting may or may not be used, depending on the value of
+the input tm_isdst field:
 
 
 {between-broken-down-and-printable-form}
@@ -90978,6 +91171,103 @@ obtain lower-resolution timestamps at minimal cost. These nonstandard clocks
 don't cause any access to the hardware clock (which can be expensive for some
     hardware clock sources), and the resolution of the returned value is the
 jiffy (Section 10.6).
+
+
+={============================================================================
+*kt_linux_core_603* os-time-localtime os-time-timezone tool-zdump 
+
+10.3 Timezones
+
+Different countries (and sometimes even different regions within a single
+country) operate on different timezones and DST regimes. Programs that
+input and output times must take into account the timezone and DST regime of
+the system on which they are run. Fortunately, all of the details are handled
+by the C library
+
+
+Timezone definitions
+
+Timezone information tends to be both voluminous and volatile. For this
+reason, rather than encoding it directly into programs or libraries, the
+system maintains this information in files in standard formats.
+
+These files reside in the directory `/usr/share/zoneinfo.` Each file in this
+directory contains information about the timezone regime in a particular
+country or region.
+
+These files are named according to the timezone they describe, so we may find
+files with names such as EST (US Eastern Standard Time), CET (Central European
+    Time), UTC, Turkey, and Iran. In addition, subdirectories can be used to
+hierarchically group related timezones. Under a directory such as Pacific, we
+may find the files Auckland, Port_Moresby, and Galapagos. When we specify a
+timezone for use by a program, in effect, we are specifying a relative
+pathname for one of the timezone files in this directory.
+
+The local time for the system is defined by the timezone file
+`/etc/localtime`, which is often linked to one of the files in
+/usr/share/zoneinfo.
+
+
+keitee@kit-ubuntu:/media/keitee/ssd2/as-sky-repo-track/asplayer$ ls -al /etc/localtime
+lrwxrwxrwx 1 root root 33 Nov 14 06:45 /etc/localtime -> /usr/share/zoneinfo/Europe/London
+
+$ zdump -v /etc/localtime
+
+// shows when BST begins and ends
+...
+/etc/localtime  Sun Mar 29 00:59:59 2020 UT = Sun Mar 29 00:59:59 2020 GMT isdst=0 gmtoff=0
+/etc/localtime  Sun Mar 29 01:00:00 2020 UT = Sun Mar 29 02:00:00 2020 BST isdst=1 gmtoff=3600
+/etc/localtime  Sun Oct 25 00:59:59 2020 UT = Sun Oct 25 01:59:59 2020 BST isdst=1 gmtoff=3600
+/etc/localtime  Sun Oct 25 01:00:00 2020 UT = Sun Oct 25 01:00:00 2020 GMT isdst=0 gmtoff=0
+...
+
+
+*tool-zdump*
+The format of timezone files is documented in the tzfile(5) manual page.
+Timezone files are built using zic(8), the zone information compiler. The
+zdump(8) command can be used to display the time as it would be currently
+according to the timezone in a specified timezone file.
+
+-v     
+
+For  each  zonename  on  the command line, print the time at the lowest
+possible time value, the time one day after the lowest possible time value,
+the times both one second before and exactly at each detected time
+discontinuity, the time at one day less than the highest possible time
+value, and the time at the highest possible time value.
+
+Each line ends with isdst=1 if the given time is  Daylight  Saving  Time  or
+isdst=0 otherwise.
+
+
+// timezone file is binary file
+
+man tzfile
+
+       * tzh_typecnt ttinfo entries, each defined as follows:
+
+           struct ttinfo {
+               int32_t       tt_gmtoff;
+               unsigned char tt_isdst;
+               unsigned char tt_abbrind;
+           };
+
+// UT means UTC?
+
+In each structure, tt_gmtoff gives the number of seconds to be added to UT,
+tt_isdst tells whether tm_isdst should be set by localtime(3) and tt_abbrind
+  serves as an index into the array of timezone abbreviation  bytes  that
+  follow  the  ttinfo structure(s) in the file.
+
+https://www.dedoimedo.com/computers/linux-timezone.html
+
+To obtain the current timezone setting, each of these functions uses tzset(3),
+which initializes `three global variables`:
+
+char *tzname[2]; /* Name of timezone and alternate (DST) timezone */
+int daylight; /* Nonzero if there is an alternate (DST) timezone */
+long timezone; /* Seconds difference between UTC and local
+ standard time */
 
 
 ={============================================================================

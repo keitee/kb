@@ -22,7 +22,7 @@ using testing::StrEq;
 // ={=========================================================================
 // string-pos
 
-TEST(StringIterator, PosEnd)
+TEST(String, check_size)
 {
   string coll{"12345"};
 
@@ -736,8 +736,8 @@ TEST(CxxStringOperation, find_substring_3)
 }
 
 // cxx-string-substr
-// is to extract substring
-TEST(StringOperation, substring_substr)
+// is to extract substring and use index
+TEST(StringOperation, check_get_substr)
 {
   std::string coll{"interchangeability"};
 
@@ -1105,6 +1105,39 @@ TEST(String, check_cstring_2)
 
     EXPECT_THAT(result.size(), 13);
     EXPECT_THAT(strlen(result.c_str()), 13);
+  }
+
+  {
+    // src_len is 14 which includes a null since std::string.data()
+    //                "0123456789012"
+    std::string input{"&streamtype=1"};
+    char output[256] = {0};
+
+    EXPECT_THAT(input.size(), 13);
+    EXPECT_THAT(strlen(input.c_str()), 13);
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // char *strcpy(char *dest, const char *src);
+    // which understand a cstring.
+    strcpy(output, input.c_str());
+
+    EXPECT_THAT(sizeof(output), 256);
+
+    // when use stringstream, it has the same result as using std::string
+    std::ostringstream oss{};
+
+    oss << output;
+
+    // std::cout << "oss: " << oss.str() << std::endl;
+
+    // // size of result?
+    // std::string result{output};
+
+    EXPECT_THAT(input, oss.str());
+
+    EXPECT_THAT(oss.str().size(), 13);
+    EXPECT_THAT(strlen(oss.str().c_str()), 13);
   }
 }
 
@@ -1692,7 +1725,7 @@ TEST(StringTrim, 2018_11)
 }
 
 // ={=========================================================================
-// string-split
+// string-split string-parse
 //
 // 4.6 Splitting a String
 // You want to split a delimited string into multiple strings. For example, you
@@ -1704,7 +1737,7 @@ TEST(StringTrim, 2018_11)
 // CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
 // make the original example short.
 
-TEST(StringSplit, GetExtension)
+TEST(StringParse, GetExtension)
 {
   const string suffix{"tmp"};
   vector<string> coll1{"prog.dat", "mydir", "hello.", "opps.tmp", "end.dat"};
@@ -2017,7 +2050,6 @@ namespace string_split_2018_11
 
 namespace tokenizer_book
 {
-
   class StringTokenizer
   {
   public:
@@ -2939,7 +2971,6 @@ TEST(StringTokenizer, 2018_11_find)
 
 namespace string_parse
 {
-
   // from asan tool
 
   // usage:
@@ -3102,6 +3133,76 @@ TEST(StringParse, Hex)
     filename[i] = 0;
 
   EXPECT_STREQ(filename, "/foo/bar");
+}
+
+// want to get "GMT isdst=0 gmtoff=0" from the line:
+// "/etc/localtime  Sun Mar 29 01:00:00 2020 UT = Sun Mar 29 02:00:00 2020 BST isdst=1 gmtoff=3600"
+
+TEST(StringParse, check_case_1)
+{
+  // clang-format off
+  // someone's implementation
+  {
+    // "/etc/localtime  Tue Jan 19 03:14:07 2038 UT = Tue Jan 19 04:14:07 2038 CET isdst=0 gmtoff=3600"
+    std::string temp( buf );
+    struct tm utcTime = {0};
+
+    temp.erase( 0, temp.find( " " ) + 2 ); // Remove "/etc/localtime  " -> 2 spaces
+
+    auto utOff = temp.find( " UT = " );
+    std::string date = temp.substr( 0, utOff ); // Capture UTC date "Tue Jan 19 03:14:07 2038"
+
+    // Remove everything to " UT = ", "Tue Jan 19 04:14:07 2038 CET isdst=0 gmtoff=3600" is left
+    temp.erase( 0, utOff + sizeof(" UT = ") - 1 );
+
+    // Remove until next 5 spaces, "CET isdst=0 gmtoff=3600" will be left
+    auto spaceCount = 5;
+    while ( spaceCount > 0 )
+    {
+      auto spOff = temp.find( " " );
+      temp.erase( 0, spOff + 1 );
+      spaceCount--;
+    }
+
+    char timeZone[5] = {0};
+    uint32_t isDst = 0;
+    uint32_t gmtOff = 0;
+    sscanf( temp.c_str(), "%s isdst=%u gmtoff=%u", timeZone, &isDst, &gmtOff );
+  }
+  // clang-format on
+
+  // it seems brittle since what if #num of spaces in the line changes and use c
+  // code. so my take which use cxx-stringstream
+
+  {
+    // clang-format off
+    std::stringstream ss{"/etc/localtime  Sun Mar 29 01:00:00 2020 UT = Sun Mar 29 02:00:00 2020 BST isdst=1 gmtoff=3600"};
+    // clang-format on
+
+    std::string token{};
+
+    // advance ss up to token we want to get
+    for (int i = 0; i < 13; ++i)
+    {
+      ss >> token;
+      // std::cout << "token: " << token << std::endl;
+    }
+
+    std::string timezone{};
+    ss >> timezone;
+
+    std::string dst{};
+    ss >> dst;
+
+    int dstvalue = std::stoi(dst.substr(dst.find('=')+1));
+    EXPECT_THAT(dstvalue, 1);
+
+    std::string offset{};
+    ss >> offset;
+
+    int offsetvalue = std::stoi(offset.substr(offset.find('=')+1));
+    EXPECT_THAT(offsetvalue, 3600);
+  }
 }
 
 // ={=========================================================================

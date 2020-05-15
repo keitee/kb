@@ -269,6 +269,126 @@ TEST(OsIO, io_readv)
 
 /*
 ={=============================================================================
+os-pipe
+
+The C standard I/O library popen(3) makes it easy for the application
+programmer to open a pipe to an external process.
+
+#include <stdio.h>
+FILE *popen(const char *command, const char *mode);
+Returns file stream, or NULL on error
+
+int pclose(FILE *stream);
+Returns termination status of child process, or –1 on error
+
+
+keitee@kit-ubuntu:~/git/kb/code-cxx/cxx/build$ echo 'vgcassetid=100&vgctoken=200&streamtype=2' | base64
+dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
+
+since base64 add a new line to the output
+
+[ RUN      ] OsPipe.check_popen
+output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
+
+[       OK ] OsPipe.check_popen (7 ms)
+
+*/
+
+namespace os_pipe
+{
+  constexpr auto BASE64_COMMAND{"/usr/bin/base64"};
+  constexpr int BASE64_MAX_SIZE{1000};
+
+  std::string base64_encode(std::string &input)
+  {
+    std::ostringstream cmd{};
+    char encoded[BASE64_MAX_SIZE]{};
+
+    cmd << "echo '" << input << "' | " << BASE64_COMMAND;
+
+    auto pfd = popen(cmd.str().c_str(), "r");
+    if (pfd)
+    {
+      // fgets()  reads  in  at most one less than size characters from stream
+      // and stores them into the buffer pointed to by s.  Reading stops after
+      // an EOF or a newline.  If a newline is read, it is stored into the
+      // buffer.
+      // A terminating null byte ('\0') is stored after the last character in
+      // the buffer.
+
+      if (fgets(encoded, sizeof(encoded), pfd))
+      {
+        // std::cout << "encoded: " << encoded << std::endl;
+        // strip trailing newline, "\n"
+        encoded[strlen(encoded) - 1] = '\0';
+      }
+
+      pclose(pfd);
+    }
+
+    return std::string{encoded};
+  }
+} // namespace os_pipe
+
+TEST(OsPipe, check_popen)
+{
+  using namespace os_pipe;
+
+  // clang-format off
+  const char command1[]{"echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64"};
+  const char command2[]{"(echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64)"};
+  const char command3[]{"{echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64}"};
+  // clang-format on
+
+  {
+    char output[1000]{};
+
+    auto pfd = popen(command1, "r");
+    if (pfd)
+    {
+      fgets(output, sizeof(output), pfd);
+      std::cout << "output: " << output << std::endl;
+    }
+
+    pclose(pfd);
+  }
+
+  {
+    char output[1000]{};
+
+    auto pfd = popen(command2, "r");
+    if (pfd)
+    {
+      fgets(output, sizeof(output), pfd);
+      std::cout << "output: " << output << std::endl;
+    }
+
+    pclose(pfd);
+  }
+
+  {
+    char output[1000]{};
+
+    auto pfd = popen(command3, "r");
+    if (pfd)
+    {
+      fgets(output, sizeof(output), pfd);
+      std::cout << "output: " << output << std::endl;
+    }
+
+    pclose(pfd);
+  }
+
+  {
+    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
+    std::string output = base64_encode(input);
+    std::cout << "output size: " << output.size() << ", output: " << output
+              << std::endl;
+  }
+}
+
+/*
+={=============================================================================
 os-memset os-bzero
 
 man bzero

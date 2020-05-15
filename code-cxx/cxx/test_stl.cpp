@@ -1959,6 +1959,14 @@ TEST(StlSet, check_duplicate)
   }
 }
 
+// note that use lower_bound() to see if serch item falls in between items.
+//
+// std::map<Key,T,Compare,Allocator>::lower_bound
+// std::set<Key,Compare,Allocator>::lower_bound
+//
+// 1) Returns an iterator pointing to the first element that is not less than
+// (i.e. greater or equal to) key.
+
 TEST(StlSet, check_search)
 {
   {

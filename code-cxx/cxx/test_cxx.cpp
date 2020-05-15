@@ -7971,9 +7971,9 @@ TEST(CxxBool, CheckUsage)
 }
 
 // ={=========================================================================
-// cxx-stdio
+// cxx-io
 
-TEST(CxxIO, stdio_input)
+TEST(CxxIO, check_stdio_input)
 {
   {
     int i{};
@@ -7981,9 +7981,12 @@ TEST(CxxIO, stdio_input)
     string s{};
 
     // show the same result when use cin. To emulate input:
-    stringstream iss("10\n4.0\nThis is a text\n");
+    std::stringstream iss("10\n4.0\nThis is a text\n");
+
     iss >> i;
     iss >> d;
+
+    // see that it DO NOT read a line
     iss >> s;
 
     EXPECT_EQ(i, 10);
@@ -7991,13 +7994,15 @@ TEST(CxxIO, stdio_input)
     EXPECT_EQ(s, "This");
   }
 
+  // works even when there is no newlines
   {
     int i{};
     double d{};
     string s{};
 
     // show the same result when use cin. To emulate input:
-    stringstream iss("10 4.0 This is a text");
+    std::stringstream iss("10 4.0 This is a text");
+
     iss >> i;
     iss >> d;
     iss >> s;
@@ -8005,21 +8010,6 @@ TEST(CxxIO, stdio_input)
     EXPECT_EQ(i, 10);
     EXPECT_EQ(d, 4.0);
     EXPECT_EQ(s, "This");
-  }
-
-  {
-    int i{};
-    double d{};
-    string s{};
-    stringstream iss("10\n4.0\nThis is a text\n");
-    iss >> i;
-    iss >> d;
-    iss.ignore(numeric_limits<streamsize>::max(), '\n');
-    getline(iss, s);
-
-    EXPECT_EQ(i, 10);
-    EXPECT_EQ(d, 4.0);
-    EXPECT_EQ(s, "This is a text");
   }
 
   {
@@ -8027,7 +8017,9 @@ TEST(CxxIO, stdio_input)
     double d{};
     string s{};
     int i1, i2, i3, i4;
-    stringstream iss("10\n4.0\n1 2 3 4\n");
+
+    std::stringstream iss("10\n4.0\n1 2 3 4\n");
+
     iss >> i;
     iss >> d;
     iss >> i1;
@@ -8043,24 +8035,46 @@ TEST(CxxIO, stdio_input)
   }
 }
 
-TEST(CxxIO, stdio_getline)
+// how can get a whole line?
+
+TEST(CxxIO, check_std_getline)
 {
   {
     int i{};
     double d{};
     string s{};
+
     // why s is null?
     // "If you read token by token, the newline character is not a special
     // character. In this case, the tokens might contain a newline character."
 
-    stringstream iss("10\n4.0\nThis is a text\n");
+    std::stringstream iss("10\n4.0\nThis is a text\n");
+
     iss >> i;
     iss >> d;
-    getline(iss, s);
+    std::getline(iss, s);
 
     EXPECT_EQ(i, 10);
     EXPECT_EQ(d, 4.0);
     EXPECT_EQ(s, "");
+  }
+
+  // ok, ignore them
+  {
+    int i{};
+    double d{};
+    string s{};
+
+    std::stringstream iss("10\n4.0\nThis is a text\n");
+
+    iss >> i;
+    iss >> d;
+    iss.ignore(numeric_limits<streamsize>::max(), '\n');
+    std::getline(iss, s);
+
+    EXPECT_EQ(i, 10);
+    EXPECT_EQ(d, 4.0);
+    EXPECT_EQ(s, "This is a text");
   }
 
   // so use stream-maniplulator ws to remove whitespaces
@@ -8068,28 +8082,31 @@ TEST(CxxIO, stdio_getline)
     int i{};
     double d{};
     string s{};
-    stringstream iss("10\n4.0\nThis is a text\n");
+
+    std::stringstream iss("10\n4.0\nThis is a text\n");
+
     iss >> i;
     iss >> d;
-    getline(iss >> ws, s);
+    std::getline(iss >> ws, s);
 
     EXPECT_EQ(i, 10);
     EXPECT_EQ(d, 4.0);
     EXPECT_EQ(s, "This is a text");
   }
 
+  // set `separator`
   {
-    string s{};
-    stringstream iss("one|two|three");
-    vector<string> coll{};
+    std::string s{};
+    std::stringstream iss("one|two|three");
+    std::vector<std::string> coll{};
 
-    while (getline(iss, s, '|'))
+    while (std::getline(iss, s, '|'))
       coll.push_back(s);
 
     EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
   }
 
-  // why loop once?
+  // why loop once? useful?
   {
     char buf[100];
     int bufsize = 100;
@@ -8097,12 +8114,14 @@ TEST(CxxIO, stdio_getline)
     stringstream iss("one|two|three");
     vector<string> coll{};
 
+    // read from iss and stores them to buf.
     while (iss.get(buf, bufsize, '|'))
       coll.push_back(buf);
 
     EXPECT_THAT(coll, ElementsAre("one"));
   }
 
+  // useful?
   {
     char buf[100];
     int bufsize = 100;

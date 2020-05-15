@@ -143,7 +143,8 @@ int main(int argc, char **argv)
 {
   int fd{};
 
-  struct flock flock{};
+  struct flock flock
+  {};
   const char *flocktype;
   int flockcmd{};
 

@@ -204,5 +204,9 @@ target_link_libraries(lpi-flock ${LIBS})
 add_executable(lpi-flock-fcntl "lpi_flock_fcntl.cpp" "lpi_lib.cpp")
 target_link_libraries(lpi-flock-fcntl ${LIBS})
 
+# lpi-flock-fcntl
+add_executable(lpi-pipe "lpi_pipe.cpp" "lpi_pipe.cpp" "lpi_lib.cpp")
+target_link_libraries(lpi-pipe ${LIBS})
+
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

@@ -2633,6 +2633,35 @@ TEST(CxxCaseBase64, check_decode_1)
 
     std::cout << "output: " << output << std::endl;
   }
+
+  // output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9MgA=
+  // output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mg==
+  // $ echo "vgcassetid=100&vgctoken=200&streamtype=2" | base64
+  // dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
+
+  {
+    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
+    char output[1000] = {0};
+
+    // NOTE: +1 to include a null to encode
+    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
+                  input.length() + 1,
+                  output);
+
+    std::cout << "output: " << output << std::endl;
+  }
+
+  {
+    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
+    char output[1000] = {0};
+
+    // NOTE: +1 to include a null to encode
+    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
+                  input.length(),
+                  output);
+
+    std::cout << "output: " << output << std::endl;
+  }
 }
 
 // $ echo "ABC123Test Lets Try this' input and see What happens" | base64
