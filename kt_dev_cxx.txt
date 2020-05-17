@@ -60,8 +60,9 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 *kt_dev_cxx_0000* cxx-issue-incremental-build
 *kt_dev_cxx_0001* cxx-volatile
-*kt_dev_cxx_0000* cxx-stdio cxx-stream
+*kt_dev_cxx_0000* cxx-stream cxx-stdio
 *kt_dev_cxx_0000* cxx-stream cxx-file
+*kt_dev_cxx_0000* cxx-stream-cxx-stringstream
 *kt_dev_cpp_0004* cxx-postfix
 *kt_dev_cpp_0004* expr-chain
 |kt_dev_lang_011| expr-literal
@@ -248,7 +249,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-string-numeric-conversion cxx-boost-lexical-cast
 *kt_dev_cxx_0000* cxx-string-iterator
 *kt_dev_cxx_0000* cxx-string-raw
-*kt_dev_cxx_0000* cxx-stringstream
 *kt_dev_stl_075* stl-string: seg fault
 *kt_dev_cxx_0000* cxx-sp-raii cxx-raii
 *kt_dev_cxx_0000* cxx-sp-shared
@@ -6272,7 +6272,83 @@ int main()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-stream cxx-file
 
-<cxx-string-getline>
+Figure 15.1. Class Hierarchy of the Fundamental Stream Classes
+
+The classes in this class hierarchy play the following roles:
+
+o The base class ios_base defines the properties of all stream classes
+  independent of the char- acter type and the corresponding character traits.
+  Most of this class consists of components and functions for state and format
+  flags.
+
+o The class template basic_ios<> is derived from ios_base and defines the
+  common prop- erties of all stream classes that depend on the character types
+  and the corresponding character traits. These properties include the
+  definition of the buffer used by the stream. The buffer is an object of a
+  class derived from the template class basic_streambuf<> with the
+  corresponding template instantiation. It performs the actual reading and/or
+  writing.
+
+o The class templates basic_istream<> and basic_ostream<> derive virtually
+  from basic_ios<> and define objects that can be used for reading or writing,
+  respectively. Like basic_ios<>, these classes are templates that are
+    parametrized with a character type and its traits. When
+    internationalization does not matter, the corresponding instantiations for
+    the char- acter type char — istream and ostream — are used.
+
+o The class template basic_iostream<> derives from both basic_istream<> and
+  basic_ostream<>. This class template defines objects that can be used for
+  both reading and writing.
+
+o The class template basic_streambuf<> is `the heart` of the IOStream library.
+  This class defines the interface to all representations that can be written
+  to or read from by streams and is used by the other stream classes to
+  perform the reading and writing of characters. For access to some external
+  representation, classes are derived from basic_streambuf<>.
+
+
+namespace std
+{
+  // /home/keitee/works/7/iosfwd
+
+  template<typename _CharT, typename _Traits = char_traits<_CharT>> 
+    class basic_ios;
+
+  template<typename _CharT, typename _Traits = char_traits<_CharT>> 
+    class basic_streambuf;
+
+  template<typename _CharT, typename _Traits = char_traits<_CharT>> 
+    class basic_istream;
+
+  template<typename _CharT, typename _Traits = char_traits<_CharT>> 
+    class basic_ostream;
+
+  template<typename _CharT, typename _Traits = char_traits<_CharT>> 
+    class basic_iostream;
+
+
+  /// Base class for @c char streams.
+  typedef basic_ios<char> 		ios;
+
+  /// Base class for @c char buffers.
+  typedef basic_streambuf<char> 	streambuf;
+
+  /// Base class for @c char input streams.
+  typedef basic_istream<char> 		istream;
+
+  /// Base class for @c char output streams.
+  typedef basic_ostream<char> 		ostream;
+
+  /// Base class for @c char mixed input and output streams.
+  typedef basic_iostream<char> 		iostream;
+}
+
+For the application programmer, it should be sufficient to include <iosfwd>
+for the declaration of the stream classes and <istream> or <ostream> when
+using the input or output functions, respectively.
+
+
+<cxx-getline>
 
 CXXSLR-13.2.10 Input/Output Operators
 
@@ -6303,7 +6379,7 @@ void process (const std::string& filecontents)
   ...
 }
 
-namespace *cxx-string-code*
+namespace cxx-code
 {
   // /usr/include/c++/4.9.2/bits/basic_string.h
   /**
@@ -6343,270 +6419,10 @@ namespace *cxx-string-code*
     { return std::getline(__is, __str, __is.widen('\n')); }
 }
 
-TEST(Stdio, GetLine)
-{
-  {
-    int i{}; double d{}; string s{};
-    // why s is null? 
-    // "If you read token by token, the newline character is not a special
-    // character. In this case, the tokens might contain a newline character."
 
-    stringstream iss("10\n4.0\nThis is a text\n");
-    iss >> i; iss >> d;
-    getline(iss, s);
+*cxx-stream-manipulator*
 
-    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "");
-  }
-
-  // so use cxx-stream-maniplulator ws to remove whitespaces
-  {
-    int i{}; double d{}; string s{};
-    stringstream iss("10\n4.0\nThis is a text\n");
-    iss >> i; iss >> d;
-    getline(iss >> ws, s);
-
-    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
-  }
-
-  {
-    string s{};
-    stringstream iss("one|two|three");
-    vector<string> coll{};
-
-    while (getline(iss , s, '|'))
-      coll.push_back(s);
-
-    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
-  }
-
-  // why loop once?
-  {
-    char buf[100];
-    int bufsize = 100;
-
-    stringstream iss("one|two|three");
-    vector<string> coll{};
-
-    while (iss.get(buf, bufsize, '|'))
-      coll.push_back(buf);
-
-    EXPECT_THAT(coll, ElementsAre("one"));
-  }
-
-  {
-    char buf[100];
-    int bufsize = 100;
-
-    stringstream iss("one|two|three");
-    vector<string> coll{};
-
-    // *cxx-stream-member-function*
-    while (iss.getline(buf, bufsize, '|'))
-      coll.push_back(buf);
-
-    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
-  }
-}
-
-
-The type string from the C++ standard library (see Chapter 13) grows as needed
-to accommodate a lengthy string. Rather than using char*, this is much easier
-and less error prone. In addition, strings provide a convenient function
-getline() for line-by-line reading. So, whenever you can, avoid the use of
-C-strings and use strings.
-
-
-15.3.2 Input Operator >>
-
-<ex>
-
-TEST(Stdio, Input)
-{
-  {
-    int i{}; double d{}; string s{};
-
-    // show the same result when use cin. To emulate input:
-    stringstream iss("10\n4.0\nThis is a text\n");
-    iss >> i; iss >> d; iss >> s;
-
-    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
-  }
-
-  {
-    int i{}; double d{}; string s{};
-
-    // show the same result when use cin. To emulate input:
-    stringstream iss("10 4.0 This is a text");
-    iss >> i; iss >> d; iss >> s;
-
-    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
-  }
-
-  {
-    int i{}; double d{}; string s{};
-    stringstream iss("10\n4.0\nThis is a text\n");
-    iss >> i; iss >> d;
-    iss.ignore(numeric_limits<streamsize>::max(), '\n');
-    getline(iss, s);
-
-    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
-  }
-
-  {
-    int i{}; double d{}; string s{};
-    int i1, i2, i3, i4;
-    stringstream iss("10\n4.0\n1 2 3 4\n");
-    iss >> i; iss >> d;
-    iss >> i1; iss >> i2; iss >> i3; iss >> i4;
-
-    vector<int> coll{i1, i2, i3, i4};
-
-    EXPECT_EQ(i, 10);
-    EXPECT_EQ(d, 4.0);
-    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
-  }
-}
-
-
-TEST(CxxStdio, SpecialTypes)
-{
-  int i1{}, i2{}, i3{}, i4{};
-
-  // 15.3.3 Input/Output of Special Types
-  //
-  // Numeric Types
-  // When reading numeric values, the input must start with at least one digit.
-  // Otherwise, the numeric value will be set to 0 and the failbit (see Section
-  // 15.4.1, page 758) is set:
-  //
-  // int x;
-  // std::cin >> x; // assigns 0 to x, if the next character does not fit
-  //
-  // However, if there is no input or if the failbit is set already, calling the
-  // input operator will not modify x. This also applies to bool.
-
-  // fail
-  stringstream iss6("1.2.3.4\n");
-
-  iss6 >> i1;
-  iss6 >> i2;
-  iss6 >> i3;
-  iss6 >> i4;
-
-  vector<int> coll1{i1, i2, i3, i4};
-  EXPECT_THAT(coll1, ElementsAre(1,0,0,0));
-  EXPECT_THAT(iss6.fail(), true);
-
-  // fail
-  stringstream iss7("1.2.3.4\n");
-  i1 = i2 = i3 = i4 = 0;
-  int idummy;
-
-  iss7 >> i1;
-  iss7 >> idummy;
-  iss7 >> i2;
-  iss7 >> idummy;
-  iss7 >> i3;
-  iss7 >> idummy;
-  iss7 >> i4;
-
-  vector<int> coll2{i1, i2, i3, i4};
-  EXPECT_THAT(coll2, ElementsAre(1,0,0,0));
-  EXPECT_THAT(iss7.fail(), true);
-
-  // okay
-  stringstream iss8("1.2.3.4\n");
-  i1 = i2 = i3 = i4 = 0;
-  char cdummy;
-
-  iss8 >> i1;
-  iss8 >> cdummy;
-  iss8 >> i2;
-  iss8 >> cdummy;
-  iss8 >> i3;
-  iss8 >> cdummy;
-  iss8 >> i4;
-
-  vector<int> coll3{i1, i2, i3, i4};
-  EXPECT_THAT(coll3, ElementsAre(1,2,3,4));
-  EXPECT_THAT(iss8.good(), true);
-}
-
-
-http://www.cplusplus.com/reference/istream/ws/
-Extract whitespaces
-
-Extracts as many whitespace characters as possible from the current position
-in the input sequence. The extraction stops as soon as a non-whitespace
-character is found. These extracted whitespace characters are discarded.
-
-note:
-The point is that there is remaining '\n' before getline to get a whole line
-is used.
-
-
-CLR 15.5.1 Member Functions for Input
-
-istream& istream::get (char& c)
-
-Assigns the next character to the passed argument c.
-Returns the stream. The stream’s state tells whether the read was successful.
-
-note: When C-strings are read, it is safer to use the functions from this
-section than to use operator >>. The reason is that the maximum string size to
-be read must be passed explicitly as an argument.
-
-
-istream& istream::ignore ()
-istream& istream::ignore (streamsize count)
-istream& istream::ignore (streamsize count, int delim)
-
-* `All forms extract and discard characters.`
-* The first form ignores one character.
-* The second form ignores up to count characters.
-* The third form ignores up to count characters until delim is extracted and
-  discarded.
-
-* If count is std::numeric_limits<std::streamsize>::max(), all characters are
-  discarded until either delim or end-of-file is reached.
-
-* All forms return the stream.
- 
-* Examples:
- 
-  The following call discards the rest of the line:
-
-  cin.ignore(numeric_limits<std::streamsize>::max(),’\n’);
-
-  The following call discards the complete remainder of cin:
-
-  cin.ignore(numeric_limits<std::streamsize>::max());
-
-
-15.4.2 Member Functions Accessing the State of Streams
-
-The current state of the flags can be determined by the member functions, as
-presented in Table 15.4.
-
-good()              Returns true if the stream is OK (goodbit is “set”)
-eof()               Returns true if end-of-file was hit (eofbit is set)
-fail()              Returns true if an error has occurred (failbit or badbit is set)
-bad()               Returns true if a fatal error has occurred (badbit is set)
-rdstate()           Returns the currently set flags
-clear()             Clears all flags
-clear(state)        Clears all and sets state flags
-setstate(state)     Sets additional state flags
-
-
-<cxx-stream-format> cxx-stream-manipulator
-
-CXXSLR-15.6 Manipulators
-
-Manipulators for streams are `objects` that modify a stream when applied with
-the standard I/O operators. This does not necessarily mean that something is
-read or written. The basic manipulators defined in <istream> or <ostream> are
-presented in Table 15.8.
-
+*cxx-endl*
 endl    basic_ostream Inserts a newline character into the buffer and
         `flushes the output buffer to its device`
 
@@ -6616,64 +6432,6 @@ flush   basic_ostream Flushes the output buffer to its device
 
 ws      basic_istream Reads and ignores whitespaces
 
-
-Manipulators with Arguments
-
-Some of the manipulators process arguments. For example, you can use the
-following to set the minimum field width of the next output and the fill
-character:
-
-<ex>
-std::cout << std::setw(6) << std::setfill(’_’);
-
-The standard manipulators with arguments are defined in the header file
-<iomanip>, which must be included to work with the standard manipulators
-taking arguments: #include <iomanip>
-
-// header <iomanip>
-setiosflags       Set format flags (function )
-resetiosflags     Reset format flags (function )
-setbase           Set basefield flag (function )
-setfill           Set fill character (function )
-setw              Set field width (function )
-get_money         Get monetary value (function )
-put_money         Put monetary value (function )
-get_time          Get date and time (function )
-put_time          Put date and time (function )
-
-Notice that non-parametric manipulators are declared directly in <ios>.
-
-Table 15.9. Manipulators Provided by the C++ Standard Library
-
-
-CLR-15.7.1 Format Flags
-
-setf(flags)   Sets flags as additional flags and returns the previous state 
-              of all flags
-
-unsetf(flags) Clears flags
-
-flags()       Returns all set format flags
-
-flags(flags)  Sets flags as the new flags and returns the previous state 
-              of all flags
-
-
-<manipulators-vs-flags>
-The manipulators setiosflags() and resetiosflags() provide the possibility of
-setting or clearing, respectively, one or more flags in a write or read
-statement with operator << or >>, respectively.  
-
-#include <iostream>
-#include <iomanip>
-...
-std::cout << resetiosflags(std::ios::adjustfield) // clear adjustm. flags
-          << setiosflags(std::ios::left);         // left-adjust values
-
-Some flag manipulations are performed by specialized manipulators. These
-manipulators are used often 
-
-`because they are more convenient and more readable.`
 
 <ex>
 Often, the stream you are writing to does not belong to you, especially if you
@@ -6700,55 +6458,11 @@ void logError(ostream &out, const string &s)
 }
 
 
-15.7.3 Field Width, Fill Character, and Adjustment
-
-For the output, width() defines a minimum field. This definition applies only
-to the next formatted field written.
-
-Two member functions are used to define the field width and the fill
-character: width() and fill()
-
-width()     
-Returns the current field width
-
-width(val)  
-Sets the field width for the next formatted output to val and returns the
-previous field width
-
-fill() 
-Returns the current fill character
-
-fill(c) 
-Defines c as the fill character and returns the previous fill character
-
-Table 15.14. Member Functions for the Field Width and the Fill Character
-
-
-Manipulator Meaning
-
-setw(val) 
-Sets the field width of the next input and output to val (corresponds to
-width())
-
-setfill(c) 
-Defines c as the fill character (corresponds to fill())
-
-left 
-Left-adjusts the value
-
-right 
-Right-adjusts the value
-
-internal 
-Left-adjusts the sign and right-adjusts the value
-
-Table 15.17. Manipulators for Adjustment
-
 <ex>
-Note that I set the width inside the loop while I set the right flag prior to
-the loop. I had to do this because the width resets to zero after each write
-to the stream. Format flags are not reset after writes, so I only had to
-initialize them once and be done with it.
+I set the width inside the loop while I set the right flag prior to the loop. I
+had to do this because the width resets to zero after each write to the stream.
+Format flags are not reset after writes, so I only had to initialize them once
+and be done with it.
 
 {
   size_t width{72};
@@ -6762,42 +6476,6 @@ initialize them once and be done with it.
     getline(input_file, line);
     output_file << line << '\n';
   }
-}
-
-TEST(Stdio, Manipulators)
-{
-  // showpos Forces writing a positive sign on positive numbers 
-  // noshowpos Forces not writing a positive sign on positive numbers 
-  // uppercase Forces uppercase letters for numeric values 
-  // nouppercase Forces lowercase letters for numeric values 
-
-  int value = 3301;
-  cout.setf(ios::showpos | ios::uppercase);
-  cout << "value: " << value << ", value: " << -value << endl;
-
-  // not all flags are supported as manipulator object so have to use
-  // setiosflags()
-
-  cout << setiosflags(ios::showpos | ios::uppercase) 
-    << "value: " << value << ", value: " << -value << endl;
-
-  // address           perms offset  dev   inode       pathname
-  // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
-
-  // cout.width(8);
-  cout.setf(std::ios::left);
-  cout << setw(20) << "| start" << 
-    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
-    << setw(40) << "| pathname" << endl;
-
-  cout.setf(std::ios::right);
-  cout << setw(20) << "| start" << 
-    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
-    << setw(40) << "| pathname" << endl;
-
-  cout << setw(20) << right << "| start" << 
-    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
-    << setw(40) << "| pathname" << endl;
 }
 
 
@@ -6816,7 +6494,6 @@ value
 
 
 15.7.6 Floating-Point Notation
-
 If ios::fixed is set, floatingpoint values are printed using decimal notation.
 
 setprecision      Set decimal precision (function )
@@ -6824,35 +6501,23 @@ setprecision      Set decimal precision (function )
 *cxx-round*
 In all cases, the remainder is not cut off `but rounded.`
 
-TEST(Stdio, ManipulatorsFloat)
+TEST(CxxIO, check_manipulators_float)
 {
   double value = 8.809030;
-  ostringstream os;
+  std::ostringstream os;
+
   os << std::fixed << std::setprecision(2) << value;
 
-  // this is what round() cannot do
   EXPECT_THAT(os.str(), "8.81");
 }
 
 
-15.7.7 General Formatting Definitions
+*cxx-stream-file* *cxx-file*
 
-Flag    Meaning
-skipws  Skips leading whitespaces automatically when reading a value 
-        with operator >>
-
-Both flags can be manipulated using the manipulators presented in Table 15.30.
-
-Manipulator Meaning
-skipws  Skips leading whitespaces with operator >> (sets the flag ios::skipws)
-
-
-*cxx-file-stream-file*
-
-CXXSLR-15.9
+CLR-15.9 Figure 15.2. Class Hierarchy of the File Stream Classes
 
 Compared with the mechanism of C, a major advantage of the file stream classes
-for file access is the automatic management of files. The files are
+for file access is the `automatic management of files.` The files are
 automatically opened at construction time and closed at destruction time. This
 is possible, of course, through appropriate definitions of corresponding
 constructors and destructors.
@@ -6930,96 +6595,19 @@ namespace cxx_code
   }
 } // namespace
 
+
+*cxx-stream-file-flag*
+
 15.9.3 File Flags
 
 in    Opens for reading (default for ifstream)
 out   Opens for writing (default for ofstream)
 
-
-<ex> *cxx-file-ifstream* for input.txt
-
-// * fstream is stream so that can use stream operation with no effort.
-// * use istream to take ifstream.
-
-// = 05 ======
-// { VOD.L, 1, 100, 184.0, 183.7, VOD.X, 2, 100, 189.0, 183.8, VOD.L, 3, 100, \
-// 185.0, 183.9, VOD.X, 4, 100, 186.0, 184.0, VOD.L, 5, 100, 187.0, 183.1, }
-
-std::vector<string> getVector(std::istream &is)
-{
-    std::vector<std::string> svec;
-    std::string s;
-
-    while (is >> s)
-        svec.push_back(s);
-
-    return svec;
-}
-
-void t_sstream_05()
-{
-    using namespace std;
-
-    // ifstream ifs{"input.txt", ifstream::in};
-    ifstream ifs{"input.txt"};
-
-    std::vector<std::string> svec = getVector(ifs);
-
-    cout << "{ ";
-    for (const auto &e : svec)
-        cout << e << ", ";
-    cout << "}" << endl;
-}
-
-note:
-Why getline()? see *cxx-ex-ifstream* to see parsing example, difficult to
-build structure from a file without knowing where to stop for a unit. 
+Table 15.33. Flags for Opening Files
+Table 15.34. Meaning of Open Modes in C++
 
 
-<ex> for ifstream
-#include <iostream>
-#include <fstream>
-#include <string>
-
-int main()
-{
-  std::string line;
-  int lnum = 0;
-  std::ifstream ifs("sample.SWD", std::ifstream::in );
-
-  // while( std::getline( ifs, line ))
-  // {
-  //   std::cout << lnum << ":" << line << std::endl;
-  //   lnum++;
-  // }
-
-  std::getline( ifs, line );
-
-  std::string hid = line.substr( 13, 6 );
-
-  int hidi = std::stoi(hid);
-  std:: cout << "hid :" << hid << "hid i: " << hidi << std::endl;
-
-  ifs.close();
-}
-
-
-#include <iostream>
-#include <fstream>
-
-int main()
-{
-    std::ofstream ofile("test-out.txt");
-
-    if( !ofile )
-    {
-        std::cerr << "cannot open output file" << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
-    ofile << "0: this is sample output file" << std::endl;
-    ofile << "1: this is sample output file" << std::endl;
-}
+15.9.4 Random Access
 
 
 {buffered-io} 
@@ -7054,6 +6642,372 @@ cout: a
 cout: long
 cout: line
 end: line
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-stringstream
+
+CXXSLR-15.10 Stream Classes for Strings
+
+string provide a buffer but don’t have an I/O channel. This buffer/string can
+be manipulated with special functions.
+
+`stringstream` "see(treat) string as a stream so use stream ops; IO ops" and
+provide a `buffer` 
+
+  sstream buffer <-> stream
+
+For example, text for output `can be formatted` in a string and then sent to an
+output channel sometime `later`. Another use is reading input line by line and
+processing each line by using stream operations.
+
+
+Supports in-memory IO. Use stream operation such as read(>>) and write(<<) but
+they are really to read from or write to a string since use it as if the
+string were IO stream. 
+
+The following stream classes - corresponding to the stream classes for files -
+are defined for strings:
+
+  o The class template basic_istringstream<> with the specializations
+    istringstream and wistringstream for reading from strings 
+    ("input string stream")
+
+  o The class template basic_ostringstream<> with the specializations
+    ostringstream and wostringstream for writing to strings 
+    ("output string stream")
+
+  o The class template basic_stringstream<> with the specializations
+    stringstream and wstringstream `for reading from and writing to strings`
+
+  o The class template basic_stringbuf<> with the specializations stringbuf
+    and wstringbuf, used by the other string stream classes to perform the
+    reading and writing of characters
+
+note: 
+
+stringstream has input and output as well so use it
+
+typedef basic_istringstream<char> istringstream;
+typedef basic_ostringstream<char> ostringstream;
+typedef basic_stringstream<char> stringstream;
+
+
+<cxx-stringstream-ops>
+
+#include <sstream>
+
+sstream strm(string);   
+strm is an sstream that holds a copy of the string s.
+
+std::basic_string<CharT,Traits,Allocator> str() const;
+strm.str();
+`return a copy of cxx-string` that strm holds. Returns the buffer as a string
+
+strm.str(string);       
+copies the string s into strm. Sets the contents of the buffer to string and
+  remove the current contents from the stream. Can use the function str() to
+  `assign new contents to the buffer`
+
+*cxx-stringstream-clear*
+strm.str(""); 
+clears sstream buffer
+
+// note: strm.clear()? no.
+
+os = std::ostringstream("");
+
+
+std::ios::clear
+void clear (iostate state = goodbit);
+
+Set error state flags
+Sets a new value for the stream's internal error state flags.
+
+
+<ex>
+TEST(StringConverison, check_stringstream)
+{
+  // note that os, buffer, has all inputs from << and seek() moves writing pos.
+  // *cxx-string-convert-to-string*
+
+  // to string
+  {
+    std::ostringstream os;
+
+    os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
+    EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
+
+    bitset<15> bit_set(5789);
+    os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
+    EXPECT_EQ(
+      os.str(),
+      "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+
+    os.seekp(0);
+    os << "octal : " << oct << 15;
+    EXPECT_EQ(
+      os.str(),
+      "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+  }
+
+  // to string in hex
+  {
+    std::ostringstream os;
+    // os << "0x" << hex << 16;
+    os << std::hex << 16;
+    EXPECT_THAT(os.str(), "10");
+  }
+
+  // input integer to hex string
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << hex << value;
+    EXPECT_THAT(os.str(), "3ad0");
+  }
+
+  // input integer and add some. to string
+  {
+    std::string input{"15056"};
+    uint32_t value = std::stoi(input.c_str());
+
+    std::ostringstream os;
+    os << 5000 + value;
+    EXPECT_THAT(os.str(), "20056");
+  }
+
+  // to string
+  {
+    std::stringstream ss;
+    std::vector<string> string_vector{};
+
+    for (int i = 0; i < 4; ++i)
+    {
+      ss << "player " << i;
+      string_vector.push_back(string(ss.str()));
+      ss.str("");
+    }
+
+    EXPECT_THAT(string_vector,
+                ElementsAre("player 0", "player 1", "player 2", "player 3"));
+  }
+
+  // to number
+  {
+    // The following lines read the integer x with the value 3 and the
+    // floating-point f with the value 0.7 from the stringstream:
+
+    int x{};
+    float f{};
+
+    istringstream is{"3.7"};
+
+    // or
+    // string input{"3.7"};
+    // stringstream is(input);
+    //
+    // or
+    // string input{"3.7"};
+    // stringstream is;
+    // is.str(input);
+
+    is >> x >> f;
+
+    ASSERT_THAT(x, Eq(3));
+    ASSERT_THAT(f, FloatEq(0.7));
+  }
+
+  // to number
+  {
+    stringstream is{"1 2 3 4"};
+    int value{};
+    vector<int> coll{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4));
+  }
+
+  // to number
+  {
+    stringstream is{"1234"};
+    int value{};
+
+    is >> setw(2) >> value;
+
+    // actually was 1234
+    // EXPECT_THAT(value, 12);
+  }
+
+  // to number
+  {
+    string coll{"10101"};
+    string token = coll.substr(0, 1);
+    EXPECT_EQ(stoi(token), 1);
+  }
+
+  // to number
+  {
+    string coll{"10101"};
+    stringstream is{coll.substr(0, 1)};
+    int value{};
+    is >> value;
+    EXPECT_EQ(value, 1);
+  }
+
+  // to number(hex)
+  {
+    stringstream is{"fabc"};
+    int value{};
+
+    is >> hex >> value;
+
+    EXPECT_THAT(value, 64188);
+  }
+}
+
+
+<ex> *cxx-string-convert-to-number*
+
+// file parsing example *cxx-ex-ifstream*
+//
+// input.txt
+//
+// VOD.L 1 100 184.0 183.7
+// VOD.X 2 100 189.0 183.8
+// VOD.L 3 100 185.0 183.9
+// VOD.X 4 100 186.0 184.0
+// VOD.L 5 100 187.0 183.1
+
+struct StockData
+{
+    string  name;
+    int     time;
+    int     volume;
+    float   high;
+    float   low;
+};
+
+// = 03 ======
+// { VOD.L, 1, 100, 184.000, 183.700 }
+// { VOD.X, 2, 100, 189.000, 183.800 }
+// { VOD.L, 3, 100, 185.000, 183.900 }
+// { VOD.X, 4, 100, 186.000, 184.000 }
+// { VOD.L, 5, 100, 187.000, 183.100 }
+
+void t_sstream_03()
+{
+    string line{};
+    StockData sdata{};
+
+    ifstream ifs("input.txt", std::ifstream::in);
+
+    while (getline(ifs, line))
+    {
+        istringstream iss(line);
+
+        // *cxx-string-convert-to-number*
+        iss >> sdata.name; 
+        iss >> sdata.time;
+        iss >> sdata.volume;
+        iss >> sdata.high;
+        iss >> sdata.low;
+
+        cout << "{ " 
+            << sdata.name << ", "
+            << sdata.time << ", "
+            << sdata.volume << ", "
+            << showpoint 
+            << sdata.high << ", "
+            << sdata.low << " }" << endl;
+    }
+
+    ifs.close();
+}
+
+
+<ex>
+double sciToDub(const string& str) {
+  stringstream ss(str);
+  double d = 0;
+  ss >> d;
+  if (ss.fail( )) {
+    string s = "Unable to format ";
+    s += str;
+    s += " as a number!";
+    throw (s);
+  }
+  return (d);
+}
+
+// *cxx-string-convert-to-number*
+// The following lines read the integer x with the value 3 and the
+// floating-point f with the value 0.7 from the string s:
+
+TEST(CxxStringTest, UseInputStringStream)
+{
+  int x{};
+  float f{};
+  istringstream is{"3.7"};
+
+  is >> x >> f;
+ 
+  ASSERT_THAT(x, Eq(3));
+  ASSERT_THAT(f, FloatEq(0.7));
+}
+
+
+<ex> ostrringstream
+ostringstream is useful when need to `build up` our output a little at a time
+but do not want to print the output until later.
+
+void PerfCounter::dump()
+{
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; 
+            pstart && pstart->pnext; pstart = pstart->pnext)
+    {
+        ss << "snap: " << countSnap << ": ";
+        ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+        // time diff in us from current to next
+        uint64_t timeDiff = 
+            (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
+            (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
+
+        ss << timeDiff << "us" << std::endl;
+        ++countSnap;
+    }
+
+    std::cout << ss.str();
+}
+
+
+<ex> cxx-string-convert-to-string-from-object
+
+std::ostream &operator<<(std::ostream &os, const Location &location)
+{
+    os << "(" << location.latitude() << "," << location.longitude() << ")";
+    return os;
+}
+
+TEST_F(ALocation, ProvidesPrintableRepresentation) {
+   Location location{-32, -105};
+   stringstream s;
+ 
+   s << location;
+ 
+   ASSERT_THAT(s.str(), StrEq("(-32,-105)"));
+}
+
+
 
 
 ={============================================================================
@@ -55341,370 +55295,6 @@ TEST(CxxStringTest, UseRawString)
          "country":"US" }})";
 
     std::cout << s << std::endl;
-}
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-stringstream
-
-CXXSLR-15.10 Stream Classes for Strings
-
-string provide a buffer but don’t have an I/O channel. This buffer/string can
-be manipulated with special functions.
-
-`stringstream` "see(treat) string as a stream so use stream ops; IO ops" and
-provide a `buffer` 
-
-  sstream buffer <-> stream
-
-For example, text for output `can be formatted` in a string and then sent to an
-output channel sometime `later`. Another use is reading input line by line and
-processing each line by using stream operations.
-
-
-Supports in-memory IO. Use stream operation such as read(>>) and write(<<) but
-they are really to read from or write to a string since use it as if the
-string were IO stream. 
-
-The following stream classes - corresponding to the stream classes for files -
-are defined for strings:
-
-  o The class template basic_istringstream<> with the specializations
-    istringstream and wistringstream for reading from strings 
-    ("input string stream")
-
-  o The class template basic_ostringstream<> with the specializations
-    ostringstream and wostringstream for writing to strings 
-    ("output string stream")
-
-  o The class template basic_stringstream<> with the specializations
-    stringstream and wstringstream `for reading from and writing to strings`
-
-  o The class template basic_stringbuf<> with the specializations stringbuf
-    and wstringbuf, used by the other string stream classes to perform the
-    reading and writing of characters
-
-note: 
-
-stringstream has input and output as well so use it
-
-typedef basic_istringstream<char> istringstream;
-typedef basic_ostringstream<char> ostringstream;
-typedef basic_stringstream<char> stringstream;
-
-
-<cxx-stringstream-ops>
-
-#include <sstream>
-
-sstream strm(string);   
-strm is an sstream that holds a copy of the string s.
-
-std::basic_string<CharT,Traits,Allocator> str() const;
-strm.str();
-`return a copy of cxx-string` that strm holds. Returns the buffer as a string
-
-strm.str(string);       
-copies the string s into strm. Sets the contents of the buffer to string and
-  remove the current contents from the stream. Can use the function str() to
-  `assign new contents to the buffer`
-
-*cxx-stringstream-clear*
-strm.str(""); 
-clears sstream buffer
-
-// note: strm.clear()? no.
-
-os = std::ostringstream("");
-
-
-std::ios::clear
-void clear (iostate state = goodbit);
-
-Set error state flags
-Sets a new value for the stream's internal error state flags.
-
-
-<ex>
-TEST(StringConverison, check_stringstream)
-{
-  // note that os, buffer, has all inputs from << and seek() moves writing pos.
-  // *cxx-string-convert-to-string*
-
-  // to string
-  {
-    std::ostringstream os;
-
-    os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
-    EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
-
-    bitset<15> bit_set(5789);
-    os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
-    EXPECT_EQ(
-      os.str(),
-      "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
-
-    os.seekp(0);
-    os << "octal : " << oct << 15;
-    EXPECT_EQ(
-      os.str(),
-      "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
-  }
-
-  // to string in hex
-  {
-    std::ostringstream os;
-    // os << "0x" << hex << 16;
-    os << std::hex << 16;
-    EXPECT_THAT(os.str(), "10");
-  }
-
-  // input integer to hex string
-  {
-    std::string input{"15056"};
-    uint32_t value = std::stoi(input.c_str());
-
-    std::ostringstream os;
-    os << hex << value;
-    EXPECT_THAT(os.str(), "3ad0");
-  }
-
-  // input integer and add some. to string
-  {
-    std::string input{"15056"};
-    uint32_t value = std::stoi(input.c_str());
-
-    std::ostringstream os;
-    os << 5000 + value;
-    EXPECT_THAT(os.str(), "20056");
-  }
-
-  // to string
-  {
-    std::stringstream ss;
-    std::vector<string> string_vector{};
-
-    for (int i = 0; i < 4; ++i)
-    {
-      ss << "player " << i;
-      string_vector.push_back(string(ss.str()));
-      ss.str("");
-    }
-
-    EXPECT_THAT(string_vector,
-                ElementsAre("player 0", "player 1", "player 2", "player 3"));
-  }
-
-  // to number
-  {
-    // The following lines read the integer x with the value 3 and the
-    // floating-point f with the value 0.7 from the stringstream:
-
-    int x{};
-    float f{};
-
-    istringstream is{"3.7"};
-
-    // or
-    // string input{"3.7"};
-    // stringstream is(input);
-    //
-    // or
-    // string input{"3.7"};
-    // stringstream is;
-    // is.str(input);
-
-    is >> x >> f;
-
-    ASSERT_THAT(x, Eq(3));
-    ASSERT_THAT(f, FloatEq(0.7));
-  }
-
-  // to number
-  {
-    stringstream is{"1 2 3 4"};
-    int value{};
-    vector<int> coll{};
-
-    while (is >> value)
-      coll.push_back(value);
-
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4));
-  }
-
-  // to number
-  {
-    stringstream is{"1234"};
-    int value{};
-
-    is >> setw(2) >> value;
-
-    // actually was 1234
-    // EXPECT_THAT(value, 12);
-  }
-
-  // to number
-  {
-    string coll{"10101"};
-    string token = coll.substr(0, 1);
-    EXPECT_EQ(stoi(token), 1);
-  }
-
-  // to number
-  {
-    string coll{"10101"};
-    stringstream is{coll.substr(0, 1)};
-    int value{};
-    is >> value;
-    EXPECT_EQ(value, 1);
-  }
-
-  // to number(hex)
-  {
-    stringstream is{"fabc"};
-    int value{};
-
-    is >> hex >> value;
-
-    EXPECT_THAT(value, 64188);
-  }
-}
-
-
-<ex> *cxx-string-convert-to-number*
-
-// file parsing example *cxx-ex-ifstream*
-//
-// input.txt
-//
-// VOD.L 1 100 184.0 183.7
-// VOD.X 2 100 189.0 183.8
-// VOD.L 3 100 185.0 183.9
-// VOD.X 4 100 186.0 184.0
-// VOD.L 5 100 187.0 183.1
-
-struct StockData
-{
-    string  name;
-    int     time;
-    int     volume;
-    float   high;
-    float   low;
-};
-
-// = 03 ======
-// { VOD.L, 1, 100, 184.000, 183.700 }
-// { VOD.X, 2, 100, 189.000, 183.800 }
-// { VOD.L, 3, 100, 185.000, 183.900 }
-// { VOD.X, 4, 100, 186.000, 184.000 }
-// { VOD.L, 5, 100, 187.000, 183.100 }
-
-void t_sstream_03()
-{
-    string line{};
-    StockData sdata{};
-
-    ifstream ifs("input.txt", std::ifstream::in);
-
-    while (getline(ifs, line))
-    {
-        istringstream iss(line);
-
-        // *cxx-string-convert-to-number*
-        iss >> sdata.name; 
-        iss >> sdata.time;
-        iss >> sdata.volume;
-        iss >> sdata.high;
-        iss >> sdata.low;
-
-        cout << "{ " 
-            << sdata.name << ", "
-            << sdata.time << ", "
-            << sdata.volume << ", "
-            << showpoint 
-            << sdata.high << ", "
-            << sdata.low << " }" << endl;
-    }
-
-    ifs.close();
-}
-
-
-<ex>
-double sciToDub(const string& str) {
-  stringstream ss(str);
-  double d = 0;
-  ss >> d;
-  if (ss.fail( )) {
-    string s = "Unable to format ";
-    s += str;
-    s += " as a number!";
-    throw (s);
-  }
-  return (d);
-}
-
-// *cxx-string-convert-to-number*
-// The following lines read the integer x with the value 3 and the
-// floating-point f with the value 0.7 from the string s:
-
-TEST(CxxStringTest, UseInputStringStream)
-{
-  int x{};
-  float f{};
-  istringstream is{"3.7"};
-
-  is >> x >> f;
- 
-  ASSERT_THAT(x, Eq(3));
-  ASSERT_THAT(f, FloatEq(0.7));
-}
-
-
-<ex> ostrringstream
-ostringstream is useful when need to `build up` our output a little at a time
-but do not want to print the output until later.
-
-void PerfCounter::dump()
-{
-    std::stringstream ss{};
-    uint32_t countSnap{1};
-
-    // only when there are two nodes to use
-    for (CounterData *pstart = phead; 
-            pstart && pstart->pnext; pstart = pstart->pnext)
-    {
-        ss << "snap: " << countSnap << ": ";
-        ss << pstart->name << " -> " << pstart->pnext->name << " took ";
-
-        // time diff in us from current to next
-        uint64_t timeDiff = 
-            (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
-            (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
-
-        ss << timeDiff << "us" << std::endl;
-        ++countSnap;
-    }
-
-    std::cout << ss.str();
-}
-
-
-<ex> cxx-string-convert-to-string-from-object
-
-std::ostream &operator<<(std::ostream &os, const Location &location)
-{
-    os << "(" << location.latitude() << "," << location.longitude() << ")";
-    return os;
-}
-
-TEST_F(ALocation, ProvidesPrintableRepresentation) {
-   Location location{-32, -105};
-   stringstream s;
- 
-   s << location;
- 
-   ASSERT_THAT(s.str(), StrEq("(-32,-105)"));
 }
 
 

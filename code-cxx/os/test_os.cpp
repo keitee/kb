@@ -337,7 +337,6 @@ TEST(OsPipe, check_popen)
   // clang-format off
   const char command1[]{"echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64"};
   const char command2[]{"(echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64)"};
-  const char command3[]{"{echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64}"};
   // clang-format on
 
   {
@@ -357,19 +356,6 @@ TEST(OsPipe, check_popen)
     char output[1000]{};
 
     auto pfd = popen(command2, "r");
-    if (pfd)
-    {
-      fgets(output, sizeof(output), pfd);
-      std::cout << "output: " << output << std::endl;
-    }
-
-    pclose(pfd);
-  }
-
-  {
-    char output[1000]{};
-
-    auto pfd = popen(command3, "r");
     if (pfd)
     {
       fgets(output, sizeof(output), pfd);

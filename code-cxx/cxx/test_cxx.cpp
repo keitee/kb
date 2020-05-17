@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdarg>
 #include <forward_list>
+#include <fstream>
 #include <future>
 #include <iostream>
 #include <limits>
@@ -3252,7 +3253,7 @@ TEST(Ratio, Ratio)
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(Time, SystemCall)
+TEST(CxxTime, check_system_call)
 {
   // #include <time.h>
   // time_t time(time_t *timep);
@@ -3262,7 +3263,7 @@ TEST(Time, SystemCall)
   // same value that gettimeofday() returns in the tv_sec field of its tv
   // argument.
 
-  auto now = time(0);
+  auto now = std::time(0);
 
   // The ctime() function provides a simple method of converting a time_t value
   // `into printable form.` The ctime() function automatically accounts for
@@ -3271,21 +3272,21 @@ TEST(Time, SystemCall)
   // Returns pointer to statically allocated string `terminated by newline` and
   // \0 on success, or NULL on error
 
-  cout << "The local date and time is: " << ctime(&now);
+  cout << "The local date and time is: " << std::ctime(&now);
 
   // The gmtime() and localtime() functions convert a time_t value into a
   // so-called brokendown time. The broken-down time is placed in a statically
   // allocated structure whose address is returned as the function result.
 
   // tm *localtm = localtime(&now);
-  auto localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm);
+  auto localtm = std::localtime(&now);
+  cout << "The local date and time is: " << std::asctime(localtm);
 
   // tm *gmtm = gmtime(&now);
-  auto gmtm = gmtime(&now);
+  auto gmtm = std::gmtime(&now);
   if (gmtm != nullptr)
   {
-    cout << "The UTC date and time is: " << asctime(gmtm);
+    cout << "The UTC date and time is: " << std::asctime(gmtm);
   }
 }
 
@@ -8136,7 +8137,21 @@ TEST(CxxIO, check_std_getline)
   }
 }
 
-TEST(CxxIO, stdio_special_types)
+// 15.4.2 Member Functions Accessing the State of Streams
+//
+// The current state of the flags can be determined by the member functions, as
+// presented in Table 15.4.
+//
+// good()              Returns true if the stream is OK (goodbit is “set”)
+// eof()               Returns true if end-of-file was hit (eofbit is set)
+// fail()              Returns true if an error has occurred (failbit or badbit is set)
+// bad()               Returns true if a fatal error has occurred (badbit is set)
+// rdstate()           Returns the currently set flags
+// clear()             Clears all flags
+// clear(state)        Clears all and sets state flags
+// setstate(state)     Sets additional state flags
+
+TEST(CxxIO, check_stdio_numbers)
 {
   int i1{}, i2{}, i3{}, i4{};
 
@@ -8200,7 +8215,143 @@ TEST(CxxIO, stdio_special_types)
   EXPECT_THAT(iss8.good(), true);
 }
 
-TEST(CxxIO, stdio_manipulators)
+// [ RUN      ] 
+// date: 05/17/20
+// time: 08:24:17
+
+// [       OK ]
+
+// put_time is one of manipulators
+// Table 15.9. Manipulators Provided by the C++ Standard Library
+// template< class CharT >
+// /*unspecified*/ put_time( const std::tm* tmb, const CharT* fmt );
+
+TEST(CxxIO, check_manipulator_put_time)
+{
+  auto now = chrono::system_clock::now();
+  time_t t = chrono::system_clock::to_time_t(now);
+  tm *tm = localtime(&t);
+  std::cout << put_time(tm, "date: %x\ntime: %X\n") << endl;
+}
+
+// 15.6.2 How Manipulators Work
+// Manipulators are implemented using a very simple trick that not only enables
+// the convenient manipulation of streams but also demonstrates the power
+// provided by function overloading.
+//
+// // ostream
+//
+//   /**
+//    *  @brief  Write a newline and flush the stream.
+//    *
+//    *  This manipulator is often mistakenly used when a simple newline is
+//    *  desired, leading to poor buffering performance.  See
+//    *  https://gcc.gnu.org/onlinedocs/libstdc++/manual/streambufs.html#io.streambuf.buffering
+//    *  for more on this subject.
+//   */
+//   template<typename _CharT, typename _Traits>
+//     inline basic_ostream<_CharT, _Traits>&
+//     endl(basic_ostream<_CharT, _Traits>& __os)
+//     { return flush(__os.put(__os.widen('\n'))); }
+//
+// The member function widen() is used to convert the newline character into the
+// character set currently used by the stream. See Section 15.8, page 790, for
+// more details.
+
+// The same effect as “writing” the manipulator can also be achieved by calling
+// this expression directly.  An advantage to using the function notation is
+// that it is not necessary to provide the namespace for the manipulator:
+//
+// endl(std::cout)
+//
+// The reason is that, according to ADL (argument-dependent lookup, also known
+// as Koenig lookup), functions are looked up in the namespaces where their
+// arguments are defined if they are not found otherwise.
+
+TEST(CxxIO, check_manipulators_work)
+{
+  std::cout << "check how minipulators work";
+  endl(std::cout);
+}
+
+// 15.6.3 User-Defined Manipulators
+
+namespace cxx_io
+{
+  // istream& istream::ignore (streamsize count, int delim)
+  // The third form ignores up to count characters until delim is extracted and
+  // discarded.
+  //
+  // so the following function defines a manipulator that ignores all characters
+  // until end-of-line:
+
+  template <typename T, typename traits>
+    inline std::basic_istream<T, traits> &
+    ignoreline(std::basic_istream<T, traits> &strm)
+    {
+      strm.ignore(std::numeric_limits<std::streamsize>::max(), strm.widen('\n'));
+      return strm;
+    }
+
+  // TODO:
+  // As written, there are multiple ways to define your own manipulator taking
+  // arguments.
+} // namespace cxx_io
+
+TEST(CxxIO, check_manipulators_user_defined)
+{
+  using namespace cxx_io;
+
+  // to simulate user input
+  std::istringstream iss{"this is line1\n"
+                         "this is line2\n"
+                         "this is line3\n"};
+
+  // gets the first
+  {
+    std::string line{};
+    std::getline(iss, line);
+    EXPECT_THAT(line, "this is line1");
+  }
+
+  // ignore the second line and gets the third. not the second? since iss moved
+  // its pos while reading the first
+  {
+    std::string line{};
+    iss >> ignoreline;
+    std::getline(iss, line);
+    EXPECT_THAT(line, "this is line3");
+  }
+}
+
+// CLR-15.6 Manipulators
+//
+// The standard manipulators with arguments are defined in the header file
+// <iomanip>, which must be included to work with the standard manipulators
+// taking arguments: #include <iomanip>
+
+// CLR-15.7.1 Format Flags
+// Table 15.9. Manipulators Provided by the C++ Standard Library
+//
+// setw(val)
+// Sets the field width of the next input and output to val (corresponds to
+// width())
+//
+// setfill(c)
+// Defines c as the fill character (corresponds to fill())
+//
+// left
+// Left-adjusts the value
+//
+// right
+// Right-adjusts the value
+//
+// internal
+// Left-adjusts the sign and right-adjusts the value
+//
+// Table 15.17. Manipulators for Adjustment
+
+TEST(CxxIO, check_manipulators)
 {
   // showpos Forces writing a positive sign on positive numbers
   // noshowpos Forces not writing a positive sign on positive numbers
@@ -8234,12 +8385,168 @@ TEST(CxxIO, stdio_manipulators)
        << endl;
 }
 
-TEST(CxxIO, stdio_manipulators_float)
+// 15.7.6 Floating-Point Notation
+// If ios::fixed is set, floatingpoint values are printed using decimal notation.
+//
+// setprecision      Set decimal precision (function )
+//
+// *cxx-round*
+// In all cases, the remainder is not cut off `but rounded.`
+
+TEST(CxxIO, check_manipulators_float)
 {
   double value = 8.809030;
-  ostringstream os;
+  std::ostringstream os;
+
   os << std::fixed << std::setprecision(2) << value;
+
   EXPECT_THAT(os.str(), "8.81");
+}
+
+// 15.9.1 File Stream Classes
+//
+// The following program first opens the file charset.out, writes the current
+// character set — all characters for the values between 32 and 255 — into this
+// file, and outputs its contents:
+//
+// If a file stream object is constructed with a string or C-string as an
+// argument, opening the file for reading and/or writing is attempted
+// automatically. Whether this attempt was successful is reflected in the
+// stream’s state. Thus, the state should be examined after construction
+
+TEST(CxxIO, check_fstream)
+{
+  {
+    std::ofstream file("charset.out");
+
+    // file opened?
+    if (!file)
+    {
+      std::cerr << "can't open output file \"" << "charset.out" << std::endl;
+      return;
+    }
+
+    // write character set
+    for (int i = 32; i < 256; ++i)
+    {
+      file << "value : " << setw(3) << i << "   "
+        << "char : " << static_cast<char>(i) << endl;
+    }
+  } // close file automatically
+
+#if 0
+  {
+    std::ifstream file("charset.out");
+
+    // file opened?
+    if (!file)
+    {
+      std::cerr << "can't open output file \""
+                << "charset.out" << std::endl;
+      return;
+    }
+
+    char c{};
+    while (file.get(c))
+    {
+      std::cout.put(c);
+    }
+  } // close file automatically
+#endif
+
+  // Instead of copying the file contents character by character, you could also
+  // output the whole contents in one statement by passing a pointer to the
+  // stream buffer of the file as an argument to operator <<:
+
+  {
+    std::ifstream file("charset.out");
+
+    // file opened?
+    if (!file)
+    {
+      std::cerr << "can't open output file \""
+                << "charset.out" << std::endl;
+      return;
+    }
+
+    std::cout << file.rdbuf();
+    
+  } // close file automatically
+}
+
+// this corresponds to the UNIX program cat
+
+TEST(CxxIO, check_fstream_members)
+{
+  {
+    std::ifstream file{};
+
+    file.open("charset.out");
+
+    // file opened?
+    if (!file)
+    {
+      std::cerr << "can't open output file \""
+                << "charset.out" << std::endl;
+      return;
+    }
+
+    // std::cout << file.rdbuf();
+
+    // clear eofbit and failbit
+    //
+    // this is a case when `file` is used for multiple files as in the original
+    // example but not in this example.
+    //
+    // Note that after the processing of a file, clear() must be called to clear
+    // the state flags that are set at end-of-file. This is required because the
+    // stream object is used for multiple files. 
+    //
+    // Note that open() never clears any state flags. Thus, if a stream was not
+    // in a good state after closing and reopening it, you still have to call
+    // clear() to get to a good state. This is also the case if you open a
+    // different file file.clear();
+
+    file.close();
+  } // close file automatically
+}
+
+namespace cxx_io
+{
+  // note that use istream to take ifstream.
+  //
+  // VOD.L, 1, 100, 184.0, 183.7, VOD.X, 2, 100, 189.0, 183.8, VOD.L, 3, 100, 185.0, 183.9
+
+  std::vector<string> getVector(std::istream &is)
+  {
+    std::vector<std::string> svec;
+    std::string s;
+
+    while (is >> s)
+      svec.push_back(s);
+
+    return svec;
+  }
+}
+
+// $ cat input.txt
+// VOD.L 1 100 184.0 183.7 VOD.X 2 100 189.0 183.8 VOD.L 3 100 185.0 183.9
+
+TEST(CxxIO, check_fstream_and_istream)
+{
+  using namespace cxx_io;
+
+  std::ifstream file{"input.txt"};
+
+  std::vector<std::string> svec = getVector(file);
+
+  std::stringstream result{};
+  std::string expected{"VOD.L, 1, 100, 184.0, 183.7, VOD.X, 2, 100, 189.0, 183.8, VOD.L, 3, 100, 185.0, 183.9, "};
+
+  for (const auto &e : svec)
+    result << e << ", ";
+
+  EXPECT_THAT(result.str(), expected);
 }
 
 #if 0
