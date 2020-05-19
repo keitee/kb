@@ -8215,7 +8215,7 @@ TEST(CxxIO, check_stdio_numbers)
   EXPECT_THAT(iss8.good(), true);
 }
 
-// [ RUN      ] 
+// [ RUN      ]
 // date: 05/17/20
 // time: 08:24:17
 
@@ -8230,7 +8230,7 @@ TEST(CxxIO, check_manipulator_put_time)
 {
   auto now = chrono::system_clock::now();
   time_t t = chrono::system_clock::to_time_t(now);
-  tm *tm = localtime(&t);
+  tm *tm   = localtime(&t);
   std::cout << put_time(tm, "date: %x\ntime: %X\n") << endl;
 }
 
@@ -8286,12 +8286,12 @@ namespace cxx_io
   // until end-of-line:
 
   template <typename T, typename traits>
-    inline std::basic_istream<T, traits> &
-    ignoreline(std::basic_istream<T, traits> &strm)
-    {
-      strm.ignore(std::numeric_limits<std::streamsize>::max(), strm.widen('\n'));
-      return strm;
-    }
+  inline std::basic_istream<T, traits> &
+  ignoreline(std::basic_istream<T, traits> &strm)
+  {
+    strm.ignore(std::numeric_limits<std::streamsize>::max(), strm.widen('\n'));
+    return strm;
+  }
 
   // TODO:
   // As written, there are multiple ways to define your own manipulator taking
@@ -8422,7 +8422,8 @@ TEST(CxxIO, check_fstream)
     // file opened?
     if (!file)
     {
-      std::cerr << "can't open output file \"" << "charset.out" << std::endl;
+      std::cerr << "can't open output file \""
+                << "charset.out" << std::endl;
       return;
     }
 
@@ -8430,7 +8431,7 @@ TEST(CxxIO, check_fstream)
     for (int i = 32; i < 256; ++i)
     {
       file << "value : " << setw(3) << i << "   "
-        << "char : " << static_cast<char>(i) << endl;
+           << "char : " << static_cast<char>(i) << endl;
     }
   } // close file automatically
 
@@ -8470,7 +8471,7 @@ TEST(CxxIO, check_fstream)
     }
 
     std::cout << file.rdbuf();
-    
+
   } // close file automatically
 }
 
@@ -8500,7 +8501,7 @@ TEST(CxxIO, check_fstream_members)
     //
     // Note that after the processing of a file, clear() must be called to clear
     // the state flags that are set at end-of-file. This is required because the
-    // stream object is used for multiple files. 
+    // stream object is used for multiple files.
     //
     // Note that open() never clears any state flags. Thus, if a stream was not
     // in a good state after closing and reopening it, you still have to call
@@ -8527,7 +8528,7 @@ namespace cxx_io
 
     return svec;
   }
-}
+} // namespace cxx_io
 
 // $ cat input.txt
 // VOD.L 1 100 184.0 183.7 VOD.X 2 100 189.0 183.8 VOD.L 3 100 185.0 183.9
@@ -8541,7 +8542,8 @@ TEST(CxxIO, check_fstream_and_istream)
   std::vector<std::string> svec = getVector(file);
 
   std::stringstream result{};
-  std::string expected{"VOD.L, 1, 100, 184.0, 183.7, VOD.X, 2, 100, 189.0, 183.8, VOD.L, 3, 100, 185.0, 183.9, "};
+  std::string expected{"VOD.L, 1, 100, 184.0, 183.7, VOD.X, 2, 100, 189.0, "
+                       "183.8, VOD.L, 3, 100, 185.0, 183.9, "};
 
   for (const auto &e : svec)
     result << e << ", ";
@@ -8561,6 +8563,111 @@ TEST(CxxIO, fstream_wildcard)
   }
 }
 #endif
+
+// cxx-stringstream
+// 806 Chapter 15: Input/Output Using Stream Classes
+// A string stream can be created with the flags for the file open modes (see
+// Section 15.9.3, page 796) and/or an existing string. With the flag ios::ate,
+// the characters written to a string stream can be appended to an existing
+// string:
+
+TEST(CxxIO, check_stringstream)
+{
+  std::string s{"value: "};
+  std::stringstream os{s, std::ios::out | std::ios::ate};
+
+  os << "is unknown";
+
+  EXPECT_THAT(os.str(), "value: is unknown");
+
+  // The string s itself is not modified.
+  EXPECT_THAT(s, "value: ");
+}
+
+namespace cxx_io
+{
+  std::tuple<std::string, std::string, std::string> parseName(std::string name)
+  {
+    std::string s1{}, s2{}, s3{};
+
+    std::istringstream{name} >> s1 >> s2 >> s3;
+
+    if (s3.empty())
+      return std::tuple<std::string, std::string, std::string>(std::move(s1),
+                                                               "",
+                                                               std::move(s2));
+    else
+      return std::tuple<std::string, std::string, std::string>(std::move(s1),
+                                                               std::move(s2),
+                                                               std::move(s3));
+  }
+} // namespace cxx_io
+
+TEST(CxxIO, check_stringstream_move)
+{
+  using namespace cxx_io;
+
+  auto ret1 = parseName("Nicolai M. Josuttis");
+
+  EXPECT_THAT(std::get<0>(ret1), "Nicolai");
+  EXPECT_THAT(std::get<1>(ret1), "M.");
+  EXPECT_THAT(std::get<2>(ret1), "Josuttis");
+}
+
+namespace cxx_io
+{
+  void hexMultiplicationTable(std::streambuf *buffer, int num)
+  {
+    std::ostream hexout{buffer};
+
+    hexout << std::hex << std::showbase;
+
+    for (int i = 1; i <= num; ++i)
+    {
+      for (int j = 1; j <= 10; ++j)
+        hexout << i * j << ' ';
+
+      hexout << std::endl;
+    }
+  } // does NOT close buffer
+
+  // NOTE: do now work
+  void hex_dump(const std::string &str)
+  {
+    auto num = str.size();
+
+    for (int i = 0; i <= (num / 16); ++i)
+    {
+      for (int j = 0; j < 16; ++j)
+      {
+        std::cout << std::hex << std::showbase << str[i * 16 + j] << ' ';
+      }
+
+      std::cout << std::endl;
+    }
+  } // does NOT close buffer
+} // namespace cxx_io
+
+TEST(CxxIO, check_streambuf)
+{
+  using namespace cxx_io;
+
+  {
+    std::cout << "we print 2 lines hex" << std::endl;
+
+    // EXPECT_THAT(oss.length(), 10);
+    hexMultiplicationTable(std::cout.rdbuf(), 2);
+
+    std::cout << "That was the output of 2 hex lines " << endl;
+  }
+
+  {
+    std::cout << "------------------------" << std::endl;
+    std::string coll{"this is message"};
+    hex_dump(coll);
+    std::cout << "------------------------" << std::endl;
+  }
+}
 
 // ={=========================================================================
 // cxx-move

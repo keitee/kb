@@ -892,7 +892,7 @@ TEST(CxxVector, check_ctor)
 
 void GetVectorArg(const vector<int> &coll)
 {
-  vector<int> coll_;
+  std::vector<int> coll_;
 
   coll_ = coll;
 
@@ -903,8 +903,8 @@ TEST(CxxVector, check_assign)
 {
   // assign
   {
-    vector<int> coll1{1, 2, 3, 4, 5, 6};
-    vector<int> coll2{};
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll2{};
 
     ASSERT_THAT(coll1.size(), 6);
     ASSERT_THAT(coll2.size(), 0);
@@ -917,8 +917,8 @@ TEST(CxxVector, check_assign)
 
   // assign
   {
-    vector<int> coll1{1, 2, 3, 4, 5, 6};
-    vector<int> coll2{};
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll2{};
 
     ASSERT_THAT(coll1.size(), 6);
     ASSERT_THAT(coll2.size(), 0);
@@ -929,10 +929,75 @@ TEST(CxxVector, check_assign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // cxx-vector-assign
+  {
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll2{};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+
+    coll1.assign({1, 2, 3, 4, 5, 6});
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+  }
+
   // assign
   {
-    vector<int> coll1{1, 2, 3, 4, 5, 6};
+    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
     GetVectorArg(coll1);
+  }
+}
+
+// cxx-array
+
+TEST(CxxVector, check_as_array)
+{
+  {
+    // c array.
+    const char arr[]{"this is char array"};
+
+    std::vector<char> coll{};
+
+    ASSERT_THAT(coll.size(), 0);
+
+    // cxx-vector-assign cxx-array-begin
+    //
+    // template< class InputIt >
+    // void assign( InputIt first, InputIt last );
+
+    coll.assign(arr, arr + sizeof(arr));
+
+    ASSERT_THAT(coll.size(), sizeof(arr));
+    EXPECT_THAT(strcmp(coll.data(), arr), 0);
+  }
+
+  {
+    std::vector<char> coll;
+    coll.resize(41);
+
+    // stl.cpp:943:32: error: invalid conversion from
+    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
+    // to ‘char*’ [-fpermissive]
+    //
+    //    strcpy(coll[0], "hello world");
+
+    strcpy(&coll[0], "hello world");
+    printf("%s\n", &coll[0]);
+  }
+
+  // Note that since C++11, you don’t have to use the expression
+  // &a[0] to get direct access to
+  // the elements in the vector, because the member function data() is
+  // provided for this purpose:
+
+  {
+    std::vector<char> coll;
+    coll.resize(41);
+
+    strcpy(coll.data(), "hello world");
+    printf("%s\n", coll.data());
   }
 }
 
@@ -1415,35 +1480,6 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
   cout << "name: " << ovec[8].getName() << endl;
 }
 
-TEST(CxxVector, asArray)
-{
-  // {
-  //   vector<int> coll{1,2,3,4,5};
-  //   cout << "coll: " << coll[-1] << endl;
-  // }
-
-  {
-    vector<char> coll;
-    coll.resize(41);
-
-    // stl.cpp:943:32: error: invalid conversion from
-    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
-    // to ‘char*’ [-fpermissive]
-    //
-    //    strcpy(coll[0], "hello world");
-
-    strcpy(&coll[0], "hello world");
-    printf("%s\n", &coll[0]);
-  }
-
-  {
-    vector<char> coll;
-    coll.resize(41);
-    strcpy(coll.data(), "hello world");
-    printf("%s\n", coll.data());
-  }
-}
-
 // ={=========================================================================
 // cxx-array
 
@@ -1519,30 +1555,6 @@ TEST(CxxArray, check_access)
   //   std::array<char, 10> coll = {"this is an char array"};
   //   PRINT_ELEMENTS(coll, "initialized: ");
   // }
-}
-
-TEST(CxxArray, check_vector)
-{
-  {
-    std::vector<char> coll;
-    coll.resize(41);
-
-    strcpy(&coll[0], "hello world");
-    printf("%s\n", &coll[0]);
-  }
-
-  // Note that since C++11, you don’t have to use the expression
-  // &a[0] to get direct access to
-  // the elements in the vector, because the member function data() is
-  // provided for this purpose:
-
-  {
-    std::vector<char> coll;
-    coll.resize(41);
-
-    strcpy(coll.data(), "hello world");
-    printf("%s\n", coll.data());
-  }
 }
 
 TEST(CxxArray, check_multi_dimention)
@@ -2273,11 +2285,7 @@ TEST(CxxMap, check_sorted_custom_compare)
     std::vector<int> ret{};
 
     // can do in single shot
-    coll.insert({{"C", 2},
-                 {"E", 4},
-                 {"A", 0},
-                 {"D", 3},
-                 {"B", 1}});
+    coll.insert({{"C", 2}, {"E", 4}, {"A", 0}, {"D", 3}, {"B", 1}});
 
     ASSERT_THAT(coll.size(), 5);
 
@@ -2308,11 +2316,7 @@ TEST(CxxMap, check_sorted_custom_compare)
     std::vector<int> ret{};
 
     // can do in single shot
-    coll.insert({{"C", 2},
-                 {"E", 4},
-                 {"A", 0},
-                 {"D", 3},
-                 {"B", 1}});
+    coll.insert({{"C", 2}, {"E", 4}, {"A", 0}, {"D", 3}, {"B", 1}});
 
     ASSERT_THAT(coll.size(), 5);
 
@@ -2332,11 +2336,7 @@ TEST(CxxMap, check_sorted_custom_compare)
     std::vector<int> ret{};
 
     // can do in single shot
-    coll.insert({{"C", 2},
-                 {"E", 4},
-                 {"A", 0},
-                 {"D", 3},
-                 {"B", 1}});
+    coll.insert({{"C", 2}, {"E", 4}, {"A", 0}, {"D", 3}, {"B", 1}});
 
     ASSERT_THAT(coll.size(), 5);
 
@@ -2427,9 +2427,9 @@ TEST(CxxMap, check_sorted_custom_compare)
 // one solution is:
 //
 // make a set<std::pair<key, elem>> using custom compare on the fly so that all
-// elems are sorted time field. 
+// elems are sorted time field.
 //
-// get a key for the first in the set which is the oldest and want to delete it. 
+// get a key for the first in the set which is the oldest and want to delete it.
 //
 // use that key to remove item in the map.
 //

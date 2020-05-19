@@ -1297,6 +1297,7 @@ TEST(StringConverison, check_functions)
   }
 }
 
+// cxx-stringstream
 TEST(StringConverison, check_stringstream)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.

@@ -2501,34 +2501,41 @@ namespace cxx_case_base64
   }
 
   // https://github.com/joedf/base64.c/blob/master/base64.c
-  unsigned char b64_chr[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  unsigned char b64_chr[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-  unsigned int b64_encode_3(const unsigned char* in, unsigned int in_len, unsigned char* out) {
+  unsigned int
+  b64_encode_3(const unsigned char *in, unsigned int in_len, unsigned char *out)
+  {
 
-    unsigned int i=0, j=0, k=0, s[3];
+    unsigned int i = 0, j = 0, k = 0, s[3];
 
-    for (i=0;i<in_len;i++) {
-      s[j++]=*(in+i);
-      if (j==3) {
-        out[k+0] = b64_chr[ (s[0]&255)>>2 ];
-        out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
-        out[k+2] = b64_chr[ ((s[1]&0x0F)<<2)+((s[2]&0xC0)>>6) ];
-        out[k+3] = b64_chr[ s[2]&0x3F ];
-        j=0; k+=4;
+    for (i = 0; i < in_len; i++)
+    {
+      s[j++] = *(in + i);
+      if (j == 3)
+      {
+        out[k + 0] = b64_chr[(s[0] & 255) >> 2];
+        out[k + 1] = b64_chr[((s[0] & 0x03) << 4) + ((s[1] & 0xF0) >> 4)];
+        out[k + 2] = b64_chr[((s[1] & 0x0F) << 2) + ((s[2] & 0xC0) >> 6)];
+        out[k + 3] = b64_chr[s[2] & 0x3F];
+        j          = 0;
+        k += 4;
       }
     }
 
-    if (j) {
-      if (j==1)
+    if (j)
+    {
+      if (j == 1)
         s[1] = 0;
-      out[k+0] = b64_chr[ (s[0]&255)>>2 ];
-      out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
-      if (j==2)
-        out[k+2] = b64_chr[ ((s[1]&0x0F)<<2) ];
+      out[k + 0] = b64_chr[(s[0] & 255) >> 2];
+      out[k + 1] = b64_chr[((s[0] & 0x03) << 4) + ((s[1] & 0xF0) >> 4)];
+      if (j == 2)
+        out[k + 2] = b64_chr[((s[1] & 0x0F) << 2)];
       else
-        out[k+2] = '=';
-      out[k+3] = '=';
-      k+=4;
+        out[k + 2] = '=';
+      out[k + 3] = '=';
+      k += 4;
     }
 
     out[k] = '\0';
@@ -2688,13 +2695,13 @@ TEST(CxxCaseBase64, check_decode_1)
 // Copyright (c) 2005-2011, Jouni Malinen <j@w1.fi>
 //
 // https://www.base64encode.org/
-// Split lines into chunks: 
+// Split lines into chunks:
 // The encoded data will be a continuous text without any whitespaces, check
 // this option if you want to break it up into multiple lines. The applied
 // character limit is defined in the MIME (RFC 2045) specification, which states
 // that the encoded lines must be no more than 76 characters long. (*)
 //
-// Perform URL safe encoding: 
+// Perform URL safe encoding:
 // Using standard Base64 in URLs requires encoding of "+", "/" and "="
 // characters into their percent-encoded form, which makes the string
 // unnecessarily longer. Enable this option to encode into an URL and file name
@@ -2789,14 +2796,23 @@ TEST(CxxCaseBase64, check_decode_4)
 {
   using namespace cxx_case_base64;
 
-  std::string input{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
-  std::string expected{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEA"};
+  std::string input{
+    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
+    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
+    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
+    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+  std::string expected{
+    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
+    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
+    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
+    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEA"};
 
   char output[1000] = {0};
 
   base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
-      input.size() + 1,
-      output);
+                input.size() + 1,
+                output);
 
   // std::cout << "output: " << output << std::endl;
 
