@@ -12263,6 +12263,57 @@ int* p;     // p has undefined value
 int* q{};   // q is initialized by nullptr
 
 
+<ex>
+
+The result is not what expects to see since milliseconds ms is not initialised.
+
+// [ RUN      ] CxxTime.check_duration_2
+// 188209768194270 ms
+// 3742327457174483840 ns
+// [       OK ] CxxTime.check_duration_2 (0 ms)
+
+TEST(CxxTime, check_duration_2)
+{
+  {
+    std::chrono::seconds twentySeconds{20}; // 20 seconds
+    std::chrono::hours aDay{24};            // 24 hours
+    std::chrono::milliseconds ms;           // NOTE NOT milliseconds
+
+    // 24 hours and 20 seconds in milliseconds?
+    // 24 * 60 * 60 * 1000 + 20 * 1000
+
+    ms += twentySeconds + aDay;   // 86,420,000 milliseconds
+    --ms;                         // 86,419,999 milliseconds
+    ms *= 2;                      // 172,839,998 milliseconds
+
+    std::cout << ms.count() << " ms" << std::endl;
+
+    // convert ms to ns
+    std::cout << std::chrono::nanoseconds(ms).count() << " ns" << std::endl;
+  }
+
+  {
+    std::chrono::seconds twentySeconds{20}; // 20 seconds
+    std::chrono::hours aDay{24};            // 24 hours
+    std::chrono::milliseconds ms{};         // 0 milliseconds
+
+    // 24 hours and 20 seconds in milliseconds?
+    // 24 * 60 * 60 * 1000 + 20 * 1000
+
+    ms += twentySeconds + aDay;   // 86,420,000 milliseconds
+    --ms;                         // 86,419,999 milliseconds
+    ms *= 2;                      // 172,839,998 milliseconds
+
+    // std::cout << ms.count() << " ms" << std::endl;
+    EXPECT_THAT(ms.count(), 172839998);
+
+    // convert ms to ns
+    // std::cout << std::chrono::nanoseconds(ms).count() << " ns" << std::endl;
+    EXPECT_THAT(std::chrono::nanoseconds(ms).count(), 172839998000000);
+  }
+}
+
+
 Use cxx-list-init to use complete object to initialize
 
 <list-init-reduce-size>
@@ -25714,6 +25765,7 @@ class FooStatic {
     FooStatic() {}
 };
 
+*cxx-static-access*
 const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
 
 TEST(Static, DefineStaticOutside)
@@ -35032,7 +35084,7 @@ int PoissonRandom( double expectedvalue )
 
 {cxx-random}
 
-17.1 Random Numbers and Distributions
+CLR-17.1 Random Numbers and Distributions
 
 the engines, which are the sources of randomness. These engines create random
 unsigned values, which are uniformly distributed between a predefined minimum
@@ -35041,18 +35093,24 @@ and a maximum;
 the distributions transfer those values into random numbers, which are
 linearly or nonlinearly distributed according to usersupplied parameters.
 
-The rand() has several problems. Many programs need random numbers in a
+The *call-rand* has several problems. Many programs need random numbers in a
 different range and some require random floating-point numbers. Some needs
 numbers that reflect a nonuniform distribution. 
 
 o engine: types that generate a sequence of random unsigned integers
+  a random-number engine is a `stateful` source of randomness.
+
 o distribution: types that use an engine to retuen numbers according to a
   particular probability distribution.
 
-The engines are function-object class that define a call operator and returns a
+  In the constructor, the first argument specifies the minimum value (default:
+  0), and the second argument specifies the maximum value (default:
+  numeric_limits<type>::max()
+
+`The engines are function-object` class that define a call operator and returns a
 random unsigned number. The engine object is similar to the output of rand().
 
-The library defines several random-number engines that differ in terms of
+The library defines `several random-number engines` that differ in terms of
 performance and quality of randomness. Each compiler designates one of these
 as the default_random_engine type. This is intended to be the engine with the
 most generally useful properties.
@@ -35060,154 +35118,164 @@ most generally useful properties.
 When refer to an random-number generator, mean the combination of a
 distribution object with an engine.
 
-<ex>
 
-// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 
-// 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 
-// 74243042, 114807987, 1137522503, 1441282327, 16531729,
-//  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
-//  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
+*cxx-random-same-sequence*
 
-TEST(AlgoGenerate, UseRandomEngineAndDistribution)
-{
-  default_random_engine dre;
-
-  for (size_t i = 0; i < 18; ++i)
-    cout << dre() << ", ";
-  cout << endl;
-
-  uniform_int_distribution<unsigned> udist1(0, 6);
-
-  for (size_t i = 0; i < 18; ++i)
-    cout << setw(2) << udist1(dre) << ", ";
-  cout << endl;
-
-  uniform_int_distribution<unsigned> udist2(6, 12);
-
-  for (size_t i = 0; i < 18; ++i)
-    cout << setw(2) << udist2(dre) << ", ";
-  cout << endl;
-}
-
-
-// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
-// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
-// 1 0 1 1 1 1 0 0 1 1 0 1 (12)
-// 0 1 1 0 0 0 0 0 1 0 1 1 (12)
-// 8 8 8 9 9 9 7 8 8 8 7 9 (12)
-
-class CardSequenceUseRand
-{
-  public:
-    CardSequenceUseRand(int size): size_(size) {}
-
-    int operator() () {
-      // return rand() % 24;
-      return rand() % (size_);
-    }
-
-  private:
-    int size_{};
-};
-
-class CardSequenceUseRandomEngine
-{
-  public:
-    int operator() () {
-      return udist(dre);
-    }
-
-  private:
-
-    static default_random_engine dre;
-    static uniform_int_distribution<size_t> udist;
-};
-
-default_random_engine CardSequenceUseRandomEngine::dre;
-uniform_int_distribution<size_t> CardSequenceUseRandomEngine::udist{0, 24};
-
-
-// note: 
-// use rand() but as distribution, limits range
-
-class CardSequenceUseRandWithRange
-{
-  public:
-    CardSequenceUseRandWithRange(int min, int max)
-      : min_(min), max_(max) {}
-
-    // same as randint() which use from and to variable names
-
-    int operator() () {
-      return min_ + (rand() % (max_ - min_ + 1));
-    }
-
-  private:
-    int min_{};
-    int max_{};
-};
-
-
-// use *cxx-static* which makes different sequence when use `signle` instance
-// as *cxx-random-same-sequence* in many times. However, show the same
-// sequence when starts an instance/application again.
-
-// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
-// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
-// 7 22 9 19 17 7 10 12 9 13 2 19 (12)
-// 2 19 11 22 12 18 4 16 11 8 15 21 (12)
-// 14 2 14 19 19 7 17 18 6 18 5 15 (12)
-
-TEST(AlgoRandom, RandomEngineVsRand)
-{
-  vector<uint32_t> ivec1;
-  generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
-  PRINT_ELEMENTS(ivec1);
-
-  vector<uint32_t> ivec2;
-  generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
-  PRINT_ELEMENTS(ivec2);
-
-  vector<uint32_t> ivec3;
-  generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
-  PRINT_ELEMENTS(ivec3);
-
-  vector<uint32_t> ivec4;
-  generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
-  PRINT_ELEMENTS(ivec4);
-
-  vector<uint32_t> ivec5;
-  generate_n(back_inserter(ivec5), 12, 
-      CardSequenceUseRandWithRange(6, 9));
-  PRINT_ELEMENTS(ivec5);
-}
-
-
-{cxx-random-same-sequence}
 Even though the numbers generated appear to be random, a given generator returns
-the 'same' sequence of numbers each time it is run. This is very 'helpful'
-during testing and on the other hand, programs have to take this fact into
-account. 
+the same sequence of numbers each time it is run. This is very `helpful` during
+testing and on the other hand, programs have to take this fact into account. 
 
 To have different sequence, make the engine and distribution objects `static`
 and they will hold their state across calls.
 
-<ex>
+TEST(CxxRandom, check_distribution_1)
+{
+  std::default_random_engine dre{};
 
-TEST(AlgoRandom, Sequence)
+  std::ostringstream oss{};
+
+  {
+    std::string expected{"16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 1457850878, 1458777923, 2007237709, "};
+
+    // `The engines are function-object` class that define a call operator and
+    // returns a random unsigned number. The engine object is similar to the
+    // output of rand().
+
+    // use random but always shows the same sequence
+    for (size_t i = 0; i < 10; ++i)
+      oss << dre() << ", ";
+
+    EXPECT_THAT(oss.str(), expected);
+  }
+
+  {
+    // clear oss
+    oss.str("");
+
+    std::uniform_int_distribution<unsigned> dist1{0, 6};
+
+    for (size_t i = 0; i < 10; ++i)
+      oss << dist1(dre) << ", ";
+
+    // std::cout << oss.str() << std::endl;
+
+    EXPECT_THAT(oss.str(), "2, 3, 5, 0, 0, 3, 4, 0, 2, 0, ");
+  }
+
+  {
+    // clear oss
+    oss.str("");
+
+    std::uniform_int_distribution<unsigned> dist1{6, 12};
+
+    for (size_t i = 0; i < 10; ++i)
+      oss << dist1(dre) << ", ";
+
+    // std::cout << oss.str() << std::endl;
+
+    EXPECT_THAT(oss.str(), "8, 10, 10, 12, 11, 9, 6, 10, 8, 10, ");
+  }
+}
+
+namespace cxx_random
+{
+  class UseEngine
+  {
+    private:
+      static std::default_random_engine dre;
+      static std::uniform_int_distribution<size_t> dist;
+
+    public:
+      int operator()() { return dist(dre); }
+  };
+
+  std::default_random_engine UseEngine::dre{};
+  std::uniform_int_distribution<size_t> UseEngine::dist{0, 24};
+
+  class UseRand
+  {
+    private:
+      int max_{};
+      int min_{};
+
+    public:
+      int operator()() { return min_ + (rand() % (max_ - min_ + 1)); }
+
+      UseRand(int min, int max)
+          : max_{max}
+          , min_{min}
+      {}
+  };
+}
+
+TEST(CxxRandom, check_distribution_2)
+{
+  using namespace cxx_random;
+
+  std::ostringstream oss{};
+
+  // always same sequence
+  {
+    std::vector<size_t> coll1{};
+
+    std::generate_n(std::back_inserter(coll1), 12, UseEngine());
+
+    for (size_t i = 0; i < coll1.size(); ++i)
+      oss << coll1[i] << ", ";
+
+    // std::cout << oss.str() << std::endl;
+
+    EXPECT_THAT(oss.str(), "0, 3, 18, 11, 13, 5, 1, 16, 16, 23, 9, 12, ");
+  }
+
+  // always same sequence but differnet numbers since dre is static single
+  // instance and makes different sequence
+
+  {
+    std::vector<size_t> coll1{};
+
+    oss.str("");
+
+    std::generate_n(std::back_inserter(coll1), 12, UseEngine());
+
+    for (size_t i = 0; i < coll1.size(); ++i)
+      oss << coll1[i] << ", ";
+
+    // std::cout << oss.str() << std::endl;
+
+    EXPECT_THAT(oss.str(), "20, 0, 1, 13, 16, 0, 9, 1, 10, 17, 14, 23, ");
+  }
+
+  {
+    std::vector<size_t> coll1{};
+
+    oss.str("");
+
+    std::generate_n(std::back_inserter(coll1), 12, UseRand{0, 23});
+
+    for (size_t i = 0; i < coll1.size(); ++i)
+      oss << coll1[i] << ", ";
+
+    // std::cout << oss.str() << std::endl;
+
+    EXPECT_THAT(oss.str(), "7, 22, 9, 19, 17, 7, 10, 12, 9, 13, 2, 19, ");
+  }
+}
+
+TEST(CxxRandom, check_distribution_3)
 {
   // single instance and makes different sequence
   {
-    default_random_engine dre;
+    std::default_random_engine dre;
 
-    vector<unsigned int> coll1{};
+    std::vector<unsigned int> coll1{};
 
     for (size_t i = 0; i < 18; ++i)
     {
       coll1.push_back(dre());
     }
 
-    vector<unsigned int> coll2{};
+    std::vector<unsigned int> coll2{};
 
     for (size_t i = 0; i < 18; ++i)
     {
@@ -35218,21 +35286,22 @@ TEST(AlgoRandom, Sequence)
     EXPECT_THAT(coll1==coll2, false);
   }
 
-  // multiple instance and makes the same sequence
+  // different dre instance and makes the same sequence
   {
-    vector<unsigned int> coll1{};
-    vector<unsigned int> coll2{};
+    std::vector<unsigned int> coll1{};
+    std::vector<unsigned int> coll2{};
 
     {
-      default_random_engine dre;
+      std::default_random_engine dre;
 
       for (size_t i = 0; i < 18; ++i)
       {
         coll1.push_back(dre());
       }
     }
+
     {
-      default_random_engine dre;
+      std::default_random_engine dre;
 
       for (size_t i = 0; i < 18; ++i)
       {
@@ -35246,51 +35315,76 @@ TEST(AlgoRandom, Sequence)
 }
 
 
-<cxx-random-seed>
+*cxx-random-seed*
+
 The same sequence is helpful during debugging. However, once program is tested
 we often want to cause each run to generate different random results.
 
-<ex>
+default_random_engine(C++11) implementation-defined
 
-TEST(AlgoRandom, Seed)
+namespace cxx_code
 {
-  default_random_engine e1;
-  default_random_engine e2(2147483646);
+  // bits/random.h
+  /**
+   * @brief Constructs a %linear_congruential_engine random number
+   *        generator engine with seed @p __s.  The default seed value
+   *        is 1.
+   *
+   * @param __s The initial seed value.
+   */
+  explicit
+    linear_congruential_engine(result_type __s = default_seed)
+    { seed(__s); }
 
-  default_random_engine e3;
-  e3.seed(32767);
-  default_random_engine e4(32767);
+  /**
+   * The classic Minimum Standard rand0 of Lewis, Goodman, and Miller.
+   */
+  typedef linear_congruential_engine<uint_fast32_t, 16807UL, 0UL, 2147483647UL>
+    minstd_rand0;
 
-  int unmatch_count{};
-  int match_count{};
-
-  for (size_t i = 0; i < 100; i++)
-  {
-    // two use different seed so expect no matches
-    if (e1() == e2())
-      ++match_count;
-
-    // two use same seed so expect all matches
-    if (e3() != e4())
-      ++unmatch_count;
-  }
-
-  EXPECT_THAT(match_count, 0);
-  EXPECT_THAT(unmatch_count, 0);
+  typedef minstd_rand0 default_random_engine;
 }
 
-note:
+TEST(CxxRandom, check_distribution_4)
+{
+  constexpr auto MAX_GENERATION{1000};
+
+  std::default_random_engine dre1{};
+  std::default_random_engine dre2{2147483646};
+
+  std::default_random_engine dre3{};
+  dre3.seed(32767);
+
+  std::default_random_engine dre4{32767};
+
+  int unmatched{};
+  int matched{};
+
+  for (size_t i = 0; i < MAX_GENERATION; ++i)
+  {
+    // uses different seeds so expects no matches between them
+    if (dre1() == dre2())
+      ++matched;
+
+    // uses the same seeds so expects matches between them
+    if (dre3() != dre4())
+      ++unmatched;
+  }
+
+  EXPECT_THAT(matched, 0);
+  EXPECT_THAT(unmatched, 0);
+}
+
 Picking a good seed, like most things about generating good random numbers, is
-surprisingly hard. The most common approach is to call `time()` function. 
+surprisingly hard. The most common approach is to call `call-time()` function. 
 
-Since that retuns time as the number of seconds, this seed is 'only' useful
-for applications that generate the seed at longer intervals. This usually
-doesn't work if the program is run repeatedly as part of an automated process;
-it might wind up with the same seed several times.
+Since that retuns time as the number of seconds, this seed is `only` useful for
+applications that generate the seed at longer intervals. This usually doesn't
+work if the program is run repeatedly as part of an automated process; it might
+wind up with the same seed several times.
 
 
-{other-distribution}
-CPR 749. TBD.
+CPL-40.7 Random Numbers
 
 
 {cxx-random-unique}
@@ -36846,7 +36940,10 @@ ct = fi.count();              // via an object
 *kt_dev_cxx_0000* cxx-template-type-member
 
 {cxx-template-type-members} <cxx-type-member> <cxx-typename>
-Uses scope operator(::) to access both static member and type members. For
+
+*cxx-static-access*
+
+Uses scope operator(::) to access both *cxx-static* member and type members. For
 example, string::size_type. In non-template code, the compiler has access to
 the class definition and knows whether a name accessed through the scope
 operator is a type or static member.
@@ -60053,8 +60150,14 @@ all         :  Kong Yize: 44.77
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
 {cxx-ratio}
+
+CLR-5.6 Compile-Time Fractional Arithmetic with Class ratio<>
+
 an interface to specify compile-time fractions and to perform compile-time
 arithmetic with them.
+
+It is used in the duration and time_point libraries to efficiently create units
+of time.
 
 Predefined ratios make it more convenient to specify large or very small
 numbers (see Table 5.20). They allow you to specify large numbers without the
@@ -60077,7 +60180,7 @@ namespace cxx_code
    *  @endcode
    *  
    */
-  template<intmax_t _Num, intmax_t _Den = 1> *cxx-default*
+  template<intmax_t _Num, `intmax_t _Den = 1`> *cxx-default*
     struct ratio
     {
       // Note: sign(N) * abs(N) == N
@@ -60086,7 +60189,13 @@ namespace cxx_code
 
       static constexpr intmax_t den =
         __static_abs<_Den>::value / __static_gcd<_Num, _Den>::value;
+
+      typedef ratio<num, den> type;
     }
+
+  typedef ratio<1,                1000000000> nano;
+  typedef ratio<1,                   1000000> micro;
+  typedef ratio<1,                      1000> milli;
 
 } // namespace
 
@@ -60106,7 +60215,7 @@ TEST(Ratio, Ratio)
 
 {cxx-time}
 
-CXXSLR-5.7 Clocks and Timers
+CLR-5.7 Clocks and Timers
 
 namespace cxx_code
 {
@@ -60125,14 +60234,14 @@ namespace cxx_code
   typedef duration<int64_t> 		    seconds;
 
   /// minutes
-  typedef duration<int64_t, ratio< 60>>   minutes;
+  typedef duration<int64_t, ratio<60>>   minutes;
 
   /// hours
   typedef duration<int64_t, ratio<3600>>  hours;
 
   /// duration
   template<typename _Rep, typename _Period>
-    struct duration
+    `struct duration`
     {
       typedef _Rep						rep;
       typedef _Period 					period;
@@ -60145,7 +60254,7 @@ namespace cxx_code
   namespace chrono
   {
     template<typename _Rep, typename _Period = ratio<1>> *cxx-default*
-      struct duration;
+      `struct duration;`
 
     template<typename _Clock, typename _Dur = typename _Clock::duration>
       struct time_point;
@@ -60178,7 +60287,6 @@ o A timepoint is defined as combination of a duration and a beginning of time
   timepoints, require using the same epoch/clock. A clock also provides a
   convenience function to yield the timepoint of `now`.
 
-
   "So duration is quantity of time and timepoint is duration which has starting
   point."
 
@@ -60186,17 +60294,17 @@ o A timepoint is defined as combination of a duration and a beginning of time
 A duration is a combination of a value representing `the number of ticks` and a
 `fraction` representing the unit `in seconds` 
 
-o the first template argument defines the type of the ticks
+o the first template argument defines `the type of the ticks`
 
-o the optional second template argument defines the unit type in seconds. 
+o the optional second template argument defines `the unit type in seconds.` 
 
-// 20 ticks and one time unit is 1 sec. 20 x 1
+// `20 ticks` and one time unit is 1 sec. 20 x 1
 std::chrono::duration<int> twentySeconds(20);
 
-// 0.5 unit and one time unit is 60 secs. 0.5 x 60 = 30
+// `0.5 tick` and one time unit is 60 secs. 0.5 x 60 = 30
 std::chrono::duration<double,std::ratio<60>> halfAMinute(0.5);
 
-// 1 unit and one time unit is 1/1000 sec
+// `1 tick` and one time unit is 1/1000 sec
 std::chrono::duration<long,std::ratio<1,1000>> oneMillisecond(1);
 
 For more convenience, the C++ standard library provides the following type
@@ -60211,6 +60319,7 @@ Table 5.22. Other Operations and Types of durations
 
 d.count()             Returns ticks of the duration d
 duration_cast<D>(d)   Returns duration d explicitly converted into type D
+duration::rep         Yields the type of the ticks
 
 
 <cxx-time-duration-cast>
@@ -60224,53 +60333,69 @@ std::chrono::minutes m2 =
 std::chrono::duration_cast<std::chrono::minutes>(sec);  // OK
 
 
-// cxx-time-duration-cast
-//
-// A typical example is code that segments a duration into different units. For
-// example, the following code segments a duration of milliseconds into the
-// corresponding hours, minutes, seconds, and milliseconds
-//
-// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
-//      02::00::55::42
+*cxx-time-duration-cast*
 
-template <typename Unit, typename Ratio>
-ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
+A typical example is code that segments a duration into different units. For
+example, the following code segments a duration of milliseconds into the
+corresponding hours, minutes, seconds, and milliseconds
+
+raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+     02::00::55::42
+
+namespace cxx_time
 {
+  template <typename Unit, typename Ratio>
+  ostream &operator<<(ostream &os, const chrono::duration<Unit, Ratio> &d)
+  {
     os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
     return os;
-}
+  }
+} // namespace cxx_time_duration_case
 
-TEST(Time, DurationCast)
+TEST(CxxTime, check_duration_cast)
 {
-  chrono::milliseconds ms(7255042);
+  using namespace cxx_time;
 
-  chrono::hours   hh = 
-    chrono::duration_cast<chrono::hours>(ms);
+  std::chrono::milliseconds ms{7255042};
+
+  // convert ms to hours
+  std::chrono::hours hh = std::chrono::duration_cast<chrono::hours>(ms);
+  EXPECT_THAT(hh.count(), 2);
 
   // take remians which means take hours out
-  chrono::minutes mm = 
-    chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+  std::chrono::minutes mm = std::chrono::duration_cast<std::chrono::minutes>(
+    ms % std::chrono::hours(1));
 
-  chrono::seconds ss = 
-    chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+  std::chrono::seconds ss = std::chrono::duration_cast<std::chrono::seconds>(
+    ms % std::chrono::minutes(1));
 
-  chrono::milliseconds msec = 
-    chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+  std::chrono::milliseconds msec =
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      ms % std::chrono::seconds(1));
 
-  ostringstream os;
+  std::chrono::nanoseconds nsec1 =
+    std::chrono::duration_cast<std::chrono::nanoseconds>(
+      ms % std::chrono::seconds(1));
 
-  os << hh << "::" << mm << "::" << ss << "::" << msec;
+  uint32_t nsec2 = ((ms % std::chrono::seconds(1)).count() * 1000000L);
 
-  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]");
+  std::ostringstream os{};
+
+  os << hh << "::" << mm << "::" << ss << "::" << msec << "::" << nsec1;
+
+  EXPECT_THAT(os.str(),
+              "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of "
+              "1/1000]::[42000000 of 1/1000000000]");
 
   os.str("");
 
   // see that same count() function used as operator<<() above
-  
-  os << hh.count() << "::" << mm.count() << "::" 
-    << ss.count() << "::" << msec.count();
 
-  EXPECT_THAT(os.str(), "2::0::55::42");
+  os << hh.count() << "::" << mm.count() << "::" << ss.count()
+     << "::" << msec.count() << "::" << nsec1.count();
+
+  EXPECT_THAT(os.str(), "2::0::55::42::42000000");
+  EXPECT_THAT(nsec1.count(), nsec2);
 }
 
 
