@@ -4,8 +4,8 @@
 // #include <systemd/sd-event.h>
 // #include "eventloop_p.h"
 
-#include <memory>
 #include <functional>
+#include <memory>
 
 typedef struct sd_event sd_event;
 
@@ -38,27 +38,27 @@ public:
   // return true if they are the same
   bool onEventLoopThread() const;
 
-  // debug 
+  // debug
   size_t size() const;
 
 public:
-
   // post F and it trigger event loop thread to process
   template <typename F>
-    inline bool invokeMethod(F &&f) const
-    {
-      // NOTE: unnecessary?
-      // return invokeMethodImpl(std::forward<F>(f));
-      return invokeMethodImpl(f);
-    }
+  inline bool invokeMethod(F &&f) const
+  {
+    // NOTE: unnecessary?
+    // return invokeMethodImpl(std::forward<F>(f));
+    return invokeMethodImpl(f);
+  }
 
   template <typename F, typename... Args>
-    inline bool invokeMethod(F &&f, Args&&... args) const
-    {
-      // NOTE: unnecessary?
-      // return invokeMethodImpl(std::bind(f, std::forward<Args>(args)...));
-      return invokeMethodImpl(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-    }
+  inline bool invokeMethod(F &&f, Args &&... args) const
+  {
+    // NOTE: unnecessary?
+    // return invokeMethodImpl(std::bind(f, std::forward<Args>(args)...));
+    return invokeMethodImpl(
+      std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+  }
 };
 
 #endif // EVENTLOOP_H

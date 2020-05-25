@@ -72,7 +72,7 @@ TEST(EventLoop, check_no_work)
 // EventLoopPrivate::m_loopRuunig is null and runs path when "this !=
 // m_loopRunning". that use sem and wait for that and blocked there.
 
-TEST(DISABLED_EventLoop, check_flush_and_no_work)
+TEST(EventLoop, DISABLED_check_flush_and_no_work)
 {
   int value{};
 
@@ -257,6 +257,8 @@ TEST(EventLoop, check_flush_with_flush_and_copy)
   }
 }
 
+// What's going to happen when f() uses reference to local.
+//
 // as you can see, for dangling case, it's changes randomly
 //
 // [ RUN      ] EventLoop.check_flush_and_dangling
@@ -304,7 +306,8 @@ TEST(EventLoop, check_flush_with_flush_and_copy)
 // w1: 32605
 // [       OK ] EventLoop.check_flush_and_dangling (1 ms)
 //
-// so how about using structure than int?
+// so how about using structure than int?  so see when use
+// void cause_dangling_reference_2(EventLoop &loop);
 
 TEST(EventLoop, check_flush_and_dangling_1)
 {
@@ -348,8 +351,6 @@ TEST(EventLoop, check_flush_and_dangling_1)
     // blocks here
     loop.run();
 
-    // since do not use std::ref and w1 changes v which is local to
-    // clousure(callable) so no effect on real value
     EXPECT_THAT(value, 0);
   }
 
@@ -382,7 +383,7 @@ TEST(EventLoop, check_flush_and_dangling_1)
   // #21 0x000055d9e083e7c0 in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
   // #22 0x000055d9e0837e71 in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
   // #23 0x000055d9e0813dba in testing::Test::Run() ()
--
+
   {
     int value{};
 
@@ -401,8 +402,6 @@ TEST(EventLoop, check_flush_and_dangling_1)
     // blocks here
     loop.run();
 
-    // since do not use std::ref and w1 changes v which is local to
-    // clousure(callable) so no effect on real value
     EXPECT_THAT(value, 0);
   }
 }
@@ -667,6 +666,9 @@ TEST(EventLoop, check_invoke_do_copy)
       // header.push_back(std::string("header1"));
       header.push_back("header1");
       body = "body1";
+
+      // Unlike void cause_dangling_reference_2(EventLoop &loop); case where
+      // uses reference to local, bind() uses copies so not a problem here.
 
       loop.invokeMethod(marshallAndSendReply, header, body);
       
@@ -933,7 +935,8 @@ TEST(DBusMessage, message_call)
   DBusConnection conn = DBusConnection::sessionBus(loop);
   EXPECT_THAT(conn.isConnected(), true);
 
-  // without `target` to call member function since it's static
+  // without `target` to call member function since it's static and it is to
+  // call on different thread
   auto f1 = std::async(std::launch::async, [&]() {
     std::string name;
 

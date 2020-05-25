@@ -3,8 +3,8 @@
 #include "rlog.h"
 
 // debug
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include <cmath> // std::nan
 #include <systemd/sd-bus.h>
@@ -343,10 +343,10 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
 //         SD_BUS_TYPE_UNIX_FD          = 'h',
 //         SD_BUS_TYPE_ARRAY            = 'a',
 //         SD_BUS_TYPE_VARIANT          = 'v',
-//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in signatures */ 
+//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in signatures */
 //         SD_BUS_TYPE_STRUCT_BEGIN     = '(',
 //         SD_BUS_TYPE_STRUCT_END       = ')',
-//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in signatures */ 
+//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in signatures */
 //         SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
 //         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
 // };
@@ -433,7 +433,7 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
       case SD_BUS_TYPE_ARRAY:
       case SD_BUS_TYPE_STRUCT:
 
-      // original code
+        // original code
 #if 0
        {
          std::string types;
@@ -466,7 +466,7 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
         // returns true if we're at the end of the current container.
         // _public_ int sd_bus_message_at_end(sd_bus_message *m, int complete);
         //
-        //  bool atEnd() 
+        //  bool atEnd()
         //  { return (sd_bus_message_at_end(mMessage, false) != 0); }
         //
         // so sd_bus_message_at_end() returns 1(true?) when reaches the end
@@ -656,7 +656,7 @@ DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
 {}
 
 DBusMessage::DBusMessage(ErrorType error, const char *message)
-  : m_private(std::make_unique<DBusMessagePrivate>(error, message))
+    : m_private(std::make_unique<DBusMessagePrivate>(error, message))
 {}
 
 // true if the message is valid
@@ -748,12 +748,13 @@ template DBusMessage &DBusMessage::operator>><bool>(bool &);
 // In function `DBusMessage_message_create_Test::TestBody()::{lambda()#1}::operator()() const':
 // undefined reference to `DBusMessage& DBusMessage::operator>><std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)'
 // collect2: error: ld returned 1 exit status
-template DBusMessage &DBusMessage::operator>> <std::string>(std::string&);
+template DBusMessage &DBusMessage::operator>><std::string>(std::string &);
 
-template DBusMessage &DBusMessage::operator>> <int>(int&);
-template DBusMessage &DBusMessage::operator>> <unsigned>(unsigned&);
-template DBusMessage &DBusMessage::operator>> <double>(double&);
-template DBusMessage &DBusMessage::operator>> <DBusFileDescriptor>(DBusFileDescriptor&);
+template DBusMessage &DBusMessage::operator>><int>(int &);
+template DBusMessage &DBusMessage::operator>><unsigned>(unsigned &);
+template DBusMessage &DBusMessage::operator>><double>(double &);
+template DBusMessage &DBusMessage::operator>>
+  <DBusFileDescriptor>(DBusFileDescriptor &);
 
 template <typename T>
 DBusMessage &DBusMessage::operator<<(const T &arg)
@@ -776,11 +777,11 @@ DBusMessage &DBusMessage::operator<<(const T &arg)
   return *this;
 }
 
-template DBusMessage &DBusMessage::operator<< <bool>(const bool &);
-template DBusMessage &DBusMessage::operator<< <int>(const int&);
-template DBusMessage &DBusMessage::operator<< <unsigned>(const unsigned&);
-template DBusMessage &DBusMessage::operator<< <double>(const double&);
-template DBusMessage &DBusMessage::operator<< <std::string>(const std::string&);
+template DBusMessage &DBusMessage::operator<<<bool>(const bool &);
+template DBusMessage &DBusMessage::operator<<<int>(const int &);
+template DBusMessage &DBusMessage::operator<<<unsigned>(const unsigned &);
+template DBusMessage &DBusMessage::operator<<<double>(const double &);
+template DBusMessage &DBusMessage::operator<<<std::string>(const std::string &);
 template DBusMessage &
   DBusMessage::operator<<<DBusFileDescriptor>(const DBusFileDescriptor &);
 

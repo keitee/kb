@@ -154,7 +154,6 @@ private:
   std::list<Argument> m_args;
 
 public:
-
   // used by DBusMessage
   explicit DBusMessagePrivate(DBusMessage::MessageType type,
                               const std::string &service,

@@ -3423,7 +3423,7 @@ namespace cxx_time
   }
 } // namespace cxx_time
 
-TEST(CxxTime, check_duration_cast)
+TEST(CxxTime, check_duration_cast_1)
 {
   using namespace cxx_time;
 
@@ -3468,6 +3468,35 @@ TEST(CxxTime, check_duration_cast)
   EXPECT_THAT(os.str(), "2::0::55::42::42000000");
   EXPECT_THAT(nsec1.count(), nsec2);
 }
+
+// As we have seen, implicit conversions to a more precise unit type are always
+// possible. However, conversions to a coarser unit type are not, because you
+// might lose information.
+//
+// For example, when converting an integral value of 42,010 milliseconds into
+// seconds, the resulting integral value, 42, means that the precision of having
+// a duration of 10 milliseconds over 42 seconds gets lost. But you can still
+// explicitly force such a conversion with a duration_cast. For example:
+//
+// std::chrono::seconds sec(55);
+// std::chrono::minutes m1 = sec; // ERROR
+// std::chrono::minutes m2 =
+//    std::chrono::duration_cast<std::chrono::minutes>(sec); // OK
+#if 0
+TEST(CxxTime, check_duration_cast_2)
+{
+  using namespace cxx_time;
+
+  std::chrono::milliseconds ms{7255042};
+
+  // convert ms to hours
+  std::chrono::hours hh{};
+
+  hh = ms;
+
+  EXPECT_THAT(hh.count(), 2);
+}
+#endif
 
 // cxx-time-crono-clock
 
@@ -12360,35 +12389,94 @@ TEST(CxxCpp, cpp_case1)
   SR1("cpp case example" VAR2(what, value1));
 }
 
-// ={=========================================================================
-// cxx-assert
+/*
+={=========================================================================
+cxx-assert
 
-// cxx_ex.cpp: In instantiation of ‘class Vector<short int, 2>’:
-// cxx_ex.cpp:39:19:   required from here
-// cxx_ex.cpp:31:2: error: static assertion failed: Vector size is too small!
-//   static_assert(Size > 3, "Vector size is too small!");
-//   ^
-//
-// CPP code to demonstrate
-// static assertion using static_assert
+The usage of static_assert is quite easy. static_assert requires an expression
+and a string. 
 
-#include <iostream>
-using namespace std;
+static_assert(expression, string);
 
-template <class T, int Size>
-class Vector
-{
-  // Compile time assertion to check if
-  // the size of the vector is greater than
-  // 3 or not. If any vector is declared whose
-  // size is less than 4, the assertion will fail
-  static_assert(Size > 3, "Vector size is too small!");
+The expression has to be a predicate that can be evaluated at compile time.
+Predicate means the expression returns true or false. If the expression
+evaluates to false you will get at compile time an error message with the string
+as message. Of course you get no executable.
 
-  T m_values[Size];
+
+You can use static_assert expressions in all parts of your program. Therefore,
+It's a good idea to put general requirements on your source code in a separate
+header. The result is, the static_assert expression will be automatically
+verified at compile time if you include the header. 
+
+note that can use it in global scope.
+
+// static_assert.cpp
+
+#include <string>
+
+static_assert(sizeof(void*) == 4 ,"32-bit adressing is required!");
+static_assert(sizeof(void*) >= 8 ,"64-bit adressing is required!");
+
+template < typename T, int Line, int Column >
+struct Matrix{
+   static_assert(Line >= 0, "Line number must be positive.");
+   static_assert(Column >= 0, "Column number must be positive.");
+   static_assert( Line + Column > 0, "Line and Column must be greater than 0.");
 };
 
-TEST(Assert, StaticAssert)
+int main() {
+  
+  static_assert(sizeof(int) == sizeof(long int),"int and long int must be of the same length.");
+  
+  Matrix<int,10,5> intArray;
+  Matrix<std::string,3,4> strArray;
+  Matrix<double,0,1> doubleArray;
+  Matrix<long long,1,0> longArray;
+  
+  Matrix<char,0,0> charArray;
+
+}
+
+The program uses static_assert in the global scope (line 5 and 6); it uses it in
+the class scope (line 10 - line 12); it uses it in the local scope (line 17).
+One of the two assertions in line 5 and 6 must inevitably fall. The assertions
+in the class definition guarantees on one hand that the numbers of columns and
+lines must be greater than 0 and it guarantees on the other hand that the sum
+has to be positive.That's the reason why the template instantiation in line 14
+is not valid. On my computer int is smaller than long int. The reverse relation
+is guaranteed by the C++ standard.
+
+
+cxx_ex.cpp: In instantiation of ‘class Vector<short int, 2>’:
+cxx_ex.cpp:39:19:   required from here
+cxx_ex.cpp:31:2: error: static assertion failed: Vector size is too small!
+  static_assert(Size > 3, "Vector size is too small!");
+  ^
+*/
+
+namespace cxx_assert
 {
+  template <class T, int Size>
+    class Vector
+    {
+      // Compile time assertion to check if the size of the vector is greater
+      // than 3 or not. If any vector is declared whose size is less than 4, the
+      // assertion will fail
+
+      // NOTE: no "std::". otherwise, compile error.
+      // std::static_assert(Size > 3, "Vector size is too small!");
+
+      static_assert(Size > 3, "Vector size is too small!");
+
+      T m_values[Size];
+    };
+}
+
+TEST(CxxAssert, check_static_assert)
+{
+  using namespace cxx_assert;
+
   Vector<int, 4> four; // This will work
   (void)four;
 
@@ -13040,6 +13128,9 @@ DESCRIPTION
        number generator.  The file /dev/random has major device number 1 and
        minor device number 8.  The file /dev/urandom has major device number 1
        and minor device number 9.
+
+https://unix.stackexchange.com/questions/324209/when-to-use-dev-random-vs-dev-urandom
+https://www.2uo.de/myths-about-urandom/
 
 #endif
 

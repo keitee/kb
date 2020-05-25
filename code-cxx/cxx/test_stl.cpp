@@ -870,9 +870,13 @@ TEST(CxxVector, check_ctor)
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
-  // see that vector gets created with the value, size() and this is dynamic.
+  // see that cxx-array can be created with the value, size() and this is
+  // dynamic.
+
   {
-    vector<int> coll(20, 1);
+    std::vector<int> coll(20, 1);
+
+    EXPECT_THAT(coll.size(), 20);
 
     // okay as well
     // int value;
@@ -882,11 +886,11 @@ TEST(CxxVector, check_ctor)
     vector<bool> table1(coll.size());
     vector<bool> table2(10);
 
-    int iarray[coll.size()];
+    int arr[coll.size()];
 
     EXPECT_THAT(table1.size(), 20);
     EXPECT_THAT(table2.size(), 10);
-    EXPECT_THAT(sizeof(iarray) / sizeof(iarray[0]), 20);
+    EXPECT_THAT(sizeof(arr) / sizeof(arr[0]), 20);
   }
 }
 
@@ -1478,6 +1482,39 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
   }
 
   cout << "name: " << ovec[8].getName() << endl;
+}
+
+TEST(CxxVector, check_vector_bool)
+{
+  std::vector<bool> coll{};
+  std::ostringstream oss{};
+
+  coll.push_back(true);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(false);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+  coll.push_back(true);
+  coll.push_back(false);
+
+  for (size_t i = 0; i < coll.size(); i++)
+  {
+    oss << coll[i];
+  }
+
+  EXPECT_THAT(oss.str(), "11000101010101010");
+
+  // std::cout << oss.str() << std::endl;
 }
 
 // ={=========================================================================

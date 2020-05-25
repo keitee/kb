@@ -30,8 +30,8 @@ public:
   ~DBusConnectionPrivate();
 
   bool callWithCallback(DBusMessage &&message,
-                                             const std::function<void(DBusMessage&&)> &callback,
-                                             int msTimeout);
+                        const std::function<void(DBusMessage &&)> &callback,
+                        int msTimeout);
 
   // send a message,signal or call, to dbus and uses corresponding sd_bus_send*
   // call depending on message type.

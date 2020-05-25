@@ -10,7 +10,7 @@
 #include <semaphore.h>
 
 // 25 secs
-#define DBUS_DEFAULT_TIMEOUT_USEC    (25 * 1000 * 1000)
+#define DBUS_DEFAULT_TIMEOUT_USEC (25 * 1000 * 1000)
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -35,7 +35,7 @@ DBusConnectionPrivate::~DBusConnectionPrivate()
 
 bool DBusConnectionPrivate::send(DBusMessage &&message) const
 {
-  // take the message data. 
+  // take the message data.
   // NOTE: access private member since both are in friendship
   // TODO: need reset()?
 
@@ -112,9 +112,10 @@ int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
                                                void *userData,
                                                sd_bus_error *retError)
 {
-  DBusConnectionPrivate *self = reinterpret_cast<DBusConnectionPrivate *>(userData);
+  DBusConnectionPrivate *self =
+    reinterpret_cast<DBusConnectionPrivate *>(userData);
 
-  // shall be true since it's called back from event loop
+  // shall be true since it's called back from eventloop thread
   assert(self->m_eventloop.onEventLoopThread());
 
   // reply cookie
@@ -160,9 +161,10 @@ int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
 // If all goes well, handler will get called later with the reply by event loop
 // and get the saved callbacks and call it with the reply.
 
-bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
-                                             const std::function<void(DBusMessage&&)> &callback,
-                                             int msTimeout)
+bool DBusConnectionPrivate::callWithCallback(
+  DBusMessage &&message,
+  const std::function<void(DBusMessage &&)> &callback,
+  int msTimeout)
 {
   // convert ms timeout(10^3) to sd-bus timeout in micro sec(us) time(10^6)
   uint64_t timeout;
@@ -173,6 +175,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
 
   std::function<void(DBusMessage &&)> errorCallback;
 
+  // TODO: necessary? is there any case when it's called on eventloop thread?
   if (!m_eventloop.onEventLoopThread())
     errorCallback = callback;
 
@@ -183,7 +186,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
   message.m_private.reset();
 
   auto call = [this, messageData, callback, errorCallback, timeout]() {
-    // must be false since it's called on the other thread
+    // must be true since it's called on the other thread
     assert(m_eventloop.onEventLoopThread());
 
     logWarning("callWithCallback::call() called on the event loop thread");
@@ -223,7 +226,7 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
     }
 
     uint64_t cookie = 0;
-    r = sd_bus_message_get_cookie(msg.get(), &cookie);
+    r               = sd_bus_message_get_cookie(msg.get(), &cookie);
     if (r < 0)
     {
       logSysWarning(-r, "failed to get request message cookie");
@@ -257,7 +260,8 @@ bool DBusConnectionPrivate::callWithCallback(DBusMessage &&message,
   DBusConnection
 */
 
-DBusConnection::DBusConnection() {}
+// not used and removed
+// DBusConnection::DBusConnection() {}
 
 DBusConnection::DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&priv)
     : m_private(std::move(priv))
@@ -354,6 +358,12 @@ sd_bus *DBusConnection::handle() const
 // assess `private` of DBusConnecitonPrivae
 EventLoop DBusConnection::eventLoop() const
 {
+  // this is unnecessary since systemBus/sessionBus are only ways to get dbus
+  // and called with eventloop. always.
+  //
+  // if (!m_private)
+  //   return EventLoop();
+
   if (!m_private)
     return EventLoop();
   else
@@ -400,9 +410,15 @@ bool DBusConnection::registerName(const std::string &name)
 // it will block the event loop until complete
 //
 // otherwise it will post a message to the event loop and send the dbus
-// message within that. when reply is ready, registered handler,
-// methodCallCallback_ gets called and find callback from reply cookie which
-// release sem and relay replay.
+// message within that. 
+//
+// o create f1 which do sem_post and send it to Private::callWithCallback
+// o Private::callWithCallback create f2 which send a message over dbus and
+//   add pair<cookie, f1>
+// o wait on sem in f1
+// o eventloop thread runs f2 and when reply is ready, registered handler,
+//   methodCallCallback_ gets called and find f1 from reply cookie which release
+//   sem and relay replay.
 //
 // use input message to make a call and return newly created message from reply
 // to the call.
@@ -421,6 +437,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     return DBusMessage(DBusMessage::ErrorType::Failed);
   }
 
+  // NOTE: why use get()?
   // can access private member, m_bus, since they are in friendship.
   auto *priv = m_private.get();
   if (!priv || !priv->m_bus)
@@ -491,7 +508,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
   sem_init(&sem, 0, 0);
 
   std::function<void(DBusMessage)> f = [&](DBusMessage &&reply) {
-    // must be false since expects it runs on other thread
+    // must be true since expects it runs on other thread
     assert(priv->m_eventloop.onEventLoopThread());
 
     replyMessage = std::move(reply);

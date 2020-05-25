@@ -1,5 +1,5 @@
-#include "eventloop_p.h"
 #include "eventloop.h"
+#include "eventloop_p.h"
 // #include <systemd/sd-event.h>
 // use lpi log
 #include "rlog.h"
@@ -198,7 +198,6 @@ void EventLoopPrivate::flush()
   sem_init(&sem, 0, 0);
 
   auto flushLambda = [&]() {
-
     logWarning("sem_post");
 
     if (sem_post(&sem) != 0)
@@ -268,7 +267,7 @@ size_t EventLoop::size() const
 
 bool EventLoop::invokeMethodImpl(std::function<void()> &&f) const
 {
-  // : error: cannot bind ‘std::function<void()>’ lvalue 
+  // : error: cannot bind ‘std::function<void()>’ lvalue
   // to ‘std::function<void()>&&’
   // return m_private->invokeMethod(f);
   return m_private->invokeMethod(std::move(f));

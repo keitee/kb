@@ -1,42 +1,40 @@
 #ifndef EVENTLOOP_P_H
 #define EVENTLOOP_P_H
 
-#include <systemd/sd-event.h>
 #include <functional>
 #include <mutex>
 #include <queue>
+#include <systemd/sd-event.h>
 
 class EventLoopPrivate
 {
-  private:
-    friend class EventLoop;
+private:
+  friend class EventLoop;
 
-  private:
-    sd_event *m_eventloop;
-    int m_eventfd;
+private:
+  sd_event *m_eventloop;
+  int m_eventfd;
 
-    mutable std::recursive_mutex m_rm;
-    std::queue<std::function<void()>> m_q;
+  mutable std::recursive_mutex m_rm;
+  std::queue<std::function<void()>> m_q;
 
-    static thread_local EventLoopPrivate *m_loopRunning;
+  static thread_local EventLoopPrivate *m_loopRunning;
 
-    // NOTE: static
-    static int eventHandler_(sd_event_source *source,
-                      int fd,
-                      uint32_t revents,
-                      void *data);
+  // NOTE: static
+  static int
+  eventHandler_(sd_event_source *source, int fd, uint32_t revents, void *data);
 
-  public:
-    explicit EventLoopPrivate();
-    ~EventLoopPrivate();
+public:
+  explicit EventLoopPrivate();
+  ~EventLoopPrivate();
 
-    int run();
-    void quit(int exitCode);
-    bool invokeMethod(std::function<void()> &&f);
-    void flush();
+  int run();
+  void quit(int exitCode);
+  bool invokeMethod(std::function<void()> &&f);
+  void flush();
 
-    // debug 
-    size_t size() const;
+  // debug
+  size_t size() const;
 };
 
 #endif // EVENTLOOP_P_H

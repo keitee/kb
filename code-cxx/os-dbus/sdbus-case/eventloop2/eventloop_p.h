@@ -28,7 +28,7 @@ private:
   // see flush()
   // 1. EventLoopPrivate *m_loopRunning;
   // 2. static EventLoopPrivate *m_loopRunning;
-  // 3.
+
   static thread_local EventLoopPrivate *m_loopRunning;
 
   // NOTE: static do not honor access control

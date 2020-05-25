@@ -8734,11 +8734,10 @@ sudo docker run -v $HOME/:/home/gabrielstrimtu -it -e LOCAL_USER_ID=$(id -u) -e 
 sudo docker run -v $HOME/:/media/keitee/ssd2/docker_as -it -e LOCAL_USER_ID=$(id -u) -e LOCAL_USER=$USER  ubuntu14.04-as-local-user:latest
 
 
-sudo docker run -v /media/keitee/ssd2/docker_as:/home/developer -it -e LOCAL_USER_ID=$(id -u) -e LOCAL_USER=$USER  ubuntu14.04-as-local-user:latest
 sudo docker run -v /media/keitee/ssd2/docker_as:/home/developer -it -e LOCAL_USER_ID=developer -e LOCAL_USER=developer ubuntu14.04-as-local-user:latest
 
 
-/media/keitee/ssd2
+cd /media/keitee/ssd2
 
 sudo docker load < kamals_ubuntu14_docker.tgz
 [sudo] password for keitee:
@@ -8752,13 +8751,16 @@ tony-working0image   latest              a471ec01d5e3        4 weeks ago        
 export TIMESTART=`date +%s`
 export DNAME=ubuntu14-morty-$TIMESTART
 
+$ echo $DNAME
+ubuntu14-morty-1590079554
+
 # rename this to suit you
 export SHARENAME=docker_share
 export SHAREBASE=`pwd`
 
 // `docker_share` will be accessed from `/home/developer` in docker
 sudo docker run --name=$DNAME -d -v $SHAREBASE/$SHARENAME:/home/developer -it tony-working0image /bin/bash
-docker attach $DNAME
+sudo docker attach $DNAME
 
 # Now In Container
 export DEBIAN_FRONTEND=noninteractive
@@ -8861,14 +8863,15 @@ ssh -p 29418 gerrit.teamccp.com
 
 // install repo
 // repo version v1.12.16-163-ga103ccc
-//
+
 mkdir -p ~/bin/
 curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
 chmod a+x ~/bin/repo
 export PATH="~/bin:$PATH"
+export PATH="/home/developer/bin:$PATH"
 
-// repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/arris-bcm-manifest -m arrisxi6-morty.xml -b topic/fr_qtb_upgrade -g all --no-repo-verify --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo
-// xione_mvp branch
+
+*rdk-xi6*
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/arris-bcm-manifest -m arrisxi6-morty.xml -b topic/xione_mvp -g all --no-repo-verify --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo
 repo sync --verify --no-tags -c --no-clone-bundle
 
@@ -11058,15 +11061,39 @@ project:rdk/yocto_oe/layers/meta-rdk-sky branch:topic/fr_qtb_upgrade
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-xione
+*kt_dev_skymw_0000* skymw-rdk-xi1
 
-repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/realtek-manifest -b topic/realtek_xi_ref -m realtekxi1.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest -b topic/xione_mvp -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
 repo sync --no-tags
-repo start topic/realtek_xi_ref --all
 
-source meta-rdk/setup-environment
-select option -1, meta-rdk-soc-realtek/conf/machine/realtekxi1.conf
+ENV_PRODUCT=skyxione-uk source meta-rdk/setup-environment
+
+// select option -1, meta-rdk-soc-realtek/conf/machine/realtekxi1.conf
+
+// add the below variable in auto.conf to chose UK variant.
+
+ENV_PRODUCT = "skyxione-uk"
+
+bitbake -c fetchall comcast-mediaclient-vbn-image
+
 bitbake comcast-mediaclient-vbn-image
+
+
+*rdk-xi1-setup*
+
+dropbearkey -t rsa -f /opt/sky-ssh-hostkey
+
+dropbear -p :10022 -r /opt/sky-ssh-hostkey -B
+
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -F
+
+ssh -p 10022 root@192.168.1.108
+
+// to move where it's writable
+cd /opt
 
 
 ={============================================================================
@@ -11379,6 +11406,13 @@ int main(int argc, char *argv[])
   // NOTE: ProxyUrlMap
   // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
   
+  // create the service manager
+  std::shared_ptr<IServicesController> servicesController =
+    IServicesController::create(urlMap, security);
+
+  // start the service manager
+  servicesController->start();
+
   // start AS (webserver)
   AS_MAIN::StartAS(urlMap);
 }
@@ -11387,21 +11421,188 @@ int main(int argc, char *argv[])
 
 void AS_MAIN::StartAS(const std::shared_ptr<ProxyUrlMap> &urlMap)
 {
-  // create the service manager
-  std::shared_ptr<IServicesController> servicesController =
-    IServicesController::create(urlMap, security);
-
   // start AS
   asMain = new AS_MAIN::ProxyMain(urlMap);
   asMain->start();
 }
 
 
+*rdk-as-proxy-service-manager*
+
 M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
 M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
 M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/startlistening'
 M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/stoplistening'
 M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.player'
+
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
+
+class IServicesController
+{
+  public:
+    static std::shared_ptr<IServicesController>
+      create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
+          const std::shared_ptr<ISecurityContext> &securityCtx);
+
+    virtual ~IServicesController() = default;
+
+  public:
+    virtual bool start() = 0;
+    virtual void stop() = 0;
+};
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.h
+
+class RdkServicesController : public IServicesController
+
+
+// IXX interface class has static create and the derived class has its
+// implementation. kind of factory?
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.cpp
+
+std::shared_ptr<IServicesController> 
+IServicesController::create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
+  const std::shared_ptr<ISecurityContext> &securityCtx)
+{
+  return std::make_shared<RdkServicesController>(urlMap, securityCtx);
+}
+
+NOTE: ServiceManager that registers url
+
+RdkServicesController::RdkServicesController()
+    , mOurServiceName("com.sky.as.proxy")
+{
+  // create the manager which actually sets up the executors for each
+  // individual service
+  mManager = std::make_shared<ServicesManager>(urlMap, security);
+
+  // start the thread
+  mThread = std::thread(&RdkServicesController::threadLoop, this);
+}
+
+
+// For this class it opens a dbus connection on the system bus and then
+// installs a listener for new service registration before getting a list
+// of the current services.
+
+`bool RdkServicesController::start()`
+{
+  // get a list of all the services currently registered on the bus
+  const std::list<std::string> services =
+    mSDBus->registeredServiceNames(serviceNameFilter);
+
+  // post added events for all the services
+  for (const std::string &service : services)
+  {
+    // ignore ourselves
+    if (service != mOurServiceName)
+    {
+      `event.type = Event::ServiceAdded;`
+      event.serviceName = service;
+      mEventQueue.emplace_back(std::move(event));
+    }
+  }
+}
+
+
+void RdkServicesController::threadLoop()
+{
+  case Event::ServiceAdded:
+    onServiceRegistered(event.serviceName);
+}
+
+
+// Called when we've detected that a dbus service has been registered and it's
+// name starts with 'com.sky.as'.  Here we send a request to get the JSON
+// config of the service and if a valid reply is received we create an object
+// to wrap the dbus service and register it in the url map.
+
+void RdkServicesController::onServiceRegistered(const std::string &name)
+{
+  // create a wrapper for the service and try and get it's JSON config
+  std::shared_ptr<ASServiceSDBus> service =
+    std::make_shared<ASServiceSDBus>(mSDBus, name);
+
+  *as-dbus-config*
+  const std::string config = service->config();
+
+  `AS_LOG_INFO("registering service");`
+
+  // register the service (the manager will handle setting up processing the
+  // service and setting up all the executors)
+  mManager->registerService( config, service, domainName, registeredDbusMethods );
+}
+
+
+ASConfigMethodCall::ASConfigMethodCall(const std::string &serviceName,
+                                       const std::string &objectPath)
+    : SDBusMethodCall(serviceName, objectPath, ASSERVICE1_INTERFACE, "Config")
+{
+}
+
+// Blocking call to get the config JSON string of the service.  Returns the
+// JSON string on success, and an empty string on failure.
+//
+// This creates the request messages, gives it to the dbus connection to send
+// and waits on the reply.
+
+std::string ASServiceSDBus::config() const
+{
+  // create the dbus method call message
+  std::shared_ptr<ASConfigMethodCall> msg =
+    std::make_shared<ASConfigMethodCall>(mServiceName, mObjectPath);
+
+  // if failed to send just reply with a generic error
+  if (!mSDBus->call(msg))
+  {
+    AS_LOG_WARNING("failed to send dbus Config method call");
+    return std::string();
+  }
+
+  // get the converted response from the dbus message
+  return msg->config();
+}
+
+
+*as-dbus-request*
+
+ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASRequestMethodCall.cpp
+
+// Blocking call to send a HTTP request to a remote service and return the
+// result.  If there was an error sending the message or with the reply then
+// an ASResponse object will be returned containing an approprate error
+// message.
+
+ASResponse ASServiceSDBus::request(int flags,
+                                   std::string &&url,
+                                   std::vector< std::pair<std::string, std::string> > &&requestHeaders,
+                                   std::vector< std::pair<std::string, std::string> > &&requestQueryParams,
+                                   std::string &&requestBody)
+{
+  // create the dbus method call message
+  std::shared_ptr<ASRequestMethodCall> msg =
+    std::make_shared<ASRequestMethodCall>(mServiceName, mObjectPath,
+        flags, std::move(url),
+        std::move(requestHeaders),
+        std::move(requestQueryParams),
+        std::move(requestBody));
+
+  // if failed to send just reply with a generic error
+  if (!mSDBus->call(msg))
+  {
+    AS_LOG_WARNING("failed to send dbus Request method call");
+
+    return ASResponse(500,
+        "{ \"errorCode\": 101,\n"
+        "  \"userMessage\": \"Generic failure\",\n"
+        "  \"developerMessage\": \"Failed to send IPC message\"\n}");
+  }
+
+  // get the converted response from the dbus message
+  return msg->response();
+}
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/`ServicesManager.cpp`
@@ -11729,6 +11930,7 @@ int ServiceHttpExecutor::Exec()
     return execGetOrPost(IService::REQUEST_TYPE_POST);
 }
 
+*as-dbus-request*
 int ServiceHttpExecutor::execGetOrPost(int requestType)
 {
   // send the request off to the remote process
@@ -11736,172 +11938,6 @@ int ServiceHttpExecutor::execGetOrPost(int requestType)
     mService->request(requestType, std::move(urlPath),
         std::move(headerParams), std::move(queryParams),
         std::move(body));
-}
-
-
-*rdk-as-executor*
-
-class ASRequesthandler
-{
-  public :
-    ASRequesthandler()
-    {}
-
-    void executeFactory(const ASRequest &request)
-    {
-      //request is made to copy by value to ensure instance is not being deleted
-      std::thread threadObj = std::thread([this,request] { `this->execute(request);` });
-      threadObj.detach();
-    }
-
-    virtual void execute(const ASRequest & request) = 0;
-};
-
-class ServicesFavouritesExecutor : public ASRequesthandler
-{
-  // overrides
-  execute( const ASRequest &request )
-  {
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    ASRequest::Method method = request.method();
-
-    if ( method == ASRequest::HttpPost )
-    {
-      handlePostRequest( request );
-    }
-    else if ( method == ASRequest::HttpGet )
-    {
-      handleGetRequest( request );
-    }
-    else
-    {
-      request.sendErrorReply( ASRequest::NotSupportedError );
-    }
-
-    AS_LOG_EXIT( "%s", __func__ );
-  }
-}
-
-
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
-
-class IServicesController
-{
-  public:
-    static std::shared_ptr<IServicesController>
-      create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
-          const std::shared_ptr<ISecurityContext> &securityCtx);
-
-    virtual ~IServicesController() = default;
-
-  public:
-    virtual bool start() = 0;
-    virtual void stop() = 0;
-};
-
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.h
-
-class RdkServicesController : public IServicesController
-
-// IXX interface class has static create and the derived class has its
-// implementation. kind of factory?
-
-// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/RdkServicesController.cpp
-
-std::shared_ptr<IServicesController> IServicesController::create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
-                                                                 const std::shared_ptr<ISecurityContext> &securityCtx)
-{
-  return std::make_shared<RdkServicesController>(urlMap, securityCtx);
-}
-
-NOTE: ServiceManager that registers url
-
-RdkServicesController::RdkServicesController()
-    , mOurServiceName("com.sky.as.proxy")
-{
-  // create the manager which actually sets up the executors for each
-  // individual service
-  mManager = std::make_shared<ServicesManager>(urlMap, security);
-}
-
-void RdkServicesController::onServiceRegistered(const std::string &name)
-{
-  // register the service (the manager will handle setting up processing the
-  // service and setting up all the executors)
-  mManager->registerService( config, service, domainName, registeredDbusMethods );
-}
-
-void RdkServicesController::threadLoop()
-{
-  case Event::ServiceAdded:
-    onServiceRegistered(event.serviceName);
-    break;
-}
-
-
-void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
-{
-  mEventQueue.emplace_back(std::move(event));
-}
-
-
-// as-proxy-service
-
-SD_BUS_METHOD("DBusProxyMethodCall",       "s",         "us",         &ASProxyService::proxyMethodCall,                SD_BUS_VTABLE_UNPRIVILEGED),
-
-ASProxyService::ASProxyService(const std::shared_ptr<SDBusConnection> &connection)
-{}
-
-
-// Called by the sd-bus library when a 'com.sky.as.Service1.DBusProxyMethodCall'
-// method call arrives.
-
-int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus_error *retError )
-{
-  sd_bus_message_read( msg, "s", &msgArgs );
-  std::string dbusMessage( msgArgs );
-  self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
-}
-
-void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
-{
-  std::shared_ptr<ASProxyMethodCall> proxyMsg = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
-
-  std::string domain;
-  std::string method;
-
-  proxyMsg->GetDomainAndMethod( domain, method );
-}
-
-ASProxyMethodCall::ASProxyMethodCall( const std::string dBusMessage, sd_bus_message *reply )
-        : SDBusMethodCall( "/com/sky/as/service", ASSERVICE1_INTERFACE )
-{
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    mReplyCode = 500;
-    mReply = reply;
-    mSentReply = false;
-
-    SetDomainAndMethod( dBusMessage );
-
-    AS_LOG_EXIT( "%s", __func__ );
-}
-
-void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
-{
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    if ( dBusMessage.empty() == false )
-    {
-        mDbusMessage = dBusMessage;
-
-        AS_LOG_INFO( "mDbusMessage: %s", mDbusMessage.c_str() );
-
-        Json::Reader reader;
-        Json::Value root;
-        if ( reader.parse( mDbusMessage, root ) )
-    }
 }
 
 
@@ -11933,6 +11969,38 @@ map<string, string>
 const char*
 
 return:
+
+
+*as-dbus-request*
+// service/asservice.cpp
+// Called by the sd-bus library when a 'com.sky.as.Service1.Request' method
+// call arrives.
+
+int ASServicePrivate::request(sd_bus_message *msg, void *userData,
+                              sd_bus_error *retError)
+{
+    ASServicePrivate *self = reinterpret_cast<ASServicePrivate*>(userData);
+    assert(self != nullptr);
+    assert(self->m_parent != nullptr);
+
+    // create the request object
+    std::shared_ptr<ASRequestPrivate> request =
+        std::make_shared<ASRequestPrivate>(self->m_dbusConn.eventLoop(), msg);
+
+    // check the message was paresed correctly
+    if (!request || !request->isValid() )
+    {
+        LOG_WARNING("invalid Request method call");
+        return sd_bus_reply_method_errorf(msg, SD_BUS_ERROR_INVALID_ARGS,
+                                          "Failed to parse request args");
+    }
+
+    // call the client api
+    `self->m_parent->onRequest(ASRequest(std::move(request)));`
+
+    // done (the reply will be created / queued by the client api)
+    return 1;
+}
 
 
 *as-dbus*
@@ -12143,29 +12211,121 @@ method return time=1585175944.623156 sender=:1.381 -> destination=:1.382 serial=
    }
 
 
+*rdk-as-executor*
+
+class ASRequesthandler
+{
+  public :
+    ASRequesthandler()
+    {}
+
+    void executeFactory(const ASRequest &request)
+    {
+      //request is made to copy by value to ensure instance is not being deleted
+      std::thread threadObj = std::thread([this,request] { `this->execute(request);` });
+      threadObj.detach();
+    }
+
+    virtual void execute(const ASRequest & request) = 0;
+};
+
+class ServicesFavouritesExecutor : public ASRequesthandler
+{
+  // overrides
+  execute( const ASRequest &request )
+  {
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    ASRequest::Method method = request.method();
+
+    if ( method == ASRequest::HttpPost )
+    {
+      handlePostRequest( request );
+    }
+    else if ( method == ASRequest::HttpGet )
+    {
+      handleGetRequest( request );
+    }
+    else
+    {
+      request.sendErrorReply( ASRequest::NotSupportedError );
+    }
+
+    AS_LOG_EXIT( "%s", __func__ );
+  }
+}
+
+
+
+void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  mEventQueue.emplace_back(std::move(event));
+}
+
+
+// as-proxy-service
+
+SD_BUS_METHOD("DBusProxyMethodCall",       "s",         "us",         &ASProxyService::proxyMethodCall,                SD_BUS_VTABLE_UNPRIVILEGED),
+
+ASProxyService::ASProxyService(const std::shared_ptr<SDBusConnection> &connection)
+{}
+
+
+// Called by the sd-bus library when a 'com.sky.as.Service1.DBusProxyMethodCall'
+// method call arrives.
+
+int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus_error *retError )
+{
+  sd_bus_message_read( msg, "s", &msgArgs );
+  std::string dbusMessage( msgArgs );
+  self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
+}
+
+void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  std::shared_ptr<ASProxyMethodCall> proxyMsg = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
+
+  std::string domain;
+  std::string method;
+
+  proxyMsg->GetDomainAndMethod( domain, method );
+}
+
+ASProxyMethodCall::ASProxyMethodCall( const std::string dBusMessage, sd_bus_message *reply )
+        : SDBusMethodCall( "/com/sky/as/service", ASSERVICE1_INTERFACE )
+{
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    mReplyCode = 500;
+    mReply = reply;
+    mSentReply = false;
+
+    SetDomainAndMethod( dBusMessage );
+
+    AS_LOG_EXIT( "%s", __func__ );
+}
+
+void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
+{
+    AS_LOG_ENTRY( "%s", __func__ );
+
+    if ( dBusMessage.empty() == false )
+    {
+        mDbusMessage = dBusMessage;
+
+        AS_LOG_INFO( "mDbusMessage: %s", mDbusMessage.c_str() );
+
+        Json::Reader reader;
+        Json::Value root;
+        if ( reader.parse( mDbusMessage, root ) )
+    }
+}
+
+
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-dtt
 
 *as-dtt*
-
-// on xi6 rdk box
-dropbearkey -t rsa -f /opt/sky-ssh-hostkey
-dropbear -p :10022 -P /var/run/dropbear-sky.pid -r /opt/sky-ssh-hostkey -B
-
-// new
-dropbear -p :10022 -r /opt/sky-ssh-hostkey -B
-
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -F
-
-ssh -p 10022 root@192.168.0.103
-
-
-// to move where it's writable
-cd /opt
-
 
 // as-proxy
 
@@ -14316,6 +14476,20 @@ wl_simple_shell_set_geometry( sink->shell, sink->surfaceId,sink->windowX, sink->
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-drm
+
+
+Lib for UK and DE, Release Note and Mapping of Mac with Euid available at below sftp
+
+URL : gate.nds.com
+
+User name : sftp3367
+
+In order to access the account one may use any sftp client on Windows machines
+(FileZilla or WinSCP for example)
+and configure it for using SFTP via port 22.
+
+sftp sftp3367@gate.nds.com
+
 
 sysroots/arrisxi6-morty/usr/include/WPEFramework/core/JSONRPC.h
 

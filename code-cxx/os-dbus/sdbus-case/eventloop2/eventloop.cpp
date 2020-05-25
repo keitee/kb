@@ -77,7 +77,7 @@ EventLoopPrivate::~EventLoopPrivate()
     m_eventloop = sd_event_unref(m_eventloop);
 
 #ifdef EVENTLOOP_DEBUG
-   logWarning("EventLoopPrivate::~EventLoopPrivate()");
+    logWarning("EventLoopPrivate::~EventLoopPrivate()");
 #endif
   }
 }
@@ -401,7 +401,7 @@ size_t EventLoop::size() const
   return m_private->size();
 }
 
-// NOTE: 
+// NOTE:
 // access private member so make it friend or add public member functions
 // to it.
 
