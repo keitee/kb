@@ -1,5 +1,7 @@
 /*
 
+NOTE: DO NOT USE PROXY/ADAPTOR
+
 D-Bus Complex Ping Pong Example
 
 Demonstrates usage of the Qt D-Bus typesystem.
@@ -21,6 +23,9 @@ Reply was: Sorry, I don't know the answer
 Ask your question: What is the answer to life, the universe and everything?
 Reply was: 42
 
+same service name as "ping/pong" example
+
+#define SERVICE_NAME "org.example.QtDBus.PingExample"
 
 dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Introspectable.Introspect
 
@@ -77,6 +82,97 @@ method return time=1579041212.526071 sender=:1.447 -> destination=:1.449 serial=
   </interface>
 </node>
 "
+
+As you can see, signal/slot/property maps to dbus signal/method/property
+
+class Pong : public QDBusAbstractAdaptor
+{
+  NOTE: qtmoc still scans "Q_OBJECT" even if it's in the comment block and which
+  causes compile error so removed from here this line.
+
+  Q_CLASSINFO("D-Bus Interface", "org.example.QtDBus.ComplexPong.Pong")
+  Q_PROPERTY(QString value READ value WRITE setValue)
+
+  ...
+
+signals:
+  void aboutToQuit();
+
+public slots:
+  QDBusVariant query(const QString &query);
+  Q_NOREPLY void quit();
+};
+
+  <interface name="org.example.QtDBus.ComplexPong.Pong">
+    <property name="value" type="s" access="readwrite"/>
+    <signal name="aboutToQuit">
+    </signal>
+    <method name="query">
+      <arg type="v" direction="out"/>
+      <arg name="query" type="s" direction="in"/>
+    </method>
+    <method name="quit">
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+    </method>
+  </interface>
+
+
+call "ping":
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.example.QtDBus.ComplexPong.Pong.quit
+
+call "query":
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.example.QtDBus.ComplexPong.Pong.query string:"hello"
+method return time=1590681924.560269 sender=:1.184 -> destination=:1.185 serial=3 reply_serial=2
+   variant       string "World"
+
+
+NOTE
+call "aboutToQuit" signal? do not work and why?
+
+dbus-send --session --type=signal --dest='org.example.QtDBus.PingExample' / org.example.QtDBus.ComplexPong.Pong.aboutToQuit
+
+so "ping" expose signal and "pong" connect to it. Later, ping emits that signal.
+Under dbus, guess that this translates to that:
+  "ping" register its interest to signal.
+  "pong" send a signal which is a broadcast.
+
+Unlike call which "pong" receives and "pong" send a signal. 
+
+
+call property get:
+
+interface=org.freedesktop.DBus.Properties; member=Get
+string "org.example.QtDBus.ComplexPong.Pong"
+string "value"
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Properties.Get \
+string:"org.example.QtDBus.ComplexPong.Pong" \
+string:"value"
+
+method return time=1590682295.430013 sender=:1.184 -> destination=:1.187 serial=5 reply_serial=2
+   variant       string "initial value"
+
+
+call property set:
+
+interface=org.freedesktop.DBus.Properties; member=Set
+string "org.example.QtDBus.ComplexPong.Pong"
+string "value"
+variant       string "this is message from ping"
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Properties.Set \
+string:"org.example.QtDBus.ComplexPong.Pong" \
+string:"value" \
+variant:string:"this is message from ping"
+
+check if "value" property is changed
+
+$ dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Properties.Get string:"org.example.QtDBus.ComplexPong.Pong" string:"value"
+method return time=1590682798.629954 sender=:1.184 -> destination=:1.191 serial=8 reply_serial=2
+   variant       string "this is message from ping"
+
 */
 
 #include <stdio.h>
@@ -104,7 +200,6 @@ void Pong::setValue(QString const &newValue)
 }
 
 /*
-NOTE
 the original code was:
 
 int main(int argc, char **argv)
@@ -125,14 +220,6 @@ this is mapped and it leads to raises Pong::aboutToQuit signal.
 
 `ping` connect to this Pong::aboutToQuit and runs its quit() so ping also exit.
 
-Adaptors are intended to be lightweight classes
-`whose main purpose is to relay calls to and from the real object`,
-
-So this connect() make a signal and do the same as "emit aboutToQuit"
-
-that is, "send a signal", "emit a signal" means a "send a signal message on
-dbus" after all.
- 
 */
 
 void Pong::quit()
@@ -151,6 +238,7 @@ void Pong::really_quit()
 {
   qDebug() << "really_quit is called";
 
+  // send a signal
   emit aboutToQuit();
 
   QTimer::singleShot(0, QCoreApplication::instance(), &QCoreApplication::quit);
@@ -181,7 +269,6 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  // adaptor
   QObject obj;
   Pong *pong = new Pong(&obj);
 

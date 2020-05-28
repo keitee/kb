@@ -103,12 +103,21 @@ int main(int argc, char **argv)
 
   // NOTE: cannot use this since error:
   // No such method 'ping' in any interface at object path '/' (signature '')
-  
+
   // QDBusMessage QDBusMessage::createMethodCall(const QString &service, const
   // QString &path, const QString &interface, const QString &method)
 
   QDBusMessage msg =
     QDBusMessage::createMethodCall(SERVICE_NAME, "/", QString(), "ping");
+    
+  // all shows this runtime error
+  // QDBusMessage::createMethodCall(SERVICE_NAME, "/", QString(), "ping");
+  // QDBusMessage::createMethodCall(SERVICE_NAME, "/", "", "ping");
+  // QDBusMessage::createMethodCall(SERVICE_NAME,
+  //                                "/",
+  //                                "local.pong.Pong",
+  //                                "ping");
+
   QDBusConnection::sessionBus().call(msg);
 #else
   // Make a *direct* call(slot) of the remote object, instead of using

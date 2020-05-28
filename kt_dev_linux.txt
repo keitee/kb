@@ -591,10 +591,10 @@
 |kt_linux_core_710| os-dbus-kdbus
 *kt_linux_core_700* os-dbus-sdbus os-sdbus
 
+*kt_linux_core_700* win-wayland
+*kt_linux_core_700* os-virtual-terminal
+*kt_linux_core_000* os-admin: check nvidia version
 
-#{ syssetup
-*kt_linux_sete_005* admin-check running services
-*kt_linux_sete_005* admin: check nvidia version
 *kt_linux_sete_005* admin-gnome: check gnome version
 *kt_linux_sete_005* admin-gnome: shortcuts
 |kt_linux_sete_005| admin: firefox shortcuts
@@ -10140,7 +10140,7 @@ $ diff -qr /mnt/asan/gcc/gcc-4.9.4/libsanitizer .
         /usr/bin/bzip2 -dc /usr/src/redhat/SOURCES/linux-libc-headers-2.6.18.0.tar.bz2
 
 
-{7z}
+{tool-7z}
 https://www.ibm.com/developerworks/community/blogs/6e6f6d1b-95c3-46df-8a26-b7efd8ee4b57/entry/how_to_use_7zip_on_linux_command_line144?lang=en
 
 1. Create an archive
@@ -12326,11 +12326,21 @@ $ sudo apt-get install btrfs-tools
 
 
 ={============================================================================
-*kt_linux_tool_039* tool-ip tool-ifconfig
+*kt_linux_tool_039* tool-ip tool-ifconfig os-net
 
 Assigning IP Address on demand using IP command. ifconfig command is
 deprecated and replaced by IP command in Linux. However, IFCONFIG command is
 still works and available for most of the Linux distributions.
+
+ip a show eth0
+
+ip a show
+
+sudo /etc/init.d/networking stop
+[ ok ] Stopping networking (via systemctl): networking.service.
+
+sudo /etc/init.d/networking restart
+[ ok ] Restarting networking (via systemctl): networking.service.
 
 
 ={============================================================================
@@ -91715,7 +91725,7 @@ system for one application to talk to a single other application.
 
 However, the primary intended application of the protocol is the D-Bus message
 bus, specified in the section called “Message Bus Specification”. The message
-bus is a special application that accepts connections from multiple other
+bus is a `special application` that accepts connections from multiple other
 applications, and forwards messages among them.
 
 
@@ -91798,6 +91808,15 @@ DCOP. D-Bus is built on that experience and carefully tailored to meet the
 needs of these desktop projects in particular. D-Bus may or may not be
 appropriate for other applications; the FAQ has some comparisons to other IPC
 systems.
+
+
+keitee@kit-ubuntu:~$ ps -ef | grep dbus
+root       974     1  0 May25 ?        00:00:08 /usr/sbin/thermald --no-daemon --dbus-enable
+message+   990     1  0 May25 ?        00:00:02 /usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+gdm       1523  1490  0 May25 ?        00:00:00 /usr/bin/dbus-daemon --session --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+gdm       1598  1593  0 May25 ?        00:00:00 /usr/bin/dbus-daemon --config-file=/usr/share/defaults/at-spi2/accessibility.conf --nofork --print-address 3
+keitee    2214  2187  0 May25 ?        00:00:04 /usr/bin/dbus-daemon --session --address=systemd: --nofork --nopidfile --systemd-activation --syslog-only
+keitee    2304  2299  0 May25 ?        00:00:00 /usr/bin/dbus-daemon --config-file=/usr/share/defaults/at-spi2/accessibility.conf --nofork --print-address 3
 
 
 <dbus-concept>
@@ -91893,7 +91912,7 @@ unix:path=/tmp/dbus-test
 Applications using D-Bus are `either servers or clients` A server listens for
 incoming connections; a client connects to a server. Once the connection is
 established, it is a symmetric flow of messages; the client-server distinction
-only matters when setting up the connection.
+`only matters when setting up the connection.`
 
 If you're using the bus daemon, as you probably are, your application will be
 a `client of the bus daemon.` That is, the bus daemon listens for connections
@@ -91917,7 +91936,7 @@ application will be the server and which will be the client, and specify a
 mechanism for them to agree on the server's address. This is an `unusual case.`
 
 
-<dbus-bus-name> <dbus-lifecycle>
+*dbus-bus-name* <dbus-lifecycle>
 When each application connects to the bus daemon, the daemon immediately
 `assigns` it a name called `the unique connection name.` A unique name begins
 `with a ':' (colon) character.` These names are never reused during the lifetime
@@ -91928,7 +91947,7 @@ An example of a unique name might be :34-907. The numbers after the colon have
 no meaning other than their uniqueness.
 
   "When a name is mapped to a particular application's connection, that
-  application is said to `own` that name."
+  application is said to `own that name."`
 
   Each connection = each application = each bus name
 
@@ -91936,14 +91955,14 @@ no meaning other than their uniqueness.
 Applications may ask to own `additional` well-known names. For example, you
 could write a specification to define a name called 
 
-  `com.mycompany.TextEditor.`
+  `com.mycompany.TextEditor`
 
 Your definition could specify that to own this name, an application should
 have an object at the path 
 
   `/com/mycompany/TextFileManager` supporting 
 
-  `interface org.freedesktop.FileHandler.`
+  `interface org.freedesktop.FileHandler`
 
   "Applications could then send messages to this bus name, object, and
   interface to execute method calls."
@@ -91960,6 +91979,10 @@ The message bus then sends out `notification messages` telling remaining
 applications that the application's names have lost their owner. By tracking
 these notifications, your application can reliably `monitor` the lifetime of
 other applications. 
+
+note:
+"bus name" is confusing since it a name of sender or receiver which is given
+by dbus but not dbus name itself.
 
 
 <dbus-native-objects-and-object-path>
@@ -92063,14 +92086,16 @@ receive either a method return message or an error message in reply.
 
 Each message has a header, including fields, and a body, including arguments.
 You can think of the header as the routing information for the message, and
-the body as the payload. Header fields might include the sender bus name,
-    destination bus name, method or signal name, and so forth. One of the
-    header fields is a type signature describing the values found in the body.
-    For example, the letter "i" means "32-bit integer" so the signature "ii"
-    means the payload has two 32-bit integers. 
+the body as the payload. 
+
+Header fields might include the sender bus name, destination bus name, method
+or signal name, and so forth. One of the header fields is a `type signature`
+describing the values found in the body. For example, the letter "i" means
+"32-bit integer" so the signature "ii" means the payload has two 32-bit
+integers. 
 
 
-<os-dbus-call> calling-a-method Behind the Scenes
+*os-dbus-call* calling-a-method Behind the Scenes
 A method call in DBus `consists of two messages`; a method call message sent from
 process A to process B, and a matching method reply message sent from process B
 to process A. Both the call and the reply messages are routed through the bus
@@ -92218,9 +92243,11 @@ unified protocol that is tailored specifically for meeting the needs of
 
 There are two primary use-cases for which D-Bus is designed:
 
-As a "system bus" for communicating between system applications and user sessions
+As a "system bus" for communicating between system applications and user
+sessions
 
-As a "session bus" for exhanging data between applications in a desktop environments
+As a "session bus" for exhanging data between applications in a desktop
+environments
 
 As the name implies, D-Bus uses a logical "Bus" over which connected
 applications may communicate. For ease of use, this communication takes place
@@ -92244,7 +92271,7 @@ this feature to prevent the user from needing to explicitly specify the remote
 interfaces being used.
 
 Objects in D-Bus are uniquely identified through the combination of a bus name
-and object path. The bus name uniquely identifies a client application
+and object path. `The bus name uniquely identifies a client application`
 connected to the bus and the object path uniquely identifies the object within
 that application. Each application is automatically assigned a unique and
 effectively random bus name upon connection. Applications wishing to export
@@ -92265,6 +92292,7 @@ to determine the unique, random name assigned to the network manager at
 connection time, applications wishing to make use of the network manager will
 may simply use the well-known name.
 
+
 Key Components
 
 Object Paths
@@ -92274,12 +92302,12 @@ object path intentionally looks just like a standard Unix file system path.
 The primary difference is that the path may contain only numbers, letters,
 underscores, and the / character.
 
-
 From a functional standpoint, the primary purpose of object paths is simply to
 be a unique identifier for an object. The "hierarchy" implied the path
 structure is almost purely conventional. Applications with a naturally
 hierarchical structure will likely take advantage of this feature while others
 may choose to ignore it completely.
+
 
 Interfaces
 
@@ -92300,9 +92328,10 @@ are similar to those employed by many popular programming languages. They must
 begin with a letter and may consist of only letters, numbers, and underscores.
 
 Each method and signal explicitly defines the number and types of arguments
-they accept. These are encoded as D-Bus Signature strings.
+they accept. `These are encoded as D-Bus Signature strings.`
 
-<os-dbus-signature> *os-dbus-type*
+
+*os-dbus-signature* *os-dbus-type*
 Signature Strings
 
 D-Bus uses a string-based type encoding mechanism called Signatures to
@@ -92336,8 +92365,9 @@ h           Unix file descriptor
 
 No spacing is allowed within signature strings. When defining signatures for
 multi-argument methods and signatures, the types of each argument are
-concatenated into a single string. For example, the signature for a method
+`concatenated into a single string.` For example, the signature for a method
 that accepts two integers followed by a string would be "iis".
+
 
 Container Types
 There are four container types: Structs, Arrays, Variants, and Dictionaries.
@@ -92368,7 +92398,7 @@ Dictionaries work in a manner similar to that of structures but are restricted
 to arrays of key = value pairs. The key must be a basic, non-container type
 and the value may be any single, complete type. 
 
-`Dictionaries are defined in terms of arrays using {}` to surround the key and
+Dictionaries are defined `in terms of arrays` using {} to surround the key and
 value types. Examples:
 
 a{ss}       pair<string, string>
@@ -92396,36 +92426,36 @@ const char*
 
 "      <arg direction=\"out\" type=\"(ua{ss}s)\" name=\"response\"/>\n"
 
-    struct Response
-    {
-        uint code;
-        QMap<QString,QString> headers;
-        QString body;
+struct Response
+{
+  uint code;
+  QMap<QString,QString> headers;
+  QString body;
 
-        Response()
-            : code(0)
-        { }
+  Response()
+    : code(0)
+  { }
 
-        Response(uint code_, const char *body_)
-            : code(code_), body(body_)
-        { }
+  Response(uint code_, const char *body_)
+    : code(code_), body(body_)
+  { }
 
-        Response(uint code_, const QString &body_)
-            : code(code_), body(body_)
-        { }
+  Response(uint code_, const QString &body_)
+    : code(code_), body(body_)
+  { }
 
-        Response(uint code_, const QString &body_, const QMap<QString,QString> &headers_)
-            : code(code_), body(body_), headers(headers_)
-        { }
+  Response(uint code_, const QString &body_, const QMap<QString,QString> &headers_)
+    : code(code_), body(body_), headers(headers_)
+  { }
 
-        Response(uint code_, QString &&body_)
-            : code(code_), body(std::move(body_))
-        { }
+  Response(uint code_, QString &&body_)
+    : code(code_), body(std::move(body_))
+  { }
 
-        Response(uint code_, QString &&body_, QMap<QString,QString> &&headers_)
-            : code(code_), body(std::move(body_)), headers(std::move(headers_))
-        { }
-    };
+  Response(uint code_, QString &&body_, QMap<QString,QString> &&headers_)
+    : code(code_), body(std::move(body_)), headers(std::move(headers_))
+  { }
+};
 
 
 Methods
@@ -92451,16 +92481,18 @@ strings would use "uu" for the argument signature and "ss" for the return
 value signature. If the method accepts no arguments or returns no values, the
 signatures for those attributes are empty strings.
 
+
 Signals
 
 D-Bus signals provide a 1-to-many, publish-subscribe mechanism. Similar to
 method return values, D-Bus signals may contain an arbitrary ammount of data.
-Unlike methods however, signals are entirely asynchronous and may be emitted
+Unlike methods however, `signals are entirely asynchronous` and may be emitted
 by D-Bus objects at any time.
 
 By default, signals emitted from D-Bus objects will not be sent to any
 clients. To receive signals, `client applications must explicitly register`
 their interest in the specific signals emitted by D-Bus objects.
+
 
 Bus Names
 
@@ -92625,12 +92657,12 @@ method return time=1567119934.300884 sender=org.freedesktop.DBus -> destination=
     <method name="Hello">
       <arg direction="out" type="s"/>
     </method>
-    <method name="RequestName">
+    `<method name="RequestName">`
       <arg direction="in" type="s"/>
       <arg direction="in" type="u"/>
       <arg direction="out" type="u"/>
     </method>
-    <method name="ReleaseName">
+    `<method name="ReleaseName">`
       <arg direction="in" type="s"/>
       <arg direction="out" type="u"/>
     </method>
@@ -92810,19 +92842,6 @@ parameters: oas
 *os-dbus-properties*
 https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties
 
-If one or more properties change on an object, the
-org.freedesktop.DBus.Properties.PropertiesChanged signal may be `emitted`
-(this signal was added in 0.14):
-
-org.freedesktop.DBus.Properties.PropertiesChanged (STRING interface_name,
-  DICT<STRING,VARIANT> changed_properties,
-  ARRAY<STRING> invalidated_properties);
-        
-where changed_properties is a dictionary containing the changed properties
-  with the new values and invalidated_properties is an array of properties
-  that changed but the value is not conveyed.
-
-
 from bluetooth usb dongle.
 
 org.bluez
@@ -92847,7 +92866,7 @@ org.bluez
     org.bluez.NetworkServer1
     org.freedesktop.DBus.Introspectable
 
-    org.freedesktop.DBus.Properties
+    `org.freedesktop.DBus.Properties`
       <method name="Get">
       <method name="Set">
       <method name="GetAll">
@@ -92890,7 +92909,7 @@ org.bluez
 </node>
 
 
-org.freedesktop.DBus.Properties
+`org.freedesktop.DBus.Properties`
 
 Get(interface_name, property_name)
 
@@ -92931,48 +92950,116 @@ Signal indicating property values have changed
 
 parameters: sa{sv}as that is (s, a{sv}, as)
 
-1. Name of interface with changed properties
-2. Dictionary of string names to variant values of the changed properties
-3. Array of string names indicating properties that have changed but for
-which values are not conveyed.
-
 If one or more properties change on an object, the
-org.freedesktop.DBus.Properties.PropertiesChanged signal may be emitted (this
-    signal was added in 0.14):
+`org.freedesktop.DBus.Properties.PropertiesChanged` signal may be `emitted`
+(this signal was added in 0.14):
 
 org.freedesktop.DBus.Properties.PropertiesChanged (STRING interface_name,
   DICT<STRING,VARIANT> changed_properties,
   ARRAY<STRING> invalidated_properties);
         
-where changed_properties is a dictionary containing the changed properties with
-  the new values and invalidated_properties is an array of properties that
-  changed but the value is not conveyed.
+where changed_properties is a dictionary containing the changed properties
+  with the new values and invalidated_properties is an array of properties
+  that changed but the value is not conveyed.
 
 
 <ex>
 
-// QDBusConnectionInterface *QDBusConnection::interface() const
-// Returns a QDBusConnectionInterface object that represents the D-Bus server
-// interface on this connection.
-// 
-// https://doc.qt.io/qt-5/qdbusconnectioninterface.html
-//
-// Detailed Description
-//
-// Inherits:	QDBusAbstractInterface
-//
-// The D-Bus bus server daemon provides one special interface
-// org.freedesktop.DBus that allows clients to access certain properties of
-// the bus, such as the current list of clients connected. The
-// QDBusConnectionInterface class provides access to that interface.
-// 
-// The most common uses of this class are to register and unregister service
-// names on the bus using the registerService() and unregisterService()
-// functions, query about existing names using the isServiceRegistered(),
-// registeredServiceNames() and serviceOwner() functions, and to receive
-// notification that a client has registered or de-registered through the
-// serviceRegistered(), serviceUnregistered() and serviceOwnerChanged()
-// signals.
+QDBusConnectionInterface *QDBusConnection::interface() const
+
+Returns a QDBusConnectionInterface object that represents the D-Bus server
+interface on this connection.
+
+https://doc.qt.io/qt-5/qdbusconnectioninterface.html
+
+Detailed Description
+
+Inherits:	QDBusAbstractInterface
+
+The D-Bus bus server daemon provides one special interface
+org.freedesktop.DBus that allows clients to access certain properties of the
+bus, such as the current list of clients connected. The
+QDBusConnectionInterface class provides access to that interface.
+
+The most common uses of this class are to register and unregister service
+names on the bus using the registerService() and unregisterService()
+functions, query about existing names using the isServiceRegistered(),
+registeredServiceNames() and serviceOwner() functions, and to receive
+notification that a client has registered or de-registered through the
+serviceRegistered(), serviceUnregistered() and serviceOwnerChanged()
+signals.
+
+qtbase/src/dbus/qdbusconnectioninterface.cpp
+
+/*!
+    Requests to register the service name \a serviceName on the
+    bus. The \a qoption flag specifies how the D-Bus server should behave
+    if \a serviceName is already registered. The \a roption flag
+    specifies if the server should allow another application to
+    replace our registered name.
+
+    If the service registration succeeds, the serviceRegistered()
+    signal will be emitted. If we are placed in queue, the signal will
+    be emitted when we obtain the name. If \a roption is
+    AllowReplacement, the serviceUnregistered() signal will be emitted
+    if another application replaces this one.
+
+    \sa unregisterService()
+*/
+QDBusReply<QDBusConnectionInterface::RegisterServiceReply>
+QDBusConnectionInterface::registerService(const QString &serviceName,
+                                          ServiceQueueOptions qoption,
+                                          ServiceReplacementOptions roption)
+{
+    // reconstruct the low-level flags
+    uint flags = 0;
+    switch (qoption) {
+    case DontQueueService:
+        flags = DBUS_NAME_FLAG_DO_NOT_QUEUE;
+        break;
+    case QueueService:
+        flags = 0;
+        break;
+    case ReplaceExistingService:
+        flags = DBUS_NAME_FLAG_DO_NOT_QUEUE | DBUS_NAME_FLAG_REPLACE_EXISTING;
+        break;
+    }
+
+    switch (roption) {
+    case DontAllowReplacement:
+        break;
+    case AllowReplacement:
+        flags |= DBUS_NAME_FLAG_ALLOW_REPLACEMENT;
+        break;
+    }
+
+    QDBusMessage reply = call(QLatin1String("RequestName"), serviceName, flags);
+
+    // convert the low-level flags to something that we can use
+    if (reply.type() == QDBusMessage::ReplyMessage) {
+        uint code = 0;
+
+        switch (reply.arguments().at(0).toUInt()) {
+        case DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER:
+        case DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER:
+            code = uint(ServiceRegistered);
+            break;
+
+        case DBUS_REQUEST_NAME_REPLY_EXISTS:
+            code = uint(ServiceNotRegistered);
+            break;
+
+        case DBUS_REQUEST_NAME_REPLY_IN_QUEUE:
+            code = uint(ServiceQueued);
+            break;
+        }
+
+        reply.setArguments(QVariantList() << code);
+    }
+
+    return reply;
+}
+
 
 As with QDBusConnectionInterface, can have class for ObjectManager interface
 
@@ -93246,6 +93333,10 @@ Here is an example invocation:
             dict:string:int32:"one",1,"two",2,"three",3      \
             variant:int32:-8                                 \
             objpath:/org/freedesktop/sample/object/name
+
+
+--type=TYPE
+Specify method_call or signal (defaults to "signal").
 
 
 <ex>
@@ -94654,7 +94745,7 @@ including starting up another X session!
 
 
 ={============================================================================
-*kt_linux_sete_005* admin: check nvidia version
+*kt_linux_sete_005* os-admin: check nvidia version
 
 $ cat /proc/driver/nvidia/version 
 NVRM version: NVIDIA UNIX x86_64 Kernel Module  340.96  Sun Nov  8 22:33:28 PST 2015

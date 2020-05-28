@@ -8,39 +8,35 @@
 #ifndef UTL_DBUSSIGNALSPY_H
 #define UTL_DBUSSIGNALSPY_H
 
+#include <QDBusConnection>
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
-#include <QDBusConnection>
-
 
 class DBusSignalSpy : public QObject
 {
-	Q_OBJECT
+  Q_OBJECT
 
 public:
-	DBusSignalSpy(const QDBusConnection &dbusConn,
-	              const QString &path,
-	              const QString &interface,
-	              const QString &name);
-	~DBusSignalSpy();
+  DBusSignalSpy(const QDBusConnection &dbusConn,
+                const QString &path,
+                const QString &interface,
+                const QString &name);
+  ~DBusSignalSpy();
 
+  bool wait(int timeout = 5000);
 
-	bool wait(int timeout = 5000);
+  int count() const;
 
-	int count() const;
-
-	void clear();
-	void reset();
+  void clear();
+  void reset();
 
 private slots:
-	void onDBusSignal();
+  void onDBusSignal();
 
 private:
-	QDBusConnection m_dbusConn;
-	int m_count;
-
+  QDBusConnection m_dbusConn;
+  int m_count;
 };
-
 
 #endif // !defined(UTL_DBUSSIGNALSPY_H)

@@ -5,7 +5,7 @@ project(test VERSION 0.1 LANGUAGES CXX)
 # TODO:
 # To fix find_package issue:
 
-# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
+# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.6/gcc_64 cmake ..
 # cmake version 3.15.5
 
 
@@ -40,6 +40,13 @@ if(Qt5Core_FOUND)
   message(STATUS "Qt5Core found")
 else()
   message(STATUS "Qt5Core not found, not building moc")
+endif()
+
+find_package(Qt5DBus)
+if(Qt5DBus_FOUND)
+  message(STATUS "Qt5DBus found")
+else()
+  message(STATUS "Qt5DBus not found, not building moc")
 endif()
 
 # find_package(Qt5Test)
@@ -129,7 +136,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # NOTE:
 # Qt5::Test is needed for QSignalSpy.h
 
-add_executable(test 
+add_executable(bletest 
   tst_main.cpp
   tst_configsettings.cpp
   mck_blercucontroller.h 
@@ -139,4 +146,4 @@ add_executable(test
   utl_dbussignalspy.cpp 
   )
 
-target_link_libraries(test gmock_main blercu dbus configsettings Qt5::Core)
+target_link_libraries(bletest gmock_main blercu dbus configsettings Qt5::Core Qt5::DBus)

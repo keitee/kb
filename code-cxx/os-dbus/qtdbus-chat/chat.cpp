@@ -1,6 +1,8 @@
 /*
 D-Bus Chat Example
 
+copied from ~/Qt/Examples/Qt-5.12.3/dbus/chat
+
 Demonstrates communication among instances of an application.
 
 Chat is a Qt D-Bus example which demonstrates a simple chat system among
@@ -45,6 +47,7 @@ ChatMainWindow::ChatMainWindow()
           SIGNAL(textChanged(QString)),
           this,
           SLOT(textChangedSlot(QString)));
+
   connect(sendButton, SIGNAL(clicked(bool)), this, SLOT(sendClickedSlot()));
 
   // for menu->file->change nick name
@@ -61,6 +64,7 @@ ChatMainWindow::ChatMainWindow()
   // ADAPTOR
   // add our D-Bus interface and connect to D-Bus
   new ChatAdaptor(this);
+
   if (QDBusConnection::sessionBus().registerObject("/", this))
     qDebug() << "org.exampe.chat is registered";
   else

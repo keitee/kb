@@ -48,7 +48,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-nexus-virtual-display
 *kt_dev_skymw_0000* skymw-rdk-westeros
 *kt_dev_skymw_0000* skymw-rdk-git
-*kt_dev_skymw_0000* skymw-rdk-xione
+*kt_dev_skymw_0000* skymw-rdk-xi1
 *kt_dev_skymw_0000* skymw-rdk-llama
 *kt_dev_skymw_0000* skymw-rdk-as-build
 *kt_dev_skymw_0000* skymw-rdk-as-build-bbfile
@@ -11064,6 +11064,9 @@ project:rdk/yocto_oe/layers/meta-rdk-sky branch:topic/fr_qtb_upgrade
 *kt_dev_skymw_0000* skymw-rdk-xi1
 
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest -b topic/xione_mvp -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+
+repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest -b refs/tags/SKXI11AIS_DEV_000120.7.7.0.0 -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+
 repo sync --no-tags
 
 ENV_PRODUCT=skyxione-uk source meta-rdk/setup-environment
@@ -11071,13 +11074,17 @@ ENV_PRODUCT=skyxione-uk source meta-rdk/setup-environment
 // select option -1, meta-rdk-soc-realtek/conf/machine/realtekxi1.conf
 
 // add the below variable in auto.conf to chose UK variant.
-
-ENV_PRODUCT = "skyxione-uk"
+// ENV_PRODUCT = "skyxione-uk"
 
 bitbake -c fetchall comcast-mediaclient-vbn-image
 
-bitbake comcast-mediaclient-vbn-image
 
+cd /media/keitee/ssd2/direct_build
+
+patch -p1 < /media/keitee/ssd2/breakpad-from-ben.patch
+
+
+bitbake comcast-mediaclient-vbn-image
 
 *rdk-xi1-setup*
 
@@ -11092,8 +11099,82 @@ iptables -F
 
 ssh -p 10022 root@192.168.1.108
 
+
 // to move where it's writable
 cd /opt
+
+
+// as-proxy
+
+systemctl status sky-asproxy
+systemctl stop sky-asproxy
+systemctl start sky-asproxy
+mount-copybind ./asproxy /usr/sbin/asproxy
+
+journalctl -fu sky-asproxy
+
+umount /usr/sbin/asproxy
+scp -r -P 10022 ./asproxy root@192.168.1.101:/opt
+
+
+// as-player
+
+systemctl status sky-asplayer
+systemctl start sky-asplayer
+systemctl stop sky-asplayer
+
+mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
+umount /usr/sbin/asrdkplayer
+
+scp -r -P 10022 ./asrdkplayer root@192.168.1.108:/opt
+
+journalctl -fu sky-asplayer --since today
+journalctl -fu sky-asplayer
+
+// get log from box to host
+journalctl -u sky-asproxy --since today > /opt/proxy.log
+journalctl -u sky-asrdkplayer --since today > /opt/player.log
+
+ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log
+ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asplayer --since today" > player.log
+ssh -p 10022 root@192.168.1.101 "journalctl --since today" > xx.log
+scp -P 10022 root@192.168.1.101:/opt/proxy.fail.log .
+
+
+*as-epg*
+cat /lib/systemd/system/sky-epg.service
+journalctl -fu sky-epg
+
+root@arrisxi6-morty:~# cat /tmp/data/sky/packages/com.bskyb.epgui/console.log
+epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open shared object file: No such file or directory
+pid 6 has terminated (return code 127)
+
+
+*gdb*
+
+gdb /usr/sbin/asrdkplayer
+gdb ./asrdkplayer
+gdbserver localhost:5432 /usr/sbin/asrdkplayer
+./gdbserver localhost:5432 ./asrdkplayer
+./gdbserver --attach localhost:5432 8709
+target remote 192.168.1.101:5432
+gdb root@192.168.1.101:5432 /opt
+
+b ASPlayerInterface::WatchLive:KTDEBUG
+thread apply all bt full
+scp -P 10022 root@192.168.1.101:/opt/gdb.txt .
+
+b AS_WEB_SERVER_MainThread.cpp:KTDEBUG
+
+b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/players/1/action/watchlive"
+b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/services/favourites"
+b AS_WEB_SERVER_MainThread.cpp:185 if uri->GetPath().c_str() == "/9005/as/services/favourites"
+
+b ServiceConfigParser.cpp:ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
+// b ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
+b ServiceConfigParser::checkUriAllowed if DEBUG_GDB()
+
+
 
 
 ={============================================================================
@@ -12324,77 +12405,6 @@ void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-dtt
-
-*as-dtt*
-
-// as-proxy
-
-systemctl status sky-asproxy
-systemctl stop sky-asproxy
-systemctl start sky-asproxy
-mount-copybind ./asproxy /usr/sbin/asproxy
-
-journalctl -fu sky-asproxy
-
-umount /usr/sbin/asproxy
-scp -r -P 10022 ./asproxy root@192.168.1.101:/opt
-
-
-// as-player
-
-systemctl status sky-asplayer
-systemctl start sky-asplayer
-systemctl stop sky-asplayer
-mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
-
-gdb /usr/sbin/asrdkplayer
-gdb ./asrdkplayer
-gdbserver localhost:5432 /usr/sbin/asrdkplayer
-./gdbserver localhost:5432 ./asrdkplayer
-./gdbserver --attach localhost:5432 8709
-target remote 192.168.1.101:5432
-gdb root@192.168.1.101:5432 /opt
-
-b ASPlayerInterface::WatchLive:KTDEBUG
-thread apply all bt full
-scp -P 10022 root@192.168.1.101:/opt/gdb.txt .
-
-umount /usr/sbin/asrdkplayer
-scp -r -P 10022 ./asrdkplayer root@192.168.1.101:/opt
-
-journalctl -fu sky-asplayer --since today
-journalctl -fu sky-asplayer
-
-// get log from box to host
-journalctl -u sky-asproxy --since today > /opt/proxy.log
-journalctl -u sky-asrdkplayer --since today > /opt/player.log
-
-ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asproxy --since today" > proxy.log
-ssh -p 10022 root@192.168.1.101 "journalctl -u sky-asplayer --since today" > player.log
-ssh -p 10022 root@192.168.1.101 "journalctl --since today" > xx.log
-scp -P 10022 root@192.168.1.101:/opt/proxy.fail.log .
-
-
-*as-epg*
-cat /lib/systemd/system/sky-epg.service
-journalctl -fu sky-epg
-
-root@arrisxi6-morty:~# cat /tmp/data/sky/packages/com.bskyb.epgui/console.log
-epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open shared object file: No such file or directory
-pid 6 has terminated (return code 127)
-
-
-*gdb*
-b AS_WEB_SERVER_MainThread.cpp:KTDEBUG
-
-b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/players/1/action/watchlive"
-b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/services/favourites"
-b AS_WEB_SERVER_MainThread.cpp:185 if uri->GetPath().c_str() == "/9005/as/services/favourites"
-
-b ServiceConfigParser.cpp:ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
-// b ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
-b ServiceConfigParser::checkUriAllowed if DEBUG_GDB()
-
 
 *rdk-as-dtt-scan-start*
 // from asda ws menu
@@ -14477,7 +14487,6 @@ wl_simple_shell_set_geometry( sink->shell, sink->surfaceId,sink->windowX, sink->
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-drm
 
-
 Lib for UK and DE, Release Note and Mapping of Mac with Euid available at below sftp
 
 URL : gate.nds.com
@@ -14488,7 +14497,7 @@ In order to access the account one may use any sftp client on Windows machines
 (FileZilla or WinSCP for example)
 and configure it for using SFTP via port 22.
 
-sftp sftp3367@gate.nds.com
+sftp sftp8720@gate.nds.com
 
 
 sysroots/arrisxi6-morty/usr/include/WPEFramework/core/JSONRPC.h

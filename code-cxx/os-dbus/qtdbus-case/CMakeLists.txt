@@ -38,7 +38,6 @@ add_subdirectory(cmdlineoptions)
 add_subdirectory(configsettings)
 add_subdirectory(dbus)
 add_subdirectory(blercu)
-add_subdirectory(test)
 
 add_executable(qtdbus-case main.cpp blercu)
 
@@ -103,3 +102,9 @@ target_link_libraries(qtdbus-case
   dbus
   blercu
   Qt5::DBus Qt5::Core)
+
+# Add test
+# if use enable_testing(), "test" target name is reserverd so changed test
+# target to "bletest". what other purpose?
+enable_testing()
+add_subdirectory(test)

@@ -24,210 +24,284 @@
 
 #include <gtest/gtest.h>
 
-#include <QDebug>
-#include <QUuid>
 #include <QDBusServer>
+#include <QDebug>
 #include <QSharedPointer>
+#include <QUuid>
 
 #include <functional>
 
 /*
- 
+
+https://doc.qt.io/qt-5/qdbusconnection.html
+qtbase/src/dbus/qdbusconnection.cpp
+
+\class QDBusConnection
+\inmodule QtDBus
+\since 4.2
+
+\brief The QDBusConnection class represents a connection to the D-Bus bus daemon.
+
+This class is the initial point in a D-Bus session. Using it, you
+can get access to remote objects, interfaces; connect remote
+signals to your object's slots; register objects, etc.
+
+D-Bus connections are created using the connectToBus() function,
+which opens a connection to the server daemon and does the initial
+handshaking, associating that connection with a name. Further
+attempts to connect using the same name will return the same
+connection.
+
+The connection is then torn down using the disconnectFromBus()
+function.
+
+Once disconnected, calling connectToBus() will not reestablish a
+connection, you must create a new QDBusConnection instance.
+
+As a convenience for the two most common connection types, the
+sessionBus() and systemBus() functions return open connections to
+the session server daemon and the system server daemon,
+respectively. Those connections are opened when first used and are
+closed when the QCoreApplication destructor is run.
+
+D-Bus also supports peer-to-peer connections, without the need for
+a bus server daemon. Using this facility, two applications can
+talk to each other and exchange messages. This can be achieved by
+passing an address to connectToBus() function, which was opened by
+another D-Bus application using QDBusServer.
+
+
 https://doc.qt.io/qt-5/qdbusserver.html#details
 
 The QDBusServer class provides peer-to-peer communication between processes on
 the same computer.
+
+
+QDBusMessage QDBusMessage::createMethodCall(
+  const QString &service,
+  const QString &path,
+  const QString &interface,
+  const QString &method)
+
+When using DBus in a `peer-to-peer` context (i.e., not on a bus), the service
+parameter is optional.
 
 */
 
 class BleRcuControllerAdaptorTest : public ::testing::Test
 {
 public:
-	void SetUp()
-	{
-		m_mockController = QSharedPointer<MockBleRcuController>::create();
+  void SetUp()
+  {
+    m_mockController = QSharedPointer<MockBleRcuController>::create();
 
-		m_dbusServer = new QDBusServer();
-		ASSERT_NE(m_dbusServer, nullptr);
-		ASSERT_TRUE(m_dbusServer->isConnected());
-		m_dbusServer->setAnonymousAuthenticationAllowed(true);
+    m_dbusServer = new QDBusServer();
+    ASSERT_NE(m_dbusServer, nullptr);
 
-		m_newConnectionReady = false;
+    // Returns true if this QDBusServer object is connected.
+    // If it isn't connected, you need to call the constructor again.
+    ASSERT_TRUE(m_dbusServer->isConnected());
 
-		QObject::connect(m_dbusServer, &QDBusServer::newConnection,
-		                 std::bind(&BleRcuControllerAdaptorTest::onNewConnection, this, std::placeholders::_1));
+    // If value is set to true, an incoming connection can proceed even if the
+    // connecting client is not authenticated as a user.
+    m_dbusServer->setAnonymousAuthenticationAllowed(true);
 
-		processEventsFor(10);
+    m_newConnectionReady = false;
 
-		// for some reason the name of the server has to be unique, use a UUID as conventient for now
-		const QUuid name = QUuid::createUuid();
-		m_dbusConn = QSharedPointer<QDBusConnection>::create(QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
+    // void newConnection(const QDBusConnection &connection)
+    // This signal is emitted when a new client connection connection is
+    // established to the server.
 
-		// if all goes to plan then onNewConnection() should be called, wait for
-		// that to happen before proceeding
-		std::function<bool()> lambda = [this]() {
-			return m_newConnectionReady;
-		};
+    QObject::connect(m_dbusServer,
+                     &QDBusServer::newConnection,
+                     std::bind(&BleRcuControllerAdaptorTest::onNewConnection,
+                               this,
+                               std::placeholders::_1));
 
-		ASSERT_TRUE(processEventsUtil(lambda, 1000));
-		ASSERT_TRUE(m_dbusConn->isConnected());
-	}
+    processEventsFor(10);
 
-	void TearDown()
-	{
-		m_dbusConn.reset();
+    // for some reason the name of the server has to be unique, use a UUID as conventient for now
+    const QUuid name = QUuid::createUuid();
+    m_dbusConn       = QSharedPointer<QDBusConnection>::create(
+      QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
 
-		m_dbusServer->deleteLater();
-		m_dbusServer = nullptr;
+    // if all goes to plan then onNewConnection() should be called, wait for
+    // that to happen before proceeding
+    std::function<bool()> lambda = [this]() { return m_newConnectionReady; };
 
-		m_mockController.reset();
-	}
+    ASSERT_TRUE(processEventsUtil(lambda, 1000));
+    ASSERT_TRUE(m_dbusConn->isConnected());
+  }
 
-protected:
-	QDBusServer *m_dbusServer;
-	QSharedPointer<QDBusConnection> m_dbusConn;
-	bool m_newConnectionReady;
+  void TearDown()
+  {
+    m_dbusConn.reset();
 
-	QSharedPointer<MockBleRcuController> m_mockController;
+    m_dbusServer->deleteLater();
+    m_dbusServer = nullptr;
 
-protected:
-	const QString m_deviceObjPath = QStringLiteral("/com/sky/blercu/monkeycontroller");
-	const QString m_interfaceName = QStringLiteral("com.sky.blercu.Controller1");
-
-protected:
-	void onNewConnection(const QDBusConnection &connection)
-	{
-		QDBusConnection newConn(connection);
-
-		// will be owned by m_mockController and therefore automatically
-		// deleted with the mock controller is destructed (no memory leak here)
-		BleRcuController1Adaptor *adaptor = new BleRcuController1Adaptor(m_mockController.data(),
-		                                                                 QDBusObjectPath(m_deviceObjPath));
-		adaptor->registerConnection(newConn);
-
-		if (!newConn.registerObject(m_deviceObjPath, m_mockController.data()))
-			qCritical("failed to register blercucontroller adaptor object");
-
-		// indicate the next connection is ready
-		m_newConnectionReady = true;
-	}
+    m_mockController.reset();
+  }
 
 protected:
-	QDBusMessage constructGetPropertyMethod(const QString &name)
-	{
-		QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, "org.freedesktop.DBus.Properties", "Get");
-		request << m_interfaceName;
-		request << name;
-		return request;
-	}
+  QDBusServer *m_dbusServer;
+  QSharedPointer<QDBusConnection> m_dbusConn;
+  bool m_newConnectionReady;
 
-	QDBusVariant getPropertyFromDBus(const QString &name)
-	{
-		// construct the request
-		QDBusMessage request = constructGetPropertyMethod(name);
+  QSharedPointer<MockBleRcuController> m_mockController;
 
-		// perform the request
-		QDBusMessage reply = m_dbusConn->call(request, QDBus::BlockWithGui);
-		EXPECT_EQ(reply.type(), QDBusMessage::ReplyMessage);
+protected:
+  const QString m_deviceObjPath =
+    QStringLiteral("/com/sky/blercu/monkeycontroller");
+  const QString m_interfaceName = QStringLiteral("com.sky.blercu.Controller1");
 
-		// check the reply
-		QList<QVariant> results = reply.arguments();
-		EXPECT_EQ(results.length(), 1);
-		EXPECT_TRUE(results.first().canConvert<QDBusVariant>());
+protected:
+  void onNewConnection(const QDBusConnection &connection)
+  {
+    QDBusConnection newConn(connection);
 
-		return results.first().value<QDBusVariant>();
-	}
+    // will be owned by m_mockController and therefore automatically
+    // deleted with the mock controller is destructed (no memory leak here)
+    BleRcuController1Adaptor *adaptor =
+      new BleRcuController1Adaptor(m_mockController.data(),
+                                   QDBusObjectPath(m_deviceObjPath));
+    adaptor->registerConnection(newConn);
+
+    if (!newConn.registerObject(m_deviceObjPath, m_mockController.data()))
+      qCritical("failed to register blercucontroller adaptor object");
+
+    // indicate the next connection is ready
+    m_newConnectionReady = true;
+  }
+
+protected:
+  QDBusMessage constructGetPropertyMethod(const QString &name)
+  {
+    // QDBusMessage &QDBusMessage::operator<<(const QVariant &arg)
+    // Appends the argument arg to the list of arguments to be sent over D-Bus
+    // in a method call or signal emission.
+
+    QDBusMessage request =
+      QDBusMessage::createMethodCall("",
+                                     m_deviceObjPath,
+                                     "org.freedesktop.DBus.Properties",
+                                     "Get");
+    request << m_interfaceName;
+    request << name;
+    return request;
+  }
+
+  QDBusVariant getPropertyFromDBus(const QString &name)
+  {
+    // construct the request
+    QDBusMessage request = constructGetPropertyMethod(name);
+
+    // perform the request
+    QDBusMessage reply = m_dbusConn->call(request, QDBus::BlockWithGui);
+    EXPECT_EQ(reply.type(), QDBusMessage::ReplyMessage);
+
+    // check the reply
+    QList<QVariant> results = reply.arguments();
+    EXPECT_EQ(results.length(), 1);
+    EXPECT_TRUE(results.first().canConvert<QDBusVariant>());
+
+    return results.first().value<QDBusVariant>();
+  }
 };
 
+// Q_PROPERTY(bool Pairing READ pairing)
+// bool pairing() const;
 
 TEST_F(BleRcuControllerAdaptorTest, testPairingProperty)
 {
-	const QList<bool> values = { true, false };
+  const QList<bool> values = {true, false};
 
-	for (bool value : values) {
+  for (bool value : values)
+  {
+    // expect the the device name will be queried
+    EXPECT_CALL(*m_mockController, isPairing())
+      .WillOnce(::testing::Return(value));
 
-		// expect the the device name will be queried
-		EXPECT_CALL(*m_mockController, isPairing())
-			.WillOnce(::testing::Return(value));
+    // get the property
+    const QDBusVariant pairingVar = getPropertyFromDBus("Pairing");
 
-		// get the property
-		const QDBusVariant pairingVar = getPropertyFromDBus("Pairing");
-
-		// check it
-		const QVariant pairing = pairingVar.variant();
-		EXPECT_TRUE(pairing.canConvert<bool>());
-		EXPECT_EQ(pairing.toBool(), value);
-	}
+    // check it
+    const QVariant pairing = pairingVar.variant();
+    EXPECT_TRUE(pairing.canConvert<bool>());
+    EXPECT_EQ(pairing.toBool(), value);
+  }
 }
-
 
 TEST_F(BleRcuControllerAdaptorTest, testPairingPropertyChanged)
 {
-	const QList<bool> values = { true, false };
+  const QList<bool> values = {true, false};
 
-	for (const bool &value : values) {
+  for (const bool &value : values)
+  {
+    // create an object to watch for the signal
+    DBusPropertyChangeSpy propSpy(*m_dbusConn, m_deviceObjPath);
 
-		// create an object to watch for the signal
-		DBusPropertyChangeSpy propSpy(*m_dbusConn, m_deviceObjPath);
+    // emit a pairing state change from the controller object
+    emit m_mockController->pairingStateChanged(value);
 
-		// emit a pairing state change from the controller object
-		emit m_mockController->pairingStateChanged(value);
+    // check the event was sent over dbus as a prop change
+    ASSERT_TRUE(propSpy.wait(10000));
 
-		// check the event was sent over dbus as a prop change
-		ASSERT_TRUE(propSpy.wait(10000));
+    ASSERT_TRUE(propSpy.signalled());
+    ASSERT_EQ(propSpy.interfaceName(), m_interfaceName);
 
-		ASSERT_TRUE(propSpy.signalled());
-		ASSERT_EQ(propSpy.interfaceName(), m_interfaceName);
+    const QVariantMap changedProps = propSpy.changedProperties();
+    ASSERT_TRUE(changedProps.contains("Pairing"));
 
-		const QVariantMap changedProps = propSpy.changedProperties();
-		ASSERT_TRUE(changedProps.contains("Pairing"));
-
-		const QVariant propValue = changedProps["Pairing"];
-		ASSERT_TRUE(propValue.canConvert<bool>());
-		ASSERT_EQ(propValue.value<bool>(), value);
-		
-	}
+    const QVariant propValue = changedProps["Pairing"];
+    ASSERT_TRUE(propValue.canConvert<bool>());
+    ASSERT_EQ(propValue.value<bool>(), value);
+  }
 }
 
 TEST_F(BleRcuControllerAdaptorTest, testPairingCodeProperty)
 {
-	const QList<quint8> values = { 0, 33, 255 };
+  const QList<quint8> values = {0, 33, 255};
 
-	for (quint8 value : values) {
+  for (quint8 value : values)
+  {
+    // expect the the device name will be queried
+    EXPECT_CALL(*m_mockController, pairingCode())
+      .WillOnce(::testing::Return(value));
 
-		// expect the the device name will be queried
-		EXPECT_CALL(*m_mockController, pairingCode())
-			.WillOnce(::testing::Return(value));
+    // get the property
+    const QDBusVariant codeVar = getPropertyFromDBus("PairingCode");
 
-		// get the property
-		const QDBusVariant codeVar = getPropertyFromDBus("PairingCode");
-
-		// check it
-		const QVariant code = codeVar.variant();
-		EXPECT_TRUE(code.canConvert<quint8>());
-		EXPECT_EQ(code.value<quint8>(), value);
-	}
+    // check it
+    const QVariant code = codeVar.variant();
+    EXPECT_TRUE(code.canConvert<quint8>());
+    EXPECT_EQ(code.value<quint8>(), value);
+  }
 }
-
 
 TEST_F(BleRcuControllerAdaptorTest, testIsReady)
 {
-	// IsReady is a method call that doesn't respond but instead sends back a
-	// Ready signal
+  // IsReady is a method call that doesn't respond but instead sends back a
+  // Ready signal
 
-	// create an object to watch for the signal
-	DBusSignalSpy signalSpy(*m_dbusConn, m_deviceObjPath, m_interfaceName, "Ready");
+  // create an object to watch for the signal
+  DBusSignalSpy signalSpy(*m_dbusConn,
+                          m_deviceObjPath,
+                          m_interfaceName,
+                          "Ready");
 
-	// construct the request
-	QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, m_interfaceName, "IsReady");
+  // construct the request
+  QDBusMessage request = QDBusMessage::createMethodCall("",
+                                                        m_deviceObjPath,
+                                                        m_interfaceName,
+                                                        "IsReady");
 
-	// send the request
-	m_dbusConn->call(request, QDBus::BlockWithGui);
+  // send the request
+  m_dbusConn->call(request, QDBus::BlockWithGui);
 
-
-	// check the event was sent over dbus as a prop change
-	ASSERT_TRUE(signalSpy.wait(1000));
-	ASSERT_EQ(signalSpy.count(), 1);
+  // check the event was sent over dbus as a prop change
+  ASSERT_TRUE(signalSpy.wait(1000));
+  ASSERT_EQ(signalSpy.count(), 1);
 }
 
 #if 0
@@ -370,4 +444,3 @@ TEST_F(BleRcuControllerAdaptorTest, testGetDevices)
 }
 
 #endif
-

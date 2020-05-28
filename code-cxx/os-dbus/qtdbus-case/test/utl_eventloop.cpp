@@ -12,10 +12,6 @@
 
 #include <functional>
 
-
-
-
-
 // -----------------------------------------------------------------------------
 /*!
 	Runs the event loop until the \a condition function returns \c true or if
@@ -28,30 +24,32 @@
  */
 bool processEventsUtil(const std::function<bool()> &condition, int timeout)
 {
-	if (timeout > 0) {
+  if (timeout > 0)
+  {
 
-		QTimer timeOutTimer;
-		timeOutTimer.setSingleShot(true);
-		timeOutTimer.start(timeout);
+    QTimer timeOutTimer;
+    timeOutTimer.setSingleShot(true);
+    timeOutTimer.start(timeout);
 
-		// add a dummy function to wake the event thread
-		std::function<void()> lambda = []() {
-			;
-		};
-		QObject::connect(&timeOutTimer, &QTimer::timeout, lambda);
+    // add a dummy function to wake the event thread
+    std::function<void()> lambda = []() { ; };
+    QObject::connect(&timeOutTimer, &QTimer::timeout, lambda);
 
-		while (timeOutTimer.isActive() && !condition()) {
-			QCoreApplication::processEvents();
-		}
+    while (timeOutTimer.isActive() && !condition())
+    {
+      QCoreApplication::processEvents();
+    }
+  }
+  else
+  {
 
-	} else {
+    while (!condition())
+    {
+      QCoreApplication::processEvents();
+    }
+  }
 
-		while (!condition()) {
-			QCoreApplication::processEvents();
-		}
-	}
-
-	return condition();
+  return condition();
 }
 
 // -----------------------------------------------------------------------------
@@ -61,63 +59,54 @@ bool processEventsUtil(const std::function<bool()> &condition, int timeout)
  */
 void processEventsFor(int minTime)
 {
-	volatile bool done = false;
+  volatile bool done = false;
 
-	std::function<void()> lambda = [&] {
-		done = true;
-	};
+  std::function<void()> lambda = [&] { done = true; };
 
-	QTimer::singleShot(minTime, lambda);
-	while (!done) {
-		QCoreApplication::processEvents();
-	}
+  QTimer::singleShot(minTime, lambda);
+  while (!done)
+  {
+    QCoreApplication::processEvents();
+  }
 }
 
-
-
-#define SIGNALLER_EVENT_TYPE    QEvent::Type(QEvent::User + 123)
-
+#define SIGNALLER_EVENT_TYPE QEvent::Type(QEvent::User + 123)
 
 ThreadSafeSignaller::ThreadSafeSignaller(QObject *parent)
-	: QObject(parent)
-	, m_count(0)
-{
-}
+    : QObject(parent)
+    , m_count(0)
+{}
 
-ThreadSafeSignaller::~ThreadSafeSignaller()
-{
-}
+ThreadSafeSignaller::~ThreadSafeSignaller() {}
 
 void ThreadSafeSignaller::trigger()
 {
-	QCoreApplication::postEvent(this, new QEvent(SIGNALLER_EVENT_TYPE));
+  QCoreApplication::postEvent(this, new QEvent(SIGNALLER_EVENT_TYPE));
 }
 
 bool ThreadSafeSignaller::event(QEvent *event)
 {
-	if (event && (event->type() == SIGNALLER_EVENT_TYPE)) {
-		m_count++;
-		return true;
-	}
+  if (event && (event->type() == SIGNALLER_EVENT_TYPE))
+  {
+    m_count++;
+    return true;
+  }
 
-	return QObject::event(event);
+  return QObject::event(event);
 }
 
 bool ThreadSafeSignaller::isTriggered() const
 {
-	return (m_count > 0);
+  return (m_count > 0);
 }
 
 bool ThreadSafeSignaller::waitFor(int timeout)
 {
-	return processEventsUtil(std::bind(&ThreadSafeSignaller::isTriggered, this), timeout);
+  return processEventsUtil(std::bind(&ThreadSafeSignaller::isTriggered, this),
+                           timeout);
 }
 
 int ThreadSafeSignaller::count() const
 {
-	return m_count;
+  return m_count;
 }
-
-
-
-

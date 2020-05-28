@@ -10,7 +10,7 @@
 
 cmake_minimum_required(VERSION 3.0.0)
 
-project(qt-dbus-list VERSION 0.1 LANGUAGES CXX)
+project(qtdbus-list VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -19,18 +19,18 @@ set(CMAKE_AUTOMOC ON)
 #
 # have to say where Qt is by either:
 #
-# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
+# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.6/gcc_64 cmake ..
 #
 # or 
 #
-# set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
+# set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.6/gcc_64/lib/cmake/Qt5Core")
 #
 # Find the QtWidgets library
 
 find_package(Qt5DBus)
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
-add_executable(${PROJECT_NAME} "listnames.cpp")
+add_executable(${PROJECT_NAME} "test_listnames.cpp")
 
 # no need to have this:
 # qt5_wrap_cpp("mainwindow.cxx" "mainwindow.h")

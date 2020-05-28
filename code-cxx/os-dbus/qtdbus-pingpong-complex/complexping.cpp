@@ -6,8 +6,6 @@
 #include "complexping.h"
 #include "ping-common.h"
 
-// #define SERVICE_NAME            "org.example.QtDBus.PingExample"
-
 void Ping::quit()
 {
   // To print message when gets `aboutToQuit` signal from `pong`, use this slot
@@ -40,13 +38,12 @@ void Ping::start(const QString &name)
     QCoreApplication::instance()->quit();
   }
 
-  // NOTE: ping do not use proxy but still able to connect to remote signal.
+  // NOTE: ping do not use proxy but still able to "connect to remote signal."
   //
   // Also see that proxy inherits from QDBusAbstractInterface as QDBusInterface
   // does. So proxy is not much different from QDBusInterface use.
 
   // original code:
-  // // QObject::connect()
   // connect(iface, SIGNAL(aboutToQuit()),
   //     QCoreApplication::instance(), SLOT(quit()));
 
@@ -76,33 +73,12 @@ void Ping::start(const QString &name)
     }
     else if (line == "value")
     {
-      // method call time=1571906439.566168 sender=:1.888 ->
-      // destination=org.example.QtDBus.PingExample serial=9 path=/;
-      // interface=org.freedesktop.DBus.Properties; member=Get
-      //    string "org.example.QtDBus.ComplexPong.Pong"
-      //    string "value"
-      //
-      // method return time=1571906439.566688 sender=:1.889 ->
-      // destination=:1.888 serial=4 reply_serial=9
-      //    variant       string "initial value"
-
       QVariant reply = iface->property("value");
       if (!reply.isNull())
         printf("value property = %s\n", qPrintable(reply.toString()));
     }
     else if (line.startsWith("value="))
     {
-
-      // method call time=1571906585.509050 sender=:1.892 ->
-      // destination=org.example.QtDBus.PingExample serial=10 path=/;
-      // interface=org.freedesktop.DBus.Properties; member=Set
-      //    string "org.example.QtDBus.ComplexPong.Pong"
-      //    string "value"
-      //    variant       string "this is message from ping"
-      //
-      // method return time=1571906585.509573 sender=:1.893 ->
-      // destination=:1.892 serial=5 reply_serial=10
-
       iface->setProperty("value", line.mid(6));
     }
     else
@@ -136,20 +112,20 @@ int main(int argc, char **argv)
   }
 
   // use serviceWatcher to get notified when service(complexpong) is registered.
-  // And runs Ping::start()
 
   QDBusServiceWatcher serviceWatcher(SERVICE_NAME,
                                      QDBusConnection::sessionBus(),
                                      QDBusServiceWatcher::WatchForRegistration);
 
-  // not proxy and QObject
+  // connect ping and watcher and runs Ping::start() when serviceRegistered is
+  // raised.
   Ping ping;
   QObject::connect(&serviceWatcher,
                    &QDBusServiceWatcher::serviceRegistered,
                    &ping,
                    &Ping::start);
 
-  printf("run ./compleping\n");
+  printf("launch ./complexping\n");
 
   /*
   https://doc.qt.io/qt-5/qprocess.html
@@ -165,5 +141,9 @@ int main(int argc, char **argv)
   QProcess pong;
   pong.start("./complexpong");
 
+  printf("runs event loop\n");
+
   app.exec();
+
+  printf("./complexping ends\n");
 }
