@@ -1,4 +1,9 @@
 /*
+
+NOTE:
+This is kind of "peer-to-peer" example and have Adaptor and Proxy at the same
+time.
+
 D-Bus Chat Example
 
 copied from ~/Qt/Examples/Qt-5.12.3/dbus/chat
@@ -6,7 +11,7 @@ copied from ~/Qt/Examples/Qt-5.12.3/dbus/chat
 Demonstrates communication among instances of an application.
 
 Chat is a Qt D-Bus example which demonstrates a simple chat system among
-instances of an application. Users connect and send message to broadcast.
+instances of an application. Users connect and send message(signal) to broadcast.
 
   instance #1
     |                    |
@@ -23,7 +28,9 @@ instances of an application. Users connect and send message to broadcast.
 so when only instance #1 exist, this gets input message. when there are many
 instances, all gets the same input message when one of them sends signal.
 
-not able to do this since it has no name:
+not able to do this since it has no service name, that is no:
+QDBusConnection::sessionBus().registerService(SERVICE_NAME);
+
 dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Introspectable.Introspect
 
 dbus-send --session / org.example.chat.action string:'dbus:' string:'do you see?' 
@@ -48,9 +55,10 @@ ChatMainWindow::ChatMainWindow()
           this,
           SLOT(textChangedSlot(QString)));
 
+  // emit message
   connect(sendButton, SIGNAL(clicked(bool)), this, SLOT(sendClickedSlot()));
 
-  // for menu->file->change nick name
+  // emit action, for menu->file->change nick name
   connect(actionChangeNickname,
           SIGNAL(triggered(bool)),
           this,
@@ -72,9 +80,6 @@ ChatMainWindow::ChatMainWindow()
 
   // Access to remote object is done via proxy, OrgExampleChatInterface.
   //
-  // Make a connection between signals exposed by proxy and slot functions in
-  // this adaptor object.
-  //
   // When runs this
   //
   // emit action(m_nickname, QLatin1String("joins the chat"));
@@ -92,20 +97,40 @@ ChatMainWindow::ChatMainWindow()
   //    expose signals to dbus
   //    if omit this, no compile error but nothing happens
 
-  // PROXY
-  // OrgExampleChatInterface proxy
-  org::example::chat *iface;
-  iface = new org::example::chat(QString(),
-                                 QString(),
-                                 QDBusConnection::sessionBus(),
-                                 this);
+  // PROXY OrgExampleChatInterface
+  //
+  // NOTE: WHY service and path are empty?
+  //
+  // QDBusAbstractInterface(const QString &service, const QString &path, const char *interface,
+  //                        const QDBusConnection &connection, QObject *parent);
+  //
+  // Address -> [Bus Name] -> Path -> Interface -> Method
+  //
+  // `The bus name is in brackets to indicate that it's optional` -- you only
+  // provide a name to route the method call to the right application when using
+  // the bus daemon.
+  //
+  // *os-dbus-peer-to-peer* *os-dbus-name-not-used* If you have a `direct
+  // connection` to another application, bus names aren't used; there's no bus
+  // daemon.
+  //
+  // path is empty since it's not going to make call
 
+  // Q: who's going to free `iface`? no one since done when app ends.
+  org::example::chat *iface;
+  iface = new org::example::chat(QString(),                     // service
+                                 QString(),                     // path
+                                 QDBusConnection::sessionBus(), // connection
+                                 this);                         // parent
+
+  // TWO ways to connect to remote signal:
+  //
   // connect (local) slot to (remote) org.example.chat signal
   //
   // connect(iface, SIGNAL(message(QString,QString)),
   //     this, SLOT(messageSlot(QString,QString)));
   //
-  // shorter than this:
+  // is shorter than:
   //
   // bool QDBusConnection::connect(
   //  const QString &service,
@@ -128,17 +153,28 @@ ChatMainWindow::ChatMainWindow()
   // not at connection time.
 
   if (!QDBusConnection::sessionBus().connect(
-        QString(), // service
-        QString(), // path
-        "org.example.chat",
-        "message",
-        this,
-        SLOT(messageSlot(QString, QString))))
+        QString(),                            // service
+        QString(),                            // path
+        "org.example.chat",                   // interface
+        "message",                            // name
+        this,                                 // receiver
+        SLOT(messageSlot(QString, QString)))) // slot
   {
     qDebug() << "connect message signal failed";
   }
 
-  // Q: who's going to free `iface`? no one since done when app ends.
+  // this is how complexping uses remote signal and using proxy make that
+  // simple; just use connect()
+  //
+  // iface = new QDBusInterface(SERVICE_NAME,                          // service
+  //                            "/",                                   // path
+  //                            "org.example.QtDBus.ComplexPong.Pong", // interface
+  //                            QDBusConnection::sessionBus(), // connection
+  //                            this);                         // parent
+  //
+  // connect(iface, SIGNAL(aboutToQuit()),
+  //     QCoreApplication::instance(), SLOT(quit()));
+
   connect(iface,
           SIGNAL(action(QString, QString)),
           this,
@@ -219,6 +255,16 @@ void ChatMainWindow::sendClickedSlot()
   QDBusConnection::sessionBus().send(msg);
 
 #else
+  // NOTE: Unlike complexpong, we need this in Adaptor ctor:
+  // setAutoRelaySignals(true);
+  //
+  // void ChatMainWindow::message(const QString &, const QString &);
+  // void ChatAdaptor::message(const qstring &, const qstring &);
+  //
+  // since complexpong uses "emit" in pong(adaptor) itself and directly uses
+  // adaptor signal. However, here uses signal from parent of adaptor and should
+  // signal-to-signal relay and enable it.
+
   qDebug() QString("nickname(%1): emit message").arg(m_nickname);
   emit message(m_nickname, messageLineEdit->text());
 #endif

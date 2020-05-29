@@ -56,37 +56,37 @@
 #include "ui_chatmainwindow.h"
 #include "ui_chatsetnickname.h"
 
-class ChatMainWindow: public QMainWindow, Ui::ChatMainWindow
+class ChatMainWindow : public QMainWindow, Ui::ChatMainWindow
 {
-    Q_OBJECT
-    QString m_nickname;
-    QStringList m_messages;
+  Q_OBJECT
+  QString m_nickname;
+  QStringList m_messages;
 
 public:
-    ChatMainWindow();
-    ~ChatMainWindow();
+  ChatMainWindow();
+  ~ChatMainWindow();
 
-    void rebuildHistory();
+  void rebuildHistory();
 
 signals:
-    void message(const QString &nickname, const QString &text);
-    void action(const QString &nickname, const QString &text);
+  void message(const QString &nickname, const QString &text);
+  void action(const QString &nickname, const QString &text);
 
 private slots:
-    void messageSlot(const QString &nickname, const QString &text);
-    void actionSlot(const QString &nickname, const QString &text);
-    void textChangedSlot(const QString &newText);
-    void sendClickedSlot();
-    void changeNickname();
-    void aboutQt();
-    void exiting();
+  void messageSlot(const QString &nickname, const QString &text);
+  void actionSlot(const QString &nickname, const QString &text);
+  void textChangedSlot(const QString &newText);
+  void sendClickedSlot();
+  void changeNickname();
+  void aboutQt();
+  void exiting();
 };
 
-class NicknameDialog: public QDialog, public Ui::NicknameDialog
+class NicknameDialog : public QDialog, public Ui::NicknameDialog
 {
-    Q_OBJECT
+  Q_OBJECT
 public:
-    NicknameDialog(QWidget *parent = 0);
+  NicknameDialog(QWidget *parent = 0);
 };
 
 #endif // CHAT_H

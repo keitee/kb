@@ -1,6 +1,89 @@
 /*
 
-NOTE: DO NOT USE PROXY/ADAPTOR
+NOTE: DO NOT USE PROXY BUT USE ADAPTOR
+
+Using adaptor allows to use property and signal from "pong"
+
+https://doc.qt.io/qt-5/usingadaptors.html
+
+Using Qt D-Bus Adaptors
+
+Adaptors are special classes that are attached to any QObject-derived class
+and `provide the interface to the external world using D-Bus.` 
+
+Adaptors are intended to be lightweight classes 
+`whose main purpose is to relay calls to and from the real object`, 
+possibly validating or converting the input from the external world and, thus,
+protecting the real object.
+
+Unlike multiple inheritance, adaptors can be added at any time to any object
+(but not removed), which allows for greater flexibility when `exporting`
+existing classes. Another advantage of adaptors is to provide similar but not
+identical functionality in methods of the same name in different interfaces, a
+case which can be quite common when adding a new version of a standard
+interface to an object.
+
+In order to use an adaptor, one must create a class which inherits
+`QDBusAbstractAdaptor`. 
+
+*qt-moc*
+Since that is a standard QObject-derived class, the Q_OBJECT macro must appear
+in the declaration and `the source file must be processed with the moc tool.`
+
+The class must also contain one Q_CLASSINFO entry with the "D-Bus Interface"
+name, `declaring which interface it is exporting.` Only one entry per class is
+supported.
+
+Any public slot in the class will be accessible through the bus over messages
+of the MethodCall type. 
+
+(See Declaring Slots in D-Bus Adaptors for more information). 
+https://doc.qt.io/qt-5/qdbusdeclaringslots.html
+
+
+https://doc.qt.io/qt-5/qdbusdeclaringsignals.html
+Declaring Signals in D-Bus Adaptors
+
+Any signal in a class derived from QDBusAbstractAdaptor will be automatically
+relayed into D-Bus, provided that the signal's parameters conform to certain
+rules (see The Qt D-Bus Type System for more information). No special code is
+necessary to make this relay.
+
+Signals in the class will be automatically `relayed over D-Bus.`
+
+`However, signals must still be emitted.` The easiest way to emit an adaptor
+signal is to connect another signal to it, so that Qt's signals and slots
+mechanism automatically `emits the adaptor signal`, too. This can be done in the
+adaptor's constructor, as you can see in the D-Bus Complex Ping Pong Example.
+
+
+QObject <- Pong(Adaptor) <- QDBusAbstractAdaptor
+and register QObject with dbus
+
+
+void QDBusAbstractAdaptor::setAutoRelaySignals(bool enable)
+
+Toggles automatic signal relaying from the real object (see object()).
+
+Automatic signal relaying consists of signal-to-signal connection of the
+signals on the parent that have the exact same method signatue in both
+classes.
+
+If enable is set to true, connect the signals; if set to false, disconnect all
+signals.
+
+
+The QDBusAbstractAdaptor::setAutoRelaySignals() convenience function can also
+be used to make and break connections between signals in the real object and
+the corresponding signals in the adaptor. It will inspect the list of signals
+in both classes and connect those whose parameters match exactly.
+
+
+Also, any property declared with Q_PROPERTY `will be automatically exposed` over
+`the Properties interface on D-Bus.` Since the QObject property system does not
+allow for non-readable properties, it is not possible to declare write-only
+properties using adaptors.
+
 
 D-Bus Complex Ping Pong Example
 
@@ -268,6 +351,9 @@ QDBusVariant Pong::query(const QString &query)
 int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
+
+  // QObject <- Pong(Adaptor) <- QDBusAbstractAdaptor
+  // and register QObject with dbus
 
   QObject obj;
   Pong *pong = new Pong(&obj);
