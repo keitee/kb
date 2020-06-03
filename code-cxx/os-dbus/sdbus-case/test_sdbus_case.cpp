@@ -32,10 +32,7 @@ namespace
     loop.invokeMethod(std::bind(w1, std::ref(value)));
   }
 
-  void f2(std::string &message)
-  {
-    message += ":called";
-  }
+  void f2(std::string &message) { message += ":called"; }
 
   // so pass a reference to local which will be invalid when f gets called.
   void cause_dangling_reference_2(EventLoop &loop)
@@ -43,7 +40,7 @@ namespace
     std::string message("dangling");
     loop.invokeMethod(std::bind(f2, std::ref(message)));
   }
-}
+} // namespace
 
 // posts many work but nothing is done since do not run event loop and process
 // nothing.
@@ -572,7 +569,8 @@ namespace
   }
 
   // from ASRequestPrivate::marshallAndSendReply
-  static void marshallAndSendReply(const std::vector<std::string> &headers, const std::string &body)
+  static void marshallAndSendReply(const std::vector<std::string> &headers,
+                                   const std::string &body)
   {
     std::this_thread::sleep_for(chrono::milliseconds(100));
 
@@ -613,7 +611,7 @@ namespace
 // headers: size : 5: header1, header2, header3, header4, header5,
 // body: body5
 // [       OK ] EventLoop.event_invoke_do_copy (501 ms)
-// 
+//
 // [ RUN      ] EventLoop.event_invoke_do_copy
 // ================
 // headers: size : 1: header1,
@@ -632,7 +630,7 @@ namespace
 // headers: size : 5: header1, header2, header3, header4, header5,
 // body: body5
 // [       OK ] EventLoop.event_invoke_do_copy (501 ms)
-// 
+//
 // [ RUN      ] EventLoop.event_invoke_do_copy
 // ================
 // headers: size : 1: header1,
@@ -671,7 +669,7 @@ TEST(EventLoop, check_invoke_do_copy)
       // uses reference to local, bind() uses copies so not a problem here.
 
       loop.invokeMethod(marshallAndSendReply, header, body);
-      
+
       // now changes header and body. post it
       header.push_back("header2");
       body = "body2";
@@ -692,7 +690,7 @@ TEST(EventLoop, check_invoke_do_copy)
       body = "body5";
       loop.invokeMethod(marshallAndSendReply, header, body);
 
-      // okay, reset them 
+      // okay, reset them
       header.clear();
       body.clear();
 

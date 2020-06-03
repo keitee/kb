@@ -3114,6 +3114,85 @@ TEST(CxxSwap, swap)
   }
 }
 
+// see how swap works on vector
+// void swap( vector& other ); (until C++17)
+TEST(CxxSwap, check_container)
+{
+  std::vector<int> coll1{1, 2, 3, 4};
+  std::vector<int> coll2{5, 6, 7, 8, 9, 10};
+  EXPECT_THAT(coll1.size(), 4);
+  EXPECT_THAT(coll2.size(), 6);
+
+  // swap them
+  swap(coll1, coll2);
+
+  EXPECT_THAT(coll1.size(), 6);
+  EXPECT_THAT(coll1, ElementsAre(5, 6, 7, 8, 9, 10));
+
+  EXPECT_THAT(coll2.size(), 4);
+  EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4));
+}
+
+// how swap elements on vector?
+//
+// 9.3.4 iter_swap()
+//
+// #include <algorithm>
+//
+// void iter_swap (ForwardIterator1 pos1, ForwardIterator2 pos2)
+//
+// Swaps the values to which iterators pos1 and pos2 refer.
+// The iterators don’t need to have the same type. However, the values must be
+// assignable.
+
+TEST(CxxSwap, check_iter_swap)
+{
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    // std::iter_swap(coll.begin(), next(coll.begin()));
+    std::iter_swap(coll.begin(), ++coll.begin());
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    // std::iter_swap(coll.begin(), prev(coll.end()));
+    std::iter_swap(coll.begin(), --coll.end());
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator[]()
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[1]);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[8]);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator*()
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    std::vector<int>::iterator one, two;
+    one = coll.begin();
+    two = one + 1;
+    swap(*one, *two); // calls std::swap()
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    one = coll.begin();
+    two = one + 8;
+    swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+}
+
+// ={=========================================================================
+// cxx-???
+
 namespace cxx_reference
 {
   void func_01(char *buffer)
@@ -10544,7 +10623,7 @@ namespace cxx_template
   }
 } // namespace cxx_template
 
-TEST(Template, Function)
+TEST(CxxTemplate, check_function)
 {
   using namespace cxx_template;
 
@@ -10619,7 +10698,7 @@ namespace cxx_template
 
 } // namespace cxx_template
 
-TEST(Template, Specialisation)
+TEST(CxxTemplate, check_specialisation)
 {
   using namespace cxx_template;
 
@@ -10659,6 +10738,39 @@ TEST(Template, Specialisation)
   }
 }
 
+// can use value also as a type but non-type template parameters are limited:
+//
+// https://en.cppreference.com/w/cpp/language/template_parameters
+// A non-type template parameter must have a structural type, which is one of
+// the following types (optionally cv-qualified, the qualifiers are ignored):
+//
+// case stl example:
+//
+// std::array<int, 8> coll = {};
+
+namespace cxx_template
+{
+  template <typename T, int num>
+  T add_num(const T t)
+  {
+    return t + num;
+  }
+} // namespace cxx_template
+
+TEST(CxxTemplate, check_non_type_argument)
+{
+  using namespace cxx_template;
+
+  // parse error
+  // EXPECT_THAT(add_num<int, 5>(10), 15);
+
+  auto ret = add_num<int, 5>(10);
+  EXPECT_THAT(ret, 15);
+
+  ret = add_num<int, 15>(10);
+  EXPECT_THAT(ret, 25);
+}
+
 namespace cxx_template_default
 {
   // `This shows how function-object is useful` *cxx-functor*
@@ -10687,7 +10799,7 @@ namespace cxx_template_default
 
 } // namespace cxx_template_default
 
-TEST(CxxTemplate, DefaultTypeArgument)
+TEST(CxxTemplate, check_default_type_argument)
 {
   using namespace cxx_template_default;
 
@@ -10752,7 +10864,7 @@ namespace cxx_template_member
 
 } // namespace cxx_template_member
 
-TEST(Template, MemberTemplate)
+TEST(CxxTemplate, check_memeber_function_template)
 {
   using namespace cxx_template_member;
 
@@ -13192,6 +13304,11 @@ TEST(CxxRandom, check_distribution_5)
       std::cout << "random window in seconds : " << window << std::endl;
     }
   }
+}
+
+// cxx-17
+TEST(CxxAny, check_any)
+{
 }
 
 // ={=========================================================================

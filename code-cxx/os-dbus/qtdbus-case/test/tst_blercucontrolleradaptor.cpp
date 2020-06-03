@@ -76,6 +76,12 @@ https://doc.qt.io/qt-5/qdbusserver.html#details
 The QDBusServer class provides peer-to-peer communication between processes on
 the same computer.
 
+QDBusServer::QDBusServer(QObject *parent = nullptr)
+
+Constructs a QDBusServer with the given parent. The server will listen for
+connections in /tmp (on Unix systems) or on a TCP port bound to localhost
+(elsewhere).
+
 
 QDBusMessage QDBusMessage::createMethodCall(
   const QString &service,
@@ -93,6 +99,8 @@ class BleRcuControllerAdaptorTest : public ::testing::Test
 public:
   void SetUp()
   {
+    qDebug() << "do SetUp()";
+
     m_mockController = QSharedPointer<MockBleRcuController>::create();
 
     m_dbusServer = new QDBusServer();
@@ -120,10 +128,22 @@ public:
 
     processEventsFor(10);
 
-    // for some reason the name of the server has to be unique, use a UUID as conventient for now
+    // for some reason the name of the server has to be unique, use a UUID as
+    // conventient for now
+
     const QUuid name = QUuid::createUuid();
+
+    // QDBusConnection QDBusConnection::connectToPeer
+    //  (const QString &address, const QString &name)
+    //
+    // Opens a peer-to-peer connection on address address and associate with it
+    // the connection name name. Returns a QDBusConnection object associated
+    // with that connection.
+
     m_dbusConn       = QSharedPointer<QDBusConnection>::create(
       QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
+
+    qDebug() << "connected to server";
 
     // if all goes to plan then onNewConnection() should be called, wait for
     // that to happen before proceeding
@@ -135,6 +155,8 @@ public:
 
   void TearDown()
   {
+    qDebug() << "do TearDown()";
+
     m_dbusConn.reset();
 
     m_dbusServer->deleteLater();
@@ -160,6 +182,8 @@ protected:
   {
     QDBusConnection newConn(connection);
 
+    qDebug() << "onNewConnection called";
+
     // will be owned by m_mockController and therefore automatically
     // deleted with the mock controller is destructed (no memory leak here)
     BleRcuController1Adaptor *adaptor =
@@ -177,9 +201,32 @@ protected:
 protected:
   QDBusMessage constructGetPropertyMethod(const QString &name)
   {
+    // QDBusMessage QDBusMessage::createMethodCall
+    // (const QString &service, const QString &path, const QString &interface, const QString &method)
+    //
+    // Constructs a new DBus message representing a method call. A method call
+    // always informs its destination address (service, path, interface and
+    // method).
+    //
+    // The DBus bus allows calling a method on a given remote object without
+    // specifying the destination interface, if the method name is unique.
+    // However, if two interfaces on the remote object export the same method
+    // name, the result is undefined (one of the two may be called or an error
+    // may be returned).
+    //
+    // When using DBus in a peer-to-peer context (i.e., not on a bus), the
+    // service parameter is optional.
+
     // QDBusMessage &QDBusMessage::operator<<(const QVariant &arg)
     // Appends the argument arg to the list of arguments to be sent over D-Bus
     // in a method call or signal emission.
+
+    // <interface name="org.freedesktop.DBus.Properties">
+    //   <method name="Get">
+    //     <arg name="interface" type="s" direction="in"/>
+    //     <arg name="name" type="s" direction="in"/>
+    //     <arg name="value" type="v" direction="out"/>
+    //   </method>
 
     QDBusMessage request =
       QDBusMessage::createMethodCall("",
@@ -209,8 +256,31 @@ protected:
   }
 };
 
+// blercu/adaptors/blercucontroller1_adaptor.h
+// 
+// interface "com.sky.blercu.Controller1" is exposed to dbus and client like AS
+// can access. Here these tests are to see if client can access exposed 
+// properties as expected.
+//
+//
+// class BleRcuController1Adaptor : public DBusAbstractAdaptor
+// Q_CLASSINFO("D-Bus Interface", "com.sky.blercu.Controller1")
 // Q_PROPERTY(bool Pairing READ pairing)
 // bool pairing() const;
+
+// external property read dbus call -> adaptor -> mock controller. so  
+// QDBusMessage::createMethodCall("", "com.sky.blercu.Controller1")
+// works like a loopback call to itself?
+//
+// [ RUN      ] BleRcuControllerAdaptorTest.testPairingProperty
+// do SetUp()
+// connected to server
+// onNewConnection called
+// DBusAbstractAdaptor::DBusAbstractAdaptor: get dbus context object of the parent
+// BleRcuController1Adaptor::pairing: calls m_controller->isPairing()
+// BleRcuController1Adaptor::pairing: calls m_controller->isPairing()
+// do TearDown()
+// [       OK ] BleRcuControllerAdaptorTest.testPairingProperty (14 ms)
 
 TEST_F(BleRcuControllerAdaptorTest, testPairingProperty)
 {
@@ -278,6 +348,17 @@ TEST_F(BleRcuControllerAdaptorTest, testPairingCodeProperty)
     EXPECT_EQ(code.value<quint8>(), value);
   }
 }
+
+// test a call
+//
+// [ RUN      ] BleRcuControllerAdaptorTest.testIsReady
+// do SetUp()
+// connected to server
+// onNewConnection called
+// DBusAbstractAdaptor::DBusAbstractAdaptor: get dbus context object of the parent
+// BleRcuController1Adaptor::IsReady()
+// do TearDown()
+// [       OK ] BleRcuControllerAdaptorTest.testIsReady (11 ms)
 
 TEST_F(BleRcuControllerAdaptorTest, testIsReady)
 {

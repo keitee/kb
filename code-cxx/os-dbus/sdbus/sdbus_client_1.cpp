@@ -1,6 +1,5 @@
 
 /*
-
 http://0pointer.net/blog/the-new-sd-bus-api-of-systemd.html
 
 Invoking a Method, from C, with sd-bus
@@ -19,6 +18,11 @@ https://www.freedesktop.org/software/systemd/man/sd_bus_open_system.html#
 #include <stdlib.h>
 
 #include <systemd/sd-bus.h>
+
+#include "gmock/gmock.h"
+
+using namespace std;
+using namespace testing;
 
 /*
 
@@ -94,7 +98,7 @@ queued service job as /org/freedesktop/systemd1/job/2208
 // Invoking a Method, from C, with sd-bus
 // client side
 
-int main(int argc, char *argvp[])
+TEST(SdbusClient, check_1)
 {
   sd_bus_error error{SD_BUS_ERROR_NULL};
   sd_bus_message *m{nullptr};
@@ -156,7 +160,105 @@ finish:
   sd_bus_error_free(&error);
   sd_bus_message_unref(m);
   sd_bus_unref(bus);
-
-  return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+// to call server from os-dbus/sdbus/sdbus_server_1.cpp
+TEST(SdbusClient, check_2)
+{
+  sd_bus_error error{SD_BUS_ERROR_NULL};
+  sd_bus_message *m{nullptr};
+  sd_bus_message *reply{nullptr};
+  sd_bus *bus{nullptr};
+
+  int value{};
+  int r{};
+
+  // connect to the system bus and note that on `strerror(-r)`
+  r = sd_bus_open_user(&bus);
+  if (r < 0)
+  {
+    fprintf(stderr, "failed to connect to system bus: %s\n", strerror(-r));
+    goto finish;
+  }
+
+  // issue the method call and store the response message in m
+  r = sd_bus_call_method(bus,
+                         "net.poettering.Calculator",         // service
+                         "/net/poettering/Calculator",        // object path
+                         "net.poettering.Calculator", // interface
+                         "Multiply",                        // method
+                         &error,         // object to return error in
+                         &m,             // return message on success
+                         "xx",           // input signature
+                         5, // first argument
+                         7 // second argument
+  );
+  if (r < 0)
+  {
+    fprintf(stderr, "failed to issue method call: %s\n", error.message);
+    goto finish;
+  }
+
+  // // int sd_bus_message_new_method_call(	sd_bus *bus,
+  // //  	sd_bus_message **m,
+  // //  	const char *destination,
+  // //  	const char *path,
+  // //  	const char *interface,
+  // //  	const char *member);
+
+  // r = sd_bus_message_new_method_call(bus,
+  //     &m,
+  //     "net.poettering.Calculator",
+  //     "/net/poettering/Calculator",
+  //     "net.poettering.Calculator",
+  //     "Multiply");
+  // if (r < 0)
+  // {
+  //   fprintf(stderr, "failed to allocate method call: %s\n", strerror(-r));
+  //   goto finish;
+  // }
+
+  // // int sd_bus_call(sd_bus *bus, sd_bus_message *m, uint64_t usec, sd_bus_error
+  // // *ret_error, sd_bus_message **reply);
+
+  // r = sd_bus_call(bus, m, 0, &error, &reply);
+  // if (r < 0)
+  // {
+  //   fprintf(stderr, "failed to issue method call: %s\n", strerror(-r));
+  //   goto finish;
+  // }
+
+  printf("succuess on methond call\n");
+
+  // parse the response message
+  //
+  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_read.html#
+  //
+  // sd_bus_message_read() reads a sequence of fields from the D-Bus message
+  // object m and advances the read position in the message. The type string
+  // types describes the types of items expected in the message and the field
+  // arguments that follow. The type string may be NULL or empty, in which case
+  // nothing is read.
+  //
+  //"o", SD_BUS_TYPE_OBJECT_PATH, object path, const char **
+
+  r = sd_bus_message_read(m, "x", &value);
+  if (r < 0)
+  {
+    fprintf(stderr, "failed to parse reply message: %s\n", strerror(-r));
+    goto finish;
+  }
+
+  printf("returned value %d\n", value);
+
+finish:
+  sd_bus_error_free(&error);
+  sd_bus_message_unref(m);
+  sd_bus_unref(bus);
+}
+
+int main(int argc, char **argv)
+{
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

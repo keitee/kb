@@ -7,6 +7,50 @@
 #define LOG_EXIT LOG_MSG
 
 /*
+
+The server is a simple example of an iterative server—a server that handles one
+client at a time before proceeding to the next client. (We consider server
+design in more detail in Chapter 60.)
+
+note:
+when running two clients to see if server output is mixed, server output is
+mixed, that is diff is not empty. also server's fd from accept() is always the
+same.
+
+keitee@kit-ubuntu:~/git/kb/code-cxx/os/build$ ./lpi-socket-unix-server > server.out
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00064 : server starts
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00137 [ENOENT No such file or directory] server: accepted fd{4}
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00148 [ENOENT No such file or directory] server: close fd{4}
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00137 [ENOENT No such file or directory] server: accepted fd{4}
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00148 [ENOENT No such file or directory] server: close fd{4}
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00137 [ENOENT No such file or directory] server: accepted fd{4}
+LOG| F:lpi_socket_unix_server.cpp C:int main(int, char**) L:00148 [ENOENT No such file or directory] server: close fd{4}
+
+
+The following shell session log demonstrates the use of these programs. We begin
+by running the server in the background:
+
+$ ./us_xfr_sv > b &
+[1] 9866
+
+Examine socket file with ls users
+
+$ ls -lF /tmp/us_xfr srwxr-xr-x 1 mtk 0 Jul 18 10:48 /tmp/us_xfr=
+
+We then create a test file to be used as input for the client, and run the client:
+
+$ cat *.c > a
+$ ./us_xfr_cl < a
+
+Client takes input from test file At this point, the child has completed. Now we
+terminate the server as well, and check that the server’s output matches the
+client’s input:
+
+$ kill %1
+[1]+ Terminated
+$ diff a b
+$
+
 Listing 57-2: Header file for us_xfr_sv.c and us_xfr_cl.c
 ––––––––––––––––––––––––––––––––––––––––––––––––––––––––– sockets/us_xfr.h
 */
@@ -56,6 +100,14 @@ int main(int argc, char **argv)
   //
   // #define ENOENT 2 // No such file or directory
 
+  // Note that after the server terminates, the socket pathname continues to
+  // exist. This is why the server uses remove() to remove any existing instance
+  // of the socket pathname before calling bind(). (Assuming we have appropriate
+  // permissions, this remove() call would remove any type of file with this
+  // pathname, even if it wasn’t a socket.) If we did not do this, then the
+  // bind() call would fail if a previous invocation of the server had already
+  // created this socket pathname.
+
   // okay to fail to remove when file do not exist
   if (remove(SV_SOCK_PATH) == -1 && errno != ENOENT)
     LOG_EXIT("failed to delete (%s)", SV_SOCK_PATH);
@@ -70,8 +122,8 @@ int main(int argc, char **argv)
   // according to the usual rules for file creation (Section 15.3.1). The file
   // is marked as a socket. When stat() is applied to this pathname, it returns
   // the value S_IFSOCK in the file-type component of the st_mode field of the
-  // stat structure (Section 15.1). When listed with ls –l, a UNIX domain socket
-  // is shown with the type s in the first column, and ls –F appends an equal
+  // stat structure (Section 15.1). When listed with ls -l, a UNIX domain socket
+  // is shown with the type s in the first column, and ls -F appends an equal
   // sign (=) to the socket pathname.
   //
   // It is usual to bind a socket to an absolute pathname, so that the socket
@@ -89,7 +141,6 @@ int main(int argc, char **argv)
   // handle client connections iteratively
   for (;;)
   {
-
     // Accept a connection. The connection is returned on a new socket, 'cfd';
     // the listening socket ('sfd') remains open and can be used to accept
     // further connections.
@@ -97,6 +148,8 @@ int main(int argc, char **argv)
     cfd = accept(sfd, NULL, NULL);
     if (cfd == -1)
       LOG_EXIT("failed to accept");
+
+    LOG_MSG("server: accepted fd{%d}", cfd);
 
     // read data from connected socket, client, and output it to stdout until
     // EOF
@@ -107,9 +160,10 @@ int main(int argc, char **argv)
     if (num_read == -1)
       LOG_EXIT("failed to read from client");
 
+    LOG_MSG("server: close fd{%d}", cfd);
+
     if (close(cfd) == -1)
       LOG_EXIT("failed to close");
-
   } // for
 
   LOG_MSG("server ends");

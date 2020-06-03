@@ -26,7 +26,6 @@ bool processEventsUtil(const std::function<bool()> &condition, int timeout)
 {
   if (timeout > 0)
   {
-
     QTimer timeOutTimer;
     timeOutTimer.setSingleShot(true);
     timeOutTimer.start(timeout);
@@ -42,7 +41,6 @@ bool processEventsUtil(const std::function<bool()> &condition, int timeout)
   }
   else
   {
-
     while (!condition())
     {
       QCoreApplication::processEvents();
@@ -56,7 +54,29 @@ bool processEventsUtil(const std::function<bool()> &condition, int timeout)
 /*!
 	Runs the event loop at least \a minTime milliseconds.
 
- */
+void QCoreApplication::processEvents
+  (QEventLoop::ProcessEventsFlags flags = QEventLoop::AllEvents)
+
+Processes all pending events for the calling thread according to the specified
+flags until there are no more events to process.
+
+You can call this function occasionally when your program is busy performing a
+long operation (e.g. copying a file).
+
+In the event that you are running a local loop which calls this function
+continuously, without an event loop, the DeferredDelete events will not be
+processed. This can affect the behaviour of widgets, e.g. QToolTip, that rely
+on DeferredDelete events to function properly. An alternative would be to call
+sendPostedEvents() from within that local loop.
+
+Calling this function processes events only for the calling thread, and
+returns after all available events have been processed. Available events are
+events queued before the function call. This means that events that are posted
+while the function runs will be queued until a later round of event
+processing.
+
+*/
+
 void processEventsFor(int minTime)
 {
   volatile bool done = false;
@@ -64,6 +84,7 @@ void processEventsFor(int minTime)
   std::function<void()> lambda = [&] { done = true; };
 
   QTimer::singleShot(minTime, lambda);
+
   while (!done)
   {
     QCoreApplication::processEvents();

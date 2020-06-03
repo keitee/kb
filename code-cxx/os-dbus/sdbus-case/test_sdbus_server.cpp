@@ -1,11 +1,25 @@
+#include <future>
+#include <string>
 #include <sys/signal.h>
 #include <systemd/sd-bus-vtable.h>
 #include <systemd/sd-daemon.h>
+#include <systemd/sd-id128.h>
 
 #include "dbusconnection.h"
 #include "dbusmessage.h"
 #include "eventloop.h"
 #include "rlog.h"
+
+#include "gmock/gmock.h"
+
+using namespace std;
+using namespace testing;
+
+namespace
+{
+  // create the event loop
+  EventLoop loop;
+} // namespace
 
 /*
 https://www.freedesktop.org/software/systemd/man/sd_bus_default.html
@@ -98,6 +112,9 @@ that sender through. An example of a complete rule would be
 
 */
 
+// ={=========================================================================
+// server example which is from sdbus_server_1.cpp
+
 #undef SD_BUS_VTABLE_START
 #define SD_BUS_VTABLE_START(_flags)                                            \
   {                                                                            \
@@ -140,82 +157,6 @@ that sender through. An example of a complete rule would be
         },                                                                     \
     },                                                                         \
   }
-
-// typedef int (*sd_bus_message_handler_t)(sd_bus_message *m, void *userdata,
-// sd_bus_error *ret_error);
-
-int rule_matched(sd_bus_message *msg, void *userData, void *retError)
-{
-  std::string message;
-
-  // simply print out message details
-  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_get_sender.html#
-  // const char* sd_bus_message_get_sender(	sd_bus_message *message);
-  // const char* sd_bus_message_get_destination(	sd_bus_message
-  // *message); const char* sd_bus_message_get_path(	sd_bus_message
-  // *message); const char* sd_bus_message_get_interface(	sd_bus_message
-  // *message); const char* sd_bus_message_get_member(	sd_bus_message
-  // *message);
-
-  message += "sender=" + std::string(sd_bus_message_get_sender(msg));
-  message +=
-    ", destination=" + std::string(sd_bus_message_get_destination(msg));
-  message += ", path=" + std::string(sd_bus_message_get_path(msg));
-  message += ", interface=" + std::string(sd_bus_message_get_interface(msg));
-  message += ", member=" + std::string(sd_bus_message_get_member(msg));
-
-  logWarning("rules matched: %s", message.c_str());
-}
-
-//
-void install_match(const DBusConnection &conn, sd_bus_slot *&slot)
-{
-  std::string matchRule = "type='signal'";
-
-  // comment them out to accept all
-  //
-  // if (!service.empty())
-  // {
-  //   matchRule += ",sender='" + service + "'";
-  // }
-  // if (!path.empty())
-  // {
-  //   matchRule += ",path='" + path + "'";
-  // }
-  // if (!interface.empty())
-  // {
-  //   matchRule += ",interface='" + interface + "'";
-  // }
-  // if (!signalName.empty())
-  // {
-  //   matchRule += ",member='" + signalName + "'";
-  // }
-
-  int rc = sd_bus_add_match(conn.handle(),
-                            &slot,
-                            matchRule.c_str(),
-                            sd_bus_message_handler_t(rule_matched),
-                            nullptr);
-  if (rc < 0)
-  {
-    logSysError(-rc, "failed to add match");
-  }
-}
-
-// ={=========================================================================
-
-namespace
-{
-  // cannot do this
-  // DBusConnection dbusConn;
-
-  std::string objectPath("/net/poettering/Calculator"); // object path
-  std::string interface("net.poettering.Calculator");   // interface
-  std::string service;                                  // service
-} // namespace
-
-// NOTE: handler has the fixed signature regardless of input/output args
-// static int handler(sd_bus_message *m, void *data, sd_bus_error *error);
 
 static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
 {
@@ -282,15 +223,8 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
   return sd_bus_reply_method_return(m, "x", x / rhs);
 }
 
-static int method_function1(sd_bus_message *m, void *data, sd_bus_error *error)
-{
-  DBusMessage message =
-    DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
-                                  "/org/freedesktop/DBus", // path
-                                  "org.freedesktop.DBus",  // interface
-                                  "ListNames");            // method
-}
-
+// *os-dbus-type*
+// x           64-bit signed integer
 // #define SD_BUS_METHOD(_member, _signature, _result, _handler, _flags)
 
 static const sd_bus_vtable calculator_vtable[] = {
@@ -298,251 +232,618 @@ static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_METHOD(
     "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
-  SD_BUS_METHOD("Function1",
-                nullptr,
-                nullptr,
-                method_function1,
-                SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_VTABLE_END};
 
-// tracker callback
-//
-// Called by the sd-bus library when there is a tracked service drops off the
-// bus.
-// Annoyingly the callback doesn't tell us which service has dropped off the
-// bus, so we have to iterate through all the callbacks and check if still being
-// tracked, if not it means they've gone bye bye.
-
-static int tracker_handler(sd_bus_track *track, void *data)
-{
-  // print out message for now
-  logWarning("tracker handler is called");
-}
-
-static void send_signal(DBusConnection &conn)
-{
-  sd_bus_message *msg{nullptr};
-  std::string arg1;
-  std::string arg2;
-
-  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_new_signal.html#
-  //
-  // int sd_bus_message_new_signal(sd_bus *bus,
-  //  sd_bus_message **m,                         // out
-  //  const char *path,
-  //  const char *interface,
-  //  const char *member);
-
-  // The sd_bus_message_new_signal() function creates a new bus message object
-  // that encapsulates a D-Bus signal, and returns it in the m output parameter.
-  // The signal will be sent to path path, on the interface interface, member
-  // member. When this message is sent, no reply is expected. See
-  // sd_bus_message_new_call(1) for a short description of the meaning of the
-  // path, interface, and member parameters.
-
-  int rc = sd_bus_message_new_signal(conn.handle(),
-                                     &msg,
-                                     objectPath.c_str(),
-                                     interface.c_str(),
-                                     "WebSocketUpdate");
-  if (rc < 0)
-  {
-    logSysError(-rc, "failed to create new signal message");
-    return;
-  }
-
-  // add the arguments
-
-  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_append.html#
-  //
-  // int sd_bus_message_append(
-  //  sd_bus_message *m,
-  //  const char *types,
-  //  ...)
-  //
-  // The sd_bus_message_append() function appends a sequence of fields to the
-  // D-Bus message object m. The type string types describes the types of the
-  // field arguments that follow. For each type specified in the type string,
-  // one or more arguments need to be specified, in the same order as declared
-  // in the type string.
-
-  rc = sd_bus_message_append(msg, "ss", arg1.c_str(), arg2.c_str());
-  if (rc < 0)
-  {
-    logSysError(-rc, "failed to append args to the signal");
-  }
-  else
-  {
-    // send the signal
-    rc = sd_bus_send_to(conn.handle(), msg, service.c_str(), nullptr);
-    if (rc < 0)
-    {
-      logSysError(-rc, "failed to send the signal");
-    }
-  }
-
-  sd_bus_message_unref(msg);
-}
-
 // ={=========================================================================
-int main(int argc, char **argv)
+class SdbusServerTest : public ::testing::Test
 {
-  int rc{};
+protected:
+  // DBusConnection m_conn = DBusConnection::sessionBus(eventLoop);
+
+protected:
+  const std::string m_path{"/net/poettering/Calculator"};     // object path
+  const std::string m_interface{"net.poettering.Calculator"}; // interface
+  sd_bus *m_bus{nullptr};
+  sd_id128_t m_id{};
+  int m_fds[2]{};
+
+public:
+  SdbusServerTest() {}
+
+  ~SdbusServerTest() {}
+
+  void SetUp() { logWarning("SetUp() called"); }
+
+  void TearDown() { logWarning("TearDown() called"); }
+};
+
+TEST_F(SdbusServerTest, check_1)
+{
+  EXPECT_THAT(true, true);
+}
+
+#if 0
+
+// As with as-player which create event loop and dbus connection in main and
+// hold them for its lifetime, do the same here.
+//
+
+TEST_F(SdbusServerTest, check_2)
+{
+  int r{};
   sd_bus_slot *slot{nullptr};
-  sd_bus_track *tracker{nullptr};
 
   // disable the SIGPIPE signal, the most annoying signal in the world
   signal(SIGPIPE, SIG_IGN);
 
-  // create the event loop
-  EventLoop eventLoop;
-
-  // connect to the system bus
-  // copy ctor
-
+  // have to use sessionBus:
   // 0000095658.544841 ERR: < M:dbusconnection.cpp F:registerName L:228 > failed
   // to acquire the service name (13-Permission denied) DBusConnection conn =
   // DBusConnection::systemBus(eventLoop);
 
-  // NOTE: cannot make `conn` global object since DBusConnection() is private
-  // and which is invalid connection.
-
-  DBusConnection conn = DBusConnection::sessionBus(eventLoop);
-
+  // note that DBusConnection only support copy ctor and means that not able
+  // to create member or global var.
+  DBusConnection conn = DBusConnection::sessionBus(loop);
   if (!conn.isConnected())
   {
-    logError("failed to connect to system bus");
-    return EXIT_FAILURE;
+    logError("failed to connect to session bus");
+    return;
   }
 
-  // done in ASServicePrivate::ASServicePrivate for example
+  logWarning("sdbus is connected");
 
   // https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html#
   // install the object
   //
   // sd_bus_add_object_vtable() is used to declare attributes for the path
-  // object path path connected to the bus connection bus under the interface
-  // interface. The table vtable may contain property declarations using
-  // SD_BUS_PROPERTY() or SD_BUS_WRITABLE_PROPERTY(), method declarations using
-  // SD_BUS_METHOD(), SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(),
-  // or SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
-  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below. The userdata
-  // parameter contains a pointer that will be passed to various callback
-  // functions. It may be specified as NULL if no value is necessary.
+  // object path `path` connected to the bus connection bus under the interface
+  // interface.
   //
-  // For both functions, a match slot is created internally. If the output
+  // The table vtable may contain property declarations using SD_BUS_PROPERTY()
+  // or SD_BUS_WRITABLE_PROPERTY(), method declarations using SD_BUS_METHOD(),
+  // SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(), or
+  // SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
+  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below.
+  //
+  // The `userdata` parameter contains a pointer that will be passed to handler
+  // callback functions. It may be specified as NULL if no value is necessary.
+  //
+  // typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
+  //  	void *userdata,
+  //  	sd_bus_error *ret_error);
+  //
+  // For both functions, a `match slot` is created internally. If the output
   // parameter slot is NULL, a "floating" slot object is created, see
   // sd_bus_slot_set_floating(3). Otherwise, a pointer to the slot object is
   // returned. In that case, the reference to the slot object should be dropped
   // when the vtable is not needed anymore, see sd_bus_slot_unref(3).
 
-  rc = sd_bus_add_object_vtable(conn.handle(),      // bus
-                                &slot,              // slot
-                                objectPath.c_str(), // object path
-                                interface.c_str(),  // interface
-                                calculator_vtable,  // vtable
-                                NULL);              // user data
-  if (rc < 0)
+  r = sd_bus_add_object_vtable(conn.handle(),       // bus
+                               &slot,               // slot
+                               m_path.c_str(),      // object path
+                               m_interface.c_str(), // interface
+                               calculator_vtable,   // vtable
+                               nullptr);            // user data
+
+  if (r < 0)
   {
-    logSysError(-rc, "failed to add object");
-    return EXIT_FAILURE;
+    logSysError(-r, "failed to add object");
+    return;
   }
 
-#if 0
-  // when use this, keep getting tracker_handler() called.
+  logWarning("sdbus object is added");
 
-  // TODO what's tracker?
-  // create a tracker object to keep track of registered clients, if they
-  // disappear then we automatically remove their listeners
-  rc = sd_bus_track_new(conn.handle(),
-      &tracker,
-      &tracker_handler,
-      nullptr);
-  if (rc < 0)
-  {
-    logSysError(-rc, "failed to create bus tracker");
-  }
-#endif
-
-  // register name and it will end up calling like:
+  // server example requset name and run for loop to handle dbus call.
   // r = sd_bus_request_name(bus, "net.poettering.Calculator", 0);
+  // r = sd_bus_process(bus, NULL);
+  //
+  // now uses event loop and what to do?
 
-  if (!conn.registerName("net.poettering.Calculator"))
+  // int sd_bus_set_server(sd_bus *bus, int b, sd_id128_t bus_id);
+  //
+  // sd_bus_set_server() configures the bus object as a server for direct D-Bus
+  // connections. b enables/disables the server mode. If zero, the server mode is
+  // disabled. Otherwise, the server mode is enabled. Configuring a bus object as
+  // a server is required to allow establishing direct connections between two
+  // peers without going via the D-Bus daemon.
+  //
+  // id must contain a 128-bit integer id for the server. If clients add a guid
+  // field to their D-Bus address string, the server id must match this guid or
+  // the D-Bus authentication handshake will fail. If no specific id is defined
+  // for the server, sd_id128_randomize can be used to generate a random id
+  // instead.
+
+  // https://www.freedesktop.org/software/systemd/man/sd_id128_randomize.html#
+  //
+  // #include <systemd/sd-id128.h>
+  // int sd_id128_randomize(	sd_id128_t *ret);
+  //
+  // sd_id128_randomize() generates a new randomized 128-bit ID and returns it
+  // in ret. Every invocation returns a new randomly generated ID. This uses the
+  // /dev/urandom kernel random number generator.
+
+  sd_id128_t bus_id{};
+
+  r = sd_id128_randomize(&bus_id);
+  if (r < 0)
   {
-    logFatal("failed to acquire service name");
-    return EXIT_FAILURE;
+    logSysError(-r, "failed to add id128");
+    return;
   }
 
-  install_match(conn, slot);
-
-  logWarning("sdbus server is running");
-
-  // Notify that the service is now ready.
-  sd_notify(0, "READY=1");
-
+  // int sd_bus_set_server(sd_bus *bus, int b, sd_id128_t bus_id);
+  r = sd_bus_set_server(conn.handle(), (int)1, bus_id);
+  if (r < 0)
   {
-    DBusMessage message =
-      DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
-                                    "/org/freedesktop/DBus", // path
-                                    "org.freedesktop.DBus",  // interface
-                                    "ListNames");            // method
-
-    DBusMessage reply = conn.call(std::move(message));
+    std::cout << "r : " << r << std::endl;
+    logSysError(-r, "failed to set server");
+    return;
   }
 
-#if 0
-  // parse the response message
-  // https://www.freedesktop.org/software/systemd/man/sd_bus_process.html#
-  //
-  // sd_bus_process() drives the connection between the client and the message
-  // bus. That is, it handles connecting, authentication, and message
-  // processing. When invoked pending I/O work is executed, and queued incoming
-  // messages are dispatched to registered callbacks. Each time it is invoked a
-  // single operation is executed.
-  //
-  // return positive if a message was processed. It returns zero when no
-  // operations were pending.
-  //
-  // When zero is returned the caller should synchronously poll for I/O events
-  // before calling into sd_bus_process() again. For that either user the
-  // simple, synchronous sd_bus_wait(3) call, or hook up the bus connection
-  // object to an external or manual event loop using sd_bus_get_fd(3).
-  //
-  // https://www.freedesktop.org/software/systemd/man/sd_bus_wait.html#
-  //
-  // sd_bus_wait() synchronously waits for I/O on the specified bus connection
-  // object. This function is supposed to be called whenever sd_bus_process(3)
-  // returns zero, indicating that no work is pending on the connection.
-  // Internally, this call invokes ppoll(3), to wait for I/O on the bus
-  // connection. If the timeout_sec parameter is specified, the call will block
-  // at most for the specified amount of time in µs. Pass UINT64_MAX to permit
-  // it to sleep indefinitely.
-
-  for (;;)
+  // int sd_bus_is_server(sd_bus *bus);
+  r = sd_bus_is_server(conn.handle());
+  if (r > 0)
   {
-    // process requests
-    r = sd_bus_process(bus, NULL);
-    if (r < 0)
-    {
-      fprintf(stderr, "failed to process bus: %s\n", strerror(-r));
-      goto finish;
-    }
-
-    // processed a request and try to process another one right away
-    if (r > 0)
-    {
-      printf("processed a request and try another\n");
-      continue;
-    }
-
-    r = sd_bus_wait(bus, (uint64_t)-1);
-    if (r < 0)
-    {
-      fprintf(stderr, "failed to wait on bus: %s\n", strerror(-r));
-      goto finish;
-    }
+    logWarning("server mode is set");
   }
+}
 #endif
 
-  return eventLoop.run();
+// https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html#
+// install the object
+//
+// sd_bus_add_object_vtable() is used to declare attributes for the path
+// object path `path` connected to the bus connection bus under the interface
+// interface.
+//
+// The table vtable may contain property declarations using SD_BUS_PROPERTY()
+// or SD_BUS_WRITABLE_PROPERTY(), method declarations using SD_BUS_METHOD(),
+// SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(), or
+// SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
+// SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below.
+//
+// The `userdata` parameter contains a pointer that will be passed to handler
+// callback functions. It may be specified as NULL if no value is necessary.
+//
+// typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
+//  	void *userdata,
+//  	sd_bus_error *ret_error);
+//
+// For both functions, a `match slot` is created internally. If the output
+// parameter slot is NULL, a "floating" slot object is created, see
+// sd_bus_slot_set_floating(3). Otherwise, a pointer to the slot object is
+// returned. In that case, the reference to the slot object should be dropped
+// when the vtable is not needed anymore, see sd_bus_slot_unref(3).
+
+// ={=========================================================================
+// uses the same server/client code from
+// libsystemd/sd-bus/test-bus-server.c
+
+#define _cleanup_(x) __attribute__((__cleanup__(x)))
+
+static inline const char *strna(const char *s)
+{
+  return s ?: "n/a";
+}
+
+#if 0
+TEST_F(SdbusServerTest, check_2_1)
+{
+  int r{};
+  sd_bus_slot *slot{nullptr};
+
+  assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_fds) >= 0);
+
+  assert(sd_id128_randomize(&m_id) >= 0);
+
+  assert(sd_bus_new(&m_bus) >= 0);
+  assert(sd_bus_set_fd(m_bus, m_fds[0], m_fds[0]) >= 0);
+  assert(sd_bus_set_server(m_bus, 1, m_id) >= 0);
+  assert(sd_bus_set_anonymous(m_bus, true) >= 0);
+  assert(sd_bus_negotiate_fds(m_bus, true) >= 0);
+  assert(sd_bus_start(m_bus) >= 0);
+
+  // int sd_bus_is_server(sd_bus *bus);
+  r = sd_bus_is_server(m_bus);
+  if (r > 0)
+  {
+    logWarning("server mode is set");
+  }
+
+  auto t = std::async([this] {
+    int r{};
+
+    _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
+    _cleanup_(sd_bus_unrefp) sd_bus *bus{nullptr};
+    _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
+
+    assert(sd_bus_new(&bus) >= 0);
+    assert(sd_bus_set_fd(bus, m_fds[1], m_fds[1]) >= 0);
+    assert(sd_bus_negotiate_fds(bus, true) >= 0);
+    assert(sd_bus_set_anonymous(bus, true) >= 0);
+    assert(sd_bus_start(bus) >= 0);
+
+    logWarning("client bus is connected");
+
+    // int sd_bus_message_new_method_call(	sd_bus *bus,
+    //  	sd_bus_message **m,
+    //  	const char *destination,
+    //  	const char *path,
+    //  	const char *interface,
+    //  	const char *member);
+
+    r = sd_bus_message_new_method_call(bus,
+                                       &m,
+                                       "org.freedesktop.systemd.test",
+                                       "/",
+                                       "org.freedesktop.systemd.test",
+                                       "Exit");
+    if (r < 0)
+    {
+      logSysError(-r, "Failed to allocate method call: %m");
+      return;
+    }
+
+    logWarning("client call");
+
+    r = sd_bus_call(bus, m, 0, &error, &reply);
+    if (r < 0)
+    {
+      logSysError(-r, "Failed to issue method call:");
+
+      // logSysError(-r,
+      //     "Failed to issue method call: %s",
+      //     bus_error_message(&error, -r));
+      return;
+    }
+  });
+
+  {
+    const sd_bus_error error{SD_BUS_ERROR_UNKNOWN_METHOD, "Unknown method."};
+    bool quit = false;
+
+    while (!quit)
+    {
+      _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
+
+      r = sd_bus_process(m_bus, &m);
+      if (r < 0)
+      {
+        // log_error_errno(r, "Failed to process requests: %m");
+        logSysError(-r, "failed to process requests");
+        break;
+        // goto fail;
+      }
+
+      if (r == 0)
+      {
+        r = sd_bus_wait(m_bus, (uint64_t)-1);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to wait: %m");
+          logSysError(-r, "Failed to wait: %m");
+          break;
+          // goto fail;
+        }
+
+        continue;
+      }
+
+      if (!m)
+        continue;
+
+      // log_info("Got message! member=%s", strna(sd_bus_message_get_member(m)));
+      logWarning("Got message! member=%s", strna(sd_bus_message_get_member(m)));
+
+      // sd_bus_message_is_method_call() checks if message m is a method call
+      // message. If interface is non-null, it also checks if the message has the
+      // same interface set. If member is non-null, it also checks if the message
+      // has the same member set. Also see sd_bus_set_message_new_method_call(3).
+      // It returns true when all checks pass.
+
+      if (sd_bus_message_is_method_call(m,
+                                        "org.freedesktop.systemd.test",
+                                        "Exit"))
+      {
+        assert((sd_bus_can_send(m_bus, 'h') >= 1) == 1);
+
+        r = sd_bus_message_new_method_return(m, &reply);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to allocate return: %m");
+          logSysError(-r, "Failed to allocate return: %m");
+          // goto fail;
+          break;
+        }
+
+        quit = true;
+      }
+      else if (sd_bus_message_is_method_call(m, NULL, NULL))
+      {
+        // int sd_bus_message_new_method_error(sd_bus_message *call, sd_bus_message **m, const sd_bus_error *e);
+        // r = sd_bus_message_new_method_error(
+        //                 m,
+        //                 &reply,
+        //                 &SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_UNKNOWN_METHOD, "Unknown method."));
+        r = sd_bus_message_new_method_error(m, &reply, &error);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to allocate return: %m");
+          logSysError(-r, "Failed to allocate return: %m");
+          // goto fail;
+          break;
+        }
+      }
+
+      if (reply)
+      {
+        r = sd_bus_send(m_bus, reply, NULL);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to send reply: %m");
+          logSysError(-r, "Failed to send reply: %m");
+          // goto fail;
+          break;
+        }
+      }
+    }
+  }
+
+  t.get();
+
+  sd_bus_unref(m_bus);
+}
+#endif
+
+// ={=========================================================================
+// uses net.poettering.Calculator from sdbus_server_1.cpp
+// however, it didn't call the expected
+
+// [ RUN      ] SdbusServerTest.check_2_2
+// 0000073942.107396 WRN: < M:test_sdbus_server.cpp F:SetUp L:255 > SetUp() called
+// 0000073942.107512 WRN: < M:test_sdbus_server.cpp F:TestBody L:618 > sdbus is connected
+// 0000073942.107563 WRN: < M:test_sdbus_server.cpp F:TestBody L:637 > server mode is set
+// 0000073942.107877 WRN: < M:test_sdbus_server.cpp F:operator() L:653 > client bus is connected
+// 0000073942.108023 WRN: < M:test_sdbus_server.cpp F:method_multiply L:175 > method multiply is called
+//
+// 0000073942.108243 WRN: < M:test_sdbus_server.cpp F:TestBody L:708 > Got message! member=Disconnected
+//
+// 0000073942.108277 ERR: < M:test_sdbus_server.cpp F:TestBody L:685 > failed to process requests (104-Connection reset by peer)
+// 0000073942.108309 WRN: < M:test_sdbus_server.cpp F:TearDown L:257 > TearDown() called
+// [       OK ] SdbusServerTest.check_2_2 (1 ms)
+
+TEST_F(SdbusServerTest, check_2_2)
+{
+  int r{};
+  sd_bus_slot *slot{nullptr};
+
+  assert(socketpair(AF_UNIX, SOCK_STREAM, 0, m_fds) >= 0);
+
+  assert(sd_id128_randomize(&m_id) >= 0);
+
+  assert(sd_bus_new(&m_bus) >= 0);
+  assert(sd_bus_set_fd(m_bus, m_fds[0], m_fds[0]) >= 0);
+  assert(sd_bus_set_server(m_bus, 1, m_id) >= 0);
+  assert(sd_bus_set_anonymous(m_bus, true) >= 0);
+  assert(sd_bus_negotiate_fds(m_bus, true) >= 0);
+  assert(sd_bus_start(m_bus) >= 0);
+
+  logWarning("sdbus is connected");
+
+  r = sd_bus_add_object_vtable(m_bus,               // bus
+                               &slot,               // slot
+                               m_path.c_str(),      // object path
+                               m_interface.c_str(), // interface
+                               calculator_vtable,   // vtable
+                               nullptr);            // user data
+
+  if (r < 0)
+  {
+    logSysError(-r, "failed to add object");
+    return;
+  }
+
+  // int sd_bus_is_server(sd_bus *bus);
+  r = sd_bus_is_server(m_bus);
+  if (r > 0)
+  {
+    logWarning("server mode is set");
+  }
+
+  auto t = std::async([this] {
+    int r{};
+
+    _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
+    _cleanup_(sd_bus_unrefp) sd_bus *bus{nullptr};
+    _cleanup_(sd_bus_error_free) sd_bus_error error = SD_BUS_ERROR_NULL;
+
+    assert(sd_bus_new(&bus) >= 0);
+    assert(sd_bus_set_fd(bus, m_fds[1], m_fds[1]) >= 0);
+    assert(sd_bus_negotiate_fds(bus, true) >= 0);
+    assert(sd_bus_set_anonymous(bus, true) >= 0);
+    assert(sd_bus_start(bus) >= 0);
+
+    logWarning("client bus is connected");
+
+    // issue the method call and store the response message in m
+    r = sd_bus_call_method(bus,
+                           "net.poettering.Calculator",  // service
+                           "/net/poettering/Calculator", // object path
+                           "net.poettering.Calculator",  // interface
+                           "Multiply",                   // method
+                           &error, // object to return error in
+                           &m,     // return message on success
+                           "xx",   // input signature
+                           5,      // first argument
+                           7       // second argument
+    );
+    if (r < 0)
+    {
+      fprintf(stderr, "failed to issue method call: %s\n", error.message);
+    }
+  });
+
+  {
+    const sd_bus_error error{SD_BUS_ERROR_UNKNOWN_METHOD, "Unknown method."};
+    bool quit = false;
+
+    while (!quit)
+    {
+      _cleanup_(sd_bus_message_unrefp) sd_bus_message *m = NULL, *reply = NULL;
+
+      r = sd_bus_process(m_bus, &m);
+      if (r < 0)
+      {
+        // log_error_errno(r, "Failed to process requests: %m");
+        logSysError(-r, "failed to process requests");
+        break;
+        // goto fail;
+      }
+
+      if (r == 0)
+      {
+        r = sd_bus_wait(m_bus, (uint64_t)-1);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to wait: %m");
+          logSysError(-r, "Failed to wait: %m");
+          break;
+          // goto fail;
+        }
+
+        continue;
+      }
+
+      if (!m)
+        continue;
+
+      // log_info("Got message! member=%s", strna(sd_bus_message_get_member(m)));
+      logWarning("Got message! member=%s", strna(sd_bus_message_get_member(m)));
+
+      // sd_bus_message_is_method_call() checks if message m is a method call
+      // message. If interface is non-null, it also checks if the message has the
+      // same interface set. If member is non-null, it also checks if the message
+      // has the same member set. Also see sd_bus_set_message_new_method_call(3).
+      // It returns true when all checks pass.
+
+      if (sd_bus_message_is_method_call(m,
+                                        "net.poettering.Calculator",
+                                        "Multiply"))
+      {
+
+        assert((sd_bus_can_send(m_bus, 'h') >= 1) == 1);
+
+        r = sd_bus_message_new_method_return(m, &reply);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to allocate return: %m");
+          logSysError(-r, "Failed to allocate return: %m");
+          // goto fail;
+          break;
+        }
+
+        quit = true;
+      }
+      else if (sd_bus_message_is_method_call(m, NULL, NULL))
+      {
+
+        // int sd_bus_message_new_method_error(sd_bus_message *call, sd_bus_message **m, const sd_bus_error *e);
+        // r = sd_bus_message_new_method_error(
+        //                 m,
+        //                 &reply,
+        //                 &SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_UNKNOWN_METHOD, "Unknown method."));
+        r = sd_bus_message_new_method_error(m, &reply, &error);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to allocate return: %m");
+          logSysError(-r, "Failed to allocate return: %m");
+          // goto fail;
+          break;
+        }
+      }
+
+      if (reply)
+      {
+        r = sd_bus_send(m_bus, reply, NULL);
+        if (r < 0)
+        {
+          // log_error_errno(r, "Failed to send reply: %m");
+          logSysError(-r, "Failed to send reply: %m");
+          // goto fail;
+          break;
+        }
+      }
+    }
+  }
+
+  t.get();
+
+  sd_bus_unref(m_bus);
+}
+
+// ={=========================================================================
+
+#if 0
+This code is to show how gtest init done under Qt env.
+
+static void GoogleTestRunner(int argc, char **argv)
+{
+  // Since Google Mock depends on Google Test, InitGoogleMock() is
+  // also responsible for initializing Google Test. Therefore there's
+  // no need for calling testing::InitGoogleTest() separately.
+  testing::InitGoogleMock(&argc, argv);
+  int result = RUN_ALL_TESTS();
+
+  QCoreApplication::exit(result);
+}
+
+int main(int argc, char **argv)
+{
+  QCoreApplication app(argc, argv);
+
+  // Disable sigpipe as we run a few tests that deliberately close remote
+  // ends of pipes / sockets.
+  signal(SIGPIPE, SIG_IGN);
+
+  // This will run the functor from the application event loop.
+  QTimer::singleShot(0, &app, std::bind(&GoogleTestRunner, argc, argv));
+
+  return app.exec();
+}
+
+so follows the same approach.
+
+#endif
+
+static void GoogleTestRunner(int argc, char **argv)
+{
+  // Since Google Mock depends on Google Test, InitGoogleMock() is
+  // also responsible for initializing Google Test. Therefore there's
+  // no need for calling testing::InitGoogleTest() separately.
+  //
+  // NOTE: what's the benefit?
+  // testing::InitGoogleTest(&argc, argv);
+
+  testing::InitGoogleMock(&argc, argv);
+  // to supress comple warning since not use return value
+  int result = RUN_ALL_TESTS();
+
+  // exit event loop
+  loop.quit(0);
+}
+
+// Q:
+//
+// 1. How to pass eventloop to each test since dbus connection need this? make
+// it global? yes, it works for now.
+
+int main(int argc, char **argv)
+{
+  // EventLoop is created at global
+
+  // post function to run on the event loop
+  loop.invokeMethod(std::bind(&GoogleTestRunner, argc, argv));
+
+  // run event loop and blocks
+  loop.run();
 }

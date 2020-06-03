@@ -163,7 +163,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 
 # test_gtest.cpp
-add_executable(${PROJECT_NAME} "test_gtest.cpp" "second.cpp")
+add_executable(${PROJECT_NAME} "test_gtest.cpp" "reward.cpp")
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})

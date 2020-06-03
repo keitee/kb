@@ -183,7 +183,7 @@ include_directories(${LIBS_DIR})
 
 # sdbus_client
 add_executable(sdbus_client_1 "sdbus_client_1.cpp")
-target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
+target_link_libraries(sdbus_client_1 gmock_main ${LIBS} "-lsystemd")
 
 
 # NOTE: fails to run cmake for c file

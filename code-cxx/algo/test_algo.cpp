@@ -9407,9 +9407,25 @@ TEST(AlgoStack, ContiguousSimple)
 
 // ={=========================================================================
 // algo-sort-insert
+// [sorted][unsorted]
 
 // reference code, ascending sort
-void sort_insertion_01(vector<int> &coll)
+// o the unsorted < the last sorted to start scanning.
+// o the unsorted > the current to to stop scanning.
+
+// vs. bubble sort
+// template <typename Cont>
+// void bubble_sort(Cont& cont) {
+//   for (int i = 0; i < cont.size(); i++) {
+//     for (int j = i + 1; j < cont.size(); j++) {
+//       if (cont[i] > cont[j]) {
+//         cont.swap(i, j);
+//       }
+//     }
+//   }
+// }
+
+void sort_insertion_01(std::vector<int> &coll)
 {
   // start from 1 since one entry is always sorted.
   int size = (int)coll.size();
@@ -9418,8 +9434,8 @@ void sort_insertion_01(vector<int> &coll)
   {
     int sorted_index = unsorted_index - 1;
 
-    // pick the first from `unsorted` and that is less than the last of the
-    // sorted. so have to place it in the sorted area.
+    // pick the first from `unsorted`. if it is less than the last of the
+    // sorted, then have to place it in the sorted area.
 
     // if (coll[unsorted_index] < coll[sorted_index])
     if (coll[sorted_index] > coll[unsorted_index])
@@ -9431,10 +9447,10 @@ void sort_insertion_01(vector<int> &coll)
       // sorted[current-1] < the entry in question by:
       //
       // move the last sorted down one which makes a space, and check the one
-      // before the current.
+      // before the current, current-1 since already checked the current.
       //
-      // must have "index == 0" check since have a check on current-1 to see if
-      // or not contine searching.
+      // must have "index == 0" check since have a check on current-1 to see
+      // whether or not contine searching.
 
       for (; 0 <= current_index; --current_index)
       {
@@ -9450,10 +9466,15 @@ void sort_insertion_01(vector<int> &coll)
   }
 }
 
-// removes to check `current-1` from the current in searching the place in the
+// Unlike 01:
+// o removes to check `current-1` from the current in searching the place in the
 // sorted and then no need to check on -1 index.
+//
+// o the difference is this. 01 compare the sorted and the unsorted to start
+// scanning the place of the unsorted and use "current-1", one ahead, to check.
+// 02 instead, scanning from current regardless.
 
-void sort_insertion_02(vector<int> &coll)
+void sort_insertion_02(std::vector<int> &coll)
 {
   int size = (int)coll.size();
 
@@ -9480,8 +9501,8 @@ void sort_insertion_02(vector<int> &coll)
   }
 }
 
-// `current` starts from the unsorted and uses swap
-void sort_insertion_03(vector<int> &coll)
+// "current index" starts from the unsorted and uses swap
+void sort_insertion_03(std::vector<int> &coll)
 {
   int size = (int)coll.size();
 
@@ -9491,7 +9512,7 @@ void sort_insertion_03(vector<int> &coll)
          --current_index)
     {
       // swap current and current-1
-      swap(coll[current_index], coll[current_index - 1]);
+      std::swap(coll[current_index], coll[current_index - 1]);
     }
 }
 
@@ -9600,29 +9621,32 @@ void sort_insertion_08(vector<T> &coll, F f)
   }
 }
 
-TEST(AlgoSort, Insertion)
+TEST(AlgoSort, check_insertion)
 {
   {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_01(coll);
     EXPECT_THAT(
       coll,
       ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
+
   {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_02(coll);
     EXPECT_THAT(
       coll,
       ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
+
   {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_03(coll);
     EXPECT_THAT(
       coll,
       ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
+
   {
     vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
     sort_insertion_04(coll);

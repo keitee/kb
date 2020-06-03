@@ -1,6 +1,5 @@
 
 /*
-
 http://0pointer.net/blog/the-new-sd-bus-api-of-systemd.html
 
 Implementing a Service, in C, with sd-bus
@@ -17,7 +16,6 @@ $lsdbus
 18233 :1.91                    gvim lsdbus.sh
 
 $ busctl --user tree net.poettering.Calculator
-busctl --user tree net.poettering.Calculator
 └─/net
   └─/net/poettering
     └─/net/poettering/Calculator
@@ -28,7 +26,6 @@ interfaces and the members this object exposes:
 
 
 $ busctl --user introspect net.poettering.Calculator /net/poettering/Calculator
-busctl --user introspect net.poettering.Calculator /net/poettering/Calculator
 
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
 net.poettering.Calculator           interface -         -            -
@@ -51,6 +48,13 @@ mentioned above. But the first interface we see is actually the one we added! It
 shows our two methods, and both take "xx" (two 64bit signed integers) as input
 parameters, and return one "x". 
 
+dbus-send --session --type=method_call --print-reply --dest='net.poettering.Calculator' \
+/net/poettering/Calculator net.poettering.Calculator.Multiply \
+int64:5 int64:7
+
+method return time=1590799398.142437 sender=:1.418 -> destination=:1.420 serial=4 reply_serial=2
+   int64 35
+
 busctl --user call net.poettering.Calculator /net/poettering/Calculator net.poettering.Calculator Multiply xx 5 7
 x 35
 
@@ -62,20 +66,19 @@ sorry, can't do that
 
 */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
 
-#include <systemd/sd-bus.h>
 #include <systemd/sd-bus-vtable.h>
-
+#include <systemd/sd-bus.h>
 
 // #include <systemd/sd-bus.h>
 //
 // typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
 //  	void *userdata,
 //  	sd_bus_error *ret_error);
-//  
+//
 // int sd_bus_add_match(	sd_bus *bus,
 //  	sd_bus_slot **slot,
 //  	const char *match,
@@ -147,12 +150,12 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 // indices or structure field names they apply to, and GNU C allows this as an
 // extension in C90 mode as well. `This extension is not implemented in GNU C++`
 //
-// ii  systemd                                               237-3ubuntu10.33 
-// 
+// ii  systemd                                               237-3ubuntu10.33
+//
 // struct sd_bus_vtable {
 //         /* Please do not initialize this structure directly, use the
 //          * macros below instead */
-// 
+//
 //         uint8_t type:8;
 //         uint64_t flags:56;
 //         union {
@@ -179,7 +182,7 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 //                 } property;
 //         } x;
 // };
-// 
+//
 // #define SD_BUS_VTABLE_START(_flags)                                     \
 //         {                                                               \
 //                 .type = _SD_BUS_VTABLE_START,                           \
@@ -190,61 +193,63 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 // To build it under C++ which is already in the latest systemd:
 
 #undef SD_BUS_VTABLE_START
-#define SD_BUS_VTABLE_START(_flags)                                     \
-        {                                                               \
-                .type = _SD_BUS_VTABLE_START,                           \
-                .flags = _flags,                                        \
-                .x = {                                                  \
-                    .start = {                                          \
-                        .element_size = sizeof(sd_bus_vtable)           \
-                    },                                                  \
-                },                                                      \
-        }
+#define SD_BUS_VTABLE_START(_flags)                                            \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_START, .flags = _flags,                             \
+    .x = {                                                                     \
+      .start = {.element_size = sizeof(sd_bus_vtable)},                        \
+    },                                                                         \
+  }
 
 #undef SD_BUS_METHOD_WITH_OFFSET
-#define SD_BUS_METHOD_WITH_OFFSET(_member, _signature, _result, _handler, _offset, _flags)   \
-        {                                                               \
-                .type = _SD_BUS_VTABLE_METHOD,                          \
-                .flags = _flags,                                        \
-                .x = {                                                  \
-                    .method = {                                         \
-                        .member = _member,                              \
-                        .signature = _signature,                        \
-                        .result = _result,                              \
-                        .handler = _handler,                            \
-                        .offset = _offset,                              \
-                    },                                                  \
-                },                                                      \
-        }
+#define SD_BUS_METHOD_WITH_OFFSET(_member,                                     \
+                                  _signature,                                  \
+                                  _result,                                     \
+                                  _handler,                                    \
+                                  _offset,                                     \
+                                  _flags)                                      \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_METHOD, .flags = _flags,                            \
+    .x = {                                                                     \
+      .method =                                                                \
+        {                                                                      \
+          .member    = _member,                                                \
+          .signature = _signature,                                             \
+          .result    = _result,                                                \
+          .handler   = _handler,                                               \
+          .offset    = _offset,                                                \
+        },                                                                     \
+    },                                                                         \
+  }
 
 #undef SD_BUS_SIGNAL
-#define SD_BUS_SIGNAL(_member, _signature, _flags)                      \
-        {                                                               \
-                .type = _SD_BUS_VTABLE_SIGNAL,                          \
-                .flags = _flags,                                        \
-                .x = {                                                  \
-                    .signal = {                                         \
-                        .member = _member,                              \
-                        .signature = _signature,                        \
-                    },                                                  \
-                },                                                      \
-        }
+#define SD_BUS_SIGNAL(_member, _signature, _flags)                             \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_SIGNAL, .flags = _flags,                            \
+    .x = {                                                                     \
+      .signal =                                                                \
+        {                                                                      \
+          .member    = _member,                                                \
+          .signature = _signature,                                             \
+        },                                                                     \
+    },                                                                         \
+  }
 
 // *os-dbus-type*
 // x           64-bit signed integer
-// SD_BUS_METHOD( member, signature, result, handler, flags)
+// #define SD_BUS_METHOD(_member, _signature, _result, _handler, _flags)
 
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
-  SD_BUS_METHOD("Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+  SD_BUS_METHOD(
+    "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
-  SD_BUS_VTABLE_END
-};
+  SD_BUS_VTABLE_END};
 
 int main(int argc, char *argvp[])
 {
   sd_bus_slot *slot = NULL;
-  sd_bus *bus = NULL;
+  sd_bus *bus       = NULL;
 
   const char *path = NULL;
   int r;
@@ -291,12 +296,12 @@ int main(int argc, char *argvp[])
   // returned. In that case, the reference to the slot object should be dropped
   // when the vtable is not needed anymore, see sd_bus_slot_unref(3).
 
-  r = sd_bus_add_object_vtable(bus,                           // bus
-                               &slot,                         // slot
-                               "/net/poettering/Calculator",  // object path
-                               "net.poettering.Calculator",   // interface
-                               calculator_vtable,             // vtable
-                               NULL);                         // user data
+  r = sd_bus_add_object_vtable(bus,                          // bus
+                               &slot,                        // slot
+                               "/net/poettering/Calculator", // object path
+                               "net.poettering.Calculator",  // interface
+                               calculator_vtable,            // vtable
+                               NULL);                        // user data
 
   if (r < 0)
   {
@@ -320,7 +325,7 @@ int main(int argc, char *argvp[])
   // sd_bus_process() drives the connection between the client and the message
   // bus. That is, it handles connecting, authentication, and message
   // processing. When invoked pending I/O work is executed, and queued incoming
-  // messages are dispatched to registered callbacks. Each time it is invoked a
+  // messages *are dispatched to registered callbacks.* Each time it is invoked a
   // single operation is executed.
   //
   // return positive if a message was processed. It returns zero when no
@@ -340,7 +345,7 @@ int main(int argc, char *argvp[])
   // Internally, this call invokes ppoll(3), to wait for I/O on the bus
   // connection. If the timeout_sec parameter is specified, the call will block
   // at most for the specified amount of time in µs. Pass UINT64_MAX to permit
-  // it to sleep indefinitely.
+  // it to sleep *indefinitely*.
 
   for (;;)
   {
@@ -375,4 +380,3 @@ finish:
 
   return r < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
-

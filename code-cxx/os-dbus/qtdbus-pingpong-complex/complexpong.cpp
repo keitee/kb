@@ -226,6 +226,13 @@ Unlike call which "pong" receives and "pong" send a signal.
 
 call property get:
 
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface" type="s" direction="in"/>
+      <arg name="name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+
 interface=org.freedesktop.DBus.Properties; member=Get
 string "org.example.QtDBus.ComplexPong.Pong"
 string "value"

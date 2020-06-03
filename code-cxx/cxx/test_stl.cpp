@@ -3230,65 +3230,6 @@ TEST(Predicate, ValueAndReference)
 }
 
 // ={=========================================================================
-// algo-swap
-//
-// 9.3.4 iter_swap()
-//
-// #include <algorithm>
-//
-// void iter_swap (ForwardIterator1 pos1, ForwardIterator2 pos2)
-//
-// Swaps the values to which iterators pos1 and pos2 refer.
-// The iterators don’t need to have the same type. However, the values must be
-// assignable.
-//
-
-TEST(AlgoSwap, IterSwap)
-{
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    // std::iter_swap(coll.begin(), next(coll.begin()));
-    std::iter_swap(coll.begin(), ++coll.begin());
-    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
-
-    // std::iter_swap(coll.begin(), prev(coll.end()));
-    std::iter_swap(coll.begin(), --coll.end());
-    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
-  }
-
-  // use operator[]()
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    std::swap(coll[0], coll[1]);
-    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
-
-    std::swap(coll[0], coll[8]);
-    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
-  }
-
-  // use operator*()
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    vector<int>::iterator one, two;
-    one = coll.begin();
-    two = one + 1;
-    swap(*one, *two); // calls std::swap()
-    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
-
-    one = coll.begin();
-    two = one + 8;
-    swap(*one, *two);
-    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
-  }
-}
-
-// ={=========================================================================
 // cxx-algo-copy
 //
 // [ RUN      ] AlgoCopy.Error

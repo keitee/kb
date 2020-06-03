@@ -198,8 +198,10 @@ add_executable(test_sdbus_server "test_sdbus_server.cpp"
   dbus/dbusmessage.cpp 
   dbus/dbusconnection.cpp 
   dbus/dbusfiledescriptor.cpp)
+target_link_libraries(test_sdbus_server gmock_main Boost::thread ${LIBS} "-lsystemd")
 
-target_link_libraries(test_sdbus_server Boost::thread ${LIBS} "-lsystemd")
+add_executable(test_bus_server test-bus-server.cpp)
+target_link_libraries(test_bus_server Boost::thread ${LIBS} "-lsystemd")
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

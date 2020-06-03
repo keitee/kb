@@ -48,7 +48,7 @@ BleRcuController1Adaptor::BleRcuController1Adaptor(
   // If enable is set to true, connect the signals; if set to false, disconnect
   // all signals.
 
-  // TODO: don't use "auto replay signals, do this manually
+  // don't use "auto replay signals, do this manually using connect()
   // setAutoRelaySignals(true);
   setAutoRelaySignals(false);
 
