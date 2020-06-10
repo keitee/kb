@@ -219,6 +219,10 @@ target_link_libraries(test_stl gmock_main)
 add_executable(test_gcc "test_gcc.cpp")
 target_link_libraries(test_gcc gmock_main)
 
+# test_cpp.cpp
+add_executable(test_cpp "test_cpp.cpp")
+target_link_libraries(test_cpp gmock_main)
+
 # test bridge pattern.
 # bridge client. not needed bridge_p.h since there is no subclassing on impl.
 add_executable(bridge_client1 "bridge_client1.cpp" "bridge.cpp")

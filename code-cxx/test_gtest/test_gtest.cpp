@@ -333,6 +333,7 @@ TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey1)
   EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
 }
 
+// use "WillRepeatdly*
 TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2)
 {
   auto station = std::make_shared<MockWeatherStation>();
@@ -342,6 +343,49 @@ TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2)
   UserInterface ui(station);
 
   EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+// if comment out:
+// EXPECT_CALL(*station, rainfall()).WillRepeatedly(Return(5.0));
+//
+// [ RUN      ] WeatherStationUserInterface.check_rain_when_rainfall_is_havey2_1
+//
+// GMOCK WARNING:
+// Uninteresting mock function call - returning default value.
+//     Function call: rainfall()
+//           Returns: 0
+// NOTE: You can safely ignore the above warning unless this call should not happen.  Do not suppress it by blindly adding an EXPECT_CALL() if you don't mean to enforce the call.  See https://github.com/google/googletest/blob/master/googlemock/docs/cook_book.md#knowing-when-to-expect for details.
+// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:356: Failure
+// Value of: ui.rain()
+// Expected: is equal to 4-byte object <00-00 00-00>
+//   Actual: 4-byte object <02-00 00-00>
+// [  FAILED  ] WeatherStationUserInterface.check_rain_when_rainfall_is_havey2_1 (0 ms)
+
+
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2_1)
+{
+  auto station = std::make_shared<MockWeatherStation>();
+
+  // EXPECT_CALL(*station, rainfall()).WillRepeatedly(Return(5.0));
+
+  UserInterface ui(station);
+
+  EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
+}
+
+// can use nicemock instead to supress warning but has to comment out ui.rain()
+// call as well since no return action from mock from expectation.
+TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2_2)
+{
+  auto station = std::make_shared<NiceMock<MockWeatherStation>>();
+  // auto station = std::shared_ptr<NiceMock<MockWeatherStation>>(
+  //   new NiceMock<MockWeatherStation>);
+
+  // EXPECT_CALL(*station, rainfall()).WillRepeatedly(Return(5.0));
+
+  UserInterface ui(station);
+
+  // EXPECT_THAT(ui.rain(), UserInterface::Range::Heavy);
 }
 
 // when use ON_CALL

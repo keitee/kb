@@ -63,9 +63,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 # include_directories(SYSTEM ${GTEST_DIR}/include)
 
-
-# add_compile_options("-g;-D_GLIBCXX_DEBUG")
-
+# add_compile_options("-g;-E")
 
 # cmake help
 #
@@ -163,7 +161,11 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 
 # test_gtest.cpp
-add_executable(${PROJECT_NAME} "test_gtest.cpp" "reward.cpp")
+add_executable(${PROJECT_NAME} 
+  "test_gtest.cpp" 
+  "reward.cpp"
+  "fixture.cpp"
+  )
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
