@@ -17,29 +17,26 @@ using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
 using testing::FloatEq;
+using testing::Ne;
 using testing::StrEq;
-
-// ={=========================================================================
-// string-pos
-
-TEST(String, check_size)
-{
-  string coll{"12345"};
-
-  EXPECT_EQ(coll.size(), 5);
-  EXPECT_EQ(coll.length(), 5);
-
-  // this is error since iterator is not int
-  // EXPECT_EQ(coll.end(), 5);
-
-  EXPECT_EQ(*coll.end(), '\0');
-}
 
 // ={=========================================================================
 // *cxx-string-ctor*
 
-TEST(String, check_ctor)
+TEST(StringCtor, check_various_form)
 {
+  {
+    std::string coll{"12345"};
+
+    EXPECT_EQ(coll.size(), 5);
+    EXPECT_EQ(coll.length(), 5);
+
+    // this is error since iterator is not int
+    // EXPECT_EQ(coll.end(), 5);
+
+    EXPECT_EQ(*coll.end(), '\0');
+  }
+
   {
     std::string s("nico");
     EXPECT_THAT(s.length(), 4);
@@ -259,9 +256,15 @@ TEST(String, check_empty)
 }
 
 // ={=========================================================================
+// string-core
+
+// SSO (short string optimisation). see test_string_sso
+// TEST(StringCore, check_sso)
+
+// ={=========================================================================
 // string-operations string-back
 
-TEST(StringOperation, Back)
+TEST(StringOperation, check_back)
 {
   string s1{"zoo"};
   EXPECT_EQ(s1.back(), 'o');
@@ -282,7 +285,7 @@ TEST(StringOperation, Back)
 
 // string-maxsize
 
-TEST(StringOperation, MaxSize)
+TEST(String, check_operation_max_size)
 {
   string s{};
 
@@ -292,6 +295,15 @@ TEST(StringOperation, MaxSize)
 #else
   EXPECT_THAT(s.max_size(), 9223372036854775807);
 #endif
+}
+
+TEST(String, check_operation_resize)
+{
+  string s{};
+
+  s.resize(1000);
+
+  EXPECT_EQ(s.size(), 1000);
 }
 
 /*
@@ -930,7 +942,7 @@ TEST(CxxString, Swap)
 //
 // int compare(size_type pos1, size_type count1, const basic_string& str ) const;
 
-TEST(StringOperation, operation_Compare)
+TEST(StringCompare, check_member_function)
 {
   {
     std::string coll1{"string compare"};
@@ -1003,6 +1015,168 @@ TEST(StringOperation, operation_Compare)
   }
 }
 
+// ={=========================================================================
+// 4.13 Doing a Case-Insensitive String Comparison
+
+namespace stringcompare
+{
+  bool caseInsCompare1(const string &s1, const string &s2)
+  {
+    if (s1.size() != s2.size())
+      return false;
+
+    for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend();
+        ++lhs, ++rhs)
+      if (toupper(*lhs) != toupper(*rhs))
+        return false;
+
+    return true;
+  }
+}
+
+TEST(StringCompare, check_no_case)
+{
+  using namespace stringcompare;
+
+  const string s1 = "In the BEGINNING...";
+  const string s2 = "In the beginning...";
+
+  EXPECT_TRUE(caseInsCompare1(s1, s2));
+}
+
+#if 0
+// ={=========================================================================
+// *cxx-string-trait*
+
+bits/char_traits.h
+
+  /**
+   *  @brief  Base class used to implement std::char_traits.
+   *
+   *  @note For any given actual character type, this definition is
+   *  probably wrong.  (Most of the member functions are likely to be
+   *  right, but the int_type and state_type typedefs, and the eof()
+   *  member function, are likely to be wrong.)  The reason this class
+   *  exists is so users can specialize it.  Classes in namespace std
+   *  may not be specialized for fundamental types, but classes in
+   *  namespace __gnu_cxx may be.
+   *
+   *  See https://gcc.gnu.org/onlinedocs/libstdc++/manual/strings.html#strings.string.character_types
+   *  for advice on how to make use of this class for @a unusual character
+   *  types. Also, check out include/ext/pod_char_traits.h.  
+   */
+
+  template<typename _CharT>
+    struct char_traits
+  {
+    template<typename _CharT>
+      _GLIBCXX14_CONSTEXPR int
+      char_traits<_CharT>::
+      compare(const char_type* __s1, const char_type* __s2, std::size_t __n)
+      {
+        for (std::size_t __i = 0; __i < __n; ++__i)
+          if (lt(__s1[__i], __s2[__i]))
+            return -1;
+          else if (lt(__s2[__i], __s1[__i]))
+            return 1;
+        return 0;
+      }
+  }
+
+o all functions of char_traits are "static" and it is "stateless" class.
+
+o Traits of basic_string should have all functions of char_traits so the easiest
+  way is to derive from char_traits and implements only necessaries in the
+  derived.
+
+#endif
+
+namespace stringtraits
+{
+  struct my_char_traits : public std::char_traits<char>
+  {
+    // make char higner if they are numbers(digits)
+    static int get_real_rank(char c)
+    {
+      if (isdigit(c))
+      {
+        return c + 256;
+      }
+
+      return c;
+    }
+
+    // return true if c1 < c2
+    static bool lt(char c1, char c2)
+    {
+      return get_real_rank(c1) < get_real_rank(c2);
+    }
+
+    // this works
+    // static int compare(const char *s1, const char *s2, size_t n)
+    // {
+    //   while (n-- != 0)
+    //   {
+    //     if (get_real_rank(*s1) < get_real_rank(*s2))
+    //     {
+    //       return -1;
+    //     }
+
+    //     if (get_real_rank(*s1) > get_real_rank(*s2))
+    //     {
+    //       return 1;
+    //     }
+
+    //     ++s1;
+    //     ++s2;
+    //   }
+
+    //   return 0;
+    // }
+
+    // if follows the stl code
+    static int compare(const char *s1, const char *s2, size_t n)
+    {
+      for (std::size_t i = 0; i < n; ++i)
+      {
+        if (get_real_rank(s1[i]) < get_real_rank(s2[i]))
+        {
+          return -1;
+        }
+        else if (get_real_rank(s1[i]) > get_real_rank(s2[i]))
+        {
+          return 1;
+        }
+      }
+      return 0;
+    }
+  };
+} // namespace stringtraits
+
+TEST(StringCompare, check_traits)
+{
+  {
+    std::string s1{"1a"};
+    std::string s2{"a1"};
+
+    // std::cout << "usual string compare : " << std::boolalpha 
+    // << (s1 < s2) << std::endl;
+    //
+    // since "numbers" are lower, before, than "alphabets"
+    EXPECT_THAT((s1 < s2), true);
+  }
+
+  // How can we do the opposite? that is, "numbers" are higher
+  {
+    using namespace stringtraits;
+
+    std::basic_string<char, my_char_traits> s1{"1a"};
+    std::basic_string<char, my_char_traits> s2{"a1"};
+
+    EXPECT_THAT((s1 < s2), false);
+  }
+}
+
 TEST(StringOperation, Add)
 {
   std::string coll1{};
@@ -1020,7 +1194,7 @@ TEST(StringOperation, Add)
 // void clear(); (until C++11)
 // void clear() noexcept;
 
-TEST(CxxString, StringClear)
+TEST(String, StringClear)
 {
   // it is safe to call clear() on empty coll
   {
@@ -1273,17 +1447,24 @@ TEST(StringConverison, check_functions)
 
     // man strtol()
     //
+    // #include <stdlib.h>
+    // long int strtol(const char *nptr, char **endptr, int base);
+    // long long int strtoll(const char *nptr, char **endptr, int base);
+    //
     // The string may begin with an arbitrary amount of white space (as deter‐
     // mined by isspace(3)) followed by a single optional '+' or '-' sign.
-
+    //
     // If base is zero or 16, the string may then include a "0x" prefix, and
     // the number will  be read in base 16;
-    //
-    // otherwise, a zero base is taken as 10 (decimal) unless the next character
-    // is '0', in which case it  is taken as 8 (octal).
 
     EXPECT_EQ(std::stol("0x12AB", nullptr, 0), 4779);
     EXPECT_EQ(std::stol("12AB", nullptr, 16), 4779);
+
+    // otherwise, a zero base is taken as 10 (decimal) unless the next character
+    // is '0', in which case it  is taken as 8 (octal).
+
+    EXPECT_EQ(std::stol("12345", nullptr, 0), 12345);
+    EXPECT_EQ(std::stol("12345", nullptr, 10), 12345);
   }
 
   // limits
@@ -1367,7 +1548,7 @@ TEST(StringConverison, check_stringstream)
                 ElementsAre("player 0", "player 1", "player 2", "player 3"));
   }
 
-  // to number
+  // convert string to number
   {
     // The following lines read the integer x with the value 3 and the
     // floating-point f with the value 0.7 from the stringstream:
@@ -1375,7 +1556,7 @@ TEST(StringConverison, check_stringstream)
     int x{};
     float f{};
 
-    istringstream is{"3.7"};
+    std::istringstream is{"3.7"};
 
     // or
     // string input{"3.7"};
@@ -1392,9 +1573,53 @@ TEST(StringConverison, check_stringstream)
     ASSERT_THAT(f, FloatEq(0.7));
   }
 
+  // leading spaces?
+  {
+    {
+      // fail since int is too small
+      //  int  max:      2.147.483.647
+      //            16.060.300.000.001
+
+      std::stringstream is{"00000000000000000016060300000001"};
+      int value{};
+      is >> value;
+      EXPECT_THAT(value, Ne(16060300000001));
+    }
+
+    {
+      // okay
+      std::stringstream is{"00000000000000000016060300000001"};
+      long long value{};
+      is >> value;
+      EXPECT_THAT(value, 16060300000001);
+    }
+
+    {
+      // to hex and okay 
+      std::stringstream is{"00000000000000000016060300000001"};
+      long long value{};
+      is >> std::hex >> value;
+      EXPECT_THAT(value, 6199059442302977);
+    }
+
+    // as octal since 
+    // otherwise, a zero base is taken as 10 (decimal) unless the next character
+    // is '0', in which case it  is taken as 8 (octal).
+    EXPECT_THAT(std::stoll("00000000000000000016060300000001", nullptr, 0),
+                968565456897);
+
+    // "taken as" means see "input" as "base". to 10
+    EXPECT_THAT(std::stoll("00000000000000000016060300000001", nullptr, 10),
+                16060300000001);
+
+    // to 16
+    EXPECT_THAT(std::stoll("00000000000000000016060300000001", nullptr, 16),
+                6199059442302977);
+  }
+
   // to number
   {
-    stringstream is{"1 2 3 4"};
+    std::stringstream is{"1 2 3 4"};
     int value{};
     vector<int> coll{};
 
@@ -3144,8 +3369,7 @@ TEST(StringParse, check_case_1)
   // clang-format off
   // someone's implementation
   {
-    // "/etc/localtime  Tue Jan 19 03:14:07 2038 UT = Tue Jan 19 04:14:07 2038 CET isdst=0 gmtoff=3600"
-    std::string temp( buf );
+    std::string temp{"/etc/localtime  Tue Jan 19 03:14:07 2038 UT = Tue Jan 19 04:14:07 2038 CET isdst=0 gmtoff=3600"};
     struct tm utcTime = {0};
 
     temp.erase( 0, temp.find( " " ) + 2 ); // Remove "/etc/localtime  " -> 2 spaces
@@ -3357,6 +3581,27 @@ TEST(String, FindNthSubstring)
 // ={=========================================================================
 // string-raw string-literal
 
+TEST(StringLiteral, check_define_literal)
+{
+  // error: ‘name’ does not name a type; did you mean ‘nanq’?
+  //
+  // constexpr name{"this is name"};
+  // constexpr name = "this is name";
+  // constexpr name{"this is name"s};
+  // constexpr name = "this is name"s;
+
+  // error: the type ‘const string {aka const std::__cxx11::basic_string<char>}’ 
+  // of constexpr variable ‘name’ is not literal
+  // {
+  //   constexpr std::string name{"this is name"};
+  // }
+
+  // using namespace std::literals;
+  // defined as std::string and can use its member.
+  auto name = "this is name"s;
+  EXPECT_THAT(name.size(), 12);
+}
+
 // outupt string:
 //
 // { "address": {
@@ -3365,7 +3610,7 @@ TEST(String, FindNthSubstring)
 //          "state":"CO",
 //          "country":"US" }}
 
-TEST(String, raw)
+TEST(StringLiteral, check_raw)
 {
   {
     std::ostringstream os1;
@@ -3589,30 +3834,6 @@ TEST(String, ConvertStringToLowerUpperCase)
 
   toLower(s);
   EXPECT_THAT(s, Eq("shazam"));
-}
-
-// ={=========================================================================
-// 4.13 Doing a Case-Insensitive String Comparison
-
-bool caseInsCompare1(const string &s1, const string &s2)
-{
-  if (s1.size() != s2.size())
-    return false;
-
-  for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend();
-       ++lhs, ++rhs)
-    if (toupper(*lhs) != toupper(*rhs))
-      return false;
-
-  return true;
-}
-
-TEST(String, CompareCaseInsensitive)
-{
-  const string s1 = "In the BEGINNING...";
-  const string s2 = "In the beginning...";
-
-  EXPECT_TRUE(caseInsCompare1(s1, s2));
 }
 
 // ={=========================================================================

@@ -123,12 +123,13 @@ target_link_libraries(${PROJECT_NAME}_2 gmock_main Boost::regex)
 add_executable(${PROJECT_NAME}_3 test_string_3.cpp)
 target_link_libraries(${PROJECT_NAME}_3 gmock_main)
 
-# # fsm qt for qt
-# find_package(Qt5Core)
-# find_package(Qt5Test)
-# add_executable(${PROJECT_NAME}_qt qfsm_qt_use.cpp qfsm_qt.cpp)
-# target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
+# string_view
+add_executable(test_string_view test_string_view.cpp)
+target_link_libraries(test_string_view)
 
+# string_sso
+add_executable(test_string_sso test_string_sso.cpp)
+target_link_libraries(test_string_sso)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

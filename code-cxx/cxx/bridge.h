@@ -7,14 +7,14 @@ class WindowImpl;
 
 class Window
 {
-  private:
-    std::shared_ptr<WindowImpl> impl;
+private:
+  std::shared_ptr<WindowImpl> impl;
 
-  public:
-    Window();
-    virtual ~Window() = default;
+public:
+  Window();
+  virtual ~Window() = default;
 
-    virtual void DrawContents();
+  virtual void DrawContents();
 };
 
 #endif // BRIDGE_PATTERN_Hgt

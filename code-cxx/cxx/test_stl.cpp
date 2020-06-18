@@ -1071,8 +1071,8 @@ TEST(CxxVector, check_move)
 // Aborted
 
 // ={=
-TEST(DISABLED_Vector, EraseRuntimeError)
-// TEST(CxxVector, EraseRuntimeError)
+// TEST(DISABLED_Vector, EraseRuntimeError)
+TEST(CxxVector, DISABLED_EraseRuntimeError)
 {
   vector<int> coll1;
   INSERT_ELEMENTS(coll1, 0, 8);
@@ -1110,63 +1110,59 @@ TEST(DISABLED_Vector, EraseRuntimeError)
 }
 
 // ={=
-TEST(CxxVector, EraseNoError)
+TEST(CxxVector, check_erase)
 {
-  vector<int> coll1;
-  INSERT_ELEMENTS(coll1, 0, 8);
-  EXPECT_THAT(coll1, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
-
-  auto it = coll1.begin() + 1;
-
-  it = coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0, 2, 3, 4, 5, 6, 7, 8));
-
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0, 3, 4, 5, 6, 7, 8));
-
-  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for (auto it = coll2.begin(); it != coll2.end(); /* no */)
   {
-    // if see even values, remove it
-    if (!(*it % 2))
-      it = coll2.erase(it);
-    else
-      ++it;
+    std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+    auto it = coll.begin() + 1;
+
+    it = coll.erase(it);
+    EXPECT_THAT(coll, ElementsAre(0, 2, 3, 4, 5, 6, 7, 8));
+
+    coll.erase(it);
+    EXPECT_THAT(coll, ElementsAre(0, 3, 4, 5, 6, 7, 8));
   }
 
-  EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
-}
-
-// ={=
-TEST(CxxVector, InsertAndErase)
-{
-  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for (auto it = coll.begin(); it != coll.end(); /* no */)
   {
-    // if see odd values, repeat it in front of it.
-    if (*it % 2)
+    std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+    // in every iteration, update it which is invalidated after insert/erase.
+    // update it from erase() and calls end() in every iteration.
+    for (auto it = coll.begin(); it != coll.end(); /* no */)
     {
-      it = coll.insert(it, *it);
-      it += 2;
+      // if see even values, remove it
+      if (!(*it % 2))
+        it = coll.erase(it);
+      else
+        ++it;
     }
-    else
-      it = coll.erase(it);
+
+    EXPECT_THAT(coll, ElementsAre(1, 3, 5, 7));
   }
 
-  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
-}
-
-TEST(CxxVector, FindAndErase)
-{
-  // find/erase when there are no duplicates. use index
   {
-    vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    // in every iteration, update it which is invalidated after insert/erase.
+    for (auto it = coll.begin(); it != coll.end(); /* no */)
+    {
+      // if see odd values, repeat it in front of it.
+      if (*it % 2)
+      {
+        it = coll.insert(it, *it);
+        it += 2;
+      }
+      else
+        it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
+  }
+
+  // find/erase single 3. use index
+  {
+    std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     for (size_t i = 0; i < coll.size(); ++i)
     {
@@ -1181,9 +1177,9 @@ TEST(CxxVector, FindAndErase)
     EXPECT_THAT(coll, ElementsAre(0, 1, 2, 4, 5, 6, 7, 8, 9));
   }
 
-  // find/erase when there are no duplicates
+  // find/erase single 3
   {
-    vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     auto it = std::find(coll.begin(), coll.end(), 3);
     if (coll.end() != it)
@@ -1194,9 +1190,9 @@ TEST(CxxVector, FindAndErase)
     EXPECT_THAT(coll, ElementsAre(0, 1, 2, 4, 5, 6, 7, 8, 9));
   }
 
-  // find/erase when there are duplicates
+  // find/erase multiple 3
   {
-    vector<int> coll{0, 1, 2, 3, 3, 3, 6, 7, 8, 9};
+    std::vector<int> coll{0, 1, 2, 3, 3, 3, 6, 7, 8, 9};
 
     coll.erase(std::remove(coll.begin(), coll.end(), 3), coll.end());
 
@@ -1688,7 +1684,7 @@ TEST(CxxArray, check_multi_dimention)
 // the reference say: Calling back on an empty container is undefined.
 // when runs, see seg fault(core dumped).
 
-TEST(DISABLED_CxxDeque, seeEmpty)
+TEST(CxxDeque, DISABLED_check_on_empty)
 {
   std::deque<int> coll;
 
@@ -1704,7 +1700,7 @@ TEST(DISABLED_CxxDeque, seeEmpty)
 
 // As with cxx-vector, deque supports pre-allocation.
 
-TEST(CxxDeque, seePreAllocation)
+TEST(CxxDeque, check_ctor)
 {
   std::deque<int> coll(1000);
 
@@ -2581,19 +2577,19 @@ TEST(CxxMap, map_multi_EqualRange)
 // ={=========================================================================
 // cxx-unordered
 
-TEST(Unordered, MapDuplicates)
+TEST(CxxUnordered, check_set)
 {
-  unordered_multiset<string> cities{"Braunschweig",
-                                    "Hanover",
-                                    "Frankfurt",
-                                    "New York",
-                                    "Chicago",
-                                    "Toronto",
-                                    "Paris",
-                                    "Frankfurt"};
+  std::unordered_multiset<string> cities{"Braunschweig",
+                                         "Hanover",
+                                         "Frankfurt",
+                                         "New York",
+                                         "Chicago",
+                                         "Toronto",
+                                         "Paris",
+                                         "Frankfurt"};
 
   {
-    vector<string> result{};
+    std::vector<string> result{};
 
     for (const auto &elem : cities)
       result.push_back(elem);
@@ -2613,7 +2609,7 @@ TEST(Unordered, MapDuplicates)
     // insert additional elements
     cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
 
-    vector<string> result{};
+    std::vector<string> result{};
 
     for (const auto &elem : cities)
       result.push_back(elem);
@@ -2632,6 +2628,84 @@ TEST(Unordered, MapDuplicates)
                                   "Hanover", // duplicates
                                   "Paris"}));
   }
+}
+
+namespace collunordered
+{
+  class Todo
+  {
+    // friend since need to access private members
+    friend std::ostream &operator<<(std::ostream &o, const Todo &t);
+    friend struct std::hash<Todo>;
+
+    int priority_{};
+    std::string desc_{};
+
+  public:
+    Todo(int priority, std::string desc)
+        : priority_(priority)
+        , desc_(desc)
+    {}
+
+    // have it as a member
+    bool operator==(const Todo &t) const
+    {
+      if ((priority_ == t.priority_) && (desc_ == t.desc_))
+        return true;
+
+      return false;
+    }
+  };
+
+  // requires "operator<<()" for printing Todo
+  template <typename T>
+  void print_unordered_set(const std::unordered_set<T> &coll)
+  {
+    for (const auto &e : coll)
+      std::cout << e << std::endl;
+  }
+
+  std::ostream &operator<<(std::ostream &o, const Todo &t)
+  {
+    o << "prio: " << t.priority_ << ", desc: " << t.desc_;
+    return o;
+  }
+} // namespace collunordered
+
+// to use user type in "unordered" coll, have to define hash function for it.
+// cxx provides default hash functions for basic types; int, std::string, so we
+// use them to make own hash function for our type.
+
+namespace std
+{
+  using collunordered::Todo;
+
+  template <>
+  struct hash<Todo>
+  {
+    size_t operator()(const Todo &t) const
+    {
+      std::hash<std::string> hashf;
+
+      // xor
+      return t.priority_ ^ (hashf(t.desc_));
+    }
+  };
+} // namespace std
+
+TEST(CxxUnordered, check_user_type)
+{
+  using namespace collunordered;
+
+  std::unordered_set<Todo> coll;
+
+  coll.insert(Todo(1, "do sport"));
+  coll.insert(Todo(2, "do revise"));
+  coll.insert(Todo(1, "do programming"));
+  coll.insert(Todo(3, "do socilise"));
+  coll.insert(Todo(2, "do watching"));
+
+  print_unordered_set(coll);
 }
 
 // ={=========================================================================

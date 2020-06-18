@@ -361,7 +361,6 @@ TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2)
 //   Actual: 4-byte object <02-00 00-00>
 // [  FAILED  ] WeatherStationUserInterface.check_rain_when_rainfall_is_havey2_1 (0 ms)
 
-
 TEST(WeatherStationUserInterface, check_rain_when_rainfall_is_havey2_1)
 {
   auto station = std::make_shared<MockWeatherStation>();
@@ -533,11 +532,11 @@ TEST(WeatherStationGmock, verify_complex_arguments1)
 // cause mismatch
 //[ RUN      ] WeatherStationGmock.verify_complex_arguments2
 // unknown file: Failure
-// 
+//
 // Unexpected mock function call - returning directly.
 //     Function call: complexargs(@0x7ffd1c8e2870 { 1, 2, 3, 4 }, @0x7ffd1c8e2850 { 5, 6, 7, 8 })
 // Google Mock tried the following 1 expectation, but it didn't match:
-// 
+//
 // /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:436: EXPECT_CALL(*station, complexargs(ElementsAre(1, 2, 3, 4), ElementsAre(5, 6, 7, 9)))...
 //   Expected arg #1: has 4 elements where
 // element #0 is equal to 5,
@@ -583,7 +582,7 @@ TEST(WeatherStationGmock, verify_complex_arguments2)
 //   EXPECT_CALL(foo, SendValues(_, ElementsAre(1, 4, 4, 7), EqualsProto( ... )));
 //
 // You can instead save the arguments and test them individually:
-// 
+//
 //   EXPECT_CALL(foo, SendValues)
 //       .WillOnce(DoAll(SaveArg<1>(&actual_array), SaveArg<2>(&actual_proto)));
 //

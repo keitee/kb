@@ -5,16 +5,16 @@
 
 class WindowImpl
 {
-  private:
-    std::string name_{};
+private:
+  std::string name_{};
 
-  public:
-    WindowImpl(const std::string &name)
-        : name_{name}
-    {}
-    virtual ~WindowImpl() = default;
+public:
+  WindowImpl(const std::string &name)
+      : name_{name}
+  {}
+  virtual ~WindowImpl() = default;
 
-    virtual void DrawContentsImpl();
+  virtual void DrawContentsImpl();
 };
 
 #endif // BRIDGE_PATTERN_P_H

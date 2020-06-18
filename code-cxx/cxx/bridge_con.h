@@ -6,17 +6,17 @@
 
 class XWindowImpl : public WindowImpl
 {
-  private:
-    std::string name_{};
+private:
+  std::string name_{};
 
-  public:
-    XWindowImpl(const std::string &name)
-        : WindowImpl(name)
-        , name_{name}
-    {}
-    virtual ~XWindowImpl() = default;
+public:
+  XWindowImpl(const std::string &name)
+      : WindowImpl(name)
+      , name_{name}
+  {}
+  virtual ~XWindowImpl() = default;
 
-    virtual void DrawContentsImpl();
+  virtual void DrawContentsImpl();
 };
 
 #endif //  BRIDGE_PATTERN_CON_H
