@@ -50,7 +50,8 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
   cout << "(" << count << ")" << endl;
 }
 
-/* ={=========================================================================
+/*
+={=========================================================================
 algo-squeeze cxx-bitset
 
 Delete all c from string s. From C prog language, p47. All these are example
@@ -60,7 +61,7 @@ void squeeze(char s[], int c);
 
 */
 
-namespace algo_squeeze
+namespace algosqueeze
 {
   // ansic version
   void squeeze1(char s[], int c)
@@ -105,37 +106,45 @@ namespace algo_squeeze
     // set the end
     *pos = '\0';
   }
-} // namespace algo_squeeze
 
-TEST(AlgoSqueeze, try_1)
+  // 2020.06. as seen above, can use only single variable.
+  void squeeze4(char s[], int c)
+  {
+    char *end       = s;
+    const char *run = s;
+
+    for (; *run != '\0'; ++run)
+    {
+      // when current char is different from c, copy current to where end points
+      // and increase it. when differnet, do not increase end.
+      if (c != *run)
+      {
+        *end++ = *run;
+      }
+    }
+
+    // when the loop ends, put it a string end.
+    *end = '\0';
+  }
+} // namespace algosqueeze
+
+TEST(AlgoSqueeze, remove_single_char)
 {
-  using namespace algo_squeeze;
+  using namespace algosqueeze;
 
+  std::vector<std::function<void(char *, int)>> coll{squeeze1,
+                                                     squeeze2,
+                                                     squeeze3,
+                                                     squeeze4};
+
+  for (const auto &f : coll)
   {
     char arr[]          = "this is a program to squeeze";
     const char result[] = "this is a program to squz";
 
-    squeeze1(arr, 'e');
+    f(arr, 'e');
 
     // std::cout << arr << std::endl;
-
-    EXPECT_THAT(strcmp(arr, result), 0);
-  }
-
-  {
-    char arr[]          = "this is a program to squeeze";
-    const char result[] = "this is a program to squz";
-
-    squeeze2(arr, 'e');
-
-    EXPECT_THAT(strcmp(arr, result), 0);
-  }
-
-  {
-    char arr[]          = "this is a program to squeeze";
-    const char result[] = "this is a program to squz";
-
-    squeeze3(arr, 'e');
 
     EXPECT_THAT(strcmp(arr, result), 0);
   }
@@ -151,7 +160,7 @@ void squeeze2(char s[], char t[]);
 
 */
 
-namespace algo_squeeze_2
+namespace algosqueeze_mutiple
 {
   void squeeze1(char s[], char t[])
   {
@@ -213,68 +222,33 @@ namespace algo_squeeze_2
     // since *s shuld be '\0'
     *pos = *s;
   }
-} // namespace algo_squeeze_2
+} // namespace algosqueeze_mutiple
 
-TEST(AlgoSqueeze, try_2)
+TEST(AlgoSqueeze, remove_multiple_chars)
 {
-  using namespace algo_squeeze_2;
+  using namespace algosqueeze_mutiple;
 
+  std::vector<std::function<void(char *, char *)>> coll{squeeze1,
+                                                        squeeze2,
+                                                        squeeze3};
+
+  for (const auto &f : coll)
   {
     char arr[]          = "hello world";
     char filter[]       = "ol";
     const char result[] = "he wrd";
 
-    squeeze1(arr, filter);
+    f(arr, filter);
 
     // std::cout << arr << std::endl;
 
     EXPECT_THAT(strcmp(arr, result), 0);
   }
-
-  {
-    char arr[]          = "hello world";
-    char filter[]       = "ol";
-    const char result[] = "he wrd";
-
-    squeeze2(arr, filter);
-
-    EXPECT_THAT(strcmp(arr, result), 0);
-  }
-
-  {
-    char arr[]          = "hello world";
-    char filter[]       = "ol";
-    const char result[] = "he wrd";
-
-    squeeze3(arr, filter);
-
-    EXPECT_THAT(strcmp(arr, result), 0);
-  }
 }
 
-/* ={=========================================================================
-algo-any cxx-bitset
-
-Write the function any(s1,s2), which returns the first location in the string s1
-where any character from the string s2 occurs, or -1 if s1 contains no
-characters from s2.
-
-note: 
-The standard library function strpbrk does the same job but returns a pointer to
-the location.
-
-char *strpbrk(const char *s, const char *accept);
-
-not good since based on the "squeeze" approach which means more work to find
-the first time since key chars can happen any order and did not stop on
-"first" match
-
-*/
-
-// ={=========================================================================
-// algo-two-player-card-game
-
 /*
+={=========================================================================
+algo-two-player-card-game
 
 https://dev.to/mortoray/interview-question-a-two-player-card-game-67i
 
@@ -1206,10 +1180,11 @@ TEST(AlgoTwoPlayerCardGame, Game_3)
   }
 }
 
-// ={=========================================================================
-// algo-swap: swap without a temporary
-
-namespace algo_swap
+/*
+={=========================================================================
+algo-swap: swap without a temporary
+*/
+namespace algoswap
 {
   void swap_1(int &a, int &b)
   {
@@ -1239,11 +1214,11 @@ namespace algo_swap
     b = a ^ b; // b = a^b = (a^b)^b = a^0 = a
     a = a ^ b; // a = a^b = (a^b)^a = b^0 = b
   }
-} // namespace algo_swap
+} // namespace algoswap
 
-TEST(AlgoSwap, Swap)
+TEST(AlgoSwap, check_swap)
 {
-  using namespace algo_swap;
+  using namespace algoswap;
 
   {
     int a = 9, b = 4;
@@ -1253,6 +1228,7 @@ TEST(AlgoSwap, Swap)
     EXPECT_THAT(a, Eq(4));
     EXPECT_THAT(b, Eq(9));
   }
+
   {
     int a = 9, b = 4;
 
@@ -1265,11 +1241,16 @@ TEST(AlgoSwap, Swap)
 
 /*
 ={=========================================================================
-algo-occurance find a number seen odd times cxx-xor
+algo-occurance find a number which is seen odd times cxx-xor
+
+ex. input {2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    sorted 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
+    answer is 12
 */
 
-namespace algo_occurance
+namespace algooccurance
 {
+  // cxx-xor
   unsigned int find_number_odd_times_1(const vector<unsigned int> &input)
   {
     unsigned int result{};
@@ -1317,39 +1298,39 @@ namespace algo_occurance
 
     return result;
   }
-} // namespace algo_occurance
+} // namespace algooccurance
 
-TEST(AlgoOccurance, OddTimes)
+TEST(AlgoOccurance, check_seen_odd_times)
 {
-  using namespace algo_occurance;
+  using namespace algooccurance;
+
+  std::vector<std::function<unsigned int(const std::vector<unsigned int>)>>
+    coll{find_number_odd_times_1,
+         find_number_odd_times_2,
+         find_number_odd_times_3};
 
   {
     // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
-    const vector<unsigned int>
+    const std::vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(find_number_odd_times_1(input), 12);
+
+    for (const auto &f : coll)
+    {
+      EXPECT_THAT(f(input), 12);
+    }
   }
 
-  // find_if() returns the first match. so remove '4' to make it the first odd
-  // num of sequence:
-  // 2 2 4 4 4 6 6 8 8 10 10 12 12 12 (15)
   {
-    const vector<unsigned int>
+    // find_if() returns the first match. so remove '4' to make it the first odd
+    // num of sequence:
+    // 2 2 {4 4 4} 6 6 8 8 10 10 {12 12 12} (15)
+
+    const std::vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2};
-    EXPECT_THAT(find_number_odd_times_2(input), 4);
-  }
 
-  // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
-  {
-    const vector<unsigned int>
-      input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(find_number_odd_times_2(input), 12);
-  }
-
-  {
-    const vector<unsigned int>
-      input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(find_number_odd_times_3(input), 12);
+    EXPECT_THAT(coll[0](input), 8);
+    EXPECT_THAT(coll[1](input), 4);
+    EXPECT_THAT(coll[2](input), 4);
   }
 }
 

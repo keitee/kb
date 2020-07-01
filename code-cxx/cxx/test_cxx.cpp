@@ -153,10 +153,6 @@ using namespace testing;
 8785:TEST(Exception, Noexcept)
 8839:TEST(TypeConversion, Double)
 8861:TEST(CxxPrintf, Formats)
-8924:TEST(CxxCpp, Stringification)
-9125:TEST(CxxCpp, VariableArgs)
-9153:TEST(CxxCpp, VariableArgsMacro)
-9164:TEST(CxxCpp, useDefined)
 9238:TEST(Assert, StaticAssert)
 9249:TEST(Numeric, Abs)
 9282:TEST(Typedef, Alias)
@@ -394,24 +390,6 @@ TEST(CxxType, check_limits)
   std::cout << " int  min: " << std::numeric_limits<int>::min() << std::endl;
 }
 
-// *cxx-issue-case* *cxx-vaarg-issue*
-// This not only cause compile warnings. It causes core dump on embedded which
-// is very difficult to get call traces since it's crashes in libc.
-//
-// But works okay in PC build
-
-TEST(CxxType, check_crash)
-{
-  typedef long int int64;
-
-  int64 value{-1};
-
-  EXPECT_THAT(sizeof(int64), 8);
-
-  // cause core
-  printf("value (%d)\n", value);
-}
-
 TEST(CxxType, check_null)
 {
   // check null char, '\0', which is actually integer 0.
@@ -626,7 +604,7 @@ namespace cxxvariant
       return m_string;
     }
   };
-} // namespace cxx_variant
+} // namespace cxxvariant
 
 TEST(CxxTypeVariant, check_custom_variant)
 {
@@ -819,7 +797,7 @@ namespace cxxvariant
       }
     }
   };
-} // namespace cxx_variant
+} // namespace cxxvariant
 
 // [ RUN      ] CxxType.type_variantMap
 // {key1:b}
@@ -834,6 +812,7 @@ TEST(CxxTypeVariant, check_custom_variant_map)
 {
   using namespace cxxvariant;
 
+  // override "Visitor"
   struct CustomVisitor : VariantMap::Visitor
   {
     std::vector<std::string> coll;
@@ -883,6 +862,7 @@ TEST(CxxTypeVariant, check_custom_variant_map)
   vmap.insert("key5", std::string("variant1"));
   vmap.insert("key6", std::string("variant2"));
 
+  // call visit with the custom visitor
   vmap.visit(visitor);
 
   EXPECT_THAT(visitor.coll.size(), 6);
@@ -975,7 +955,7 @@ TEST(CxxTypeTuple, check_make_tuple)
 TEST(CxxTypeTuple, check_tie)
 {
   {
-    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    std::tuple<int, float, string> tup1{41, 6.3, "nico"};
     int i;
     float f;
     string s;
@@ -997,7 +977,7 @@ TEST(CxxTypeTuple, check_tie)
     EXPECT_THAT(f, 6.3);
     EXPECT_THAT(s, "nico");
 
-    // changes both tup and i,f,s
+    // when make change, changes both tup and i,f,s
 
     i = 51;
     f = 7.3;
@@ -1014,7 +994,7 @@ TEST(CxxTypeTuple, check_tie)
 
   // cxx-tie do the same
   {
-    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    std::tuple<int, float, string> tup1{41, 6.3, "nico"};
     int i;
     float f;
     string s;
@@ -1047,6 +1027,89 @@ TEST(CxxTypeTuple, check_tie)
     EXPECT_THAT(i, 51);
     EXPECT_THAT(f, 7.3);
     EXPECT_THAT(s, "nico nico");
+  }
+}
+
+// cxx-17
+// "structured binding" provides easy access than using get<>
+TEST(CxxTypeTuple, check_structured_binding)
+{
+  {
+    std::tuple<int, float, std::string> tup1{41, 6.3, "nico"};
+    auto [age, score, name] = tup1;
+
+    EXPECT_THAT(age, 41);
+    EXPECT_THAT(score, 6.3);
+    EXPECT_THAT(name, "nico");
+  }
+
+  // compile error
+  // {
+  //   auto [age, score, name] = make_tuple{41, 6.3, "nico"};
+  // }
+
+  {
+    std::tuple<int, float, std::string> tup1{41, 6.3, "nico"};
+    auto [age, score, name] = tup1;
+
+    EXPECT_THAT(age, 41);
+    EXPECT_THAT(score, 6.3);
+    EXPECT_THAT(name, "nico");
+
+    age = 51;
+
+    EXPECT_THAT(age, 51);
+
+    // do not change
+    EXPECT_THAT(std::get<0>(tup1), 41);
+  }
+
+  // use reference like std::tie
+  {
+    std::tuple<int, float, std::string> tup1{41, 6.3, "nico"};
+    auto &[age, score, name] = tup1;
+
+    EXPECT_THAT(age, 41);
+    EXPECT_THAT(score, 6.3);
+    EXPECT_THAT(name, "nico");
+
+    age = 51;
+
+    EXPECT_THAT(age, 51);
+
+    // change as well
+    EXPECT_THAT(std::get<0>(tup1), 51);
+  }
+}
+
+// cxx-17
+// "structured binding" can be used on struct and pair
+TEST(CxxStructuredBinding, check_struct)
+{
+  {
+    struct Data
+    {
+      int age;
+      double score;
+      std::string name;
+    };
+
+    Data data{41, 6.3, "nico"};
+
+    auto [age, score, name] = data;
+
+    EXPECT_THAT(age, 41);
+    EXPECT_THAT(score, 6.3);
+    EXPECT_THAT(name, "nico");
+  }
+
+  {
+    std::map<int, std::string> coll{{3, "hi"}, {5, "hello"}};
+
+    for (auto &[key, value] : coll)
+    {
+      std::cout << "{" << key << ", " << value << "}" << std::endl;
+    }
   }
 }
 
@@ -2814,66 +2877,75 @@ TEST(CxxCopyControl, PrivateAndDelete)
 // ={=========================================================================
 // cxx-enum
 
-namespace cxx_enum
+namespace cxxenum
 {
+  // unscoped
+  // enum { red, yellow, green } color;       // same as above so cause error
   enum color
   {
     red,
     yellow,
     green
-  }; // unscoped
-  // enum { red, yellow, green } color;       // same as above so cause error
+  };
 
+  // scoped
   enum class peppers
   {
     yellow,
     red,
     green
-  }; // scoped
-} // namespace cxx_enum
+  };
+} // namespace cxxenum
 
-TEST(Enum, ScopedAndUnscoped)
+TEST(CxxEnum, check_scoped_and_unscoped)
 {
-  using namespace cxx_enum;
+  using namespace cxxenum;
 
+  // explicitly use unscoped enumerators and implicitly use unscoped
   {
-    // explicitly use unscoped enumerators and implicitly use unscoped
-
     int value_1 = color::yellow;
     int value_2 = yellow;
     EXPECT_THAT(value_1, value_2);
   }
 
-  {
-    // {
-    //   enum color { red, yellow, green };          // unscoped
-    //   enum {red, yellow, green};                  // unscoped and unnamed
-    // }
-    //
-    // enum {red, yellow, green}; causes errors with enum color {}:
-    //
-    // cxx.cpp:1497:9: error: redeclaration of ‘red’
-    //    enum {red, yellow, green};                  // unscoped and unnamed
-    //          ^~~
-    // cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
-    //    enum color { red, yellow, green };          // unscoped
-    //                 ^~~
-    //
-    // {
-    //   enum color { red, yellow, green };        // unscoped
-    //   enum stoplight { red, yellow, green };    // unscoped
-    // } // namespace
-    //
-    // so can use enumerators of unscoped enum and this allows *cxx-enum-hack*
+  // both cases the compile cxx-error
+  //
+  // {
+  //   enum color { red, yellow, green };          // unscoped
+  //   enum {red, yellow, green};                  // unscoped and unnamed
+  // }
+  //
+  // {
+  //   enum color { red, yellow, green };        // unscoped
+  //   enum stoplight { red, yellow, green };    // unscoped
+  // }
+  //
+  // enum {red, yellow, green}; causes errors for all enumerators
+  //
+  // cxx.cpp:1497:9: error: redeclaration of ‘red’
+  //    enum {red, yellow, green};                  // unscoped and unnamed
+  //          ^~~
+  // cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
+  //    enum color { red, yellow, green };          // unscoped
+  //                 ^~~
 
+  // so can use enumerators of unscoped enum and this allows *cxx-enum-hack*
+  // which is the implicit conversion to an integer
+  {
+    // to integer
     int value_1 = yellow;
     int coll[green];
+
     EXPECT_THAT(8, sizeof(coll));
 
-    color value_2 = yellow;
-
-    EXPECT_THAT(value_1, value_2);
+    // error from integer to enum
+    // error: invalid conversion from ‘int’ to ‘cxxenum::color’
+    // int value_2 {10};
+    // color c = value_2;
   }
+
+  // scoped enum do strong type-safety because they do not implicitly convert to
+  // or from integer values
 
   {
     // However, followings cause type error:
@@ -2887,12 +2959,6 @@ TEST(Enum, ScopedAndUnscoped)
 
     // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in
     // initialization int value_1 = peppers::red;
-  }
-
-  {
-    std::cout << "yellow value " << yellow << std::endl;
-
-    // this also confirms that cxx-enum-class do not support cxx-enum-hack
     //
     // cxx.cpp:1527:43: error: no match for ‘operator<<’
     //  (operand types are ‘std::basic_ostream<char>’ and ‘cxx_enum::peppers’)
@@ -2945,7 +3011,7 @@ namespace cxx_enum_in_class
   };
 } // namespace cxx_enum_in_class
 
-TEST(Enum, InClass)
+TEST(CxxEnum, InClass)
 {
   using namespace cxx_enum_in_class;
 
@@ -3062,7 +3128,7 @@ public:
 // has unknown flag
 // [       OK ] Enum.ScopedEnum (0 ms)
 
-TEST(Enum, ScopeAndType)
+TEST(CxxEnum, ScopeAndType)
 {
   ScopedEnum scoped;
 
@@ -8409,7 +8475,7 @@ TEST(CxxBool, check_conversion)
   }
 }
 
-TEST(CxxBool, CheckBoolDefault)
+TEST(CxxBool, check_default_value)
 {
   bool value{};
   EXPECT_EQ(value, false);
@@ -8417,7 +8483,6 @@ TEST(CxxBool, CheckBoolDefault)
 
 namespace __cxx_check
 {
-
   void CheckFailed(const char *file,
                    int line,
                    const char *cond,
@@ -8464,7 +8529,7 @@ namespace __cxx_check
 
 } // namespace __cxx_check
 
-TEST(CxxBool, CheckUsage)
+TEST(CxxBool, check_usage)
 {
   using namespace __cxx_check;
 
@@ -8490,6 +8555,107 @@ TEST(CxxBool, CheckUsage)
 
   CHECK(100 != 101);
   CHECK(100 != 100);
+}
+
+#if 0
+
+NOTE: if remove "insert for bool values", then both will use string version.
+Looks like it's to do with name resolution.
+
+but there is no bool conversion of string. Then how it uses bool version?
+
+NO. it turns out that's because there is implicit pointer to bool conversion and
+that's what's happening here.
+
+[ RUN      ] String.check_string_bool_1
+insert(std::string &&key, bool value)
+key: key1, value: 1
+insert(std::string &&key, std::string &&value)
+key: key2, value: value2
+[       OK ] String.check_string_bool_1 (0 ms)
+[ RUN      ] String.check_string_bool_2
+check_bool: 1
+[       OK ] String.check_string_bool_2 (0 ms)
+
+this "implicit pointer to bool conversion" explains how this works:
+
+Before C++11, the `cxx-operator-bool()` was declared as `operator-void*()`,
+which could cause problems such as those described in Section 15.10.1,
+page 805.
+
+#endif
+
+// (gdb) b String_check_string_resolution_Test::TestBody()
+
+namespace cxxbool
+{
+  // // insert for bool values
+  void insert(const std::string &key, bool value)
+  {
+    std::cout << "insert(const std::string &key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, bool value)
+  {
+    std::cout << "insert(std::string &&key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  // insert for string values
+  void insert(const std::string &key, const std::string &value)
+  {
+    std::cout << "insert(const std::string &key, const std::string &value)"
+              << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, std::string &&value)
+  {
+    std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void check_bool(bool value)
+  {
+    std::cout << "check_bool: " << value << std::endl;
+  }
+} // namespace cxxbool
+
+TEST(CxxBool, check_bool_conversion)
+{
+  using namespace cxxbool;
+
+  {
+    insert("key1", "value1");
+    insert("key2", std::string("value2"));
+  }
+
+  {
+    check_bool("value1");
+
+    bool expected1 = "value1";
+    EXPECT_THAT(expected1, true);
+
+    bool expected2 = "";
+    EXPECT_THAT(expected2, true);
+
+    char *ptr{nullptr};
+    bool expected3 = ptr;
+    EXPECT_THAT(expected3, false);
+  }
+
+  {
+    std::string coll{};
+
+    // error: could not convert ‘coll’ from
+    // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ to ‘bool’
+    //
+    // if (coll)
+    //   std::cout << "coll" << std::endl;
+
+    EXPECT_THAT(coll.empty(), true);
+  }
 }
 
 // ={=========================================================================
@@ -9713,9 +9879,9 @@ TEST(CxxSlice, see_slice_2)
 // ={=========================================================================
 // cxx-override
 
-namespace cxx_override
+namespace cxxoverride
 {
-  namespace no_override
+  namespace nooverride
   {
     class Base
     {
@@ -9747,17 +9913,53 @@ namespace cxx_override
       int derived_;
     };
   } // namespace no_override
+
+  namespace yesoverride
+  {
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
+
+      virtual int get_value() { return base_; }
+
+    private:
+      int base_;
+    };
+
+    class Derived : public Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
+
+      virtual int get_value() { return derived_; };
+
+    private:
+      int derived_;
+    };
+  } // namespace no_override
 } // namespace cxx_override
 
-TEST(CxxOverride, check_condition_fail_when_arg_different)
+TEST(CxxOverride, check_condition)
 {
-  using namespace cxx_override::no_override;
+  using namespace cxxoverride;
+
+  // override happens
+  {
+    yesoverride::Derived derived;
+    yesoverride::Base *pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
 
   // No override since arg is different and do not meet *cxx-override-condition*
   // Hence no vtable update and base version called.
   {
-    Derived derived;
-    Base *pbase = &derived;
+    nooverride::Derived derived;
+    nooverride::Base *pbase = &derived;
     EXPECT_THAT(pbase->get_value(), 10);
   }
 
@@ -13552,6 +13754,83 @@ TEST(CxxRandom, check_distribution_5)
 
 // cxx-17
 TEST(CxxAny, check_any) {}
+
+#if 0
+
+// ={=========================================================================
+// cxx-coredump os-coredump
+
+*cxx-issue-case* *cxx-vaarg-issue*
+This not only cause compile warnings. It causes core dump on embedded which
+is very difficult to get call traces since it's crashes in libc.
+
+But works okay in PC build
+
+#endif
+
+TEST(CxxCoredump, check_vaarg_issue)
+{
+  typedef long int int64;
+
+  int64 value{-1};
+
+  EXPECT_THAT(sizeof(int64), 8);
+
+  // cause core
+  printf("value (%d)\n", value);
+}
+
+#if 0
+
+[ RUN      ] StringCtor.check_crash
+unknown file: Failure
+C++ exception with description "basic_string::_M_construct null not valid" thrown in the test body.
+[  FAILED  ] StringCtor.check_crash (0 ms)
+
+may wonder who will do this. However, it happens when making changes and caused
+half a day to find out why.
+
+was:
+
+  struct DrmState
+  {
+    std::string state{};
+    int euid{};
+  };
+
+DrmController::DrmController(PlaybackService *service)
+    : m_state{AS_STATE_UNAVAILABLE, 0}
+{
+  ...
+}
+
+now, due to requirment change, have to make euid as string. so did that in code
+but when runs it on the box, keep crashing while cannot see why and when all
+changes looks okay. still see crash even when remove all codes changing euid.
+Sadly, no backtrace or useful from core since it crashes very early.
+
+the fix:
+
+  struct DrmState
+  {
+    std::string state{};
+    std::string euid{};
+  };
+
+DrmController::DrmController(PlaybackService *service)
+    : m_state{AS_STATE_UNAVAILABLE, ""}
+{
+}
+
+The problem is when init std::string with 0 which is left while makeing changes.
+WOW.
+
+#endif
+
+TEST(CxxCoredump, check_string_ctor)
+{
+  std::string s = 0;
+}
 
 // ={=========================================================================
 

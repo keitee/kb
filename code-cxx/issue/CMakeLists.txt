@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_gtest VERSION 0.1 LANGUAGES CXX)
+project(test_cxx VERSION 0.1 LANGUAGES CXX)
 
-enable_testing()
+# enable_testing()
 
 # https://stackoverflow.com/questions/690223/how-to-retrieve-a-user-environment-variable-in-cmake-windows
 # Getting variables into your CMake script
@@ -16,8 +16,7 @@ enable_testing()
 #
 # $ENV{FOO}
 
-set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
-set(GTEST_DIR "$ENV{HOME}/works/googletest/googletest" CACHE PATH "The path to the GoogleTest")
+# set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
 
 # Include the directory source_dir in your project. This directory must contain
@@ -42,7 +41,7 @@ set(GTEST_DIR "$ENV{HOME}/works/googletest/googletest" CACHE PATH "The path to t
 # This variable holds the path to the top level binary output directory, i.e.
 # the directory in which you ran the cmake command
 
-add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
+# add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
@@ -60,11 +59,19 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 #
 # directory...  The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
-# include_directories(SYSTEM ${GTEST_DIR}/include)
+# include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-add_compile_options("-ggdb3")
-# add_compile_options("-g;-E")
+
+# do not work
+# add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
+# add_compile_options("-g;-D_GLIBCXX_DEBUG")
+add_compile_options("-g;-Wall;-Wswitch-enum")
+
+# Supported values are 98, 11 and 14.
+# set( CMAKE_CXX_STANDARD 14 )
+add_compile_options("-std=c++17")
+
+# set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # cmake help
 #
@@ -149,36 +156,33 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 
-# to find library name:
-#
-# ~/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core/Qt5CoreConfig.cmake
-# # For backwards compatibility only. Use Qt5Core_VERSION instead.
-# set(Qt5Core_VERSION_STRING 5.12.3)
-# 
-# set(Qt5Core_LIBRARIES Qt5::Core)
+# cmake -DCXX_CPP_VALUE=GCC ..
+# to use on #if/ifdef test
 
-# used in library name:
-# target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
+add_definitions(-DGCC=1 -DCLANG=2)
+
+if (CXX_CPP_VALUE STREQUAL "GCC")
+  add_definitions(-DCXX_CPP_VALUE=GCC)
+elseif(CXX_CPP_VALUE STREQUAL "GLANG")
+  add_definitions(-DCXX_CPP_VALUE=CLANG)
+else()
+  message(WARNING "CXX_CPP_VALUE is not provided." )
+endif()
+
+add_definitions(-DARM=3 -DMIPS=4)
+
+if (CXX_CPP_VALUE2 STREQUAL "ARM")
+  add_definitions(-DCXX_CPP_VALUE2=ARM)
+elseif(CXX_CPP_VALUE2 STREQUAL "MIPS")
+  add_definitions(-DCXX_CPP_VALUE2=MIPS)
+else()
+  message(WARNING "CXX_CPP_VALUE2 is not provided." )
+endif()
 
 
-# test_gtest.cpp
-add_executable(${PROJECT_NAME} 
-  "test_gtest.cpp" 
-  "reward.cpp"
-  "fixture.cpp"
-  )
-
-# cause link errors to Boost::thread
-# target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
-
-target_link_libraries(${PROJECT_NAME} gmock gmock_main Boost::thread)
-
-# test_case.cpp
-add_executable(test_case 
-  "test_case.cpp" 
-  )
-
-target_link_libraries(test_case Boost::thread)
+# case_1.cpp
+add_executable(test_case_1 "case_1.cpp")
+target_link_libraries(test_case_1 Boost::thread)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

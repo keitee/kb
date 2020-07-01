@@ -2507,6 +2507,7 @@ using ::testing::Ge;...
 
 EXPECT_CALL(turtle, Forward(Ge(100)));
 
+*gmock-matcher-any-omit*
 If you don't care about any arguments, rather than specify _ for each of them
 `you may instead omit the parameter list:`
 
@@ -2600,12 +2601,82 @@ means that the function shouldn't be called with the given arguments at all, and
 Google Mock will report a Google Test failure whenever the function is
 (wrongfully) called.
 
-We've seen AtLeast(n) as an example of fuzzy cardinalities earlier. For the
+`We've seen AtLeast(n) as an example of fuzzy cardinalities earlier.` For the
 list of built-in cardinalities you can use, see the CheatSheet.
-https://code.google.com/p/googlemock/wiki/CheatSheet
+https://github.com/google/googletest/blob/master/googlemock/docs/cheat_sheet.md
+
+Times(AtLeast(n)) 
+when there are n WillOnce()s and a WillRepeatedly(), where n >= 0.
+
+<ex>
+Controlling When an Expectation Retires
+
+When a mock method is called, gMock only considers expectations that are still
+active. An expectation is active when created, and becomes inactive (aka
+    retires) when a call that has to occur later has occurred. For example, in
+
+using ::testing::_;
+using ::testing::Sequence;
+...
+  Sequence s1, s2;
+
+  EXPECT_CALL(log, Log(WARNING, _, "File too large."))      // #1
+      .Times(AnyNumber())
+      .InSequence(s1, s2);
+  EXPECT_CALL(log, Log(WARNING, _, "Data set is empty."))   // #2
+      .InSequence(s1);
+  EXPECT_CALL(log, Log(WARNING, _, "User not found."))      // #3
+      .InSequence(s2);
+
+as soon as either #2 or #3 is matched, #1 will retire. If a warning "File too
+large." is logged after this, it will be an error.
+
+Note that an expectation doesn't retire automatically when it's saturated. For
+example,
+
+using ::testing::_;
+...
+  EXPECT_CALL(log, Log(WARNING, _, _));                     // #1
+  EXPECT_CALL(log, Log(WARNING, _, "File too large."));     // #2
+
+says that there will be exactly one warning with the message "File too
+large.". If the second warning contains this message too, #2 will match again
+and result in an upper-bound-violated error.
+
+If this is not what you want, you can ask an expectation to retire as soon as
+it becomes saturated:
+
+using ::testing::_;
+...
+  EXPECT_CALL(log, Log(WARNING, _, _));                     // #1
+  EXPECT_CALL(log, Log(WARNING, _, "File too large."))      // #2
+      .RetiresOnSaturation();
+
+Here #2 can be used only once, so if you have two warnings with the message
+"File too large.", the first will match #2 and the second will match #1 -
+there will be no error.
+
+{
+  // expects
+  // idle(1), pending(x), playing(x), pending(x), playing(x)
+
+  InSequence dummy;
+
+  EXPECT_CALL(*mock_asinterface, updateStatus(IDLE_STATE)).Times(1);
+
+  EXPECT_CALL(*mock_asinterface, updateStatus(PEND_STATE)).Times(AtLeast(2))
+    .RetiresOnSaturation();
+  EXPECT_CALL(*mock_asinterface, updateStatus(PLAY_STATE)).Times(AtLeast(10))
+    .RetiresOnSaturation();
+
+  EXPECT_CALL(*mock_asinterface, updateStatus(PEND_STATE)).Times(AtLeast(2))
+    .RetiresOnSaturation();
+  EXPECT_CALL(*mock_asinterface, updateStatus(PLAY_STATE)).Times(AtLeast(10))
+    .RetiresOnSaturation();
+}
 
 
-Prefer Times() to be explicit than making a reader to think.
+`Prefer Times() to be explicit than making a reader to think.`
 
 // The Times() clause can be omitted. If you omit Times(), Google Mock will
 // 'infer' the cardinality for you. The rules are easy to remember:
@@ -2643,7 +2714,7 @@ behavior will be used.
 
 Second, if a mock function doesn't have a default action, or the default
 action doesn't suit you, you `can specify the action to be taken each time` the
-expectation matches using a series of WillOnce() clauses followed by an
+expectation matches `using a series of WillOnce() clauses` followed by an
 optional WillRepeatedly(). For example,
 
 using ::testing::Return;...
@@ -2667,7 +2738,7 @@ says that turtle.GetY() will be called at least twice (Google Mock knows this
     having no explicit Times()), will return 100 the first time, 200 the
 second time, and 300 from the third time on.
 
-Of course, if you explicitly write a Times(), Google Mock will not try to
+`Of course, if you explicitly write a Times(),` Google Mock will not try to
 infer the cardinality itself. 
 
 *gmock-action-default-action*
@@ -2759,7 +2830,7 @@ action will be taken afterwards. So the right answer is that turtle.GetY()
     next to the code that uses your mock.
 
 
-  *gmock-expect*
+  *gmock-expect-order*
   Setting the Default Actions for a Mock Method
 
   You've learned how to change the default value of a given type. However, this
@@ -3170,8 +3241,10 @@ the test output, but it won't be a failure.
 Mocking Side Effects
 
 Sometimes a method exhibits its effect not via returning a value but via side
-effects. For example, it may change some global state or modify an output
-argument. To mock side effects, in general you can define your own action by
+effects. 
+
+For example, it may change some global state or modify an `output argument.`
+To mock side effects, in general you can define your own action by
 implementing ::testing::ActionInterface.
 
 If all you need to do is to change an output argument, the built-in
@@ -3300,238 +3373,6 @@ class RepositoryTest : public CppUnit::TestFixture
 
 ={============================================================================
 *kt_dev_test_203* gmock-action
-
-Using Functions/Methods/Functors as Actions *gmock-invoke*
-
-If the built-in actions don't suit you, you can easily use an existing
-function, method, or functor as an action:
-
-using ::testing::_;
-using ::testing::Invoke;
-
-class MockFoo : public Foo {
- public:
-  MOCK_METHOD2(Sum, int(int x, int y));
-  MOCK_METHOD1(ComplexJob, bool(int x));
-};
-
-int CalculateSum(int x, int y) { return x + y; }
-
-class Helper {
- public:
-  bool ComplexJob(int x);
-};
-
-{
-  MockFoo foo;
-  Helper helper;
-
-  EXPECT_CALL(foo, Sum(_, _))
-      .WillOnce(Invoke(CalculateSum));
-
-  EXPECT_CALL(foo, ComplexJob(_))
-      .WillOnce(Invoke(&helper, &Helper::ComplexJob));
-
-  foo.Sum(5, 6);       // Invokes CalculateSum(5, 6).
-  foo.ComplexJob(10);  // Invokes helper.ComplexJob(10);
-}
-
-The only requirement is that the type of the function, etc must be compatible
-with `the signature of the mock function`, meaning that 
-
-the latter's, mock, arguments can be implicitly converted to the corresponding
-arguments of the former, f, and the former's return type can be implicitly
-converted to that of the latter. So, you can invoke something whose type is
-not exactly the same as the mock function, as long as it's safe to do so -
-nice, huh?
-
-
-Invoke(f)
-Invoke f with the arguments passed to the mock function, where f can be a
-global/static function or a functor.
-
-Invoke(object_pointer, &class::method)
-Invoke the method on the object with the arguments passed to the mock
-function.
-
-InvokeWithoutArgs(f)
-Invoke f, which can be a global/static function or a functor. f must take no
-arguments.
-
-InvokeWithoutArgs(object_pointer, &class::method)
-Invoke the method on the object, which takes no arguments.
-
-InvokeArgument<N>(arg1, arg2, ..., argk)
-Invoke the mock function's N-th (0-based) argument, which must be a function
-or a functor, with the k arguments.
-
-The return value of the invoked function is used as the return value of the
-action.
-
-
-When defining a function or functor to be used with Invoke*(), you can declare
-any unused parameters as Unused:
-
-double Distance(Unused, double x, double y) { return sqrt(x*x + y*y); }
-...
-EXPECT_CALL(mock, Foo("Hi", _, _)).WillOnce(Invoke(Distance));
-
-
-In InvokeArgument<N>(...), if an argument needs to be passed by reference, wrap
-  it inside ByRef(). For example,
-
-InvokeArgument<2>(5, string("Hi"), ByRef(foo))
-
-calls the mock function's #2 argument, passing to it 5 and string("Hi") by
-value, and foo by reference. 
-
-
-<gmock-action-custom>
-If you want the side effect to happen every time, you need to define a custom
-action, which we'll teach in the CookBook.
-
-https://code.google.com/p/googlemock/wiki/CookBook#Writing_New_Actions_Quickly
-
-* Writing New Actions Quickly
-
-If the built-in actions don't work for you, and you find it inconvenient to use
-Invoke(), you can use a macro from the ACTION* family to quickly define a new
-action that can be used in your code as if it's a built-in action.
-
-By writing
-
-ACTION(name) { statements; }
-
-In a namespace scope (i.e. not inside a class or function), you will define an
-    action with the given name that executes the statements. The value returned
-    by statements will be used as the return value of the action. Inside the
-    statements, you can refer to the K-th (0-based) argument of the mock
-    function as argK. For example:
-
-ACTION(IncrementArg1) { return ++(*arg1); }
-
-allows you to write
-
-... WillOnce(IncrementArg1());
-
-Note that you don't need to specify the types of the mock function arguments.
-    Rest assured that your code is type-safe though: you'll get a compiler error
-    if *arg1 doesn't support the ++ operator, or if the type of ++(*arg1) isn't
-        compatible with the mock function's return type.
-
-Another example:
-
-ACTION(Foo) {
-  (*arg2)(5);
-  Blah();
-  *arg1 = 0;
-  return arg0;
-}
-
-defines an action Foo() that invokes argument #2 (a function pointer) with 5,
-        calls function Blah(), sets the value pointed to by argument #1 to 0,
-        and returns argument #0.
-
-For more convenience and flexibility, you can also use the following pre-defined
-symbols in the body of ACTION: 
-
-
-* Writing New Parameterized Actions Quickly
-
-Sometimes you'll want to 'parameterize' an action you define. For that we have
-another macro
-
-ACTION_P(name, param) { statements; }
-
-For example,
-
-ACTION_P(Add, n) { return arg0 + n; }
-
-will allow you to write
-
-// Returns argument #0 + 5.
-... WillOnce(Add(5));
-
-For convenience, we use the term 'arguments' for the values used to invoke the
-mock function, and the term 'parameters' for the values used to instantiate an
-action.
-
-Note that you don't need to provide the type of the parameter either. Suppose
-the parameter is named param, you can also use the Google-Mock-defined symbol
-param_type to refer to the type of the parameter as inferred by the compiler.
-For example, in the body of ACTION_P(Add, n) above, you can write n_type for the
-type of n.
-
-Google Mock also provides ACTION_P2, ACTION_P3, and etc to support
-multi-parameter actions. For example,
-
-ACTION_P2(ReturnDistanceTo, x, y) {
-  double dx = arg0 - x;
-  double dy = arg1 - y;
-  return sqrt(dx*dx + dy*dy);
-}
-
-lets you write
-
-... WillOnce(ReturnDistanceTo(5.0, 26.5));
-
-You can view ACTION as a degenerated parameterized action where the number of
-parameters is 0.
-
-You can also easily define actions overloaded on the number of parameters:
-
-ACTION_P(Plus, a) { ... }
-ACTION_P2(Plus, a, b) { ... }
-
-
-<ex>
-/**
- * These helper actions are for use with Google Mock objects.
- *
- * When returning a future from a mock object expectation, care is needed to
- * make sure a new future is created each time the expectation is matched.
- * This shows up as a problem when setCallback is called on the returned future.
- *
- * The problem is that when using something like:
- *
- * EXPECT_CALL( ... ).WillRepeatedly(Return(FunctionThatReturnsAFuture()));
- *
- * Google Mock will copy the future returned from `FunctionThatReturnsAFuture()`
- * and always return the same future. This doesn't work for instance if you ever
- * call setCallback() on that future, which will throw a
- * DuplicateFutureCallback error on subsequent calls.
- *
- * Even this doesn't work, surprisingly:
- *
- * EXPECT_CALL( ... ).WillOnce(Return(FunctionThatReturnsAFuture()))
- *                   .WillOnce(Return(FunctionThatReturnsAFuture()));
- *
- * Again, the same promise is returned. I'm not quite sure how that happens
- * though.
- *
- * This can be used like this:
- *
- * EXPECT_CALL( ... ).WillOnce(returnNewCompletedFuture(someValue))
- *
- */
-
-// copied again:
-// Important note: The EXPECT_CALL() statement evaluates the action clause only
-// 'once', even though the action may be performed many times. Therefore you
-// must be careful about side effects. The following may not do what you want:
-
-ACTION(returnNewCompletedFuture) {
-    return completedFuture();
-}
-
-ACTION_P(returnNewCompletedFuture, value) {
-    return completedFuture<typename return_type::value_type>(value);
-}
-
-ACTION_P(returnNewExceptionalFuture, exception) {
-    return exceptionalFuture<typename return_type::value_type>(exception);
-}
-
 
 Combining Actions *gmock-doall*
 

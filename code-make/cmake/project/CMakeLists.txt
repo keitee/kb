@@ -95,6 +95,30 @@ find_package(Boost REQUIRED)
 # FetchContent_MakeAvailable(fmtlib)
 # # Adds fmt::fmt
 
+
+# .
+# ├── apps
+# │   ├── app.cxx           #include <modern/Student.h>
+# │   └── CMakeLists.txt
+#     client and uses `student` lib
+# 
+# ├── CMakeLists.txt
+# ├── include
+# │   └── modern
+# │       └── Student.h
+# 
+# ├── src
+# │   ├── CMakeLists.txt
+# │   └── Student.cxx         #include <modern/Student.h>
+#     build `student` lib
+# 
+# └── tests
+#     ├── CMakeLists.txt
+#     └── testlib.cpp
+# 
+# 5 directories, 9 files
+
+
 # The compiled library code is here
 add_subdirectory(src)
 
@@ -134,6 +158,40 @@ add_subdirectory(apps)
 # file(GENERATE OUTPUT xx.out CONTENT $<TARGET_OBJECTS:student>)
 # this will create xx.out in `the build directory` and it has:
 # /home/keitee/git/kb/code-make/cmake/tutorial/step6/build/src/CMakeFiles/student.dir/Student.cxx.o
+
+# the case issue:
+#
+# ok:
+# add_executable(test_mapi test_dtt.cpp 
+#   console.cpp 
+#   readline.cpp
+#   statemachine.cpp 
+#   playerlivestatemachine.cpp 
+#   )
+#
+# # Object files for target test_mapi
+# test_mapi_OBJECTS = \
+# "CMakeFiles/test_mapi.dir/test_mapi_autogen/mocs_compilation.cpp.o" \
+# "CMakeFiles/test_mapi.dir/test_dtt.cpp.o" \
+# "CMakeFiles/test_mapi.dir/console.cpp.o" \
+# "CMakeFiles/test_mapi.dir/readline.cpp.o" \
+# "CMakeFiles/test_mapi.dir/statemachine.cpp.o" \
+# "CMakeFiles/test_mapi.dir/playerlivestatemachine.cpp.o"
+#
+# not ok:
+# add_executable(test_mapi slog.cpp test_dtt.cpp 
+#   console.cpp 
+#   readline.cpp
+#   statemachine.cpp 
+#   playerlivestatemachine.cpp 
+#   )
+#
+# moved "slog.cpp" into sub-directory which is added "add_subdirectory()".
+# somehow, cmake see if can find the file since no error message for slog.cpp
+# which is not found in current dir. However, cmake not able to populate
+# makefiles properly and it seems not able to build after "slog.cpp" fron
+# add_executable source args. so see link error in the end which is not able to
+# link main() that is on test_dtt.cpp
 
 
 # Testing only available if this is the main app

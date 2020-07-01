@@ -79,7 +79,7 @@ TEST(StringCtor, check_various_form)
   }
 }
 
-TEST(String, CtorsConst)
+TEST(StringCtor, check_const)
 {
   {
     // /** *cxx-cstring*
@@ -162,104 +162,59 @@ TEST(String, CtorsConst)
   }
 }
 
-namespace cxx_string
+#if 0
+
+*os-coredump*
+
+[ RUN      ] StringCtor.check_crash
+unknown file: Failure
+C++ exception with description "basic_string::_M_construct null not valid" thrown in the test body.
+[  FAILED  ] StringCtor.check_crash (0 ms)
+
+may wonder who will do this. However, it happens when making changes and caused
+half a day to find out why.
+
+was:
+
+  struct DrmState
+  {
+    std::string state{};
+    int euid{};
+  };
+
+DrmController::DrmController(PlaybackService *service)
+    : m_state{AS_STATE_UNAVAILABLE, 0}
 {
-  // // insert for bool values
-  void insert(const std::string &key, bool value)
-  {
-    std::cout << "insert(const std::string &key, bool value)" << std::endl;
-    std::cout << "key: " << key << ", value: " << value << std::endl;
-  }
-
-  void insert(std::string &&key, bool value)
-  {
-    std::cout << "insert(std::string &&key, bool value)" << std::endl;
-    std::cout << "key: " << key << ", value: " << value << std::endl;
-  }
-
-  // insert for string values
-  void insert(const std::string &key, const std::string &value)
-  {
-    std::cout << "insert(const std::string &key, const std::string &value)"
-              << std::endl;
-    std::cout << "key: " << key << ", value: " << value << std::endl;
-  }
-
-  void insert(std::string &&key, std::string &&value)
-  {
-    std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
-    std::cout << "key: " << key << ", value: " << value << std::endl;
-  }
-
-  void check_bool(bool value)
-  {
-    std::cout << "check_bool: " << value << std::endl;
-  }
-} // namespace cxx_string
-
-// NOTE: if remove "insert for bool values", then both will use string version.
-// Looks like it's to do with resolution.
-//
-// there is no bool conversion of string. Then how it uses bool version?
-//
-// NO. it turns out that's because there is implicit pointer to bool conversion
-// and that's what's happening here.
-
-// [ RUN      ] String.check_string_bool_1
-// insert(std::string &&key, bool value)
-// key: key1, value: 1
-// insert(std::string &&key, std::string &&value)
-// key: key2, value: value2
-// [       OK ] String.check_string_bool_1 (0 ms)
-// [ RUN      ] String.check_string_bool_2
-// check_bool: 1
-// [       OK ] String.check_string_bool_2 (0 ms)
-
-// (gdb) b String_check_string_resolution_Test::TestBody()
-
-TEST(String, check_string_bool_1)
-{
-  using namespace cxx_string;
-
-  insert("key1", "value1");
-  insert("key2", std::string("value2"));
+  ...
 }
 
-TEST(String, check_string_bool_2)
+now, due to requirment change, have to make euid as string. so did that in code
+but when runs it on the box, keep crashing while cannot see why and when all
+changes looks okay. still see crash even when remove all codes changing euid.
+Sadly, no backtrace or useful from core since it crashes very early.
+
+the fix:
+
+  struct DrmState
+  {
+    std::string state{};
+    std::string euid{};
+  };
+
+DrmController::DrmController(PlaybackService *service)
+    : m_state{AS_STATE_UNAVAILABLE, ""}
 {
-  using namespace cxx_string;
-
-  check_bool("value1");
-
-  bool expected1 = "value1";
-  EXPECT_THAT(expected1, true);
-
-  bool expected2 = "";
-  EXPECT_THAT(expected2, true);
-
-  char *ptr{nullptr};
-  bool expected3 = ptr;
-  EXPECT_THAT(expected3, false);
 }
 
-TEST(String, check_empty)
+The problem is when init std::string with 0 which is left while makeing changes.
+WOW.
+
+#endif
+
+TEST(StringCtor, check_crash)
 {
-  using namespace cxx_string;
-
-  std::string coll{};
-
-  // error: could not convert ‘coll’ from ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ to ‘bool’
-  // if (coll)
-  //   std::cout << "coll" << std::endl;
-
-  EXPECT_THAT(coll.empty(), true);
+  std::string s = 0;
 }
-
-// ={=========================================================================
-// string-core
-
-// SSO (short string optimisation). see test_string_sso
-// TEST(StringCore, check_sso)
 
 // ={=========================================================================
 // string-operations string-back
@@ -285,7 +240,7 @@ TEST(StringOperation, check_back)
 
 // string-maxsize
 
-TEST(String, check_operation_max_size)
+TEST(StringOperation, check_max_size)
 {
   string s{};
 
@@ -297,7 +252,7 @@ TEST(String, check_operation_max_size)
 #endif
 }
 
-TEST(String, check_operation_resize)
+TEST(StringOperation, check_resize)
 {
   string s{};
 
@@ -409,7 +364,44 @@ namespace
   }
 }
 
-TEST(CxxStringOperation, find_substring_1)
+TEST(StringOperation, check_find_char)
+{
+  std::string coll{"There are two needles in this haystack with needles."};
+
+  {
+    // Finds the first character equal to one of the characters in the given
+    // character sequence. The search considers only the interval [pos, size()).
+    // If the character is not present in the interval, npos will be
+    // returned.Finds the first character equal to one of the characters in the
+    // given character sequence. The search considers only the interval [pos,
+    // size()). If the character is not present in the interval, npos will be
+    // returned.
+    //
+    // size_type find_first_of( const basic_string& str, size_type pos = 0 )
+    // const;
+
+    auto pos = coll.find_first_of("n");
+    EXPECT_THAT(pos, 14);
+  }
+
+  {
+    // size_type find( const basic_string& str, size_type pos = 0 ) const;
+
+    auto pos = coll.find("n");
+    EXPECT_THAT(pos, 14);
+  }
+
+  {
+    // DESCRIPTION
+    // The strchr() function returns a pointer to the first occurrence of the
+    // character c in the string s.
+
+    auto pointer = strchr(coll.c_str(), 'n');
+    EXPECT_THAT(pointer - coll.c_str(), 14);
+  }
+}
+
+TEST(StringOperation, check_find_substring_1)
 {
   {
     std::string coll1{"There are two needles in this haystack with needles."};
@@ -2229,14 +2221,6 @@ TEST(StringSplit, ByDelimeter_2018_11)
     EXPECT_THAT(coll, ElementsAre("", "", ""));
   }
 }
-
-namespace stringsplit_2018_11_strchr
-{
-
-  // 2018.11.14
-  // should try memchar/strchr way? nope.
-
-} // namespace stringsplit_2018_11_strchr
 
 namespace string_split_2018_11
 {

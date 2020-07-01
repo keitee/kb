@@ -171,11 +171,10 @@ add_executable(${PROJECT_NAME} "test_algo.cpp")
 
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 
-# test_algo_ex.cpp
-add_executable(${PROJECT_NAME}_ex "test_algo_ex.cpp")
-target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
+# test_leete
+add_executable(test_leete "test_leete.cpp")
+target_link_libraries(test_leete gmock_main Boost::thread)
 
-
-# add_test(Gtest.MatcherForPair ${PROJECT_NAME})
-# add_test(${PROJECT_NAME} ${PROJECT_NAME})
-
+# test_pad
+add_executable(test_pad "test_pad.cpp")
+target_link_libraries(test_pad gmock_main Boost::thread)
