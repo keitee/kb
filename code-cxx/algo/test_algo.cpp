@@ -1193,6 +1193,7 @@ namespace algoswap
     a = a - b; // a = b
   }
 
+  // cxx-xor
   // X XOR  X  = 0
   // X XOR  0  = X
   // X XOR  1  = ~X    // X XOR (~0) = ~X
@@ -1246,6 +1247,58 @@ algo-occurance find a number which is seen odd times cxx-xor
 ex. input {2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     sorted 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
     answer is 12
+
+Amazon phone interview question. 02/05/2013
+
+You are going to be passed as input an array with an interesting property: the
+array contains non-negative numbers that appear an even number of times
+throughout the array, save one, that appears an odd number of times.
+
+Your code should accept the array as input and return the number that appears
+an odd number of times as output.
+
+[1, 3, 1]                                             // returns 3
+[2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4]    // returns 12
+[1, 0, 1, 0, 1, 4, 4, 0, 3, 7, 0, 3, 7]               // returns 1
+
+[1, 3, 1]
+0001, 0011, 0001
+0001 ^ 0011 ^ 0001
+(0001 ^ 0001) ^ 0011 = 0000 ^ 0011 = 0011 (3)
+
+Uses two *cxx-xor* `XOR properties` and uses that xor is transitive. If do xor
+even times, becomes 0.
+
+00 0      Y xor Y = 0  (2 times)
+01 1      0 xor Y = Y  (3 times)
+10 1      Y xor Y = 0  (4 times)
+11 0      0 xor Y = Y  (5 times)
+ 
+
+algo-leetcode-136. Single Number, Easy
+
+Given a non-empty array of integers, every element appears twice except for
+one. Find that single one.
+
+Your algorithm should have a linear runtime complexity. Could you implement it
+`without using extra memory`?
+
+Example 1:
+Input: [2,2,1]
+Output: 1
+
+Example 2:
+Input: [4,1,2,1,2]
+Output: 4
+
+when use cxx-xor:
+
+Runtime: 16 ms, faster than 96.66% of C++ online submissions for Single
+Number.
+
+Memory Usage: 9.7 MB, less than 65.99% of C++ online submissions for Single
+Number.
+
 */
 
 namespace algooccurance
@@ -1328,48 +1381,76 @@ TEST(AlgoOccurance, check_seen_odd_times)
     const std::vector<unsigned int>
       input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2};
 
+    // note that xor version do not pick the first sequence.
     EXPECT_THAT(coll[0](input), 8);
+
     EXPECT_THAT(coll[1](input), 4);
     EXPECT_THAT(coll[2](input), 4);
   }
 }
 
-// ={=========================================================================
-// algo-occurance
+/*
+={=========================================================================
+algo-occurance
 
-// When input a, and b are 0 <= a <= b <= 100,000,000), write a problem to find
-// out how many k integer appears.
-//
-// e.g.,
-// input: 11, 12, 13, 14, 15, k = 1
-//
-// k appears 6 times.
+When input a, and b are 0 <= a <= b <= 100,000,000), write a code to find
+out how many k integer appears.
 
-namespace algo_occurance
+e.g.,
+input: 11, 12, 13, 14, 15, k = 1
+
+k appears 6 times.
+
+EXPECT_THAT(count_occurance_1(const std::vector<int> coll, 1), 6);
+
+*/
+
+namespace algooccurance
 {
-  int count_occurance_1(const vector<int> &input, int key)
+  int count_occurance_1(const std::vector<int> &input, int key)
   {
-    map<char, int> count_map;
+    std::map<char, int> lookup{};
 
-    for (auto value : input)
+    // builds lookup table using input
+    for (auto e : input)
     {
-      string str = to_string(value);
-      for (auto e : str)
-      {
-        ++count_map[e];
-      }
+      auto value = std::to_string(e);
+
+      for (auto c : value)
+        ++lookup[c];
     }
 
-    // string stringkey = to_string(key);
-    // auto ret = count_map.find(stringkey[0]);
+    // since the key is char but not int
+    auto ret = lookup.find(key + '0');
 
-    // if values are [0,9] and are ASCII then, can use:
-    auto ret = count_map.find(key + '0');
+    if (ret != lookup.end())
+      return ret->second;
 
-    return ret->second;
+    // not found
+    return 0;
   }
 
-  int count_occurance_2(const vector<int> &input, int key)
+  // can use lookup table approach. the key should be [0,9] and can reduce
+  // lookup table size?
+  int count_occurance_2(const std::vector<int> &input, int key)
+  {
+    // all inited as 0
+    int lookup[256]{};
+
+    // builds lookup table using input
+    for (auto e : input)
+    {
+      auto value = std::to_string(e);
+
+      for (auto c : value)
+        ++lookup[c];
+    }
+
+    return lookup[key + '0'];
+  }
+
+  // best so far
+  int count_occurance_3(const std::vector<int> &input, int key)
   {
     int digit{}, count{};
 
@@ -1389,33 +1470,46 @@ namespace algo_occurance
 
     return count;
   }
-} // namespace algo_occurance
+} // namespace algooccurance
 
-TEST(AlgoOccurance, CountKey)
+TEST(AlgoOccurance, check_count_key)
 {
-  using namespace algo_occurance;
+  using namespace algooccurance;
 
-  vector<int> coll{11, 12, 13, 14, 15};
+  std::vector<std::function<int(const std::vector<int> &, int)>> imps{
+    count_occurance_1,
+    count_occurance_2,
+    count_occurance_3};
 
-  EXPECT_THAT(count_occurance_1(coll, 1), 6);
-  EXPECT_THAT(count_occurance_2(coll, 1), 6);
+  {
+    std::vector<int> coll{11, 12, 13, 14, 15};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll, 1), 6);
+      EXPECT_THAT(f(coll, 0), 0);
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-occurance most frequent
-
 /*
+={=========================================================================
+algo-occurance
+
 48. The most frequent element in a range
 
 Write a function that, given a range, returns the most frequent element and the
 number of times it appears in the range. If more than one element appears the
 same maximum number of times then the function should return all the elements.
+
 For instance, for the range {1,1,3,5,8,13,3,5,8,8,5}, it should return {5, 3}
 and {8, 3}.
-*/
 
-// algo-leetcode-191
-/*
+std::vector<pair<int, int>> f(std::vector<int> const &coll);
+
+
+algo-leetcode-191
+
 169. Majority Element, Easy
 
 Given an array of size n, find the majority element. The majority element is the
@@ -1434,13 +1528,84 @@ Output: 2
 
 */
 
-namespace algo_occurance
+namespace algooccurance
 {
-  std::vector<pair<int, int>> U48_1(std::vector<int> const &coll)
+  // 2020.07.02
+  std::vector<pair<int, int>> f1(const std::vector<int> &coll)
   {
-    std::vector<pair<int, int>> result{};
+    // builds count map<value, count>
+    std::map<int, int> cmap{};
 
-    // 100?
+    for (auto e : coll)
+    {
+      ++cmap[e];
+    }
+
+    // build occurance multi-map<count, pair<value,count>>
+    std::multimap<int, std::pair<int, int>> omap{};
+
+    for (auto e : cmap)
+    {
+      std::pair<int, int> value{e.first, e.second};
+      omap.emplace(std::make_pair(e.second, value));
+    }
+
+    // since multimap is sorted by count, the last is the biggest; most occurred
+    // one.
+    std::vector<std::pair<int, int>> ret{};
+
+    if (omap.size())
+    {
+      auto found = omap.rbegin()->first;
+
+      for (auto it = omap.equal_range(found).first;
+           it != omap.equal_range(found).second;
+           ++it)
+        ret.emplace_back(it->second);
+    }
+
+    return ret;
+  }
+
+  // from "U48_Text"
+  // may merge loop1 and loop2 into one.
+  template <typename T>
+  std::vector<std::pair<T, std::size_t>> f2(const std::vector<T> &input)
+  {
+    // loop1. builds a occurance table
+    std::map<T, std::size_t> counts{};
+
+    for (const auto &e : input)
+      ++counts[e];
+
+    // loop2. find the max (occurrance)
+    //
+    // *cxx-algo-max-element* *cxx-algo-minmax*
+    // op is used to compare two elements:
+    // op(elem1,elem2)
+    // It should return true when the first element is less than the second
+    // element.
+    auto most = std::max_element(counts.cbegin(),
+                                 counts.cend(),
+                                 [](const std::pair<T, std::size_t> &e1,
+                                    const std::pair<T, std::size_t> &e2) {
+                                   return e1.second < e2.second;
+                                 });
+
+    // loop3. find elements which are the same as `most` occurrances
+    std::vector<std::pair<T, size_t>> result{};
+
+    std::copy_if(counts.cbegin(),
+                 counts.cend(),
+                 std::back_inserter(result),
+                 [&](const auto &e) { return e.second == most->second; });
+
+    return result;
+  }
+
+  std::vector<pair<int, int>> f3(std::vector<int> const &coll)
+  {
+    // loop1. 100 and input value range is [0,100)
     std::vector<int> bit_set(100);
 
     // first loop to count occurance of the input
@@ -1448,15 +1613,17 @@ namespace algo_occurance
     for (auto e : coll)
       ++bit_set[e];
 
-    // second loop to find the most frequent
+    // loop2. to find the most frequent
     //
-    // note: why? becuase to use single loop to find max and to find elements
-    // that shown max times
+    // why? becuase to use single loop to find max and to find elements that
+    // shown max times if there's only one max item then no need to have two
+    // loop like here
     //
-    // if there's only one max item then no need to have two loop like here
+    // can do in a single loop?
 
     int current_element{};
     int current_max{};
+    std::vector<pair<int, int>> result{};
 
     for (size_t i = 0; i < bit_set.size(); ++i)
     {
@@ -1480,115 +1647,85 @@ namespace algo_occurance
       }
     }
 
-    // have to push current when is out of loop.
+    // have to push the current which is the last and is not pushed in the for
+    // loop
     if (current_element)
     {
-      // push current to the return coll
       result.push_back(make_pair(current_element, current_max));
     }
 
     return result;
   }
 
-  template <typename T>
-  std::vector<std::pair<T, size_t>> U48_Text(std::vector<T> const &range)
+  // take same approach as f2.
+  int majority_1(const std::vector<int> &input)
   {
-    // loop1 to build a table
+    std::map<int, size_t> omap{};
 
-    std::map<T, size_t> counts;
-    for (auto const &e : range)
-      counts[e]++;
+    for (const auto e : input)
+      ++omap[e];
 
-    // loop2 to find max occurance
+    // returns iterator
+    auto most = std::max_element(omap.cbegin(),
+                                 omap.cend(),
+                                 [](const std::pair<int, std::size_t> &e1,
+                                    const std::pair<int, std::size_t> &e2) {
+                                   return e1.second < e2.second;
+                                 });
 
-    // *cxx-algo-max-element* *cxx-algo-minmax*
-    //
-    // op is used to compare two elements:
-    // op(elem1,elem2)
-    // It should return true when the first element is less than the second
-    // element.
-
-    auto maxelem = std::max_element(
-      std::begin(counts),
-      std::end(counts),
-      [](pair<T, size_t> const &e1, pair<T, size_t> const &e2) {
-        return e1.second < e2.second;
-      });
-
-    // loop3 to find elements which are shown max times (assumes that there
-    // are multiple matches
-
-    std::vector<std::pair<T, size_t>> result;
-
-    std::copy_if(
-      begin(counts),
-      end(counts),
-      back_inserter(result),
-      // [](auto const& e)
-      [=](pair<T, size_t> const &e) { return e.second == maxelem->second; });
-
-    return result;
+    return most->first;
   }
 
-  int majorityElement_1(vector<int> &nums)
+  // take same approach as f2 and do max_element manually
+  int majority_2(const std::vector<int> &input)
   {
-    int max_element{};
-    std::map<int, size_t> table;
+    std::map<int, size_t> omap{};
 
-    // first loop to count occurance of the input
+    for (const auto e : input)
+      ++omap[e];
 
-    for (auto e : nums)
-      ++table[e];
-
-    // second loop to find the most frequent
-    // since there is only one max, no need to have two loop like here
-
-    // int current_max{std::numeric_limits<int>::min()};
-    size_t current_max{std::numeric_limits<uint32_t>::min()};
-
-    for (auto const &e : table)
+    // std::max_element()
     {
-      // *cxx-type-conversion* *cxx-error* causes  that it do not work as
-      // expected.
-      //
-      // algo_ex.cpp:4867:23: warning: comparison between signed and unsigned
-      // integer expressions [-Wsign-compare]
-      //
-      // if (current_max < e.second)
+      int cvalue{};
+      size_t cmost{std::numeric_limits<size_t>::min()};
 
-      if (current_max < e.second)
+      for (const auto e : omap)
       {
-        current_max = e.second;
-        max_element = e.first;
+        if (e.second > cmost)
+        {
+          cvalue = e.first;
+          cmost  = e.second;
+        }
+      }
+
+      return cvalue;
+    }
+  }
+
+  // take same approach as f2 and do max_element manually
+  // single loop
+  int majority_3(const std::vector<int> &input)
+  {
+    std::map<int, size_t> omap{};
+    int cvalue{};
+    size_t cmost{std::numeric_limits<size_t>::min()};
+
+    for (const auto e : input)
+    {
+      ++omap[e];
+
+      if (omap[e] > cmost)
+      {
+        cvalue = e;
+        cmost  = omap[e];
       }
     }
 
-    return max_element;
+    return cvalue;
   }
 
-  int majorityElement_2(vector<int> &nums)
-  {
-    int max_element{};
-    std::unordered_map<int, size_t> table;
-
-    // first loop to count occurance of the input
-
-    for (auto e : nums)
-      ++table[e];
-
-    size_t current_max{std::numeric_limits<uint32_t>::min()};
-
-    for (auto const &e : table)
-    {
-      if (current_max < e.second)
-      {
-        current_max = e.second;
-        max_element = e.first;
-      }
-    }
-
-    return max_element;
-  }
+  // can use std::unordered_map since do not need sorted coll.
+  // int majority_4(const std::vector<int> &input);
 
   // Approach 6: Boyer-Moore Voting Algorithm
   //
@@ -1635,20 +1772,21 @@ namespace algo_occurance
   // 0, and the majority element of that suffix will necessarily be the same as
   // the majority element of the overall array.
 
-  int majorityElement_3(vector<int> &nums)
+  int majority_4(const std::vector<int> &input)
   {
-    int candidate{};
+    // candidate
+    int suffix{};
     int count{};
 
-    for (size_t i = 0; i < nums.size(); ++i)
+    for (auto e : input)
     {
       if (count == 0)
-        candidate = nums[i];
+        suffix = e;
 
-      nums[i] == candidate ? ++count : --count;
+      e == suffix ? ++count : --count;
     }
 
-    return candidate;
+    return suffix;
   }
 
   // from discussion:
@@ -1660,261 +1798,227 @@ namespace algo_occurance
   //
   // again, this is key:
   //
-  // The problem states there must be a majority element; it has to show up >n/2
-  // times NOT just n/2. Something like [1, 1, 1, 1, 2, 3, 4, 5] is an invalid
-
-  int majorityElement_4(vector<int> &nums)
-  {
-    sort(nums.begin(), nums.end());
-    return nums[nums.size() / 2];
-  }
-} // namespace algo_occurance
-
-TEST(AlgoOccurance, MostSeen)
-{
-  using namespace algo_occurance;
-
-  // 1 1 3 3 5 5 5 8 8 8 13 (11)
-  {
-    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
-    auto result = U48_1(coll);
-    EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
-  }
-  {
-    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
-    auto result = U48_Text(coll);
-    EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
-  }
-  {
-    auto func = majorityElement_1;
-    vector<int> coll{3, 2, 3};
-    EXPECT_THAT(func(coll), 3);
-  }
-
-  {
-    auto func = majorityElement_2;
-    vector<int> coll{3, 2, 3};
-    EXPECT_THAT(func(coll), 3);
-  }
-
-  {
-    auto func = majorityElement_3;
-    vector<int> coll{3, 2, 3};
-    EXPECT_THAT(func(coll), 3);
-  }
-
-  {
-    auto func = majorityElement_3;
-    vector<int> coll{2, 3, 3};
-    EXPECT_THAT(func(coll), 3);
-  }
-
+  // The problem states there must be a majority element; it has to show up >
+  // n/2 times NOT just n/2. Something like [1, 1, 1, 1, 2, 3, 4, 5] is an
+  // invalid input.
+  //
   // Hey guys, please READ and UNDERSTAND the problem statement before making
   // comments complaining about how this doesn't work for certain test cases.
   // The problem states there must be a majority element; it has to show up >n/2
   // times NOT just n/2. Something like [1, 1, 1, 1, 2, 3, 4, 5] is an invalid
   // input.
 
+  int majority_5(const std::vector<int> &input)
   {
-    auto func = majorityElement_3;
-    // okay
-    // vector<int> coll{1,1,1,1,2,3,4,5};
-    vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8};
-    EXPECT_THAT(func(coll), Not(1));
-    EXPECT_THAT(func(coll), 8);
+    std::vector<int> coll{input};
+
+    std::sort(coll.begin(), coll.end());
+    return coll[coll.size() / 2];
+  }
+} // namespace algooccurance
+
+TEST(AlgoOccurance, check_most_seen)
+{
+  using namespace algooccurance;
+
+  // do not use vector of functions due to template function.
+  // 1 1 3 3 5 5 5 8 8 8 13 (11)
+  {
+    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
+    auto result = f1(coll);
+    EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
   }
 
   {
-    auto func = majorityElement_4;
-    vector<int> coll{3, 2, 3};
-    EXPECT_THAT(func(coll), 3);
+    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
+    auto result = f2(coll);
+    EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
   }
+
   {
-    auto func = majorityElement_4;
-    vector<int> coll{2, 3, 3};
-    EXPECT_THAT(func(coll), 3);
+    std::vector<int> coll{1, 1, 3, 5, 8, 13, 3, 5, 8, 8, 5};
+    auto result = f3(coll);
+    EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
   }
+
+  // majority cases
   {
-    auto func = majorityElement_4;
-    // okay
-    // vector<int> coll{1,1,1,1,2,3,4,5};
-    vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8};
-    EXPECT_THAT(func(coll), Not(1));
+    std::vector<int> coll{3, 2, 3};
+    std::vector<std::function<int(const std::vector<int> &)>> imps{majority_1,
+                                                                   majority_2,
+                                                                   majority_3,
+                                                                   majority_4};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 3);
+    }
+  }
+
+  // majority cases
+  {
+    std::vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5};
+    std::vector<std::function<int(const std::vector<int> &)>> imps{majority_1,
+                                                                   majority_2,
+                                                                   majority_3,
+                                                                   majority_4};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 1);
+    }
+  }
+
+  // majority cases
+  {
+    std::vector<int> coll{7, 7, 5, 7, 5, 1, 5, 7, 5, 5, 7, 7, 7, 7, 7, 7};
+    std::vector<std::function<int(const std::vector<int> &)>> imps{majority_1,
+                                                                   majority_2,
+                                                                   majority_3,
+                                                                   majority_4,
+                                                                   majority_5};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 7);
+    }
+  }
+
+  // majority cases, invalid input
+  {
+    std::vector<int> coll{1, 1, 1, 1, 2, 3, 4, 5};
+    std::vector<std::function<int(const std::vector<int> &)>> imps{majority_5};
+
+    {
+      EXPECT_THAT(imps[0](coll), Ne(1));
+    }
   }
 }
 
-// ={=========================================================================
-// algo-occurance find the longest sequence of input char array
+/*
+={=========================================================================
+algo-occurance
+find the longest sequence of input char array.
+1. firstly, O(n) for time, O(1) for space
+2. secondly, can do better than O(n)?
 
-namespace algo_occurance
+Follow-ups:
+
+Q: How to handle when there are many with the same length?
+A: Currently use > which means it will have the first. If use >= then will
+have the last. If want to keep all which has the same length then can use
+container to keep those?
+
+Q: Is there any other way to reduce time complexity?
+A: Yes, there is
+
+ 1 2 3 4 5 6 7 8 9 10 11 12
+ <-------> <-------->
+           x        y
+
+Suppose that the length of the first sequence is 5 and then see the current
+index plus 5, which is 11.
+
+* if [11] is the same as the current char then this second sequence might be
+  longer one so *not skip* and see all chars. 
+
+* if [11] is not the same as the current char then means a different sequence
+  which cannot be longer than the sequnce of current char. So skip to 11 and
+  starts search from there.
+
+* HOWEVER, as with "AAAA|BCCC|CCCCC" case, cannot skip the second since need to
+  know the start of C sequnce. 
+
+So NO WAY to find chances to skip to reduce O(n) YET!
+ 
+*/
+
+namespace algooccurance
 {
-  MATCHER_P(EqPair, expected, "")
-  {
-    return arg.first == expected.first && arg.second == expected.second;
-  }
-
   MATCHER_P(NotEqPair, expected, "")
   {
     return arg.first != expected.first || arg.second != expected.second;
   }
 
-  // this is the second try and works fine.
-  // O(n)
+  // if can do without meeting O(n), O(1) then can use occurnace map in a single
+  // loop.
+  // std::pair<char, size_t> find_longest_1(const std::string &input)
+  // {
+  // }
 
-  pair<char, size_t> find_longest_1(const string &input)
+  // single loop and no extra memory
+  std::pair<char, size_t> find_longest_2(const std::string &input)
   {
-    size_t current_occurance{0}, longest_occurance{0};
-    char current_char{0}, longest_char{0};
+    // current char and occurrance
+    char cchar{};
+    std::size_t coccur{std::numeric_limits<std::size_t>::min()};
 
-    for (auto letter : input)
-    {
-      if (letter != current_char)
-      {
-        current_char      = letter;
-        current_occurance = 1;
-      }
-      // if( letter == current_char )
-      else
-        ++current_occurance;
-
-      if (current_occurance > longest_occurance)
-      {
-        longest_char      = current_char;
-        longest_occurance = current_occurance;
-      }
-    }
-
-    return pair<char, size_t>(longest_char, longest_occurance);
-  }
-} // namespace algo_occurance
-
-TEST(AlgoOccurance, FindLongest_1)
-{
-  using namespace algo_occurance;
-
-  auto func = find_longest_1;
-
-  const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-  EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
-
-  const string input2{"AAABBCCCCDDD"};
-  EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
-
-  const string input3{"AAAAAAAAAAAA"};
-  EXPECT_THAT(func(input3), EqPair(pair<char, size_t>('A', 12)));
-}
-
-namespace algo_occurance
-{
-  pair<char, size_t> find_longest_2(const string &input)
-  {
-    char current_char{}, longest_char{};
-    size_t current_occurance{}, longest_occurance{};
-
-    for (auto letter : input)
-    {
-      // cout << "diff: curr" << current_char << ", letter: " << letter << endl;
-
-      // if see the different char. use XOR and looks fancy?
-      if (current_char ^ letter)
-      {
-        // cout << "diff: letter" << letter << endl;
-
-        // save it if it's the longest so far
-        if (current_occurance > longest_occurance)
-        {
-          longest_occurance = current_occurance;
-          longest_char      = current_char;
-        }
-
-        // reset and str a search again
-        current_char      = letter;
-        current_occurance = 1;
-      }
-      // if see the same before
-      else
-        ++current_occurance;
-    }
-
-    return pair<char, size_t>(longest_char, longest_occurance);
-  }
-
-  // 0618
-  pair<unsigned char, size_t> find_longest_3(const string &input)
-  {
-    unsigned char current_char{}, saved_char{};
-    size_t current_occurance{};
-    size_t saved_occurance = numeric_limits<size_t>::min();
+    // saved char and occurrance
+    char schar{};
+    std::size_t soccur{std::numeric_limits<std::size_t>::min()};
 
     for (const auto e : input)
     {
-      if (e != current_char)
+      // can use cxx-xor if you fancy
+      if (e != cchar)
       {
-        // if see a longer sequence
-        if (saved_occurance < current_occurance)
+        if (coccur > soccur)
         {
-          saved_char      = current_char;
-          saved_occurance = current_occurance;
+          schar  = cchar;
+          soccur = coccur;
         }
 
-        current_char      = e;
-        current_occurance = 1;
+        cchar  = e;
+        coccur = 1;
       }
       else
-        ++current_occurance;
+        ++coccur;
     }
 
-    // if see a longer sequence when input ends or input has only one sequence
-    if (saved_occurance < current_occurance)
+    // to cover cases of {{"AAAAAAAAAAAA"}, {'A', 12}}
+    if (coccur > soccur)
     {
-      saved_char      = current_char;
-      saved_occurance = current_occurance;
+      schar  = cchar;
+      soccur = coccur;
     }
 
-    return pair<unsigned char, size_t>(saved_char, saved_occurance);
+    return std::make_pair(schar, soccur);
   }
 
-} // namespace algo_occurance
-
-TEST(AlgoOccurance, FindLongest_2)
-{
-  using namespace algo_occurance;
-
+  // take "if" into the loop and keep updating "saved" but not only when see
+  // different char.
+  std::pair<char, size_t> find_longest_3(const std::string &input)
   {
-    auto func = find_longest_2;
+    // current char and occurrance
+    char cchar{};
+    std::size_t coccur{std::numeric_limits<std::size_t>::min()};
 
-    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
+    // saved char and occurrance
+    char schar{};
+    std::size_t soccur{std::numeric_limits<std::size_t>::min()};
 
-    const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
+    for (const auto e : input)
+    {
+      if (e != cchar)
+      {
+        cchar  = e;
+        coccur = 1;
+      }
+      else
+        ++coccur;
 
-    // Firstly, looks better but it fails when the input has one long sequence.
-    // returns {0, 0} because variable longest_xxx gets updated only in if case
-    // but not else(when char is the same)
+      if (coccur > soccur)
+      {
+        schar  = cchar;
+        soccur = coccur;
+      }
+    }
 
-    const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(func(input3), NotEqPair(pair<char, size_t>('A', 12)));
+    return std::make_pair(schar, soccur);
   }
-  {
-    auto func = find_longest_3;
 
-    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
-
-    const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
-
-    // now okay
-    const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(func(input3), EqPair(pair<char, size_t>('A', 12)));
-  }
-}
-
-// Can do better than O(n)? Can skip some chars in searching a sequence.
-
-namespace algo_occurance
-{
+  // Can do better than O(n)? Can skip some chars in searching a sequence.
+  // not successful.
   pair<char, size_t> find_longest_4(const string &input)
   {
     char current_char{}, longest_char{};
@@ -1974,130 +2078,524 @@ namespace algo_occurance
 
     return pair<char, size_t>(longest_char, longest_occurance);
   }
+} // namespace algooccurance
 
-} // namespace algo_occurance
-
-TEST(AlgoOccurance, FindLongest_3)
+TEST(AlgoOccurance, check_longest_sequence)
 {
-  using namespace algo_occurance;
+  using namespace algooccurance;
 
-  auto func = find_longest_4;
+  {
+    std::vector<std::pair<std::string, std::pair<char, size_t>>> inputs{
+      {{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"}, {'F', 18}},
+      {{"AAABBCCCCDDD"}, {'C', 4}},
+      {{"AAAAAAAAAAAA"}, {'A', 12}},
+      {{"AAAABCBBBBBCCCCDDD"}, {'B', 5}}};
 
-  const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-  EXPECT_THAT(func(input1), EqPair(pair<char, size_t>('F', 18)));
+    std::vector<std::function<std::pair<char, size_t>(const std::string &)>>
+      imps{find_longest_2, find_longest_3};
 
-  const string input2{"AAABBCCCCDDD"};
-  EXPECT_THAT(func(input2), EqPair(pair<char, size_t>('C', 4)));
+    for (const auto &f : imps)
+    {
+      for (const auto &i : inputs)
+        EXPECT_THAT(f(i.first), i.second);
+    }
+  }
 
-  // fails, return {0, 0}
-  const string input3{"AAAAAAAAAAAA"};
-  EXPECT_THAT(func(input3), NotEqPair(pair<char, size_t>('A', 12)));
+  {
+    auto func = find_longest_4;
 
-  const string input4{"AAAABCBBBBBCCCCDDD"};
-  EXPECT_THAT(func(input4), EqPair(pair<char, size_t>('B', 5)));
+    // fails
+    const std::string input_1{"AAAAAAAAAAAA"};
+    EXPECT_THAT(func(input_1), NotEqPair(std::make_pair('A', 12)));
 
-  // fails, return {A, 4}
-  const string input5{"AAAABCCCCCCCC"};
-  EXPECT_THAT(func(input5), NotEqPair(pair<char, size_t>('C', 8)));
+    // fails, return {A, 4}
+    const std::string input_2{"AAAABCCCCCCCC"};
+    EXPECT_THAT(func(input_2), NotEqPair(std::make_pair('C', 8)));
+  }
 }
 
-// ={=========================================================================
-// algo-find if a string has all unique chars
-//
-// o. Space? assume ASCII 256 chars
-//    ask for clarity. Since it's only for alphabet uppercase then use 32
-//    bset and reduce space requirement.
-//
-// o. One simple optimization. return false if the length of input string is greater
-//    than the number of uniques chars in the set; e.g., ASCII, 256
-//
-//    if( sizeString > 256 ) return false;
-//
-// o. cstring or std::string?
-//
-// o. time O(n) and space O(1)
+/*
+={=========================================================================
+algo-unique
 
-namespace algo_unique
+From Cracking the coding interview, p172,
+
+Implement an algorithm to determine if a string has all unique characters. What
+if you cannot use additional data structures?
+
+bool f(const char *str);
+return true if a string has all unique chars
+
+o. Space? assume ASCII 256 chars
+  ask for clarity. Since it's only for alphabet uppercase then use 32
+  bset and reduce space requirement.
+
+o. One simple optimization. return false if the length of input string is greater
+  than the number of uniques chars in the set; e.g., ASCII, 256
+
+  if( sizeString > 256 ) return false;
+
+o. cstring or std::string?
+
+o. time O(n) and space O(1)
+
+*/
+
+namespace algounique
 {
-  // use lookup table
-  bool unique_1(const char *str)
+  bool check_unique_1(const char *input)
   {
-    std::bitset<256> bset{};
+    bool table[256]{};
 
-    for (; *str; ++str)
+    for (; *input; ++input)
     {
-      if (bset[*str])
-      {
+      if (table[*input])
         return false;
-      }
-      else
-        bset[*str] = 1;
+
+      table[*input] = true;
     }
 
     return true;
   }
 
-  // use cxx-string-find()
-  bool unique_2(const char *str)
+  bool check_unique_2(const char *input)
   {
-    std::string unique_set{};
+    std::bitset<256> table{};
 
-    for (; *str; ++str)
+    for (; *input; ++input)
     {
-      if (unique_set.find(*str) != string::npos)
-      {
+      if (table[*input])
         return false;
-      }
-      else
-        unique_set += *str;
+
+      table[*input] = true;
     }
 
     return true;
   }
-} // namespace algo_unique
 
-TEST(AlgoUnique, IsUnique)
-{
-  using namespace algo_unique;
-
-  EXPECT_THAT(unique_1("abcdefghijklmnopqa"), false);
-  EXPECT_THAT(unique_1("abcdefghijklmnopqr"), true);
-
-  EXPECT_THAT(unique_2("abcdefghijklmnopqa"), false);
-  EXPECT_THAT(unique_2("abcdefghijklmnopqr"), true);
-}
-
-// ={=========================================================================
-// algo-reserve
-//
-// * use in/out parameter
-// * cstring but efficient
-// * strlen()-1 since array indexing is always [0, size-1], or [0,size) and in
-//   this code, [begin, end] but not [begin, end)
-
-namespace algo_reverse
-{
-  void reverse_string_1(char *input)
+  // if use std::set. find() is the second loop
+  bool check_unique_3(const char *input)
   {
-    if (!input)
-      return;
+    std::set<char> table{};
 
-    char *begin = input;
-    char *end   = input + strlen(input) - 1;
-    char temp{};
-
-    for (; begin < end; ++begin, --end)
+    for (; *input; ++input)
     {
-      // swap(begin, end);
-      temp   = *begin;
-      *begin = *end;
-      *end   = temp;
+      if (table.find(*input) != table.end())
+        return false;
+
+      table.insert(*input);
     }
+
+    return true;
   }
 
+  // if use std::string. find() is the second loop
+  bool check_unique_4(const char *input)
+  {
+    std::string table{};
+
+    for (; *input; ++input)
+    {
+      if (table.find(*input) != std::string::npos)
+        return false;
+
+      table += *input;
+    }
+
+    return true;
+  }
+} // namespace algounique
+
+TEST(AlgoUnique, check_unique)
+{
+  using namespace algounique;
+
+  {
+    // pair<input, expected result>
+    std::vector<std::pair<std::string, bool>> inputs{
+      {"abcdefghijklmnopqa", false},
+      {"abcdefghijklmnopqr", true}};
+
+    std::vector<std::function<bool(const char *)>> imps{check_unique_1,
+                                                        check_unique_2,
+                                                        check_unique_3,
+                                                        check_unique_4};
+
+    for (const auto &f : imps)
+    {
+      for (const auto &i : inputs)
+        EXPECT_THAT(f(i.first.c_str()), i.second);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-unique
+
+first unique byte *ex-interview*
+
+Given an eventually very large stream of bytes, find the first unique byte in
+this stream.
+
+unsigned char f(const vector<unsigned char> &input);
+
+see words; evntually, byte, first, unique
+
+o time O(n) space O(1)
+o Do not check input.
+o Each input value are less than 256 and the # of input are less than unit
+ max.
+o What does "first" mean? first unique byte seen or first unique byte in
+ input order?
+
+Not byte seen first since every byte is seen first at first time and ther may be
+repeats later in the stream. The problem is that it can be shown in later of a
+stream.
+ 
+*/
+
+namespace algounique
+{
+  unsigned char check_first_unique_1(const vector<unsigned char> &input)
+  {
+    // note:
+    // input order depends on the input size. Here, the order is one for that
+    // byte. NO.
+
+    size_t occurance[256] = {}, order[256] = {};
+
+    // build occurance and order
+    size_t input_order{};
+
+    for (const auto e : input)
+    {
+      ++occurance[e];
+      // here order starts from 1
+      order[e] = ++input_order;
+    }
+
+    // find the first byte *cxx-limits*
+    unsigned char saved_input{};
+
+    // const unsigned int UINT_MAX_ORDER = ~((unsigned int)0);
+    // unsigned int saved_order = UINT_MAX_ORDER;
+    size_t saved_order{numeric_limits<size_t>::max()};
+
+    for (auto i = 0; i < 256; ++i)
+    {
+      if ((occurance[i] == 1) && (order[i] < saved_order))
+      {
+        // *TN* i refers to input value
+        saved_input = i;
+        saved_order = order[i];
+      }
+    }
+
+    // // o. to print a char to int, have to define a var as int or to defind a
+    // // char and to use +saved_input trick.
+    // // http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
+    // cout << "saved input : " << +saved_input << endl;
+    // cout << "saved order : " << saved_order << endl;
+
+    return saved_input;
+  }
+
+  // same but use single structure
+
+  unsigned char check_first_unique_2(const vector<unsigned char> &input)
+  {
+    // pair<occurance, index> and 255
+    vector<pair<size_t, size_t>> lookup_table(255);
+
+    // first pass, build table with occurance and input index
+    size_t input_index{};
+
+    for (const auto e : input)
+    {
+      auto &entry = lookup_table[e];
+      entry.first += 1;
+      entry.second = input_index;
+
+      ++input_index;
+    }
+
+    // second pass, find first and unique input byte
+    unsigned char current_byte{};
+    size_t current_order = numeric_limits<size_t>::max();
+
+    unsigned char current_index{};
+
+    for (const auto e : lookup_table)
+    {
+      if (e.first == 1 && e.second < current_order)
+      {
+        current_byte  = current_index;
+        current_order = e.second;
+      }
+
+      ++current_index;
+    }
+
+    return current_byte;
+  }
+
+  // 2020.06
+  // don't need to keep order as _1 and _2.
+  unsigned char check_first_unique_3(const std::vector<unsigned char> &input)
+  {
+    std::size_t table[256]{};
+
+    for (auto e : input)
+    {
+      ++table[e];
+    }
+
+    for (size_t it = 0; it < sizeof table; ++it)
+    {
+      if (table[it] == 1)
+        return it;
+    }
+
+    // how can we express "not found"?
+    return 0;
+  }
+} // namespace algounique
+
+TEST(AlgoUnique, check_first_unique)
+{
+  using namespace algounique;
+
+  {
+    // pair<input, expected result>
+    const std::vector<std::pair<std::vector<unsigned char>, unsigned char>>
+      inputs{
+        // clang-format off
+        {{20, 11, 23, 33, 34, 54, 44, 38, 215, 126, 101, 20, 11, 20, 54, 54, 44, 38, 38, 215, 126, 215, 23}, 33}
+        // clang-format on
+      };
+
+    const std::vector<
+      std::function<unsigned char(const std::vector<unsigned char> &)>>
+      imps{check_first_unique_1, check_first_unique_2, check_first_unique_3};
+
+    for (const auto &f : imps)
+    {
+      for (const auto &i : inputs)
+        EXPECT_THAT(f(i.first), i.second);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-unique
+
+codility, absolute distinct count of this array
+https://codility.com/train/AbsDistinct 
+
+A non-empty zero-indexed array A consisting of N numbers is given. The
+absolute distinct count of this array is the number of distinct absolute
+values among the elements of the array.
+
+For example, consider array A such that:
+
+A[0] = -5    A[1] = -3    A[2] = -1
+A[3] =  0    A[4] =  3    A[5] =  6
+
+The absolute distinct count of this array is 5, because there are 5 distinct
+absolute values among the elements of this array, namely 0, 1, 3, 5 and 6.
+
+Write a function:
+
+int absDistinct(int A[], int N);
+
+that, given a non-empty zero-indexed array A consisting of N numbers, returns
+  absolute distinct count of array A.
+
+For example, given array A such that:
+
+A[0] = -5    A[1] = -3    A[2] = -1
+A[3] =  0    A[4] =  3    A[5] =  6
+
+the function should return 5, as explained above.
+
+Assume that:
+
+N is an integer within the range [1..100,000]; each element of array A is an
+integer within the range [-2,147,483,648..2,147,483,647]; array A is sorted in
+non-decreasing order.
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(N), beyond input storage (not
+    counting the storage required for input arguments).
+
+`Elements of input arrays can be modified.`
+
+
+Test score: 100% 100 out of 100 points 
+Detected time complexity: O(N) or O(N*log(N))
+  
+
+{Q} How to implement it using c? 2014.02. How about running the modified
+binary search that use abs comparison on each item? May be nlogn? That may be
+the same as set version?
+
+2014.04.12. 
+cannot use binary search since when move index from the start, no way to set
+bottom and top.
+
+i = 0, bs(1, n-1)
+i = 1, bs(2, n-1)    // missing 0th.
+...
+
+2018.06.21
+cannot see how to do it in C but why should when there is a better way?
+ 
+*/
+
+namespace algounique
+{
+  bool absLessThan(int a, int b) { return abs(a) < abs(b); }
+  bool absEqual(int a, int b) { return abs(a) == abs(b); }
+
+  int distinct_count_1(const vector<int> &A)
+  {
+    if (!A.size())
+      return -1;
+
+    vector<int> ivec;
+    int count = 0;
+
+    for (size_t i = 0; i < A.size(); ++i)
+      ivec.push_back(A[i]);
+
+    sort(ivec.begin(), ivec.end(), absLessThan);
+    auto it_end_unique = unique(ivec.begin(), ivec.end(), absEqual);
+
+    auto it_begin = ivec.begin();
+
+    while (it_begin != it_end_unique)
+    {
+      ++it_begin;
+      ++count;
+    }
+
+    return count;
+  }
+
+  // improve _1. possible to not use additional space for coll since the problem
+  // description says that can modify input. However, still more than O(n) for
+  // time.
+  int distinct_count_2(const std::vector<int> &input)
+  {
+    // input check
+    if (!input.size())
+      return -1;
+
+    // loop1. copy input since need to have collection which is modifiable.
+    std::vector<int> coll{input};
+
+    // loop2. abs sort
+    std::sort(coll.begin(), coll.end(), [](int e1, int e2) {
+      return std::abs(e1) < std::abs(e2);
+    });
+
+    // loop3.
+    auto unique_end = std::unique(coll.begin(), coll.end(), [](int e1, int e2) {
+      return std::abs(e1) == std::abs(e2);
+    });
+
+    return std::distance(coll.begin(), unique_end);
+  }
+
+  int distinct_count_3(const vector<int> &A)
+  {
+    // write your code in C++98
+    int size = A.size();
+
+    if (!size)
+      return -1;
+
+    std::set<int> iset;
+
+    for (int i = 0; i < size; i++)
+      iset.insert(abs(A[i]));
+
+    return iset.size();
+  }
+
+  // use std::set
+  int distinct_count_4(const std::vector<int> &input)
+  {
+    // the desciption says input is non-empty.
+    // if (!input.size())
+    //   return -1;
+
+    std::set<int> coll{};
+
+    // loop1.
+    for (const auto e : input)
+      coll.insert(std::abs(e));
+
+    return coll.size();
+  }
+} // namespace algounique
+
+TEST(AlgoUnique, check_count_unique)
+{
+  using namespace algounique;
+
+  {
+    // pair<input, expected result>
+    const std::vector<std::pair<std::vector<int>, int>> inputs{
+      {{-5, -3, -1, 0, 3, 6}, 5}};
+
+    const std::vector<std::function<int(const std::vector<int> &)>> imps{
+      distinct_count_1,
+      distinct_count_2,
+      distinct_count_3,
+      distinct_count_4};
+
+    for (const auto &f : imps)
+    {
+      for (const auto &i : inputs)
+        EXPECT_THAT(f(i.first), i.second);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-reverse
+
+From Cracking the coding interview, p173,
+
+Write a function in C/C++ which reverse a null-terminated string.
+
+void reverse(char* str);
+
+*TN*
+But do you need to reverse the string in the first place? With rbegin and
+rend, any member functions or algorithms that operate on iterator ranges can
+be used on the reverse version of the string. And if you want to search
+through the string, you can use rfind to do what find does but starting from
+the end of the string and moving backward. For large strings, or large numbers
+of strings, reversing can be expensive, so avoid it if you can.
+
+o use in/out parameter
+o cstring but efficient
+o strlen()-1 since array indexing is always [0, size-1], or [0,size) and in
+  this code, [begin, end] but not [begin, end)
+
+*/
+
+namespace algoreverse
+{
   // ansic, p62
-
-  void reverse_string_2(char *input)
+  void reverse_string_1(char *input)
   {
     int str{}, end{};
     char temp{};
@@ -2109,106 +2607,66 @@ namespace algo_reverse
     }
   }
 
-  // * if can use std::string and can return although c version is better.
-  // * use *cxx-reverse-iterator*
+  // c style. assumces input is c-string since it's c version.
+  void reverse_string_2(char *input)
+  {
+    // check input
+    if (!input || !strlen(input))
+      return;
 
+    char *start{&input[0]};
+    char *end{&input[strlen(input)-1]};
+
+    for (start, end; start < end; ++start, --end)
+      std::swap(*start, *end);
+  }
+
+  // if use std::string and still c-version is better
   std::string reverse_string_3(const std::string &input)
   {
-    return std::string(input.crbegin(), input.crend());
+    return std::string{input.crbegin(), input.crend()};
   }
-  // when want to modify input itself
 
   void reverse_string_4(std::string &input)
   {
     std::reverse(input.begin(), input.end());
   }
+} // namespace algopad
 
-  std::string reverse_string_5(const std::string &input)
-  {
-    std::string reversed{};
-
-    for (auto len = input.size(); len > 0; --len)
-      reversed.push_back(input[len - 1]);
-
-    return reversed;
-  }
-
-} // namespace algo_reverse
-
-TEST(AlgoReverse, Reverse)
+TEST(AlgoReverse, check_string)
 {
-  using namespace algo_reverse;
+  using namespace algoreverse;
 
   {
-    auto func    = reverse_string_1;
-    char input[] = "REVERSE IT";
-    func(input);
-    EXPECT_THAT(input, StrEq("TI ESREVER"));
-  }
+    const std::vector<std::function<void(char *)>> imps{reverse_string_1,
+                                                        reverse_string_2};
 
-  {
-    auto func    = reverse_string_2;
-    char input[] = "REVERSE IT";
-    func(input);
-    EXPECT_THAT(input, StrEq("TI ESREVER"));
-  }
-  {
-    auto func = reverse_string_3;
-    std::string input{"REVERSE IT"};
-    EXPECT_THAT(func(input), Eq("TI ESREVER"));
-  }
-
-  {
-    auto func = reverse_string_4;
-    std::string input{"REVERSE IT"};
-    func(input);
-    EXPECT_THAT(input, Eq("TI ESREVER"));
-  }
-
-  {
-    auto func = reverse_string_5;
-    std::string input{"REVERSE IT"};
-    EXPECT_THAT(func(input), Eq("TI ESREVER"));
-  }
-  using namespace algo_reverse;
-
-  {
-    auto func = reverse_string_1;
-
+    for (const auto &f : imps)
     {
       char input[] = "REVERSE IT";
-      func(input);
+      f(input);
       EXPECT_THAT(input, StrEq("TI ESREVER"));
     }
+  }
 
+  {
+    const std::vector<std::function<std::string(const std::string &)>> imps{
+      reverse_string_3};
+
+    for (const auto &f : imps)
     {
-      char *input = nullptr;
-      func(input);
-      EXPECT_THAT(input, nullptr);
+      std::string input{"REVERSE IT"};
+      EXPECT_THAT(f(input), "TI ESREVER");
     }
+  }
+
+  {
+    auto f = reverse_string_4;
 
     {
-      char input[] = "";
-      func(input);
-      EXPECT_THAT(input, StrEq(""));
-    }
-
-    {
-      char input[] = "         HAY";
-      func(input);
-      EXPECT_THAT(input, StrEq("YAH         "));
-    }
-
-    {
-      char input[] = "HAY         ";
-      func(input);
-      EXPECT_THAT(input, StrEq("         YAH"));
-    }
-
-    {
-      char input[] = "\n\r\a\bHAY\n\r\a\b";
-      func(input);
-      EXPECT_THAT(input, StrEq("\b\a\r\nYAH\b\a\r\n"));
+      std::string input{"REVERSE IT"};
+      f(input);
+      EXPECT_THAT(input, "TI ESREVER");
     }
   }
 }
@@ -2957,126 +3415,6 @@ TEST(AlgoPalindrome, String)
     EXPECT_THAT(func("0P"), false);
     // fail
     EXPECT_THAT(func(".,"), true);
-  }
-}
-
-// ={=========================================================================
-// algo-find first unique byte
-//
-// o time O(n) space O(1)
-// o Do not check input.
-// o Each input value are less than 256 and the # of input are less than unit
-//   max.
-// o What does "first" mean? first unique byte seen or first unique byte in
-//   input order?
-//
-//   Not byte seen first since every byte is seen first at first time. The
-//   problem is that it can be shown in later of a stream.
-
-namespace algo_unique
-{
-  unsigned char first_unique_1(const vector<unsigned char> &input)
-  {
-    // note:
-    // input order depends on the input size. Here, the order is one for that
-    // byte. NO.
-
-    size_t occurance[256] = {}, order[256] = {};
-
-    // build occurance and order
-    size_t input_order{};
-
-    for (const auto e : input)
-    {
-      ++occurance[e];
-      // here order starts from 1
-      order[e] = ++input_order;
-    }
-
-    // find the first byte *cxx-limits*
-    unsigned char saved_input{};
-
-    // const unsigned int UINT_MAX_ORDER = ~((unsigned int)0);
-    // unsigned int saved_order = UINT_MAX_ORDER;
-    size_t saved_order{numeric_limits<size_t>::max()};
-
-    for (auto i = 0; i < 256; ++i)
-    {
-      if ((occurance[i] == 1) && (order[i] < saved_order))
-      {
-        // *TN* i refers to input value
-        saved_input = i;
-        saved_order = order[i];
-      }
-    }
-
-    // // o. to print a char to int, have to define a var as int or to defind a
-    // // char and to use +saved_input trick.
-    // // http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
-    // cout << "saved input : " << +saved_input << endl;
-    // cout << "saved order : " << saved_order << endl;
-
-    return saved_input;
-  }
-
-  // same but use single structure
-
-  unsigned char first_unique_2(const vector<unsigned char> &input)
-  {
-    // pair<occurance, index> and 255
-    vector<pair<size_t, size_t>> lookup_table(255);
-
-    // first pass, build table with occurance and input index
-    size_t input_index{};
-
-    for (const auto e : input)
-    {
-      auto &entry = lookup_table[e];
-      entry.first += 1;
-      entry.second = input_index;
-
-      ++input_index;
-    }
-
-    // second pass, find first and unique input byte
-    unsigned char current_byte{};
-    size_t current_order = numeric_limits<size_t>::max();
-
-    unsigned char current_index{};
-
-    for (const auto e : lookup_table)
-    {
-      if (e.first == 1 && e.second < current_order)
-      {
-        current_byte  = current_index;
-        current_order = e.second;
-      }
-
-      ++current_index;
-    }
-
-    return current_byte;
-  }
-
-} // namespace algo_unique
-
-TEST(AlgoUnique, FirstUnique)
-{
-  using namespace algo_unique;
-
-  {
-    auto func = first_unique_1;
-    const vector<unsigned char> input{20,  11,  23,  33,  34,  54,  44, 38,
-                                      215, 126, 101, 20,  11,  20,  54, 54,
-                                      44,  38,  38,  215, 126, 215, 23};
-    EXPECT_THAT(func(input), Eq(33));
-  }
-  {
-    auto func = first_unique_2;
-    const vector<unsigned char> input{20,  11,  23,  33,  34,  54,  44, 38,
-                                      215, 126, 101, 20,  11,  20,  54, 54,
-                                      44,  38,  38,  215, 126, 215, 23};
-    EXPECT_THAT(func(input), Eq(33));
   }
 }
 
@@ -5847,79 +6185,6 @@ TEST(AlgoEquilbrium, EquiTape)
   EXPECT_THAT(equi_tape_2(coll), 1);
   EXPECT_THAT(equi_tape_3(coll), 1);
   EXPECT_THAT(equi_tape_4(coll), 1);
-}
-
-// ={=========================================================================
-// algo-unique-distinct-count
-
-namespace algo_unique
-{
-  bool absLessThan(int a, int b) { return abs(a) < abs(b); }
-
-  bool absEqual(int a, int b) { return abs(a) == abs(b); }
-
-  int distinct_count_1(const vector<int> &A)
-  {
-    if (!A.size())
-      return -1;
-
-    vector<int> ivec;
-    int count = 0;
-
-    for (size_t i = 0; i < A.size(); ++i)
-      ivec.push_back(A[i]);
-
-    sort(ivec.begin(), ivec.end(), absLessThan);
-    auto it_end_unique = unique(ivec.begin(), ivec.end(), absEqual);
-
-    auto it_begin = ivec.begin();
-
-    while (it_begin != it_end_unique)
-    {
-      ++it_begin;
-      ++count;
-    }
-
-    return count;
-  }
-
-  int distinct_count_2(const vector<int> &A)
-  {
-    // write your code in C++98
-    int size = A.size();
-
-    if (!size)
-      return -1;
-
-    std::set<int> iset;
-
-    for (int i = 0; i < size; i++)
-      iset.insert(abs(A[i]));
-
-    return iset.size();
-  }
-
-  int distinct_count_3(const vector<int> &A)
-  {
-    set<int> coll{};
-
-    for (const auto e : A)
-      coll.insert(abs(e));
-
-    return coll.size();
-  }
-
-} // namespace algo_unique
-
-TEST(AlgoUnique, DistinctCount)
-{
-  using namespace algo_unique;
-
-  vector<int> coll{-5, -3, -1, 0, 3, 6};
-
-  EXPECT_THAT(distinct_count_1(coll), 5);
-  EXPECT_THAT(distinct_count_2(coll), 5);
-  EXPECT_THAT(distinct_count_3(coll), 5);
 }
 
 // ={=========================================================================

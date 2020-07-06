@@ -1007,6 +1007,7 @@ Config written to /media/keitee/ssd2/as-sky-repo/asplayer/.reviewboardrc
 
 https://www.reviewboard.org/docs/rbtools/dev/rbt/commands/post/
 rbt post --tracking-branch=origin/NGDEV-155524_AS_DRM_for_RDK_on_New --repository=asplayer --username=kyoupark --password=tegI3301
+
 rbt post --tracking-branch=origin/develop --repository=asplayer --username=kyoupark --password=tegI3301
 
 rbt post --repository=asplayer --username=kyoupark --password=tegI3301
@@ -11215,6 +11216,10 @@ patch -p1 < /media/keitee/ssd2/breakpad-from-ben.patch
 bitbake comcast-mediaclient-vbn-image
 
 
+rdk-xi1-build
+/media/keitee/ssd2/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi/arm-rdk-linux-gnueabi-g++ --sysroot=/media/keitee/ssd2/rdk/2.0/sysroots/armv7ahf-neon-rdk-linux-gnueabi/  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/Pin.dir/ASPinHandler.cpp.o -c /media/keitee/ssd2/as-sky-repo/asplayer/pin/ASPinHandler.cpp
+
+
 *rdk-xi1-flash*
 
 https://www.stb.bskyb.com/confluence/display/SI/XiOne+-+Software+upgrade+instructions+-+CAD+2
@@ -11355,6 +11360,7 @@ mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
 umount /usr/sbin/asrdkplayer
 
 scp -r -P 10022 ./asrdkplayer root@192.168.1.108:/opt
+scp -r -P 10022 ./aout root@192.168.1.108:/opt
 
 journalctl -fu sky-asplayer --since today
 journalctl -fu sky-asplayer
@@ -15093,10 +15099,46 @@ add them for 9001 and 9005
 
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=VG-DRM+Integration#VG-DRMIntegration-AAMPTuneURLBuildRules
 
+AAMP Tune URL Build Rules
+
+The URL pass to AAMP will specify the manifestURL plus additional DRM specific
+information. The proposed addition is a parameter called drmInitData and it
+would be a base64 encodedstring.
+
+The data is passed `unchanged` to the DRM instance.
+
+http://skycdn.com/asset/bbc1.m3u8?drmInitData=<base64>
+
+The following data must be `passed from application` to VG DRM for license acquisition:
+
+Asset ID
+Token
+Stream Type
+
+The data is passed as the value of a drmInitData query parameter in the play
+URL, is base64 encoded, and is opaque to AAMP. The format of the drmInitData
+query parameter, as proposed by Sky, would be a URL query string with a
+specific attribute for each data item.
+
 vgcassetid=<vgcassetid>&vgctoken=<vgctoken>&streamtype=<streamtype>
 
+Additional attributes may be added in future to pass more information.
+
+The stream type must distinguish between VOD and linear.
+
+AssetID and token come directly from the EPG which is passing it down to AS in
+the same format is received from OVP/UMV. EPG and AS should not touch the
+encoding as it is the encoding that comes from OVP/UMV which also comes
+directly from TGS.
+
+For example, assetId has the following form: vgc_asset_id=F67307ADA1614C35A0BA4DE39F22272
+
+And an example of token is: vgc_token_id=
+00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59…
+
 Regarding the streamType, the streamType in the same way they are defined for
-VG Connect 
+VG Connect where Live = 1 and VOD = 2 (see VGDRM-API-1494 VG Connect Native C
+API).
 
 where Live = 1 and VOD = 2 
 
@@ -15106,6 +15148,17 @@ where Live = 1 and VOD = 2
 // if sid is not present, m_isLinear is false and which means VOD
 
 m_isLinear = !sid.empty();
+
+
+drmdata = "&vgcassetid=F67307ADA1614C&vgctoken=000000400000&streamtype=1"};
+url << "?drmInitData=" << base_64_eocode(drmData);
+
+since EPG give us followings which has already "?" and from it, take each
+params.
+
+action/watchstream?uri=<URL>&vgcassetid=<VGC asset ID>&vgctoken=<VGC token>&sid=<service id>
+
+if URL has "?" again, this is going to be a problem.
 
 
 *as-watchstream*
@@ -15123,6 +15176,7 @@ May 13 10:27:55 arrisxi6-morty com.sky.as.player[31140]:
   // when use `base64` tool
   url {http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8
     ?drmInitData=dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9MQo=}
+
 
 // not real url to play since used fake token and all that
 

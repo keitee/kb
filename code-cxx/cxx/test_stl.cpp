@@ -363,23 +363,23 @@ TEST(CxxIterator, iterator_next)
   }
 }
 
-TEST(Iterator, Distance)
+TEST(StlIterator, check_distance)
 {
   // cxx-distance which returns positive/negative
   {
-    vector<int> coll{1, 2, 3, 4, 5};
-    auto pos = find(coll.begin(), coll.end(), 3);
-    EXPECT_EQ(distance(coll.begin(), pos), 2);
-    EXPECT_EQ(distance(pos, coll.begin()), -2);
+    std::vector<int> coll{1, 2, 3, 4, 5};
+    auto pos = std::find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(std::distance(coll.begin(), pos), 2);
+    EXPECT_EQ(std::distance(pos, coll.begin()), -2);
 
-    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
-    EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+    EXPECT_EQ(std::distance(coll.begin(), coll.end()), 5);
+    EXPECT_EQ(std::distance(coll.end(), coll.begin()), -5);
   }
 
   {
-    set<int> coll{1, 2, 3, 4, 5};
-    auto pos = find(coll.begin(), coll.end(), 3);
-    EXPECT_EQ(distance(coll.begin(), pos), 2);
+    std::set<int> coll{1, 2, 3, 4, 5};
+    auto pos = std::find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(std::distance(coll.begin(), pos), 2);
 
     // /usr/include/c++/4.9/debug/safe_iterator.h:289:error: attempt to
     // increment
@@ -429,7 +429,7 @@ TEST(Iterator, Distance)
     //     return __last - __first;
     //   }
 
-    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+    EXPECT_EQ(std::distance(coll.begin(), coll.end()), 5);
     // EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
   }
 }
@@ -2012,7 +2012,7 @@ TEST(StlSet, check_duplicate)
 // 1) Returns an iterator pointing to the first element that is not less than
 // (i.e. greater or equal to) key.
 
-TEST(StlSet, check_search)
+TEST(StlSet, check_equal_range)
 {
   {
     std::set<int> coll;
@@ -2075,6 +2075,36 @@ TEST(StlSet, check_search)
 
     EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).first), 2);
     EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).second), 5);
+
+    {
+      std::vector<int> ret{};
+
+      for (auto it = coll.lower_bound(3); it != coll.upper_bound(3); ++it)
+        ret.push_back(*it);
+
+      EXPECT_THAT(ret, ElementsAre(3, 3, 3));
+    }
+
+    // equal_range returns a pair of iterators
+    {
+      std::vector<int> ret{};
+
+      for (auto it = coll.equal_range(3).first;
+           it != coll.equal_range(3).second;
+           ++it)
+        ret.push_back(*it);
+
+      EXPECT_THAT(ret, ElementsAre(3, 3, 3));
+    }
+
+    {
+      std::vector<int> ret{};
+
+      for (auto it = coll.equal_range(3); it.first != it.second; ++it.first)
+        ret.push_back(*it.first);
+
+      EXPECT_THAT(ret, ElementsAre(3, 3, 3));
+    }
   }
 }
 
@@ -2172,6 +2202,36 @@ TEST(CxxMap, check_find)
       EXPECT_THAT(it->first, Eq(4));
       EXPECT_THAT(it->second, Eq(3));
     }
+  }
+}
+
+TEST(CxxMap, check_insert_and_emplace)
+{
+  std::map<unsigned int, std::string> coll{{1, "one"},
+                                           {2, "two"},
+                                           {3, "three"},
+                                           {4, "four"}};
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.insert({1, "one"});
+    coll_1.insert({2, "two"});
+    coll_1.insert({3, "three"});
+    coll_1.insert({4, "four"});
+
+    EXPECT_THAT(coll == coll_1, true);
+  }
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.emplace(std::make_pair(1, "one"));
+    coll_1.emplace(std::make_pair(2, "two"));
+    coll_1.emplace(std::make_pair(3, "three"));
+    coll_1.emplace(std::make_pair(4, "four"));
+
+    EXPECT_THAT(coll == coll_1, true);
   }
 }
 
@@ -2499,7 +2559,7 @@ TEST(CxxMap, map_Copy)
   }
 }
 
-TEST(CxxMap, map_multi_EqualRange)
+TEST(MapMulti, check_equal_range_1)
 {
   std::string str = "total";
 
@@ -2571,6 +2631,47 @@ TEST(CxxMap, map_multi_EqualRange)
                 ElementsAre("Sot-Weed Factor",
                             "Lost in the Funhouse",
                             "A way to success"));
+  }
+}
+
+TEST(MapMulti, check_equal_range_2)
+{
+  // build occurance multi-map<count, pair<value,count>>
+  std::multimap<int, std::pair<int, int>> omap{};
+
+  omap.emplace(1, std::make_pair(1, 10));
+  omap.emplace(2, std::make_pair(2, 20));
+  omap.emplace(3, std::make_pair(3, 30));
+  omap.emplace(3, std::make_pair(3, 30));
+
+  // get the last element
+  EXPECT_THAT(omap.rbegin()->first, 3);
+  EXPECT_THAT(omap.rbegin()->second, std::make_pair(3, 30));
+
+  {
+    std::vector<std::pair<int, int>> ret{};
+    std::vector<std::pair<int, int>> expect{{3, 30}, {3, 30}};
+
+    auto found = omap.rbegin()->first;
+
+    for (auto it = omap.equal_range(found); it.first != it.second; ++it.first)
+      ret.emplace_back(it.first->second);
+
+    EXPECT_THAT(ret, expect);
+  }
+
+  {
+    std::vector<std::pair<int, int>> ret{};
+    std::vector<std::pair<int, int>> expect{{3, 30}, {3, 30}};
+
+    auto found = omap.rbegin()->first;
+
+    for (auto it = omap.equal_range(found).first;
+         it != omap.equal_range(found).second;
+         ++it)
+      ret.emplace_back(it->second);
+
+    EXPECT_THAT(ret, expect);
   }
 }
 

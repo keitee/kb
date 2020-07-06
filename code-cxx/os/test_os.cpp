@@ -294,7 +294,7 @@ output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
 
 */
 
-namespace os_pipe
+namespace ospipe
 {
   constexpr auto BASE64_COMMAND{"/usr/bin/base64"};
   constexpr int BASE64_MAX_SIZE{1000};
@@ -328,11 +328,11 @@ namespace os_pipe
 
     return std::string{encoded};
   }
-} // namespace os_pipe
+} // namespace ospipe
 
 TEST(OsPipe, check_popen)
 {
-  using namespace os_pipe;
+  using namespace ospipe;
 
   // clang-format off
   const char command1[]{"echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64"};
@@ -510,7 +510,7 @@ RETURN VALUE
 
 */
 
-TEST(OsGlibc, glibc_memchar)
+TEST(OsGlibc, check_memchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
@@ -538,7 +538,7 @@ TEST(OsGlibc, glibc_memchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(OsGlibc, glibc_strchar)
+TEST(OsGlibc, check_strchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
@@ -568,7 +568,7 @@ TEST(OsGlibc, glibc_strchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(OsGlibc, glibc_strrchar)
+TEST(OsGlibc, check_strrchar)
 {
   char *start{};
   char fname[] = "/home/keitee/git/kb/code-cxx/libc/libc.cpp";
@@ -595,7 +595,7 @@ namespace use_internal_strchr_01
 
 } // namespace use_internal_strchr_01
 
-TEST(OsGlibc, glibc_strrcharOwn)
+TEST(OsGlibc, check_strrchar_mine)
 {
   using namespace use_internal_strchr_01;
 
@@ -1389,6 +1389,197 @@ TEST(OsGlibc, glibc_fnmatch)
 
   // but not match
   EXPECT_THAT(fnmatch(filter.c_str(), "com.sky.ax.player", 0), Not(0));
+}
+
+/*
+={=============================================================================
+glibc-fgets
+
+// clang-format off
+
+echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
+
+encoded:JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+encoded:MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+encoded:MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+encoded:OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+encoded:RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+        JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+        MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+        MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+        OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+        RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+keitee@kit-ubuntu:~/git/kb/code-cxx/cxx/build$ echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+encoded drmData {
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+RDNENEU1OSZzdHJlYW10eXBlPTEK}
+
+// clang-format on
+
+see how fgets works which removes nees of using "tr" command and this is the
+issue. note that we we run below, then there is no need to use tr command.
+
+echo "...." | base64 | base64 -d
+
+However, when use fgets, this is an issue since fgets stops when see first new
+line so we get only first line of encoding result.
+
+also, busybox base64 do not support "-w" option to output single full line.
+
+
+from man:
+
+fgets stores "\n" when read stops
+
+fgets()  reads  in  at most one less than size characters from stream and stores
+them into the buffer pointed to by s.
+
+Reading stops after an EOF or a newline. If a newline is read, it is stored into
+the buffer.
+
+terminating null byte ('\0') is stored after the last character in the buffer.
+
+fgets() returns s on success, and NULL on error or when end of file occurs while
+no characters have been read.
+ 
+NOTE
+not NULL when reading stops at new line.
+
+NOTE:
+see TEST(OsPipe, check_popen) which is the first version which works because
+encoding result from input is within a single line. no multiple lines. so didn't
+shows the problem.
+ 
+*/
+
+namespace osfgets
+{
+  constexpr auto BASE64_COMMAND{"/bin/base64"};
+  constexpr auto BASE64_DECODE_COMMAND{"/usr/bin/base64 -d"};
+  constexpr int BASE64_MAX_SIZE{100};
+
+  std::string base64_encode(const std::string &input)
+  {
+    std::ostringstream cmd{};
+    std::ostringstream encoded{};
+    char read[BASE64_MAX_SIZE]{};
+
+    cmd << "echo '" << input << "' | " << BASE64_COMMAND;
+
+    auto pfd = popen(cmd.str().c_str(), "r");
+    if (pfd)
+    {
+      while (NULL != fgets(read, BASE64_MAX_SIZE, pfd))
+      {
+        read[strlen(read) - 1] = '\0';
+        encoded << read;
+      }
+
+      pclose(pfd);
+    }
+    else
+    {
+      // LOG_ERROR( "popen failed {%s}", cmd.str().c_str());
+      std::cout << "popen failed : " << cmd.str().c_str() << std::endl;
+    }
+
+    return encoded.str();
+  }
+
+  // NOTE:
+  // if reduce read size to 100 for decode, it fails since input for reads can
+  // be big but input from base64 tool is wrapped at 76 by default. that's why
+  // we need to do while and remove `\n` to make a single line.
+  //
+  // constexpr int BASE64_MAX_SIZE{100};
+
+  std::string base64_decode(const std::string &input)
+  {
+    std::ostringstream cmd{};
+    std::ostringstream decoded{};
+    char read[BASE64_MAX_SIZE]{};
+
+    cmd << "echo '" << input << "' | " << BASE64_DECODE_COMMAND;
+
+    // std::cout << "cmd : " << cmd.str() << std::endl;
+
+    auto pfd = popen(cmd.str().c_str(), "r");
+    if (pfd)
+    {
+      while (NULL != fgets(read, BASE64_MAX_SIZE, pfd))
+      {
+        read[strlen(read) - 1] = '\0';
+        decoded << read;
+      }
+
+      pclose(pfd);
+    }
+    else
+    {
+      // LOG_ERROR( "popen failed {%s}", cmd.str().c_str());
+      std::cout << "popen failed : " << cmd.str().c_str() << std::endl;
+    }
+
+    return std::string{decoded.str()};
+  }
+} // namespace osfgets
+
+TEST(OsGlibc, check_fgets)
+{
+  using namespace osfgets;
+
+  const char input_1[]{
+    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
+    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
+    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
+    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+
+  std::string expected_1{
+    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
+    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
+    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
+    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+
+  // clang-format off
+  const char input_2[]{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+  std::string expected_2{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+  // clang-format on
+
+  // to double confirm input and expected result of encoding.
+  EXPECT_THAT(strcmp(input_1, input_2), 0);
+  EXPECT_THAT(expected_1, expected_2);
+
+  std::ostringstream drmData{};
+
+  drmData << input_1;
+
+  // encode drmData using base64
+  // printf("input drmData {%s}\n", drmData.str().c_str());
+  // std::cout << "input drmData : " << drmData.str().c_str() << std::endl;
+
+  std::string encodedData = base64_encode(drmData.str());
+
+  // printf("encoded drmData {%s}\n", encodedData.c_str());
+  // std::cout << "encoded drmData : " << encodedData << std::endl;
+
+  EXPECT_THAT(encodedData, expected_1);
+
+  std::string decodedData = base64_decode(encodedData);
+
+  EXPECT_THAT(decodedData, std::string(input_1));
 }
 
 /*

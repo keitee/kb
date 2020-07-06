@@ -2281,16 +2281,18 @@ using = character. Padding keeps the correct number of characters when there are
 not enough bytes in the sequence. Ending with a single = means the last binary
 sequence contains 2 bytes. Ending with == means it contains 1 byte.
 
-this code is from mongoose.c and examples are:
-
-  unsigned char sha[20];
-  char b64_sha[30];
-  mg_base64_encode(sha, sizeof(sha), b64_sha);
-
 */
 
 namespace cxx_case_base64
 {
+
+  /* option 1 
+     this code is from "mongoose.c" and examples are:
+     unsigned char sha[20];
+     char b64_sha[30];
+     mg_base64_encode(sha, sizeof(sha), b64_sha);
+     */
+
 #define BASE64_ENCODE_BODY                                                     \
   static const char *b64 =                                                     \
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";        \
@@ -2439,6 +2441,7 @@ namespace cxx_case_base64
     dst[j++] = '\0';
   }
 
+  // option 2
   // https://nachtimwald.com/2017/11/18/base64-encode-and-decode-in-c/
   const char b64chars[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2500,6 +2503,7 @@ namespace cxx_case_base64
     return out;
   }
 
+  // option 3
   // https://github.com/joedf/base64.c/blob/master/base64.c
   unsigned char b64_chr[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -2543,6 +2547,95 @@ namespace cxx_case_base64
     return k;
   }
 
+#if 0
+  *
+    * Base64 encoding/decoding (RFC1341)
+    * Copyright (c) 2005-2011, Jouni Malinen <j@w1.fi>
+    *
+    * This software may be distributed under the terms of the BSD license.
+    * See README for more details.
+    */
+
+    /**
+     * base64_encode - Base64 encode
+     * @src: Data to be encoded
+     * @len: Length of the data to be encoded
+     * @out_len: Pointer to output length variable, or %NULL if not used
+     * Returns: Allocated buffer of out_len bytes of encoded data,
+     * or %NULL on failure
+     *
+     * Caller is responsible for freeing the returned buffer. Returned buffer is
+     * nul terminated to make it easier to use as a C string. The nul terminator is
+     * not included in out_len.
+     */
+#endif
+
+  static const unsigned char base64_table[65] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  // unsigned char *b64_encode_4(const unsigned char *src, size_t len, size_t *out_len)
+  unsigned char *b64_encode_4(const unsigned char *src, unsigned int len)
+  {
+    unsigned char *out, *pos;
+    const unsigned char *end, *in;
+    size_t olen;
+    int line_len;
+
+    olen = len * 4 / 3 + 4; /* 3-byte blocks to 4-byte */
+    olen += olen / 72;      /* line feeds */
+    olen++;                 /* nul termination */
+    if (olen < len)
+      return NULL; /* integer overflow */
+    out = (unsigned char *)malloc(olen);
+    if (out == NULL)
+      return NULL;
+
+    end      = src + len;
+    in       = src;
+    pos      = out;
+    line_len = 0;
+    while (end - in >= 3)
+    {
+      *pos++ = base64_table[in[0] >> 2];
+      *pos++ = base64_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
+      *pos++ = base64_table[((in[1] & 0x0f) << 2) | (in[2] >> 6)];
+      *pos++ = base64_table[in[2] & 0x3f];
+      in += 3;
+      line_len += 4;
+      // if (line_len >= 72)
+      // {
+      //   *pos++   = '\n';
+      //   line_len = 0;
+      // }
+    }
+
+    if (end - in)
+    {
+      *pos++ = base64_table[in[0] >> 2];
+      if (end - in == 1)
+      {
+        *pos++ = base64_table[(in[0] & 0x03) << 4];
+        *pos++ = '=';
+      }
+      else
+      {
+        *pos++ = base64_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
+        *pos++ = base64_table[(in[1] & 0x0f) << 2];
+      }
+      *pos++ = '=';
+      line_len += 4;
+    }
+
+    // if (line_len)
+    //   *pos++ = '\n';
+
+    *pos = '\0';
+
+    // if (out_len)
+    //   *out_len = pos - out;
+
+    return out;
+  }
 } // namespace cxx_case_base64
 
 // [ RUN      ] CxxCaseBase64.check_decode_1
@@ -2688,12 +2781,6 @@ TEST(CxxCaseBase64, check_decode_1)
 // output: QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucw==
 // [       OK ] CxxCaseBase64.check_decode_2 (0 ms)
 //
-// which one is correct?
-//
-// https://web.mit.edu/freebsd/head/contrib/wpa/src/utils/base64.c
-// Base64 encoding/decoding (RFC1341)
-// Copyright (c) 2005-2011, Jouni Malinen <j@w1.fi>
-//
 // https://www.base64encode.org/
 // Split lines into chunks:
 // The encoded data will be a continuous text without any whitespaces, check
@@ -2714,10 +2801,29 @@ TEST(CxxCaseBase64, check_decode_1)
 //
 //
 // https://tools.ietf.org/html/rfc4648
-//
-// This and references in the site shows the correct result as base64.
-// http://libb64.sourceforge.net/
-// one of the references is base64 in GNU coreutils.
+
+#if 0
+NOTE:
+This and references in the site shows the correct result as base64.
+http://libb64.sourceforge.net/
+one of the references is base64 in GNU coreutils.
+
+keitee@kit-ubuntu:~/works/base64/libb64-1.2/base64$ ./base64 -e a.txt b.txt
+keitee@kit-ubuntu:~/works/base64/libb64-1.2/base64$ more a.txt b.txt
+::::::::::::::
+a.txt
+::::::::::::::
+&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D
+3D4E59&streamtype=1
+::::::::::::::
+b.txt
+::::::::::::::
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0w
+MDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAw
+MDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEy
+MjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3
+NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
+#endif
 
 TEST(CxxCaseBase64, check_decode_2)
 {
@@ -2753,6 +2859,18 @@ TEST(CxxCaseBase64, check_decode_2)
     b64_encode_3(input, sizeof(input), (unsigned char *)output);
 
     std::cout << "output: " << output << std::endl;
+  }
+
+  {
+    const unsigned char input[] =
+      "ABC123Test Lets Try this' input and see What happens";
+    // char output[1000] = {0};
+
+    unsigned char *output = b64_encode_4(input, sizeof(input));
+
+    std::cout << "output: " << output << std::endl;
+
+    free(output);
   }
 }
 
@@ -2792,6 +2910,13 @@ TEST(CxxCaseBase64, check_decode_3)
   }
 }
 
+#if 0
+
+echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
+
+#endif
+
 TEST(CxxCaseBase64, check_decode_4)
 {
   using namespace cxx_case_base64;
@@ -2801,27 +2926,262 @@ TEST(CxxCaseBase64, check_decode_4)
     "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
     "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
     "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+
   std::string expected{
+    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
+    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
+    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
+    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+
+  std::string wrong_expected{
     "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
     "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
     "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
     "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
     "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEA"};
 
-  char output[1000] = {0};
+  // option1. wrong
+  {
+    char output[1000] = {0};
 
-  base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
-                input.size() + 1,
-                output);
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.size() + 1,
+                  output);
 
-  // std::cout << "output: " << output << std::endl;
+    // std::cout << "output: " << output << std::endl;
 
-  // copy ouput to std::string
-  std::string result{output};
+    // copy ouput to std::string
+    std::string result{output};
 
-  EXPECT_THAT(result.size(), 332);
+    EXPECT_THAT(result.size(), 332);
 
-  EXPECT_THAT(expected, result);
+    EXPECT_THAT(result, Ne(expected));
+    EXPECT_THAT(result, wrong_expected);
+  }
+
+  // option2. wrong
+  {
+    char *output{};
+
+    output =
+      b64_encode_2(reinterpret_cast<const unsigned char *>(input.c_str()),
+                   input.size() + 1);
+
+    // std::cout << "output: " << output << std::endl;
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+    EXPECT_THAT(result, wrong_expected);
+  }
+
+  // option3. wrong
+  {
+    char output[1000] = {0};
+
+    b64_encode_3(reinterpret_cast<const unsigned char *>(input.c_str()),
+                 input.size() + 1,
+                 (unsigned char *)output);
+
+    // std::cout << "output: " << output << std::endl;
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+    EXPECT_THAT(result, wrong_expected);
+  }
+
+  // option4. wrong
+  {
+    char *output{};
+
+    output = (char *)b64_encode_4(
+      reinterpret_cast<const unsigned char *>(input.c_str()),
+      input.size() + 1);
+
+    std::cout << "output: " << output << std::endl;
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+    EXPECT_THAT(result, wrong_expected);
+  }
+}
+
+// see how fgets works which removes nees of using "tr" command and this is the
+// issue.
+// note that we we run below, then there is no need to use tr command.
+//
+// echo "...." | base64 | base64 -d
+//
+// However, when use fgets, this is an issue.
+
+namespace cxx_case_base64_bin
+{
+  // constexpr auto BASE64_COMMAND{"/usr/bin/base64 | tr -d '\n'"};
+  constexpr auto BASE64_COMMAND{"/usr/bin/base64"};
+  constexpr auto BASE64_DECODE_COMMAND{"/usr/bin/base64 -d"};
+  constexpr int BASE64_MAX_SIZE{1000};
+
+  std::string base64_encode(const std::string &input)
+  {
+    std::ostringstream cmd{};
+    std::ostringstream encoded{};
+    char read[BASE64_MAX_SIZE]{};
+
+    cmd << "echo '" << input << "' | " << BASE64_COMMAND;
+
+    auto pfd = popen(cmd.str().c_str(), "r");
+    if (pfd)
+    {
+      // if (fgets(encoded, sizeof(encoded), pfd))
+      //
+      // fgets stores "\n" when read stops
+      //
+      // fgets()  reads  in  at most one less than size characters from stream
+      // and stores them into the buffer pointed to by s.
+      //
+      // Reading stops after an EOF or a newline. If a newline is read, it is
+      // stored into the buffer.
+      //
+      // terminating null byte ('\0') is stored after the last character in the
+      // buffer.
+      //
+      // fgets() returns s on success, and NULL on error or when end of file
+      // occurs while no characters have been read.
+
+      while (NULL != fgets(read, BASE64_MAX_SIZE, pfd))
+      {
+        // remove "\n"
+        read[strlen(read) - 1] = '\0';
+        encoded << read;
+      }
+
+      pclose(pfd);
+    }
+    else
+    {
+      std::cout << "popen failed : " << cmd.str().c_str() << std::endl;
+    }
+
+    return encoded.str();
+  }
+
+  // NOTE:
+  // if reduce read size to 100 for decode, it fails since input for reads can
+  // be big but input from base64 tool is wrapped at 76 by default. that's why
+  // we need to do while and remove `\n` to make a single line.
+  //
+  // constexpr int BASE64_MAX_SIZE{100};
+
+  std::string base64_decode(const std::string &input)
+  {
+    std::ostringstream cmd{};
+    std::ostringstream decoded{};
+    char read[BASE64_MAX_SIZE]{};
+
+    cmd << "echo '" << input << "' | " << BASE64_DECODE_COMMAND;
+
+    // std::cout << "cmd : " << cmd.str() << std::endl;
+
+    auto pfd = popen(cmd.str().c_str(), "r");
+    if (pfd)
+    {
+      while (NULL != fgets(read, BASE64_MAX_SIZE, pfd))
+      {
+        read[strlen(read) - 1] = '\0';
+        decoded << read;
+      }
+
+      pclose(pfd);
+    }
+    else
+    {
+      // LOG_ERROR( "popen failed {%s}", cmd.str().c_str());
+      std::cout << "popen failed : " << cmd.str().c_str() << std::endl;
+    }
+
+    return std::string{decoded.str()};
+  }
+} // namespace cxx_case_base64_bin
+
+#if 0
+echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
+
+encoded:JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+encoded:MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+encoded:MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+encoded:OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+encoded:RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+        JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+        MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+        MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+        OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+        RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+keitee@kit-ubuntu:~/git/kb/code-cxx/cxx/build$ echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+RDNENEU1OSZzdHJlYW10eXBlPTEK
+
+encoded drmData {
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAw
+MDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMw
+MDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNE
+OEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUy
+RDNENEU1OSZzdHJlYW10eXBlPTEK}
+
+#endif
+
+TEST(CxxCaseBase64, check_decode_5)
+{
+  using namespace cxx_case_base64_bin;
+
+  const char input[]{
+    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
+    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
+    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
+    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+
+  std::string expected{
+    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
+    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
+    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
+    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+
+  const char input_2[]{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+  std::string expected_2{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+
+  EXPECT_THAT(strcmp(input, input_2), 0);
+  EXPECT_THAT(expected, expected_2);
+
+  std::ostringstream drmData{};
+
+  drmData << input;
+
+  // encode drmData using base64
+  // printf("input drmData {%s}\n", drmData.str().c_str());
+  // std::cout << "input drmData : " << drmData.str().c_str() << std::endl;
+
+  std::string encodedData = base64_encode(drmData.str());
+
+  // printf("encoded drmData {%s}\n", encodedData.c_str());
+  // std::cout << "encoded drmData : " << encodedData << std::endl;
+
+  EXPECT_THAT(encodedData, expected);
+
+  std::string decodedData = base64_decode(encodedData);
+
+  EXPECT_THAT(decodedData, std::string(input));
 }
 
 // ={=========================================================================

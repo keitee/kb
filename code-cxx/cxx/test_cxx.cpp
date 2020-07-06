@@ -1204,8 +1204,19 @@ namespace cxxarray
   }
 } // namespace cxxarray
 
+// *cxx-init*
 TEST(CxxArray, check_init_form)
 {
+  {
+    int arr_1[10]{};
+    int arr_1_expected[10]{0,0,0,0,0,0,0,0,0,0};
+    int arr_2[10]{1};
+    int arr_2_expected[10]{1,0,0,0,0,0,0,0,0,0};
+
+    EXPECT_THAT(memcmp((const void *)arr_1, (const void *)arr_1_expected, sizeof arr_1), 0);
+    EXPECT_THAT(memcmp((const void *)arr_2, (const void *)arr_2_expected, sizeof arr_2), 0);
+  }
+
   {
     char s2[]   = "012345678901234567890";
     int arr[20] = {33};
@@ -1267,6 +1278,7 @@ TEST(CxxArray, check_size)
   // char *s1 = "this is first message"; is a pointer
   // }
 
+  // 21 chars
   char s2[]   = "012345678901234567890";
   int arr[20] = {33};
 
@@ -1293,8 +1305,16 @@ TEST(CxxArray, check_size)
   }
 
   {
-    // strlen do not count '\n'
+    // includes a null
+    EXPECT_EQ(sizeof(s2), 22);
+    EXPECT_EQ(sizeof s2, 22);
+
+    // strlen do not count '\0'
     EXPECT_EQ(strlen(s2), 21);
+
+    // echo includes null
+    // $ echo "012345678901234567890" | wc
+    //       1       1      22
 
     std::string s{s2};
     EXPECT_EQ(s.size(), 21);
@@ -3327,10 +3347,11 @@ TEST(CxxRVO, check_when_rvo_off)
   Snitch s = createSnitch2(true);
 }
 
-// ={=========================================================================
-// cxx-swap
-
-namespace cxx_swap
+/*
+={=========================================================================
+cxx-swap
+*/
+namespace cxxswap
 {
   void swap_by_value(int x, int y)
   {
@@ -3357,9 +3378,9 @@ namespace cxx_swap
   }
 } // namespace cxx_swap
 
-TEST(CxxSwap, swap)
+TEST(CxxSwap, check_difference)
 {
-  using namespace cxx_swap;
+  using namespace cxxswap;
 
   // no swap happens since uses a copy
   {
@@ -3425,7 +3446,7 @@ TEST(CxxSwap, check_container)
 // The iterators don’t need to have the same type. However, the values must be
 // assignable.
 
-TEST(CxxSwap, check_iter_swap)
+TEST(CxxSwap, check_elements)
 {
   {
     std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -3440,7 +3461,7 @@ TEST(CxxSwap, check_iter_swap)
     EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
   }
 
-  // use operator[]()
+  // use operator[]() since [] returns reference
   {
     std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
@@ -3453,6 +3474,11 @@ TEST(CxxSwap, check_iter_swap)
   }
 
   // use operator*()
+  //
+  // // Forward iterator requirements
+  // reference
+  // operator*() const _GLIBCXX_NOEXCEPT
+  // { return *_M_current; }
   {
     std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
@@ -3468,6 +3494,30 @@ TEST(CxxSwap, check_iter_swap)
     swap(*one, *two);
     EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
   }
+
+  // on array and works
+  {
+    int coll[]{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    int *e1 = coll+0;
+    int *e2 = coll+2;
+
+    std::swap(*e1, *e2);
+    EXPECT_THAT(coll, ElementsAre(3, 2, 1, 4, 5, 6, 7, 8, 9));
+  }
+
+  // on array and fails
+  // {
+  //   int coll[]{1, 2, 3, 4, 5, 6, 7, 8, 9};
+  //   EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  //   int *e1 = coll+0;
+  //   int *e2 = coll+2;
+
+  //   std::swap(e1, e2);
+  //   EXPECT_THAT(coll, ElementsAre(3, 2, 1, 4, 5, 6, 7, 8, 9));
+  // }
 }
 
 // ={=========================================================================
@@ -9277,17 +9327,65 @@ TEST(CxxStream, fstream_wildcard)
 // the characters written to a string stream can be appended to an existing
 // string:
 
-TEST(CxxStream, check_stringstream)
+TEST(CxxStream, check_stringstream_1)
 {
-  std::string s{"value: "};
-  std::stringstream os{s, std::ios::out | std::ios::ate};
+  {
+    std::string s{"value: "};
+    std::stringstream os{s, std::ios::out | std::ios::ate};
 
-  os << "is unknown";
+    os << "is unknown";
 
-  EXPECT_THAT(os.str(), "value: is unknown");
+    EXPECT_THAT(os.str(), "value: is unknown");
 
-  // The string s itself is not modified.
-  EXPECT_THAT(s, "value: ");
+    // The string s itself is not modified.
+    EXPECT_THAT(s, "value: ");
+  }
+
+  {
+    std::string s{"value: "};
+    std::stringstream os{s};
+
+    os << "is unknown";
+
+    EXPECT_THAT(os.str(), "is unknown");
+
+    // The string s itself is not modified.
+    EXPECT_THAT(s, "value: ");
+  }
+
+  // don't need flags for ostringstream
+  {
+    std::string s{"value: "};
+    std::ostringstream os{s};
+
+    os << "is unknown";
+
+    EXPECT_THAT(os.str(), "is unknown");
+
+    // The string s itself is not modified.
+    EXPECT_THAT(s, "value: ");
+  }
+}
+
+TEST(CxxStream, check_stringstream_2)
+{
+  {
+    std::stringstream os{};
+
+    EXPECT_THAT(os.str().size(), 0);
+
+    os << "0123456789";
+    EXPECT_THAT(os.str().size(), 10);
+
+    os << "0123456789";
+    EXPECT_THAT(os.str().size(), 20);
+
+    os << "0123456789";
+    EXPECT_THAT(os.str().size(), 30);
+
+    os << "0123456789";
+    EXPECT_THAT(os.str().size(), 40);
+  }
 }
 
 namespace cxx_io
@@ -9912,7 +10010,7 @@ namespace cxxoverride
     private:
       int derived_;
     };
-  } // namespace no_override
+  } // namespace nooverride
 
   namespace yesoverride
   {
@@ -9941,8 +10039,8 @@ namespace cxxoverride
     private:
       int derived_;
     };
-  } // namespace no_override
-} // namespace cxx_override
+  } // namespace yesoverride
+} // namespace cxxoverride
 
 TEST(CxxOverride, check_condition)
 {
