@@ -2615,7 +2615,7 @@ namespace algoreverse
       return;
 
     char *start{&input[0]};
-    char *end{&input[strlen(input)-1]};
+    char *end{&input[strlen(input) - 1]};
 
     for (start, end; start < end; ++start, --end)
       std::swap(*start, *end);
@@ -2631,7 +2631,7 @@ namespace algoreverse
   {
     std::reverse(input.begin(), input.end());
   }
-} // namespace algopad
+} // namespace algoreverse
 
 TEST(AlgoReverse, check_string)
 {
@@ -2671,32 +2671,31 @@ TEST(AlgoReverse, check_string)
   }
 }
 
-namespace algo_reverse
-{
-  // Write a program to reverse a string with all its duplicates removed. Only
-  // the last instance of a character in the reverse string has to appear. Also,
-  // the following conditions are to be satisfied: Assume only Capital Letters.
-  //
-  // o. assume that input is ASCII and is all upper case chars. so can use
-  // unsigned int to check if it's a duplicate or not. if needs more range to
-  // cover then need to use something else.
-  //
-  // o. from the net
+// Write a program to reverse a string with all its duplicates removed. Only
+// the last instance of a character in the reverse string has to appear. Also,
+// the following conditions are to be satisfied: Assume only Capital Letters.
+//
+// o. assume that input is ASCII and is all upper case chars. so can use
+// unsigned int to check if it's a duplicate or not. if needs more range to
+// cover then need to use something else.
+//
+// o. from the net
 
+namespace algoreverse
+{
   std::string reverse_string_6(const std::string &input)
   {
-    std::string sin{input};
     std::string sout{};
     unsigned int bappeared{};
 
     // remove duplicates from input
-    for (size_t i = 0, size = sin.size(); i < size; ++i)
+    for (size_t i = 0, size = input.size(); i < size; ++i)
     {
       // only if not appeared before. use bitwise
-      if (!(bappeared & (1 << (sin[i] - 'A'))))
+      if (!(bappeared & (1 << (input[i] - 'A'))))
       {
-        sout += sin[i];
-        bappeared |= (1 << (sin[i] - 'A'));
+        sout += input[i];
+        bappeared |= (1 << (input[i] - 'A'));
       }
     }
 
@@ -2705,11 +2704,11 @@ namespace algo_reverse
     // return reverse;
     return std::string{sout.crbegin(), sout.crend()};
   }
-} // namespace algo_reverse
+} // namespace algoreverse
 
-TEST(AlgoReverse, ReverseAndRemoveDuplicates)
+TEST(AlgoReverse, check_string_no_duplicates)
 {
-  using namespace algo_reverse;
+  using namespace algoreverse;
 
   auto func = reverse_string_6;
 
@@ -2717,54 +2716,73 @@ TEST(AlgoReverse, ReverseAndRemoveDuplicates)
   EXPECT_THAT(func(input), Eq("LHSIKAVTJ"));
 }
 
-// ={=========================================================================
-// algo-anagram
-//
-// o. Space? assume ASCII 256 chars
-//    ask for clarity. Since it's only for alphabet uppercase then use 32
-//    bset and reduce space requirement.
-//
-// o. One simple optimization. return false if the length of input strings
-//    are different
-//
-// o. cstring or std::string?
-//
-// o. time O(n) and space O(1)
+/*
+={=========================================================================
+algo-anagram
 
-namespace algo_anagram
+From Cracking the coding interview, p174,
+
+Given two strings, write a method to decide if one is a anagram(permutation) of
+the other. 
+
+bool f(string one, string two);
+
+from STL
+
+Testing for Unordered Equality
+
+Both forms return whether the elements in the range [beg1,end1) are a
+permutation of the elements in the range starting with beg2; that is, whether
+they return equal elements in whatever order.
+
+o. Space? assume ASCII 256 chars
+  ask for clarity. Since it's only for alphabet uppercase then use 32
+  bset and reduce space requirement.
+
+o. One simple optimization. return false if the length of input strings
+  are different
+
+o. cstring or std::string?
+
+o. time O(n) and space O(1)
+
+*/
+
+namespace algoanagram
 {
   bool anagram_1(string one, string two)
   {
+    // quick optimisation.
     if (one.size() != two.size())
       return false;
 
-    sort(one.begin(), one.end());
-    sort(two.begin(), two.end());
+    std::sort(one.begin(), one.end());
+    std::sort(two.begin(), two.end());
 
-    return (one == two) ? true : false;
+    return one == two ? true : false;
   }
 
-  bool anagram_2(const string one, const string two)
+  bool anagram_2(string one, string two)
   {
+    // quick optimisation.
     if (one.size() != two.size())
       return false;
 
-    bitset<256> bset{};
+    std::bitset<256> table{};
 
-    for (const auto &e : one)
-      bset[e] = 1;
+    for (const auto e : one)
+      table.set(e);
 
-    for (const auto &e : two)
+    for (const auto e : two)
     {
-      if (!bset[e])
-      {
+      if (!table[e])
         return false;
-      }
     }
 
     return true;
   }
 
+  // Necessary since don't seem to meeet "anagram" definition.
   // To pass when there are duplicates in the input:
   //  1. remove duplicates
   //  2. move size check after removing duplicates.
@@ -2795,48 +2813,35 @@ namespace algo_anagram
 
     return true;
   }
-} // namespace algo_anagram
+} // namespace algoanagram
 
-TEST(AlgoAnagram, Anagram)
+TEST(AlgoAnagram, check_inputs)
 {
-  using namespace algo_anagram;
+  using namespace algoanagram;
 
   {
-    auto func = anagram_1;
+    const std::vector<std::function<bool(std::string, std::string)>> imps{
+      anagram_1,
+      anagram_2};
 
-    EXPECT_THAT(func("PARK", "APRK"), true);
-    EXPECT_THAT(func("PARK", "APRKPARK"), false);
-    EXPECT_THAT(func("PARK", "CARK"), false);
-    EXPECT_THAT(func("PARK", "PAAA"), false);
-  }
-  {
-    auto func = anagram_2;
-
-    EXPECT_THAT(func("PARK", "APRK"), true);
-    EXPECT_THAT(func("PARK", "APRKPARK"), false);
-    EXPECT_THAT(func("PARK", "CARK"), false);
-
-    // fails on since _2() checks table and no distinction when multiple checks
-
-    EXPECT_THAT(func("PARK", "PAAA"), true);
-  }
-  {
-    auto func = anagram_3;
-
-    EXPECT_THAT(func("PARK", "APRK"), true);
-    EXPECT_THAT(func("PARK", "APRKPARK"), false);
-    EXPECT_THAT(func("PARK", "CARK"), false);
-    EXPECT_THAT(func("PARK", "PAAA"), false);
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f("PARK", "APRK"), true);
+      EXPECT_THAT(f("PARK", "APRKPARK"), false);
+      EXPECT_THAT(f("PARK", "CARK"), false);
+      EXPECT_THAT(f("PARK", "PAAA"), false);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-palindrome
-/* algo-leetcode-9
-9. Palindrome Number, Easy
+/*
+={=========================================================================
+algo-palindrome algo-leetcode-9 9. Palindrome Number, Easy
 
 Determine whether an integer is a palindrome. An integer is a palindrome when it
 reads the same backward as forward.
+
+bool is_palindrome(int input);
 
 Example 1:
 
@@ -2863,10 +2868,9 @@ Coud you solve it without converting the integer to a string?
 
 */
 
-namespace algo_palindrome
+namespace algopalindrome
 {
-  // int reverse_integer(int value);
-  // as itoa() reverse input and atoi() makes it to integer
+  // do algo-atoi and algo-itoa at the same time and no need to reverse.
   //
   // Runtime: 108 ms, faster than 97.64% of C++ online submissions for
   // Palindrome Number.
@@ -2874,13 +2878,14 @@ namespace algo_palindrome
   // Memory Usage: 73 MB, less than 63.19% of C++ online submissions for
   // Palindrome Number.
 
-  bool is_palindrome(int input)
+  bool palindrome_1(int input)
   {
-    long long result{};
+    int result{};
     int remains{};
 
     int value = input;
 
+    // quick optimisation.
     int sign{};
     sign = (input < 0) ? -1 : 1;
     if (sign < 0)
@@ -2901,28 +2906,274 @@ namespace algo_palindrome
 
     return result == input ? true : false;
   }
-} // namespace algo_palindrome
 
-TEST(AlgoPalindrome, Integer)
+  // use more space but saves on the loop.
+  bool palindrome_2(int input)
+  {
+    std::string coll{std::to_string(input)};
+
+    size_t start{0};
+    size_t end{coll.size() - 1};
+
+    for (start, end; start < end; ++start, --end)
+      if (coll[start] != coll[end])
+        return false;
+
+    return true;
+  }
+} // namespace algopalindrome
+
+TEST(AlgoPalindrome, check_integer_input)
 {
-  using namespace algo_palindrome;
+  using namespace algopalindrome;
 
-  EXPECT_THAT(is_palindrome(121), true);
-  EXPECT_THAT(is_palindrome(-121), false);
-  EXPECT_THAT(is_palindrome(10), false);
-  EXPECT_THAT(is_palindrome(0), true);
-  EXPECT_THAT(is_palindrome(0000000123), false);
-  EXPECT_THAT(is_palindrome(1230000000), false);
-  EXPECT_THAT(is_palindrome(1234554321), true);
+  {
+    const std::vector<std::function<bool(int)>> imps{palindrome_1,
+                                                     palindrome_2};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(121), true);
+      EXPECT_THAT(f(-121), false);
+      EXPECT_THAT(f(10), false);
+      EXPECT_THAT(f(0), true);
+      EXPECT_THAT(f(0000000123), false);
+      EXPECT_THAT(f(1230000000), false);
+      EXPECT_THAT(f(1234554321), true);
+    }
+  }
 }
 
 /*
+={=========================================================================
+algo-palindrome-string algo-leetcode-19
+
+125. Valid Palindrome, Easy
+
+Given a string, determine if it is a palindrome, considering only alphanumeric
+characters and ignoring cases.
+
+bool f(string s);
+
+Note: For the purpose of this problem, we define empty string as valid palindrome.
+
+Example 1:
+Input: "A man, a plan, a canal: Panama"
+Output: true
+
+Example 2:
+Input: "race a car"
+Output: false
+ 
+*/
+
+namespace algo_palindrome
+{
+  // Runtime: 16 ms, faster than 17.06% of C++ online submissions for Valid
+  // Palindrome.
+  //
+  // Memory Usage: 9 MB, less than 89.62% of C++ online submissions for Valid
+  // Palindrome.
+
+  // use iterator like pointer
+  bool palindrome_string_1(const std::string &s)
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end   = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+      {
+        ++begin;
+        continue;
+      }
+
+      if (!isalnum(*end))
+      {
+        --end;
+        continue;
+      }
+
+      if (toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // use index
+  bool palindrome_string_2(const std::string &s)
+  {
+    int begin{};
+    int end{(int)s.size() - 1};
+
+    while (begin < end)
+    {
+      if (!isalnum(s[begin]))
+      {
+        ++begin;
+        continue;
+      }
+
+      if (!isalnum(s[end]))
+      {
+        --end;
+        continue;
+      }
+
+      if (toupper(s[begin]) != toupper(s[end]))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // 2020.07
+  bool palindrome_string_3(const std::string &input)
+  {
+    // Note: For the purpose of this problem, we define empty string as valid
+    // palindrome.
+    if (input.empty())
+      return true;
+
+    size_t start{0};
+    size_t end{input.size() - 1};
+
+    // this causes the wrong result.
+    // for (start, end; start < end; ++start, --end)
+
+    for (start, end; start < end;)
+    {
+      // not isspace() since should ignore others.
+      if (!std::isalnum(input[start]))
+      {
+        ++start;
+        continue;
+      }
+
+      if (!std::isalnum(input[end]))
+      {
+        --end;
+        continue;
+      }
+
+      if (std::tolower(input[start]) != std::tolower(input[end]))
+      {
+        return false;
+      }
+
+      ++start;
+      --end;
+    }
+
+    return true;
+  }
+
+  bool palindrome_string_4(const std::string &s)
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end   = --s.end();
+
+    while (begin < end)
+    {
+      while (begin < s.end() && !isalnum(*begin))
+        ++begin;
+
+      while (end > s.begin() && !isalnum(*end))
+        --end;
+
+      if (begin < end && toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // from discussion *py-code*
+  // # trick 1: save re.sub() result to s itself
+  // # trick 2: palindrome is the same when reversed
+  //
+  // class Solution_isPalindrome:
+  //     def answer(self, s):
+  //         s = re.sub(r'\W', '', s).upper()
+  //         return s == s[::-1]
+  bool palindrome_string_5(const std::string &s)
+  {
+    std::string coll{};
+
+    // remove non alnum chars from the input
+    for (auto e : s)
+    {
+      if (std::isalnum(e))
+        coll.push_back(std::tolower(e));
+    }
+
+    std::string reversed{coll.rbegin(), coll.rend()};
+
+    return coll == reversed ? true : false;
+  }
+} // namespace algo_palindrome
+
+TEST(AlgoPalindrome, check_string_input)
+{
+  using namespace algo_palindrome;
+
+  {
+    const std::vector<std::function<bool(const std::string &)>> imps{
+      palindrome_string_1,
+      palindrome_string_2,
+      palindrome_string_3,
+      palindrome_string_4,
+      palindrome_string_5};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(""), true);
+      EXPECT_THAT(f("121"), true);
+      EXPECT_THAT(f("A man, a plan, a canal: Panama"), true);
+      EXPECT_THAT(f("race a car"), false);
+      EXPECT_THAT(f("0P"), false);
+
+      // 3 spaces
+      EXPECT_THAT(f("   "), true);
+      //               "12345678 12345678"
+      EXPECT_THAT(f("        a        "), true);
+      EXPECT_THAT(f("a                "), true);
+      EXPECT_THAT(f("                a"), true);
+      EXPECT_THAT(f(".,"), true);
+      EXPECT_THAT(f("s"), true);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-palindrome-longest 
+
 The Modern C++ Challenge
 28. Longest palindromic substring
 
 Write a function that, given an input string, locates and returns the longest
 sequence in the string that is a palindrome. If multiple palindromes of the same
 length exist, the first one should be returned.
+
+std::string longest_palindrome(const std::string text);
 
 // from wikipedia
 
@@ -2951,16 +3202,18 @@ Unlike number version, the difference is "string" and "largest"
 */
 
 // namespace U28_2018_12_03
-namespace algo_palindrome
+namespace algopalindrome
 {
-  // palindrome is *symmetric* substr while moving i from input text.
+  // palindrome is *symmetric* while moving i(center) from input text.
+  // so center start from 0th and for every char of input:
+  // o scan to right and left from that
+  // o keep update current symetric substr and save it if that's longer
+  // o return the input when there's no finding such as single input
   //
-  // start from 0th and for every char of input:
-  //  scan to right and left from that
-  //  keep update current symetric substr and save it if that's longer
-  //  return the input when there's no finding such as single input
+  // However, this fails on
+  // EXPECT_THAT(f("ss"), "ss");
 
-  std::string longest_palindrome(const std::string text)
+  std::string palindrome_longest_1(const std::string &text)
   {
     auto length = text.size();
     int lidx{}, ridx{};
@@ -3000,44 +3253,47 @@ namespace algo_palindrome
 
     return saved;
   }
+} // namespace algopalindrome
 
-  /*
-    The simplest solution to this problem is to try a brute-force approach, checking
-    if each substring is a palindrome. However, this means we need to check C(N, 2)
-    substrings (where N is the number of characters in the string), and the time
-    complexity would be O(N^3). 
+// The simplest solution to this problem is to try a brute-force approach,
+// checking if each substring is a palindrome. However, this means we need to
+// check C(N, 2) substrings (where N is the number of characters in the string),
+// and the time complexity would be O(N^3).
+//
+//
+// The complexity could be reduced to O(N^2) by storing results of sub problems.
+// To do so we need a table of Boolean values, of size, where
+//
+// the key idea:
+// the element at [i, j] indicates whether the substring from position i to j is
+// a palindrome.
+//
+// We start by initializing all elements [i,i] with true (one-character
+// palindromes) and all the elements [i,i+i] with true for all consecutive two
+// identical characters (for two-character palindromes). We then go on to
+// inspect substrings greater than two characters, setting the element at [i,j]
+// to true if the element at [i+i,j-1] is true and the characters on the
+// positions i and j in the string are also equal. Along the way, we retain the
+// start position and length of the longest palindromic substring in order to
+// extract it after finishing computing the table.
+//
+//       0 1 2 3 4
+//       l e v e l
+// 0, l  o       *
+// 1, e    o   *
+// 2, v      o x
+// 3, e        o
+// 4, l          o
+//
+// i = 0, maxLen = 5
+//
+// why chekc "table[(i + 1)*len + j - 1]"? To see substr is symetric. ex, to see
+// [0, 4] is symetic, check substr(1,3) is symetric, that is [1, 3]
 
-    The complexity could be reduced to O(N^2) by storing results of sub problems. To
-    do so we need a table of Boolean values, of size, where 
-
-    the key idea:
-    the element at [i, j] indicates whether the substring from position i to j is
-    a palindrome. 
-
-    We start by initializing all elements [i,i] with true (one-character
-    palindromes) and all the elements [i,i+i] with true for all consecutive two
-    identical characters (for two-character palindromes). We then go on to inspect
-    substrings greater than two characters, setting the element at [i,j] to true if
-    the element at [i+i,j-1] is true and the characters on the positions i and j in
-    the string are also equal. Along the way, we retain the start position and
-    length of the longest palindromic substring in order to extract it after
-    finishing computing the table.
-
-          0 1 2 3 4
-          l e v e l
-    0, l  o       *
-    1, e    o   *
-    2, v      o x
-    3, e        o
-    4, l          o
-     
-    i = 0, maxLen = 5
-    
-    why chekc "table[(i + 1)*len + j - 1]"? To see substr is symetric. ex, to
-    see [0, 4] is symetic, check substr(1,3) is symetric, that is [1, 3] 
-  */
-
-  std::string longest_palindrome_text(std::string str)
+namespace algopalindrome
+{
+  // from text code
+  std::string palindrome_longest_2(std::string str)
   {
     size_t const len    = str.size();
     size_t longestBegin = 0;
@@ -3045,17 +3301,18 @@ namespace algo_palindrome
 
     std::vector<bool> table(len * len, false);
 
-    // diagonal elements
-    // We start by initializing all elements [i,i] with true (one-character
-    // palindromes)
+    // one-character palindromes:
+    // We start by initializing all elements [i,i] with true and set diagonal
+    // elements of the table
 
     for (size_t i = 0; i < len; i++)
     {
       table[i * len + i] = true;
     }
 
+    // two-character palindromes:
     // and all the elements [i,i+i] with true for all consecutive two identical
-    // characters (for two-character palindromes). We then go on to inspect
+    // characters. We then go on to inspect
     //
     // why "len -1"? since needs two chars to inspect
     // 0 1 2 3 4, len is 5
@@ -3094,6 +3351,11 @@ namespace algo_palindrome
              << ((i + 1) * len + j - 1) << "]:" << table[(i + 1) * len + j - 1]
              << endl;
 
+        // table[(i + 1) * len + j - 1] is to mark the previous palindrome
+        // substring.
+        //
+        // table[i * len + j] = true; is to set current substring
+
         if (str[i] == str[j] && table[(i + 1) * len + j - 1])
         {
           table[i * len + j] = true;
@@ -3108,35 +3370,32 @@ namespace algo_palindrome
             longestBegin = i;
             maxLen       = k;
           }
-        }
+        } // if end
       }
     }
 
     return std::string(str.substr(longestBegin, maxLen));
   }
-
-} // namespace algo_palindrome
+} // namespace algopalindrome
 
 // TEST(U28, 2018_12_03)
-TEST(AlgoPalindrome, LongestSubString)
+TEST(AlgoPalindrome, check_longest)
 {
-  using namespace algo_palindrome;
+  using namespace algopalindrome;
 
   {
-    EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
-    EXPECT_THAT(longest_palindrome("level"), "level");
+    auto f = palindrome_longest_2;
 
-    // this fails
-    // EXPECT_THAT(longest_palindrome("ss"), "ss");
+    EXPECT_THAT(f("sahararahnide"), "hararah");
 
-    EXPECT_THAT(longest_palindrome("s"), "s");
-  }
-
-  {
-    auto func = longest_palindrome_text;
-
-    // EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
-
+    //       0 1 2 3 4
+    //       l e v e l
+    // 0, l  o       *
+    // 1, e    o   *
+    // 2, v      o x
+    // 3, e        o
+    // 4, l          o
+    //
     // k: 3, i: 0, j: 2, table[6]:1
     // k: 3, i: 1, j: 3, table[12]:1
     // k: 3, i: 1, j: 3, table[12]:1, table[8] = true
@@ -3146,275 +3405,10 @@ TEST(AlgoPalindrome, LongestSubString)
     // k: 5, i: 0, j: 4, table[8]:1
     // k: 5, i: 0, j: 4, table[8]:1, table[4] = true
 
-    EXPECT_THAT(func("level"), "level");
+    EXPECT_THAT(f("level"), "level");
 
-    // EXPECT_THAT(longest_palindrome("ss"), "ss");
-    // EXPECT_THAT(longest_palindrome("s"), "s");
-  }
-}
-
-// algo-leetcode-19
-/*
-125. Valid Palindrome, Easy
-
-Given a string, determine if it is a palindrome, considering only alphanumeric
-characters and ignoring cases.
-
-Note: For the purpose of this problem, we define empty string as valid palindrome.
-
-Example 1:
-Input: "A man, a plan, a canal: Panama"
-Output: true
-
-Example 2:
-Input: "race a car"
-Output: false
- 
-*/
-
-namespace algo_palindrome
-{
-  // Runtime: 16 ms, faster than 17.06% of C++ online submissions for Valid
-  // Palindrome.
-  //
-  // Memory Usage: 9 MB, less than 89.62% of C++ online submissions for Valid
-  // Palindrome.
-
-  // use iterator
-  bool isPalindrome_1(string s)
-  {
-    if (s.empty())
-      return true;
-
-    auto begin = s.begin();
-    auto end   = --s.end();
-
-    while (begin < end)
-    {
-      if (!isalnum(*begin))
-      {
-        ++begin;
-        continue;
-      }
-
-      if (!isalnum(*end))
-      {
-        --end;
-        continue;
-      }
-
-      if (toupper(*begin) != toupper(*end))
-        return false;
-
-      ++begin;
-      --end;
-    }
-
-    return true;
-  }
-
-  // use index
-  bool isPalindrome_1_1(string s)
-  {
-    int begin{};
-    int end{(int)s.size() - 1};
-
-    while (begin < end)
-    {
-      if (!isalnum(s[begin]))
-      {
-        ++begin;
-        continue;
-      }
-
-      if (!isalnum(s[end]))
-      {
-        --end;
-        continue;
-      }
-
-      if (toupper(s[begin]) != toupper(s[end]))
-        return false;
-
-      ++begin;
-      --end;
-    }
-
-    return true;
-  }
-
-  // from discussion:
-
-  bool isPalindrome_2(string s)
-  {
-    int i = 0;
-    int j = s.size() - 1;
-
-    while (i < j)
-    {
-      if (!isalnum(s[i]))
-        ++i;
-      else if (!isalnum(s[j]))
-        --j;
-      else
-      {
-        if (tolower(s[i]) != tolower(s[j]))
-          return false;
-        ++i, --j;
-      }
-    }
-
-    return true;
-  }
-
-  // let's make it faster but this is wrong since ++begin/--end runs in every
-  // runrun.
-
-  bool isPalindrome_wrong(string s)
-  {
-    if (s.empty())
-      return true;
-
-    auto begin = s.begin();
-    auto end   = --s.end();
-
-    while (begin < end)
-    {
-      if (!isalnum(*begin))
-      {
-        ++begin;
-        // cout << "++: " << *begin << endl;
-      }
-      else if (!isalnum(*end))
-      {
-        --end;
-        // cout << "--: " << *end << endl;
-      }
-      else if (toupper(*begin) != toupper(*end))
-      {
-        // cout << "if: " << *begin << " != " << *end << endl;
-        return false;
-      }
-
-      // cout << ": " << *begin << " == " << *end << endl;
-
-      ++begin;
-      --end;
-    }
-
-    return true;
-  }
-
-  // after all, "if and else if" is to reduce outer loop so use while instead
-  // However, inner while changes begin/end and it requires outer check on every
-  // if; makes outer check invalid.
-  //
-  // is it any better? seems not.
-
-  bool isPalindrome_4_wrong(string s)
-  {
-    if (s.empty())
-      return true;
-
-    auto begin = s.begin();
-    auto end   = --s.end();
-
-    while (begin < end)
-    {
-      while (!isalnum(*begin))
-        ++begin;
-
-      while (!isalnum(*end))
-        --end;
-
-      if (toupper(*begin) != toupper(*end))
-        return false;
-
-      ++begin;
-      --end;
-    }
-
-    return true;
-  }
-
-  bool isPalindrome_4(string s)
-  {
-    if (s.empty())
-      return true;
-
-    auto begin = s.begin();
-    auto end   = --s.end();
-
-    while (begin < end)
-    {
-      while (begin < s.end() && !isalnum(*begin))
-        ++begin;
-
-      while (end > s.begin() && !isalnum(*end))
-        --end;
-
-      if (begin < end && toupper(*begin) != toupper(*end))
-        return false;
-
-      ++begin;
-      --end;
-    }
-
-    return true;
-  }
-
-  // from discussion *py-code*
-  // # trick 1: save re.sub() result to s itself
-  // # trick 2: palindrome is the same when reversed
-  //
-  // class Solution_isPalindrome:
-  //     def answer(self, s):
-  //         s = re.sub(r'\W', '', s).upper()
-  //         return s == s[::-1]
-
-} // namespace algo_palindrome
-
-TEST(AlgoPalindrome, String)
-{
-  using namespace algo_palindrome;
-
-  {
-    auto func = isPalindrome_1_1;
-
-    EXPECT_THAT(func(""), true);
-    EXPECT_THAT(func("121"), true);
-    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
-    EXPECT_THAT(func("race a car"), false);
-    EXPECT_THAT(func("0P"), false);
-
-    // 3 spaces
-    EXPECT_THAT(func("   "), true);
-    //               "12345678 12345678"
-    EXPECT_THAT(func("        a        "), true);
-    EXPECT_THAT(func("a                "), true);
-    EXPECT_THAT(func("                a"), true);
-  }
-
-  {
-    auto func = isPalindrome_2;
-
-    EXPECT_THAT(func(""), true);
-    EXPECT_THAT(func("121"), true);
-    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
-    EXPECT_THAT(func("race a car"), false);
-    EXPECT_THAT(func("0P"), false);
-  }
-
-  {
-    auto func = isPalindrome_4;
-
-    EXPECT_THAT(func(""), true);
-    EXPECT_THAT(func("121"), true);
-    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
-    EXPECT_THAT(func("race a car"), false);
-    EXPECT_THAT(func("0P"), false);
-    // fail
-    EXPECT_THAT(func(".,"), true);
+    EXPECT_THAT(f("ss"), "ss");
+    EXPECT_THAT(f("s"), "s");
   }
 }
 
@@ -8473,23 +8467,26 @@ TEST(AlgoRapairman, 0704)
   }
 }
 
-// ={=========================================================================
-// algo-atoi
-//
-// * input type? digits only? no space?
-// * input size?
-// * what base? 10 or 2?
-// * sign support?
+/*
+={=========================================================================
+algo-conversion algo-atoi
 
-// from ansic, p43.
-//
-// when base is 10.
-//
-// this is 'naive' implementation since no error handlings and return 0 when
-// failed to convert. compare to strtol
-//
-// there is no check on the end of string input? '0' is not the same as
-// 0(null) and when see any other than numbers, for loops ends.
+* input type? digits only? no space?
+* input size?
+* what base? 10 or 2?
+* sign support?
+
+from ansic, p43.
+
+when base is 10.
+
+this is 'naive' implementation since no error handlings and return 0 when failed
+to convert. compare to strtol
+
+there is no check on the end of string input? '0' is not the same as 0(null) and
+when see any other than numbers, for loops ends.
+
+*/
 
 namespace algo_conversion
 {
@@ -8624,7 +8621,7 @@ namespace algo_conversion
   }
 } // namespace algo_conversion
 
-TEST(AlgoConversion, StringToInteger)
+TEST(AlgoConversion, check_to_integer)
 {
   using namespace algo_conversion;
 
@@ -8640,22 +8637,26 @@ TEST(AlgoConversion, StringToInteger)
   EXPECT_THAT(atoi_hex("1A"), Eq(26));
 }
 
-// ={=========================================================================
-// algo-itoa
-//
-// * what base? 10 or 2?
-// * sign support?
+/*
+={=========================================================================
+algo-conversion algo-itoa
 
-// from ansic, p43.
-//
-// when base is 10.
-//
-// there is no check on the end of string input? '0' is not the same as
-// 0(null) and when see any other than numbers, for loops ends.
+* what base? 10 or 2?
+* sign support?
 
-namespace algo_conversion
+from ansic, p43.
+
+when base is 10.
+
+there is no check on the end of string input? '0' is not the same as
+0(null) and when see any other than numbers, for loops ends.
+ 
+*/
+
+namespace algoconversion
 {
-  std::string itoa_navie(const int input)
+  // naive version
+  std::string itoa_1(const int input)
   {
     int value{input};
     char letter{0};
@@ -8671,10 +8672,11 @@ namespace algo_conversion
     }
 
     // *algo-reverse*
-    return std::string(result.crbegin(), result.crend());
+    return std::string{result.crbegin(), result.crend()};
   }
 
-  std::string itoa_no_reverse(const int input)
+  // no reverse since insert() inserts char at front which moves up the rest
+  std::string itoa_2(const int input)
   {
     std::string result{};
     std::string temp{};
@@ -8691,14 +8693,18 @@ namespace algo_conversion
     return result;
   }
 
-} // namespace algo_conversion
+} // namespace algoconversion
 
-TEST(AlgoConversion, IntegerToString)
+TEST(AlgoConversion, check_to_string)
 {
-  using namespace algo_conversion;
+  using namespace algoconversion;
 
-  EXPECT_THAT(itoa_navie(123), Eq("123"));
-  EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
+  const std::vector<std::function<std::string(const int)>> imps{itoa_1, itoa_2};
+
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f(123), Eq("123"));
+  }
 }
 
 // ={=========================================================================

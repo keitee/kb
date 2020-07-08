@@ -741,7 +741,7 @@ TEST(CxxStringOperation, find_substring_3)
 
 // cxx-string-substr
 // is to extract substring and use index
-TEST(StringOperation, check_get_substr)
+TEST(StringOperation, check_substr)
 {
   std::string coll{"interchangeability"};
 
@@ -761,33 +761,70 @@ TEST(StringOperation, check_get_substr)
 
   // note that the second is `length`
   EXPECT_THAT(coll.substr(5, 6), "change");
+
+  EXPECT_THAT(coll.substr(0, 0), "");
 }
 
-// string-insert
+// string-add-char
 
-TEST(StringOperation, Insert)
+TEST(StringOperation, add_char)
 {
-  // *cxx-string-const-error*
-  //
-  // char x;
-  // string.push_back(x) causes error since x is not const char *. To add char,
-  // use
-  //
-  // string& string::insert (size_type idx, size_type num, char c);
+  // cxx-string-push-back
+  // void push_back( CharT ch ); (until C++20)
+  {
+    std::string coll{};
 
-  {
-    string s{};
-    s.insert(0, 1, 'X');
-    s.insert(0, 1, 'X');
-    s.insert(0, 1, 'X');
-    EXPECT_EQ(s, "XXX");
+    coll.push_back('s');
+    coll.push_back('t');
+    coll.push_back('r');
+
+    EXPECT_THAT(coll, "str");
   }
+
+  // cxx-string-insert
+  // string& string::insert (size_type idx, size_type num, char c);
   {
-    string s{};
-    s.insert(0, 1, 'X');
-    s.insert(0, 1, 'Y');
-    s.insert(0, 1, 'Z');
-    EXPECT_EQ(s, "ZYX");
+    std::string coll{};
+
+    coll.insert(0, 1, 's');
+    coll.insert(0, 1, 't');
+    coll.insert(0, 1, 'r');
+
+    EXPECT_EQ(coll, "rts");
+  }
+
+  // iterator insert( iterator pos, CharT ch ); (until C++11)
+  {
+    std::string coll{};
+
+    coll.insert(coll.end(), 's');
+    coll.insert(coll.end(), 't');
+    coll.insert(coll.end(), 'r');
+
+    EXPECT_EQ(coll, "str");
+  }
+
+  // cxx-string-append
+  {
+    std::string coll{};
+
+    coll += 's';
+    coll += 't';
+    coll += 'r';
+
+    EXPECT_EQ(coll, "str");
+  }
+
+  // basic_string& append( size_type count, CharT ch ); (until C++20)
+  // constexpr basic_string& append( size_type count, CharT ch ); (since C++20)
+  {
+    std::string coll{};
+
+    coll.append(1, 's');
+    coll.append(1, 't');
+    coll.append(1, 'r');
+
+    EXPECT_EQ(coll, "str");
   }
 }
 
@@ -1169,18 +1206,6 @@ TEST(StringCompare, check_traits)
   }
 }
 
-TEST(StringOperation, Add)
-{
-  std::string coll1{};
-
-  coll1 = "string";
-  coll1 += " add";
-
-  std::string coll2{"string add"};
-
-  EXPECT_THAT(coll1, coll2);
-}
-
 // cxx-string-clear
 //
 // void clear(); (until C++11)
@@ -1397,7 +1422,8 @@ long long stoll( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
 
 TEST(StringConverison, check_functions)
 {
-  // to string
+  // std::string to_string( int value );
+  // std::string to_string( long value ); ...
   {
     EXPECT_THAT(std::to_string(11), "11");
     EXPECT_THAT(std::to_string(3301), "3301");

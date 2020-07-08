@@ -1552,7 +1552,7 @@ namespace cxx_if
 } // namespace cxx_if
 
 // see that a sequence of calls are called if all returns true
-TEST(Cxx, If)
+TEST(CxxExpression, show_if)
 {
   using namespace cxx_if;
 
@@ -1566,6 +1566,56 @@ TEST(Cxx, If)
     std::cout << "f3 return false" << std::endl;
 
   EXPECT_THAT(ret, "f1 return true,f2 return true,f3 return true");
+}
+
+TEST(CxxExpression, show_loop) 
+{
+  const std::string input{"A man, a plan, a canal: Panama"};
+
+  // when use while
+  {
+    std::vector<size_t> coll{};
+
+    size_t start{};
+
+    while(start < 8)
+    {
+      coll.push_back(start);
+
+      if (!isalnum(input[start]))
+      {
+        ++start;
+        continue;
+      }
+
+      ++start;
+    }
+
+    EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7));
+  }
+
+  // when use for.
+  // note that "++start" in for gets executed when do "continue"
+  {
+    std::vector<size_t> coll{};
+
+    size_t start{};
+
+    for (; start < 8; ++start)
+    {
+      coll.push_back(start);
+
+      if (!isalnum(input[start]))
+      {
+        ++start;
+        continue;
+      }
+
+      // ++start;
+    }
+
+    EXPECT_THAT(coll, ElementsAre(0, 1, 3, 4, 5, 7));
+  }
 }
 
 // ={=========================================================================
@@ -10647,7 +10697,7 @@ TEST(CxxRegex, MatchResult)
 // This means abs() has no effect when fed the largest negative number. So bit
 // representation is 'agnostic' to whether it's signed or unsigned.
 
-TEST(CxxBit, bitset)
+TEST(CxxBit, check_bitset)
 {
   // cxx-bitset-code
   //
@@ -10686,7 +10736,7 @@ TEST(CxxBit, bitset)
   }
 
   {
-    bitset<32> bitvec(1U);
+    std::bitset<32> bitvec(1U);
     EXPECT_EQ(bitvec.to_string(), "00000000000000000000000000000001");
 
     EXPECT_EQ(bitvec.any(), true);
@@ -10699,11 +10749,25 @@ TEST(CxxBit, bitset)
     EXPECT_EQ(bitvec.count(), 31);
     bitvec.reset();
     EXPECT_EQ(bitvec.count(), 0);
+    // 1) Sets all bits to true.
     bitvec.set();
     EXPECT_EQ(bitvec.count(), 32);
 
     bitset<16> bitvec2("01011001011");
     EXPECT_EQ(bitvec2.to_string(), "0000001011001011");
+  }
+
+  {
+    std::bitset<32> bset_1{1U};
+    EXPECT_EQ(bset_1.to_string(), "00000000000000000000000000000001");
+
+    std::bitset<32> bset_2{};
+    EXPECT_EQ(bset_2.to_string(), "00000000000000000000000000000000");
+
+    // 2) Sets the bit at position pos to the value value.
+    bset_2.set(0);
+
+    EXPECT_THAT(bset_1, bset_2);
   }
 
   // see the use of bitset and bitset only supports fixed size.
