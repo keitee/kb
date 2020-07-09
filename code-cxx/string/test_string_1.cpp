@@ -826,6 +826,16 @@ TEST(StringOperation, add_char)
 
     EXPECT_EQ(coll, "str");
   }
+
+  {
+    std::string coll{};
+
+    coll.append("s");
+    coll.append("t");
+    coll.append("r");
+
+    EXPECT_EQ(coll, "str");
+  }
 }
 
 // string-erase, string-replace

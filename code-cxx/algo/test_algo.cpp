@@ -3412,19 +3412,24 @@ TEST(AlgoPalindrome, check_longest)
   }
 }
 
-// ={=========================================================================
-// algo-grade
+/*
+={=========================================================================
+algo-grade
 
-namespace algo_grade
+F: 60 > score
+D: 70 >
+C: 80 >
+B: 90 >
+A: 100 >
+
+plus '+' for 8, 9 and '-' for 0,1,2 for each grade
+
+vector<string> f(const vector<int> scores);
+
+*/
+
+namespace algograde
 {
-  // F: 60 > score
-  // D: 70 >
-  // C: 80 >
-  // B: 90 >
-  // A: 100 >
-  //
-  // plus '+' for 8, 9 and '-' for 0,1,2 for each grade
-
   vector<string> grade_1(const vector<int> scores)
   {
     const vector<string> grade_table{"F", "D", "C", "B", "A"};
@@ -3433,20 +3438,25 @@ namespace algo_grade
 
     for (auto e : scores)
     {
+      // handled here if e < 60 so `band` below never be a minus value
       if (e < 60)
         result.push_back(grade_table[0]);
       else
       {
         grade.clear();
 
-        int band = (e - 50) / 10;
-        grade    = grade_table[band];
+        auto band = (e - 50) / 10;
 
-        int plus_or_minus = (e - 50) % 10;
-        if (plus_or_minus < 3)
-          grade += "-";
-        else if (plus_or_minus > 7)
-          grade += "+";
+        grade = grade_table[band];
+
+        if (band > 0)
+        {
+          int plus_or_minus = e % 10;
+          if (plus_or_minus < 3)
+            grade += "-";
+          else if (plus_or_minus > 7)
+            grade += "+";
+        }
 
         result.push_back(grade);
       }
@@ -3455,89 +3465,102 @@ namespace algo_grade
     return result;
   }
 
-  vector<string> grade_2(const vector<int> scores)
+  // 2020.07. For F, no need to have +/-
+  std::vector<std::string> grade_2(const std::vector<int> scores)
   {
-    const vector<string> grade_table{"F", "D", "C", "B", "A"};
-    vector<string> result;
-    string grade{};
+    const std::string table{"FFFFFFDCBA"};
+    std::vector<std::string> result{};
 
-    for (auto e : scores)
+    for (const auto e : scores)
     {
-      if (e < 60)
-        result.push_back(grade_table[0]);
-      else
+      std::string grade{};
+
+      auto band = e / 10;
+
+      grade.append(1, table[band]);
+
+      if (band > 5)
       {
-        grade.clear();
+        auto remain = e % 10;
 
-        grade = grade_table[(e - 50) / 10];
-
-        int plus_or_minus = e % 10;
-        if (plus_or_minus < 3)
-          grade += "-";
-        else if (plus_or_minus > 7)
-          grade += "+";
-
-        result.push_back(grade);
+        if (remain > 7)
+          grade.append("+");
+        else if (remain < 3)
+          grade.append("-");
       }
+
+      result.push_back(grade);
     }
 
     return result;
   }
 
-  // use loop as algo-roman
-  //
   // CodeComplete 18.4 Stair-Step Access Tables.
-  //
-  // A: 90.0% >=
-  // B: 90.0% <
-  // C: 75.0% <
-  // D: 65.0% <
-  // F: 50.0% <
-  //
-  // Suppose scores are floating numbers.
+  // use loop rather than using index of table as aboves
+  //    60    70    80    90    100
+  //    |     |     |     |*****|
+  //                 ***** 
+  //  F    D     C     B     A
 
-  const string grade_3(const double score)
+  std::string grade_3(int score)
   {
-    const vector<double> range_limit{50.0, 65.0, 75.0, 90.0, 100.0};
-    const vector<string> grade{"F", "D", "C", "B", "A"};
+    const std::vector<int> band{60, 70, 80, 90, 100};
+    const std::vector<std::string> grade{"F", "D", "C", "B", "A"};
 
-    int max_grade_level = grade.size() - 1;
-    int grade_level{};
-    string student_grade{"A"};
+    auto max_grade = grade.size() - 1;
+    size_t grade_index{};
+    std::string student_grade{"A"};
 
-    while ((student_grade == "A") && (grade_level < max_grade_level))
+    // grade "A" means that not found yet and no need to check grade[max] since
+    // if index gets that value, means "A" anyway.
+
+    while ((student_grade == "A") && (grade_index < max_grade))
     {
-      if (score < range_limit[grade_level])
-        student_grade = grade[grade_level];
+      if (score < band[grade_index])
+        student_grade = grade[grade_index];
 
-      ++grade_level;
+      ++grade_index;
     }
 
     return student_grade;
   }
+} // namespace algopad
 
-} // namespace algo_grade
-
-TEST(AlgoGrade, Grades)
+TEST(AlgoGrade, check_imps)
 {
-  using namespace algo_grade;
+  using namespace algograde;
 
-  const vector<int> coll{54, 60, 62, 66, 68, 71, 73, 78, 89, 98};
-  EXPECT_THAT(
-    grade_1(coll),
-    ElementsAre("F", "D-", "D-", "D", "D+", "C-", "C", "C+", "B+", "A+"));
+  {
+    // pair<input, expected result>
+    const std::vector<std::pair<std::vector<int>, std::vector<std::string>>>
+      inputs{{{42, 54, 60, 62, 66, 68, 71, 73, 78, 89, 98},
+              {"F", "F", "D-", "D-", "D", "D+", "C-", "C", "C+", "B+", "A+"}}};
 
-  EXPECT_THAT(
-    grade_2(coll),
-    ElementsAre("F", "D-", "D-", "D", "D+", "C-", "C", "C+", "B+", "A+"));
+    const std::vector<
+      std::function<std::vector<std::string>(const std::vector<int>)>>
+      imps{grade_1, grade_2};
 
-  EXPECT_THAT(grade_3(49.0), "F");
-  EXPECT_THAT(grade_3(60.0), "D");
-  EXPECT_THAT(grade_3(62.0), "D");
-  EXPECT_THAT(grade_3(66.0), "C");
-  EXPECT_THAT(grade_3(68.0), "C");
-  EXPECT_THAT(grade_3(89.0), "B");
-  EXPECT_THAT(grade_3(98.0), "A");
+    for (const auto &f : imps)
+    {
+      for (const auto &i : inputs)
+        EXPECT_THAT(f(i.first), i.second);
+    }
+  }
+
+  // since grade_3 do not support +/-
+  {
+    const std::vector<int> inputs{42, 54, 60, 62, 66, 68, 71, 73, 78, 89, 98};
+    const std::vector<std::string>
+      expected{"F", "F", "D", "D", "D", "D", "C", "C", "C", "B", "A"};
+    std::vector<std::string> results{};
+
+    for (const auto &score : inputs)
+    {
+      results.push_back(grade_3(score));
+    }
+
+    EXPECT_THAT(results, expected);
+  }
 }
 
 // ={=========================================================================

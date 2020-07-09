@@ -1382,6 +1382,14 @@ TEST(CxxArray, check_access)
   EXPECT_THAT(*(arr + 2), 12);
   EXPECT_THAT(*(arr + 4), 14);
   EXPECT_THAT(*(arr + 6), 16);
+
+  // Segmentation fault (core dumped) right away when use std::vector but use
+  // int array, can survive but still undefined behaviour
+  EXPECT_THAT(coll[-1], 0);
+  // Value of: coll[-10]
+  // Expected: is equal to 0
+  //   Actual: 1893152854 (of type int)
+  EXPECT_THAT(coll[-10], 0);
 }
 
 // ={=========================================================================
@@ -1909,19 +1917,15 @@ TEST(CxxCtor, Private)
 } // namespace cxx_ctor
 
 // to see that default ctor is necessary
-
-// cause compile error
-// cxx.cpp: In constructor
-// ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
-// cxx.cpp:450:37: error: no matching function for call to
-// ‘ConstructionNoDefault::ConstructionNoDefault()’
-//      ConstructionWitNoCtorInitList() {}
-
-TEST(CxxCtor, NoDefault)
+TEST(CxxCtor, show_default_ctor_is_necessary)
 {
+  // cause compile error
+  // error: no matching function for call to ‘cxx_ctor::Base1::Base1()’
+  //      Base1 o;
+  //
   // {
-  // using namespace cxx_ctor;
-  // Base1 o;
+  //   using namespace cxx_ctor;
+  //   Base1 o;
   // }
 
   {
@@ -1930,6 +1934,7 @@ TEST(CxxCtor, NoDefault)
   }
 }
 
+#if 0 // TO DELETE
 // *cxx-unused*
 // The only purpose of the parameter is to 'distinguish' prefix from postfix
 // function invocation. Many compilers issue warnings if you fail to use named
@@ -1968,10 +1973,12 @@ TEST(CxxCtor, Parameters)
   // *cxx-error*
   // : error: cannot bind non-const lvalue reference of type ‘int&’ to an rvalue
   // of type ‘int’ foo f1(10);
+  // foo f1(10);
 
   foo f1(value);
   foo f2(value, 30);
 }
+#endif
 
 // CPL, 17.4.3 Delegating Constructors
 //
@@ -2217,7 +2224,7 @@ namespace ctor_init_2
   };
 } // namespace ctor_init_2
 
-TEST(CxxCtorInit, check_forms)
+TEST(CxxCtor, check_init_forms)
 {
   // direct init. conversion from char * to string before calling ctor and which
   // is "Foo(const string &mesg)" since it's best match
@@ -2330,7 +2337,7 @@ namespace ctor_init_explicit
   };
 } // namespace ctor_init_explicit
 
-TEST(CxxCtorInit, check_explicit_init)
+TEST(CxxCtor, check_explicit_init)
 {
   using namespace ctor_init_explicit;
 
@@ -2364,6 +2371,47 @@ TEST(CxxCtorInit, check_explicit_init)
   //   Foo foo2 = "use copy init";
   //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
   // }
+}
+
+namespace ctor_init_x
+{
+  class Parent;
+
+  class Child
+  {
+    private:
+      const Parent *m_parent{nullptr};
+      std::string m_name{};
+
+    public:
+      explicit Child(Parent *parent)
+        : m_parent{parent}, m_name{"child"}
+      {
+        std::cout << "name : " << m_name << std::endl;
+      }
+  };
+
+  class Parent
+  {
+    private:
+      std::string m_name{};
+      std::unique_ptr<Child> m_child{};
+
+    public:
+      explicit Parent()
+        : m_child(std::make_unique<Child>(this))
+          , m_name{"parent"}
+      {
+        std::cout << "name : " << m_name << std::endl;
+      }
+  };
+} // namespace ctor_init_x
+
+TEST(CxxCtor, check_init_x)
+{
+  using namespace ctor_init_x;
+
+  auto parent = std::make_shared<Parent>();
 }
 
 // ={=========================================================================
@@ -2451,7 +2499,7 @@ namespace cxx_init_list
   Foo returnFoo() { return {"one", "two", "three"}; }
 } // namespace cxx_init_list
 
-TEST(CxxCtorInit, check_init_list)
+TEST(CxxCtor, check_init_list)
 {
   using namespace cxx_init_list;
 
@@ -4671,10 +4719,12 @@ namespace cxx_static
   {
   public:
     Foo() {}
+
     static void createInstance()
     {
       std::cout << "Foo::createInstance()" << std::endl;
     }
+
     static void getName() { std::cout << "Foo::getName()" << std::endl; }
   };
 
@@ -4737,36 +4787,96 @@ TEST(CxxStatic, check_in_override)
   delete p;
 }
 
-namespace cxx_static
+namespace cxxstatic
 {
-  class FooStatic2
+  class FooStatic_1
   {
-  public:
-    FooStatic2() {}
+    public:
+      FooStatic_1() {}
 
-    static int createInstance()
-    {
-      static int m_count = 0;
+      static int createInstance()
+      {
+        static int m_count = 0;
 
-      m_count++;
+        m_count++;
 
-      // std::cout << "FooStatic2::createInstance(): count: " << m_count
-      //           << std::endl;
+        // std::cout << "FooStatic2::createInstance(): count: " << m_count
+        //           << std::endl;
 
-      return m_count;
-    }
+        return m_count;
+      }
   };
+
+  // from singleton implementation
+  class FooStatic_2
+  {
+    private:
+      std::string *m_name{nullptr};
+
+      FooStatic_2(std::string *name)
+      {
+        m_name = name;
+        std::cout << "m_name : " << m_name << std::endl;
+      }
+
+    public:
+      static FooStatic_2 &getInstance(std::string *name = nullptr)
+      {
+        static FooStatic_2 instance(name);
+        return instance;
+      }
+
+      ~FooStatic_2()
+      {
+        if (m_name)
+          delete m_name;
+      }
+
+      FooStatic_2(const FooStatic_2 &) = delete;
+      FooStatic_2 &operator=(const FooStatic_2 &) = delete;
+
+      // return true if m_name is not null
+      bool checkName() const
+      {
+        return m_name ? true : false;
+      }
+  };
+
 } // namespace cxx_static
 
 // see that static variable is initialised once when it is created.
 
-TEST(CxxStatic, static_initialised_once)
+TEST(CxxStatic, check_initialised_once)
 {
-  using namespace cxx_static;
+  using namespace cxxstatic;
 
-  EXPECT_THAT(1, FooStatic2::createInstance());
-  EXPECT_THAT(2, FooStatic2::createInstance());
-  EXPECT_THAT(3, FooStatic2::createInstance());
+  {
+    EXPECT_THAT(1, FooStatic_1::createInstance());
+    EXPECT_THAT(2, FooStatic_1::createInstance());
+    EXPECT_THAT(3, FooStatic_1::createInstance());
+  }
+
+  // NOTE: since it's singleton, each test should be run one by one. that is,
+  // comment out the rest and leave one; build and execute. repeat for each to
+  // get pass.
+
+  // as expected, call getInstance(pointer) first so that pointer is set.
+  {
+    FooStatic_2::getInstance(new std::string{"singleton"});
+    EXPECT_THAT(FooStatic_2::getInstance().checkName(), true);
+  }
+
+  {
+    FooStatic_2::getInstance(nullptr);
+    EXPECT_THAT(FooStatic_2::getInstance().checkName(), false);
+  }
+
+  // if call getInstance() first then no way to set pointer.
+  {
+    FooStatic_2::getInstance();
+    FooStatic_2::getInstance(new std::string{"singleton"});
+    EXPECT_THAT(FooStatic_2::getInstance().checkName(), false);
+  }
 }
 
 namespace cxx_static
@@ -11224,6 +11334,14 @@ TEST(IntegerDivision, Percentage)
   }
 }
 
+TEST(CxxIntegerDivision, check_on_minus)
+{
+  EXPECT_THAT(((60 - 50) / 10), 1);
+  EXPECT_THAT(((50 - 50) / 10), 0);
+  EXPECT_THAT(((40 - 50) / 10), -1);
+  EXPECT_THAT(((34 - 50) / 10), -1);
+}
+
 // cxx-shift cxx-floor cxx-ceil
 
 TEST(IntegerDivision, Shift)
@@ -13939,7 +14057,7 @@ TEST(CxxCoredump, check_vaarg_issue)
   EXPECT_THAT(sizeof(int64), 8);
 
   // cause core
-  printf("value (%d)\n", value);
+  printf("value (%ld)\n", value);
 }
 
 #if 0

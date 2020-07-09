@@ -8589,33 +8589,6 @@ ssh -p 10022 root@<STBIP>
 /tmp/data
 
 
-*rdk-xi6-core-dump*
-
-root@arrisxi6-morty:/opt# ls /var/lib/systemd/coredump/
-
-Thread 1 "asrdkplayer" received signal SIGABRT, Aborted.
-0xb69b2816 in ?? () from /lib/libc.so.6
-(gdb) bt
-#0  0xb69b2816 in ?? () from /lib/libc.so.6
-#1  0xb69be49a in raise () from /lib/libc.so.6
-#2  0xb69bf098 in abort () from /lib/libc.so.6
-#3  0x0010c7f8 in fabort ()
-#4  0x0014617c in __gnu_cxx::__verbose_terminate_handler() ()
-#5  0xb6b75d7a in ?? () from /usr/lib/libstdc++.so.6
-#6  0xb6b75dd8 in std::terminate() () from /usr/lib/libstdc++.so.6
-#7  0xb6b75fe6 in __cxa_throw () from /usr/lib/libstdc++.so.6
-#8  0x00285ee0 in VgkConfig::getInstance() ()
-#9  0x00287220 in VgkConfig::optionalString(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) ()
-#10 0x00288522 in nds::vgk::util::VgkLogger::createLogger(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool) ()
-#11 0x002896b0 in nds::vgk::util::VgkLogger::setLogger(char const*) ()
-#12 0x002517ec in VGCN_SDK_Init ()
-#13 0x0027461a in VGCN_LOADER_MANAGER_Initialize ()
-#14 0xfff9b8be in ?? ()
-Backtrace stopped: previous frame identical to this frame (corrupt stack?)
-
-scp -P 10022 root@192.168.0.105:/opt/corefiles .
-
-
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-bitbake-build
 
@@ -8769,13 +8742,6 @@ DISTRO_FEATURES_append = " build_rne"
 bitbake -c fetchall comcast-mediaclient-vbn-image
 
 bitbake comcast-mediaclient-vbn-image
-
-// bitbake-gdb 
-
-bitbake comcast-mediaclient-dev-image
-// this is old
-// bitbake comcast-mediaclient-vbn-image-skydev
-
 
 // directories to note
 
@@ -11181,17 +11147,124 @@ https://gerrit.teamccp.com/#/q/status:open+project:rdk/yocto_oe/layers/meta-rdk-
 
 project:rdk/yocto_oe/layers/meta-rdk-sky branch:topic/fr_qtb_upgrade
 
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-gdb
+
+Check if there is core file
+
+cat /opt/logs/core_file.txt
+
+
+Change core pattern to save on writable area
+
+root@skyxione:~# cat /proc/sys/kernel/core_pattern
+|/lib/rdk/core_shell.sh %e %s %t
+
+echo "/opt/persistent/%e-%s.core.%p" >/proc/sys/kernel/core_pattern
+
+
+-rw-------    1 root     root     130957312 Jul  9 10:45 asrdkplayer-6.core.21806
+-rw-------    1 root     root     130965504 Jul  9 10:45 asrdkplayer-6.core.21921
+-rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.21967
+-rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.22015
+-rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.22059
+
+
+Copy them to the host
+
+scp -P 10022 root@192.168.1.108:/opt/persistent/*core* .
+
+Run gdb-multiarch
+
+gdb-multiarch ./usr/sbin/DobbyDaemon ~/Documents/rdk_containers/coredumps/DobbyDaemon-11.core.11099
+
+
+*rdk-gdb*
+https://www.stb.bskyb.com/jira/browse/NGDEV-161596
+
+// bitbake-gdb 
+bitbake comcast-mediaclient-dev-image
+
+// this is old
+// bitbake comcast-mediaclient-vbn-image-skydev
+
+
+
+/meta-rdk-sky/recipes-core/images
+compare two files:
+comcast-mediaclient-vbn-image-skydev.bb 
+comcast-mediaclient-vbn-image.bbappend
+
+add the followings to: 
+`comcast-mediaclient-vbn-image.bbappend`
+or rdk-workspace/build-skyxione/conf/local.conf 
+
+diff --git a/recipes-core/images/comcast-mediaclient-%.bbappend b/recipes-core/images/comcast-mediaclient-%.bbappend
+index 46ed7af..a606a0d 100644
+--- a/recipes-core/images/comcast-mediaclient-%.bbappend
++++ b/recipes-core/images/comcast-mediaclient-%.bbappend
+@@ -14,4 +14,5 @@ create_sdk_files_append() {
+
+ # Needed to get zdump on the target.
+ IMAGE_INSTALL_append += " tzcode"
++IMAGE_INSTALL_append += " gdb"
+
+
+*rdk-gdb*
+
+Copy gdbserver
+
+scp -r -P 10022 ./gdbserver root@192.168.1.108:/opt
+
+
+To use this, disable drm feature:
+
+gdb /usr/sbin/asrdkplayer
+gdb ./asrdkplayer
+
+Run gdbserver
+
+./gdbserver localhost:5432 /usr/sbin/asrdkplayer
+./gdbserver localhost:5432 ./asrdkplayer
+./gdbserver --attach localhost:5432 8709
+
+
+https://www.jetbrains.com/help/clion/remote-debug.html#start-remote-debug
+192.168.1.108:5432
+
+(gdb) target remote 192.168.1.108:5432
+gdb root@192.168.1.101:5432 /opt
+
+b ASPlayerInterface::WatchLive:KTDEBUG
+thread apply all bt full
+scp -P 10022 root@192.168.1.101:/opt/gdb.txt .
+
+b AS_WEB_SERVER_MainThread.cpp:KTDEBUG
+
+b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/players/1/action/watchlive"
+b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/services/favourites"
+b AS_WEB_SERVER_MainThread.cpp:185 if uri->GetPath().c_str() == "/9005/as/services/favourites"
+
+b ServiceConfigParser.cpp:ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
+// b ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
+b ServiceConfigParser::checkUriAllowed if DEBUG_GDB()
+
 
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-xi1
 
+*xi1-build*
+
 repo info
 
-repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
--b topic/xione_mvp -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+// repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
+// -b topic/xione_mvp -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+
+// repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
+// -b 2006_sprint -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
 
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
--b refs/tags/SKXI11AIS_DEV_000120.7.7.0.0 -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
+-b refs/tags/SKXI11AIS_DEV_000130.3.7.0.0 -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
 
 repo sync --verify --no-tags
 repo sync --no-tags
@@ -11216,12 +11289,16 @@ patch -p1 < /media/keitee/ssd2/breakpad-from-ben.patch
 bitbake comcast-mediaclient-vbn-image
 
 
-rdk-xi1-build
+*xi1-gcc*
 /media/keitee/ssd2/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi/arm-rdk-linux-gnueabi-g++ --sysroot=/media/keitee/ssd2/rdk/2.0/sysroots/armv7ahf-neon-rdk-linux-gnueabi/  $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/Pin.dir/ASPinHandler.cpp.o -c /media/keitee/ssd2/as-sky-repo/asplayer/pin/ASPinHandler.cpp
+/media/keitee/ssd2/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi/arm-rdk-linux-gnueabi-addr2line -f -s -e ./asrdkplayer 0x3ff30 0x3fed4
+
+
+*xi1-image*
+https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_skyxione-de/111/
 
 
 *rdk-xi1-flash*
-
 https://www.stb.bskyb.com/confluence/display/SI/XiOne+-+Software+upgrade+instructions+-+CAD+2
 
 Upgrade from Factory Image
@@ -11313,6 +11390,20 @@ Generated on Wed Jun 10  18:20:25 UTC 2020
 root@skyxione:~#
 
 
+// with gdb from local build. Baudrate for XiOne 460800
+root@skyxione:/opt# cat /version.txt
+imagename:SKXI11AIS_VBN_SKXI11AIS_DEV_000120.7.7.0.0_20200604141923sdy
+YOCTO_VERSION=morty
+SDK_VERSION=1.0.5
+BRANCH=SKXI11AIS_DEV_000120.7.7.0.0
+VERSION=000120.7.7.0
+SPIN=0
+JENKINS_JOB=SKYXIONE-Yocto-Build
+JENKINS_BUILD_NUMBER=0
+BUILD_TIME="2020-06-04 14:19:23"
+Generated on Thu Jun 04  14:19:23 UTC 2020
+
+
 *rdk-xi1-setup*
 
 /media/keitee/ssd2/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi/arm-rdk-linux-gnueabi-gcc 
@@ -11381,31 +11472,6 @@ journalctl -fu sky-epg
 root@arrisxi6-morty:~# cat /tmp/data/sky/packages/com.bskyb.epgui/console.log
 epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open shared object file: No such file or directory
 pid 6 has terminated (return code 127)
-
-
-*gdb*
-
-gdb /usr/sbin/asrdkplayer
-gdb ./asrdkplayer
-gdbserver localhost:5432 /usr/sbin/asrdkplayer
-./gdbserver localhost:5432 ./asrdkplayer
-./gdbserver --attach localhost:5432 8709
-target remote 192.168.1.101:5432
-gdb root@192.168.1.101:5432 /opt
-
-b ASPlayerInterface::WatchLive:KTDEBUG
-thread apply all bt full
-scp -P 10022 root@192.168.1.101:/opt/gdb.txt .
-
-b AS_WEB_SERVER_MainThread.cpp:KTDEBUG
-
-b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/players/1/action/watchlive"
-b AS_WEB_SERVER::ASMainThread::Exec:KTDEBUG if uri->GetPath().c_str() == "/9005/as/services/favourites"
-b AS_WEB_SERVER_MainThread.cpp:185 if uri->GetPath().c_str() == "/9005/as/services/favourites"
-
-b ServiceConfigParser.cpp:ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
-// b ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
-b ServiceConfigParser::checkUriAllowed if DEBUG_GDB()
 
 
 ={============================================================================
@@ -11477,29 +11543,6 @@ bitbake iarmbus
 bitbake comcast-mediaclient-vbn-image
 
 do patches as you do for buidling rdk in local ubuntu. 
-
-
-<rdk-sky-dev>
-
-/meta-rdk-sky/recipes-core/images
-compare two files:
-comcast-mediaclient-vbn-image-skydev.bb 
-comcast-mediaclient-vbn-image.bbappend
-
-add the followings to `comcast-mediaclient-vbn-image.bbappend`
-or rdk-workspace/build-skyxione/conf/local.conf 
-
-                        packagegroup-core-tools-debug \
-
-diff --git a/recipes-core/images/comcast-mediaclient-%.bbappend b/recipes-core/images/comcast-mediaclient-%.bbappend
-index 46ed7af..a606a0d 100644
---- a/recipes-core/images/comcast-mediaclient-%.bbappend
-+++ b/recipes-core/images/comcast-mediaclient-%.bbappend
-@@ -14,4 +14,5 @@ create_sdk_files_append() {
-
- # Needed to get zdump on the target.
- IMAGE_INSTALL_append += " tzcode"
-+IMAGE_INSTALL_append += " gdb"
 
 
 <sky-app>
@@ -13568,7 +13611,7 @@ enum CoreStatus {
 [11:23:41,548701] *test_dtt(26849).20 console.cpp:632(L1) current service pk: 6200
 
 
-*as-watchlive*
+*as-watchlive-dtt-play*
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
@@ -13670,16 +13713,50 @@ size_t recvTimeout( uint32_t *event, void *payload, size_t *payloadSize, int tim
 cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=PROD -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 
+root@skyxione:/opt# cat /lib/systemd/system/sky-asplayer.service
+# Copyright © 2020 Sky UK. All rights reserved.
+#
+# This file is systemd script for launching the AS player service
+# at boot time.
+#
+# Enable asplayer to start on boot:
+#         systemctl enable sky-asplayer.service
+#
+# Start asplayer immediately:
+#         systemctl start sky-asplayer.service
+#
+# Stop asplayer:
+#         systemctl stop sky-asplayer.service
+#
+# Status:
+#         systemctl status sky-asplayer.service
+
+[Unit]
+Description=Sky AS Player Service
+Wants=sky-asproxy.service
+Requires=sky-appsservice.service
+After=sky-appsservice.service
+
 [Service]
 Type=dbus
 BusName=com.sky.as.player
 Environment="XDG_RUNTIME_DIR=/tmp"
 Environment="WAYLAND_DISPLAY=westeros-asplayer"
-Environment="PLAYERSINKBIN_USE_WESTEROSSINK=1"
+Environment="AAMP_ENABLE_WESTEROS_SINK=1"
+Environment="LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
+Environment="LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
+Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+Environment="ENABLE_AAMP_JS=FALSE"
+Environment="ENABLE_AAMP=TRUE"
+Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+Environment="GST_PLAYERSINKBIN_DELAY=800000000"
+Environment="GST_HWAVSYNC=0"
 WorkingDirectory=/tmp
-ExecStartPre=/bin/rm -rf /tmp/llds
 ExecStart=/usr/sbin/asrdkplayer
 Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 
 
 armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
@@ -13708,13 +13785,27 @@ cat /sys/module/amvdec_ports/parameters/multiplanar
 echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
 cat /sys/module/amvdec_ports/parameters/multiplanar
 
+
+// xi1
+export "XDG_RUNTIME_DIR=/tmp"
+export "WAYLAND_DISPLAY=westeros-asplayer"
+export "AAMP_ENABLE_WESTEROS_SINK=1"
+export "LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
+export "LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
+export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+export "ENABLE_AAMP_JS=FALSE"
+export "ENABLE_AAMP=TRUE"
+export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+export "GST_PLAYERSINKBIN_DELAY=800000000"
+export "GST_HWAVSYNC=0"
+
 // run this on console where runs player
-export XDG_RUNTIME_DIR=/tmp
-export WAYLAND_DISPLAY=westeros-asplayer
-export PLAYERSINKBIN_USE_WESTEROSSINK=1
-export WESTEROS_GL_USE_BEST_MODE=1
-export WESTEROS_SINK_USE_GFX=1
-export LD_PRELOAD=/usr/lib/libwesteros_gl.so.0.0.0
+// export XDG_RUNTIME_DIR=/tmp
+// export WAYLAND_DISPLAY=westeros-asplayer
+// export PLAYERSINKBIN_USE_WESTEROSSINK=1
+// export WESTEROS_GL_USE_BEST_MODE=1
+// export WESTEROS_SINK_USE_GFX=1
+// export LD_PRELOAD=/usr/lib/libwesteros_gl.so.0.0.0
 
 echo $XDG_RUNTIME_DIR
 echo $WAYLAND_DISPLAY
@@ -14974,7 +15065,7 @@ DRM process, which should be up and running before the WPE framework in
 running.
 
 For this reason at boot-up, the initial state returned by /drm/status shall be
-INITIALISED.
+`INITIALISED`
 
 
 STB VG-DRM Activation
@@ -15029,6 +15120,24 @@ current:
 activation service:
 string Activation status 
 (must be one of the following: NotAvailable, Active, NotActive)
+
+
+std::string DrmController::getASState(const std::string &state) const
+{
+  if (state == DRM_STATE_NOT_AVAILABLE)
+    return AS_STATE_UNAVAILABLE;
+
+  else if (state == DRM_STATE_ACTIVE)
+    return AS_STATE_ACTIVATED;
+
+  else if (state == DRM_STATE_NOT_ACTIVE)
+    return AS_STATE_INITIALISED;
+}
+
+DrmController:
+
+o waits until gets DRM_STATE_NOT_ACTIVE in "initialising" event loop
+
 
 // for jsonrpc usage
 asnetwork/Network/NetworkRdkInterface.cpp
