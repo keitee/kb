@@ -241,8 +241,6 @@ add_executable(bridge_client4 "bridge_client2.cpp"
   "bridge_abs.cpp"
   "bridge_con.cpp")
 
-add_executable(case_1 "case_1.cpp") 
-
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

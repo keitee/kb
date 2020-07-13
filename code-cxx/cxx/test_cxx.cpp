@@ -1209,12 +1209,16 @@ TEST(CxxArray, check_init_form)
 {
   {
     int arr_1[10]{};
-    int arr_1_expected[10]{0,0,0,0,0,0,0,0,0,0};
+    int arr_1_expected[10]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     int arr_2[10]{1};
-    int arr_2_expected[10]{1,0,0,0,0,0,0,0,0,0};
+    int arr_2_expected[10]{1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    EXPECT_THAT(memcmp((const void *)arr_1, (const void *)arr_1_expected, sizeof arr_1), 0);
-    EXPECT_THAT(memcmp((const void *)arr_2, (const void *)arr_2_expected, sizeof arr_2), 0);
+    EXPECT_THAT(
+      memcmp((const void *)arr_1, (const void *)arr_1_expected, sizeof arr_1),
+      0);
+    EXPECT_THAT(
+      memcmp((const void *)arr_2, (const void *)arr_2_expected, sizeof arr_2),
+      0);
   }
 
   {
@@ -1576,7 +1580,7 @@ TEST(CxxExpression, show_if)
   EXPECT_THAT(ret, "f1 return true,f2 return true,f3 return true");
 }
 
-TEST(CxxExpression, show_loop) 
+TEST(CxxExpression, show_loop)
 {
   const std::string input{"A man, a plan, a canal: Panama"};
 
@@ -1586,7 +1590,7 @@ TEST(CxxExpression, show_loop)
 
     size_t start{};
 
-    while(start < 8)
+    while (start < 8)
     {
       coll.push_back(start);
 
@@ -2379,31 +2383,32 @@ namespace ctor_init_x
 
   class Child
   {
-    private:
-      const Parent *m_parent{nullptr};
-      std::string m_name{};
+  private:
+    const Parent *m_parent{nullptr};
+    std::string m_name{};
 
-    public:
-      explicit Child(Parent *parent)
-        : m_parent{parent}, m_name{"child"}
-      {
-        std::cout << "name : " << m_name << std::endl;
-      }
+  public:
+    explicit Child(Parent *parent)
+        : m_parent{parent}
+        , m_name{"child"}
+    {
+      std::cout << "name : " << m_name << std::endl;
+    }
   };
 
   class Parent
   {
-    private:
-      std::string m_name{};
-      std::unique_ptr<Child> m_child{};
+  private:
+    std::string m_name{};
+    std::unique_ptr<Child> m_child{};
 
-    public:
-      explicit Parent()
+  public:
+    explicit Parent()
         : m_child(std::make_unique<Child>(this))
-          , m_name{"parent"}
-      {
-        std::cout << "name : " << m_name << std::endl;
-      }
+        , m_name{"parent"}
+    {
+      std::cout << "name : " << m_name << std::endl;
+    }
   };
 } // namespace ctor_init_x
 
@@ -3474,7 +3479,7 @@ namespace cxxswap
     x    = y;
     y    = temp;
   }
-} // namespace cxx_swap
+} // namespace cxxswap
 
 TEST(CxxSwap, check_difference)
 {
@@ -3598,8 +3603,8 @@ TEST(CxxSwap, check_elements)
     int coll[]{1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    int *e1 = coll+0;
-    int *e2 = coll+2;
+    int *e1 = coll + 0;
+    int *e2 = coll + 2;
 
     std::swap(*e1, *e2);
     EXPECT_THAT(coll, ElementsAre(3, 2, 1, 4, 5, 6, 7, 8, 9));
@@ -4791,58 +4796,55 @@ namespace cxxstatic
 {
   class FooStatic_1
   {
-    public:
-      FooStatic_1() {}
+  public:
+    FooStatic_1() {}
 
-      static int createInstance()
-      {
-        static int m_count = 0;
+    static int createInstance()
+    {
+      static int m_count = 0;
 
-        m_count++;
+      m_count++;
 
-        // std::cout << "FooStatic2::createInstance(): count: " << m_count
-        //           << std::endl;
+      // std::cout << "FooStatic2::createInstance(): count: " << m_count
+      //           << std::endl;
 
-        return m_count;
-      }
+      return m_count;
+    }
   };
 
   // from singleton implementation
   class FooStatic_2
   {
-    private:
-      std::string *m_name{nullptr};
+  private:
+    std::string *m_name{nullptr};
 
-      FooStatic_2(std::string *name)
-      {
-        m_name = name;
-        std::cout << "m_name : " << m_name << std::endl;
-      }
+    FooStatic_2(std::string *name)
+    {
+      m_name = name;
+      std::cout << "m_name : " << m_name << std::endl;
+    }
 
-    public:
-      static FooStatic_2 &getInstance(std::string *name = nullptr)
-      {
-        static FooStatic_2 instance(name);
-        return instance;
-      }
+  public:
+    static FooStatic_2 &getInstance(std::string *name = nullptr)
+    {
+      static FooStatic_2 instance(name);
+      return instance;
+    }
 
-      ~FooStatic_2()
-      {
-        if (m_name)
-          delete m_name;
-      }
+    ~FooStatic_2()
+    {
+      if (m_name)
+        delete m_name;
+    }
 
-      FooStatic_2(const FooStatic_2 &) = delete;
-      FooStatic_2 &operator=(const FooStatic_2 &) = delete;
+    FooStatic_2(const FooStatic_2 &) = delete;
+    FooStatic_2 &operator=(const FooStatic_2 &) = delete;
 
-      // return true if m_name is not null
-      bool checkName() const
-      {
-        return m_name ? true : false;
-      }
+    // return true if m_name is not null
+    bool checkName() const { return m_name ? true : false; }
   };
 
-} // namespace cxx_static
+} // namespace cxxstatic
 
 // see that static variable is initialised once when it is created.
 

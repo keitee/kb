@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_cxx VERSION 0.1 LANGUAGES CXX)
+project(test_cxx VERSION 0.1 LANGUAGES C CXX)
 
 # enable_testing()
 
@@ -156,9 +156,18 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF) 
 include_directories(${Boost_INCLUDE_DIRS}) 
 
+# Find includes in corresponding build directories
+set( CMAKE_INCLUDE_CURRENT_DIR ON )
+
+# base64/Makefile
+# 14:#BUFFERSIZE = 4096
+# 15:#BUFFERSIZE = 65536
+# 16:BUFFERSIZE = 16777216
+# 25:CFLAGS += -DBUFFERSIZE=$(BUFFERSIZE)
+set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBUFFERSIZE=16777216" )
 
 # cxx.cpp
-add_executable(base64 "test_base64.cpp")
+add_executable(base64 "test_base64.cpp" cencode.c)
 target_link_libraries(base64 gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})

@@ -1252,35 +1252,100 @@ TEST(String, StringClear)
 // ={=========================================================================
 // string-cstring
 
-TEST(String, check_cstring_1)
+// check null char, '\0', which is actually integer 0.
+TEST(StringForC, check_null)
 {
-  // do not include a null
-  std::string sz{"zoo"};
-  EXPECT_EQ(sz.size(), 3);
+  {
+    std::ostringstream os;
 
-  // include a null
-  char cs[] = "zoo";
-  EXPECT_EQ(strlen(cs), 3);
-  EXPECT_EQ(sizeof(cs), 4);
-  EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
+    // in order to get hex value for char 'a', which is 61, have to use (int)
+    // cast.
+    //
+    // std::cout << "a: " << hex << (int)'a' << std::endl;
+    // gets "61"
+    //
+    // std::cout << "a: " << hex << 'a' << std::endl;
+    // gets "a"
 
-  // there is std::string ctor(const char*)
-  const char s1[]  = "0123456789012345";
-  std::string coll{s1};
-  EXPECT_THAT(sizeof(s1), 17);  // s1 is array
-  EXPECT_THAT(strlen(s1), 16);  // not include null
-  EXPECT_THAT(coll.size(), 16); // not include null
+    os << std::hex << (int)'0';
+    EXPECT_THAT(os.str(), "30");
 
-  // c_str() include a null? yes but note that size() do not include a null.
-  EXPECT_THAT(strlen(coll.c_str()), 16);
-  EXPECT_THAT(coll.size(), 16);
-  // int memcmp(const void *s1, const void *s2, size_t n);
-  EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
-  EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size()+1), 0);
+    // reset os
+    os.str("");
+
+    os << std::hex << (int)'\0';
+    EXPECT_THAT(os.str(), "0");
+  }
+
+  // nullptr is not same
+  {
+    const char *p1 = "";
+    const char *p2 = nullptr;
+
+    EXPECT_NE(p1, p2);
+  }
 }
 
-// when construct a string from array, it will copy up to null?
-TEST(String, check_cstring_2)
+TEST(StringForC, check_cstring_1)
+{
+  {
+    // std::string do not include a null
+    std::ostringstream os;
+    std::string sz{"zoo"};
+
+    EXPECT_EQ(sz.size(), 3);
+
+    // c_str() includes null
+    EXPECT_EQ(strlen(sz.c_str()), 3);
+
+    // see char
+    //
+    // Expected: is equal to "zoo"
+    //   Actual: "zoo\0"
+    //
+    // for (size_t i = 0; i < 4; ++i)
+    //   os << std::hex << sz.c_str()[i];
+    // EXPECT_THAT(os.str(), "zoo\0");
+    //
+    // HOW to make std::string with "\"?
+
+    os.str("");
+
+    // see ascii hex
+    for (size_t i = 0; i < 4; ++i)
+      os << std::hex << (int)sz.c_str()[i];
+    EXPECT_THAT(os.str(), "7a6f6f0");
+  }
+
+  {
+    // cstring include a null
+    const char cs[] = "zoo";
+    EXPECT_EQ(strlen(cs), 3);   // excludes null
+    EXPECT_EQ(sizeof(cs), 4);   // +1 for null
+    EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
+  }
+
+  {
+    // there is std::string ctor(const char*)
+    const char s1[]  = "0123456789012345";
+    std::string coll{s1};
+
+    EXPECT_THAT(sizeof(s1), 17);  // +1 for null
+    EXPECT_THAT(strlen(s1), 16);  // not include null
+    EXPECT_THAT(coll.size(), 16); // not include null
+
+    // c_str() include a null? yes but note that size() do not include a null.
+    EXPECT_THAT(strlen(coll.c_str()), 16);
+    EXPECT_THAT(coll.size(), 16);
+
+    // int memcmp(const void *s1, const void *s2, size_t n);
+    EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
+    EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size()+1), 0);
+  }
+}
+
+// when construct a string from array, it will copy up to null? yes
+TEST(StringForC, check_cstring_2)
 {
   {
     // src_len is 14 which includes a null since std::string.data()
@@ -1309,7 +1374,6 @@ TEST(String, check_cstring_2)
   }
 
   {
-    // src_len is 14 which includes a null since std::string.data()
     //                "0123456789012"
     std::string input{"&streamtype=1"};
     char output[256] = {0};
@@ -1330,11 +1394,6 @@ TEST(String, check_cstring_2)
 
     oss << output;
 
-    // std::cout << "oss: " << oss.str() << std::endl;
-
-    // // size of result?
-    // std::string result{output};
-
     EXPECT_THAT(input, oss.str());
 
     EXPECT_THAT(oss.str().size(), 13);
@@ -1342,20 +1401,10 @@ TEST(String, check_cstring_2)
   }
 }
 
-TEST(String, OutputCstring)
-{
-  ostringstream os;
-
-  char s1[] = "this is first message";
-  // cout << s1 << endl;
-  os << s1 << endl;
-  EXPECT_EQ(os.str(), "this is first message\n");
-}
-
 // return bool if source and target are the same from the end.
 // bool strend(char *s, char *t);
 
-namespace string_cstring
+namespace stringcstring
 {
   bool strend_01(char *s, char *t)
   {
@@ -1395,9 +1444,9 @@ namespace string_cstring
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 
-TEST(String, CompareStringFromEnd)
+TEST(StringForC, check_strend)
 {
-  using namespace string_cstring;
+  using namespace stringcstring;
 
   char s1[] = "this is first message";
   char t1[] = "ssage";

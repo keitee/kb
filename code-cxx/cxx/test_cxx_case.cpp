@@ -2285,7 +2285,6 @@ sequence contains 2 bytes. Ending with == means it contains 1 byte.
 
 namespace cxx_case_base64
 {
-
   /* option 1 
      this code is from "mongoose.c" and examples are:
      unsigned char sha[20];
@@ -2636,404 +2635,23 @@ namespace cxx_case_base64
 
     return out;
   }
-} // namespace cxx_case_base64
 
-// [ RUN      ] CxxCaseBase64.check_decode_1
-// output: JnN0cmVhbXR5cGU9MQA=
-//
-// input len is: 14
-// b is null at i+1: 13
-// c is null at i+2: 14
-// output: JnN0cmVhbXR5cGU9MQA=
-//
-// input len is: 3
-// c is null at i+2: 2
-// output: JnMA
-//
-// input len is: 2
-// b is null at i+1: 1
-// c is null at i+2: 2
-// output: JgA=
-//
-// input len is: 13
-// b is null at i+1: 13
-// c is null at i+2: 14
-// output: JnN0cmVhbXR5cGU9MQ==
-//
-// [       OK ] CxxCaseBase64.check_decode_1 (0 ms)
-
-TEST(CxxCaseBase64, check_decode_1)
-{
-  using namespace cxx_case_base64;
-
-  {
-    const unsigned char input[] = "&streamtype=1";
-    char output[1000]           = {0};
-
-    cs_base64_encode(input, sizeof(input), output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  {
-    // src_len is 14 which includes a null
-    //                            "012.345.678.901.2"
-    const unsigned char input[] = "&streamtype=1";
-    char output[1000]           = {0};
-
-    base64_encode(input, sizeof(input), output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  // to show it handles a null
-  {
-    // src_len is 3 which includes a null
-    //                            "01"
-    const unsigned char input[] = "&s";
-    char output[1000]           = {0};
-
-    base64_encode(input, sizeof(input), output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  // to show it handles a null
-  {
-    // src_len is 2 which includes a null
-    //                            "0"
-    const unsigned char input[] = "&";
-    char output[1000]           = {0};
-
-    base64_encode(input, sizeof(input), output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  // {
-  //   std::string input{"&streamtype=1"};
-  //   char output[1000] = {0};
-  //
-  //   cs_base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
-  //                    input.length(),
-  //                    output);
-  //
-  //   std::cout << "output: " << output << std::endl;
-  // }
-  {
-    // src_len is 14 which includes a null since std::string.data()
-    //               "012.345.678.901.2"
-    std::string input{"&streamtype=1"};
-    char output[1000] = {0};
-
-    // NOTE: +1 to include a null to encode
-    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
-                  input.length() + 1,
-                  output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  // output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9MgA=
-  // output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mg==
-  // $ echo "vgcassetid=100&vgctoken=200&streamtype=2" | base64
-  // dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
-
-  {
-    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
-    char output[1000] = {0};
-
-    // NOTE: +1 to include a null to encode
-    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
-                  input.length() + 1,
-                  output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  {
-    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
-    char output[1000] = {0};
-
-    // NOTE: +1 to include a null to encode
-    base64_encode(reinterpret_cast<const unsigned char *>(input.data()),
-                  input.length(),
-                  output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-}
-
-// $ echo "ABC123Test Lets Try this' input and see What happens" | base64
-// QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwo=
-//
-// https://www.base64encode.org/
-// QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwo=
-//
-// from base64 man:
-// The  data  are  encoded  as  described  for  the base64 alphabet in RFC 4648.
-
-//[ RUN      ] CxxCaseBase64.check_decode_2
-// input len is: 53
-// b is null at i+1: 52
-// c is null at i+2: 53
-// output: QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucwA=
-// output: QUJDMTIzVGVzdCBMZXRzIFRyeSB0aGlzJyBpbnB1dCBhbmQgc2VlIFdoYXQgaGFwcGVucw==
-// [       OK ] CxxCaseBase64.check_decode_2 (0 ms)
-//
-// https://www.base64encode.org/
-// Split lines into chunks:
-// The encoded data will be a continuous text without any whitespaces, check
-// this option if you want to break it up into multiple lines. The applied
-// character limit is defined in the MIME (RFC 2045) specification, which states
-// that the encoded lines must be no more than 76 characters long. (*)
-//
-// Perform URL safe encoding:
-// Using standard Base64 in URLs requires encoding of "+", "/" and "="
-// characters into their percent-encoded form, which makes the string
-// unnecessarily longer. Enable this option to encode into an URL and file name
-// friendly Base64 variant (RFC 4648 / Base64URL) where the "+" and "/"
-// characters are respectively replaced by "-" and "_", as well as the padding
-// "=" signs are omitted.
-//
-// Have tried couple of codes from googling and all showed the same result as
-// decode_1 result. seems there are many RFC or old/new RFC.
-//
-//
-// https://tools.ietf.org/html/rfc4648
-
-#if 0
-NOTE:
-This and references in the site shows the correct result as base64.
-http://libb64.sourceforge.net/
-one of the references is base64 in GNU coreutils.
-
-keitee@kit-ubuntu:~/works/base64/libb64-1.2/base64$ ./base64 -e a.txt b.txt
-keitee@kit-ubuntu:~/works/base64/libb64-1.2/base64$ more a.txt b.txt
-::::::::::::::
-a.txt
-::::::::::::::
-&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D
-3D4E59&streamtype=1
-::::::::::::::
-b.txt
-::::::::::::::
-JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0w
-MDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAw
-MDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEy
-MjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3
-NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
-#endif
-
-TEST(CxxCaseBase64, check_decode_2)
-{
-  using namespace cxx_case_base64;
-
-  {
-    const unsigned char input[] =
-      "ABC123Test Lets Try this' input and see What happens";
-    char output[1000] = {0};
-
-    base64_encode(input, sizeof(input), output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  {
-    const unsigned char input[] =
-      "ABC123Test Lets Try this' input and see What happens";
-
-    char *output = b64_encode_2(input, strlen((const char *)input));
-    // char *output = b64_encode_2(input, strlen((const char *)input+1));
-
-    std::cout << "output: " << output << std::endl;
-
-    free(output);
-  }
-
-  {
-    const unsigned char input[] =
-      "ABC123Test Lets Try this' input and see What happens";
-    char output[1000] = {0};
-
-    b64_encode_3(input, sizeof(input), (unsigned char *)output);
-
-    std::cout << "output: " << output << std::endl;
-  }
-
-  {
-    const unsigned char input[] =
-      "ABC123Test Lets Try this' input and see What happens";
-    // char output[1000] = {0};
-
-    unsigned char *output = b64_encode_4(input, sizeof(input));
-
-    std::cout << "output: " << output << std::endl;
-
-    free(output);
-  }
-}
-
-TEST(CxxCaseBase64, check_decode_3)
-{
-  using namespace cxx_case_base64;
-
-  {
-    // src_len is 14 which includes a null since std::string.data()
-    //                "0123456789012"
-    std::string input{"&streamtype=1"};
-    char output[1000] = {0};
-
-    EXPECT_THAT(input.size(), 13);
-    EXPECT_THAT(sizeof(output), 1000);
-
-    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
-                  input.size() + 1,
-                  output);
-
-    //                 "01234567890123456789"
-    char converted[] = "JnN0cmVhbXR5cGU9MQA=";
-    // std::cout << "output: " << output << std::endl;
-
-    // includes a null
-    EXPECT_THAT(sizeof(converted), 21);
-
-    // copy ouput to std::string
-    std::string result{output};
-
-    // expected and result are same?
-    EXPECT_THAT(memcmp(converted, result.c_str(), sizeof(converted)), 0);
-
-    // not includes a null
-    EXPECT_THAT(result.size(), 20);
-    EXPECT_THAT(strlen(result.c_str()), 20);
-  }
-}
-
-#if 0
-
-echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
-JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
-
-#endif
-
-TEST(CxxCaseBase64, check_decode_4)
-{
-  using namespace cxx_case_base64;
-
-  std::string input{
-    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
-    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
-    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
-    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
-
-  std::string expected{
-    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
-    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
-    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
-    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
-    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
-
-  std::string wrong_expected{
-    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
-    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
-    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
-    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
-    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEA"};
-
-  // option1. wrong
-  {
-    char output[1000] = {0};
-
-    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
-                  input.size() + 1,
-                  output);
-
-    // std::cout << "output: " << output << std::endl;
-
-    // copy ouput to std::string
-    std::string result{output};
-
-    EXPECT_THAT(result.size(), 332);
-
-    EXPECT_THAT(result, Ne(expected));
-    EXPECT_THAT(result, wrong_expected);
-  }
-
-  // option2. wrong
-  {
-    char *output{};
-
-    output =
-      b64_encode_2(reinterpret_cast<const unsigned char *>(input.c_str()),
-                   input.size() + 1);
-
-    // std::cout << "output: " << output << std::endl;
-
-    // copy ouput to std::string
-    std::string result{output};
-
-    EXPECT_THAT(result, Ne(expected));
-    EXPECT_THAT(result, wrong_expected);
-  }
-
-  // option3. wrong
-  {
-    char output[1000] = {0};
-
-    b64_encode_3(reinterpret_cast<const unsigned char *>(input.c_str()),
-                 input.size() + 1,
-                 (unsigned char *)output);
-
-    // std::cout << "output: " << output << std::endl;
-
-    // copy ouput to std::string
-    std::string result{output};
-
-    EXPECT_THAT(result, Ne(expected));
-    EXPECT_THAT(result, wrong_expected);
-  }
-
-  // option4. wrong
-  {
-    char *output{};
-
-    output = (char *)b64_encode_4(
-      reinterpret_cast<const unsigned char *>(input.c_str()),
-      input.size() + 1);
-
-    std::cout << "output: " << output << std::endl;
-
-    // copy ouput to std::string
-    std::string result{output};
-
-    EXPECT_THAT(result, Ne(expected));
-    EXPECT_THAT(result, wrong_expected);
-  }
-}
-
-// see how fgets works which removes nees of using "tr" command and this is the
-// issue.
-// note that we we run below, then there is no need to use tr command.
-//
-// echo "...." | base64 | base64 -d
-//
-// However, when use fgets, this is an issue.
-
-namespace cxx_case_base64_bin
-{
   // constexpr auto BASE64_COMMAND{"/usr/bin/base64 | tr -d '\n'"};
   constexpr auto BASE64_COMMAND{"/usr/bin/base64"};
   constexpr auto BASE64_DECODE_COMMAND{"/usr/bin/base64 -d"};
   constexpr int BASE64_MAX_SIZE{1000};
 
-  std::string base64_encode(const std::string &input)
+  // use external bin
+  std::string base64_encode_bin(const std::string &input)
   {
     std::ostringstream cmd{};
     std::ostringstream encoded{};
     char read[BASE64_MAX_SIZE]{};
 
-    cmd << "echo '" << input << "' | " << BASE64_COMMAND;
+    // echo -n '&streamtype=1' | base64
+    cmd << "echo -n '" << input << "' | " << BASE64_COMMAND;
+
+    // std::cout << "cmd : " << cmd.str() << std::endl;
 
     auto pfd = popen(cmd.str().c_str(), "r");
     if (pfd)
@@ -3077,14 +2695,20 @@ namespace cxx_case_base64_bin
   // we need to do while and remove `\n` to make a single line.
   //
   // constexpr int BASE64_MAX_SIZE{100};
+  //
+  // NOTE: "base64 -d" do not make NEW LINE!
+  // keitee@kit-ubuntu:~/git/kb/code-cxx/cxx$ echo -n 'JnN0cmVhbXR5cGU9MQ==' | /usr/bin/base64 -d
+  // &streamtype=1keitee@kit-ubuntu:~/git/kb/code-cxx/cxx$ echo 'JnN0cmVhbXR5cGU9MQ==' | /usr/bin/base64 -d
+  // &streamtype=1keitee@kit-ubuntu:~/git/kb/code-cxx/cxx$
 
-  std::string base64_decode(const std::string &input)
+  std::string base64_decode_bin(const std::string &input)
   {
     std::ostringstream cmd{};
     std::ostringstream decoded{};
     char read[BASE64_MAX_SIZE]{};
 
-    cmd << "echo '" << input << "' | " << BASE64_DECODE_COMMAND;
+    // here do not include NULL and NEW LINE
+    cmd << "echo -n '" << input << "' | " << BASE64_DECODE_COMMAND;
 
     // std::cout << "cmd : " << cmd.str() << std::endl;
 
@@ -3093,7 +2717,7 @@ namespace cxx_case_base64_bin
     {
       while (NULL != fgets(read, BASE64_MAX_SIZE, pfd))
       {
-        read[strlen(read) - 1] = '\0';
+        // read[strlen(read) - 1] = '\0';
         decoded << read;
       }
 
@@ -3107,9 +2731,491 @@ namespace cxx_case_base64_bin
 
     return std::string{decoded.str()};
   }
-} // namespace cxx_case_base64_bin
+
+  // Base 64 encoding implementation according to "Base 64 Encoding" in https://tools.ietf.org/html/rfc4648#page-5
+  // static bool Base64Encode( const std::string& inputString, std::string& encodedString )
+  bool base64_encode_as(const std::string &inputString,
+                        std::string &encodedString)
+  {
+    bool retVal = false;
+
+    static const std::string base64AlphabetMap =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const uint32_t maxOctetLength =
+      3; // Max number of octets - 24-bit group
+    static const uint32_t octetBitMask =
+      0x3F; // Mask for the encoded 6-bit group
+    static const uint32_t inputBitGroupLength =
+      8; // Length of the each input bit group - a byte
+    static const uint32_t encodedBitGroupLength =
+      6; // Length of the each encoded bit group - 6 bits for base64
+
+    if (!inputString.empty())
+    {
+      uint32_t currentOctetsLength = 0;
+      uint32_t currentOctets       = 0;
+
+      for (uint32_t index = 0; index < inputString.length(); ++index)
+      {
+        // Form a 24-bit input group with 3 octets, from left to right
+        currentOctets =
+          ((currentOctets << inputBitGroupLength) | inputString[index]);
+        ++currentOctetsLength;
+
+        // Once we have a 24-bit input group or if we are at the last character of the input string,
+        // encode the input group.
+        if ((currentOctetsLength == maxOctetLength) ||
+            (index == (inputString.length() - 1)))
+        {
+          uint32_t encodedByteIndex = 0;
+          while (encodedByteIndex <= currentOctetsLength)
+          {
+            // Calculate the bit shift length needed to extract the current 6-bit group to be encoded
+            // from the input bit group ( which can be 24-bits or 8/16-bits if they are at the end of the input string)
+            int32_t octetShiftLength =
+              ((inputBitGroupLength * currentOctetsLength) -
+               (encodedBitGroupLength * (encodedByteIndex + 1)));
+            uint32_t alphabetMapIndex = 0;
+
+            // If we have a complete 6-bits group, i.e. all bits are present, extract it and
+            // reset those bits in the input bit group. In the case of an incomplete 6-bits group,
+            // which would be in the case of a 8/16-bits input group, make it a complete 6-bits group
+            // by << to the required length.
+            if (octetShiftLength > 0)
+            {
+              alphabetMapIndex =
+                (currentOctets >> octetShiftLength) & octetBitMask;
+              currentOctets &= (~(octetBitMask << octetShiftLength));
+            }
+            else
+            {
+              alphabetMapIndex =
+                (currentOctets << std::abs(octetShiftLength)) & octetBitMask;
+            }
+
+            // Add the corresponding character in the base64 alphabet map to the output string.
+            encodedString += base64AlphabetMap[alphabetMapIndex];
+
+            ++encodedByteIndex;
+          }
+
+          // If padding is needed, in the case 8/16-bits input group, add 2/1 character(s) of padding
+          if ((index == (inputString.length() - 1)) &&
+              (currentOctetsLength != maxOctetLength))
+          {
+            auto paddingLength = (maxOctetLength - currentOctetsLength);
+            encodedString += ((paddingLength == 1) ? ("=") : ("=="));
+          }
+
+          currentOctetsLength = 0;
+          currentOctets       = 0;
+        }
+      }
+
+      retVal = true;
+    }
+
+    return retVal;
+  }
+} // namespace cxx_case_base64
+
+// [ RUN      ] CxxCaseBase64.check_decode_1
+// output: JnN0cmVhbXR5cGU9MQA=
+//
+// input len is: 14
+// b is null at i+1: 13
+// c is null at i+2: 14
+// output: JnN0cmVhbXR5cGU9MQA=
+//
+// input len is: 3
+// c is null at i+2: 2
+// output: JnMA
+//
+// input len is: 2
+// b is null at i+1: 1
+// c is null at i+2: 2
+// output: JgA=
+//
+// input len is: 13
+// b is null at i+1: 13
+// c is null at i+2: 14
+// output: JnN0cmVhbXR5cGU9MQ==
+//
+// [       OK ] CxxCaseBase64.check_decode_1 (0 ms)
 
 #if 0
+
+echo "&streamtype=1" | base64
+JnN0cmVhbXR5cGU9MQo=
+
+echo -n "&streamtype=1" | base64
+JnN0cmVhbXR5cGU9MQ==
+
+#endif
+
+TEST(CxxCaseBase64, check_decode_1)
+{
+  using namespace cxx_case_base64;
+
+  const std::string expected{"JnN0cmVhbXR5cGU9MQ=="};
+
+  // keitee@kit-ubuntu:~/git/kb/code-cxx/cxx/build$ echo -n "&streamtype=1" | hexdump -C
+  // 00000000  26 73 74 72 65 61 6d 74  79 70 65 3d 31           |&streamtype=1|
+  //
+  // NOTE: so "echo -n" makes a string but not including NULL and `\n`
+  {
+    const char input[] = "&streamtype=1";
+    std::ostringstream os{};
+
+    // see ascii hex but not including null
+    for (size_t i = 0; i < strlen(input); ++i)
+      os << std::hex << (int)input[i];
+    EXPECT_THAT(os.str(), "2673747265616d747970653d31");
+
+    os.str("");
+
+    // see ascii hex and including null
+    for (size_t i = 0; i < strlen(input) + 1; ++i)
+      os << std::hex << (int)input[i];
+    EXPECT_THAT(os.str(), "2673747265616d747970653d310");
+  }
+
+  // option1. include NULL but not new line. WRONG
+  {
+    const unsigned char input[] = "&streamtype=1";
+    char output[1000]           = {0};
+
+    cs_base64_encode(input, sizeof(input), output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+  }
+
+  // option1 fail
+  {
+    // src_len is 14 which includes a null
+    //                            "012.345.678.901.2"
+    const unsigned char input[] = "&streamtype=1";
+    char output[1000]           = {0};
+
+    base64_encode(input, sizeof(input), output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+  }
+
+  // $ echo -n "&s" | base64
+  // JnM=
+  // do not include NULL and new line. Still different result.
+
+  // NO
+  {
+    //                            "01"
+    const unsigned char input[] = "&s";
+    char output[1000]           = {0};
+    const std::string expected{"JnM="};
+
+    base64_encode(input, sizeof(input), output);
+
+    EXPECT_THAT(sizeof(input), 3);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+  }
+
+  // NO. +1 to include a null to encode
+  {
+    std::string input{"&s"};
+    char output[1000] = {0};
+    const std::string expected{"JnM="};
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.length() + 1,
+                  output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+  }
+
+  // NO. +1 to include a null to encode. use sizeof
+  {
+    std::string input{"&s"};
+    char output[1000] = {0};
+    const std::string expected{"JnM="};
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  sizeof(input),
+                  output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, Ne(expected));
+  }
+
+  // not to include a null and OK
+  {
+    std::string input{"&s"};
+    char output[1000] = {0};
+    const std::string expected{"JnM="};
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.length(),
+                  output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // YES
+  {
+    //                            "01"
+    const unsigned char input[] = "&s";
+    char output[1000]           = {0};
+    const std::string expected{"JnM="};
+
+    base64_encode(input, 2, output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+}
+
+// https://www.base64encode.org/
+// Split lines into chunks:
+// The encoded data will be a continuous text without any whitespaces, check
+// this option if you want to break it up into multiple lines. The applied
+// character limit is defined in the MIME (RFC 2045) specification, which states
+// that the encoded lines must be no more than 76 characters long. (*)
+//
+// Perform URL safe encoding:
+// Using standard Base64 in URLs requires encoding of "+", "/" and "="
+// characters into their percent-encoded form, which makes the string
+// unnecessarily longer. Enable this option to encode into an URL and file name
+// friendly Base64 variant (RFC 4648 / Base64URL) where the "+" and "/"
+// characters are respectively replaced by "-" and "_", as well as the padding
+// "=" signs are omitted.
+//
+// Have tried couple of codes from googling and all showed the same result as
+// decode_1 result. seems there are many RFC or old/new RFC.
+//
+// https://tools.ietf.org/html/rfc4648
+
+TEST(CxxCaseBase64, check_decode_2)
+{
+  using namespace cxx_case_base64;
+
+  const std::string expected{"JnM="};
+
+  // not to include a null and OK
+  {
+    std::string input{"&s"};
+    char output[1000] = {0};
+
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.length(),
+                  output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // YES
+  {
+    //                            "01"
+    const unsigned char input[] = "&s";
+    char output[1000]           = {0};
+
+    base64_encode(input, 2, output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // option2. WRONG
+  {
+    const unsigned char input[] = "&s";
+
+    char *output = b64_encode_2(input, sizeof(input));
+    // char *output = b64_encode_2(input, strlen((const char *)input+1));
+
+    std::string result{output};
+    EXPECT_THAT(result, Ne(expected));
+
+    free(output);
+  }
+
+  // option2. OK
+  {
+    const unsigned char input[] = "&s";
+
+    char *output = b64_encode_2(input, strlen((char *)input));
+
+    std::string result{output};
+    EXPECT_THAT(result, (expected));
+
+    free(output);
+  }
+
+  // option3. OK
+  {
+    const unsigned char input[] = "&s";
+    char output[1000]           = {0};
+
+    b64_encode_3(input, strlen((char *)input), (unsigned char *)output);
+
+    std::string result{output};
+    EXPECT_THAT(result, (expected));
+  }
+
+  // option4. OK
+  {
+    const unsigned char input[] = "&s";
+
+    char *output = (char *)b64_encode_4(input, strlen((char *)input));
+
+    std::string result{output};
+    EXPECT_THAT(result, (expected));
+
+    free(output);
+  }
+}
+
+// DO NOT USE NULL and NEW LINE
+// echo -n "&streamtype=1" | base64
+// JnN0cmVhbXR5cGU9MQ==
+
+TEST(CxxCaseBase64, check_decode_3)
+{
+  using namespace cxx_case_base64;
+
+  const unsigned char input[] = "&streamtype=1";
+  const std::string expected{"JnN0cmVhbXR5cGU9MQ=="};
+
+  {
+    std::ostringstream drmData{};
+    drmData << input;
+
+    std::string encodedData = base64_encode_bin(drmData.str());
+    EXPECT_THAT(encodedData, expected);
+
+    std::string decodedData = base64_decode_bin(encodedData);
+    EXPECT_THAT(decodedData, std::string((const char *)input));
+  }
+
+  // YES
+  {
+    char output[1000] = {0};
+
+    base64_encode(input, strlen((char *)input), output);
+
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+}
+
+#if 0
+
+echo -n "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
+JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTE=
+
+#endif
+
+TEST(CxxCaseBase64, check_decode_4)
+{
+  using namespace cxx_case_base64;
+
+  std::string input{
+    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
+    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
+    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
+    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+
+  std::string expected{
+    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
+    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
+    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
+    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTE="};
+
+  // option1. OK
+  {
+    char output[1000] = {0};
+
+    // +1 since it's cstring
+    base64_encode(reinterpret_cast<const unsigned char *>(input.c_str()),
+                  input.size(),
+                  output);
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // option2. OK
+  {
+    char *output{};
+
+    output =
+      b64_encode_2(reinterpret_cast<const unsigned char *>(input.c_str()),
+                   input.size());
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // option3. OK
+  {
+    char output[1000] = {0};
+
+    b64_encode_3(reinterpret_cast<const unsigned char *>(input.c_str()),
+                 input.size(),
+                 (unsigned char *)output);
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+
+  // option4. OK
+  {
+    char *output{};
+
+    output = (char *)b64_encode_4(
+      reinterpret_cast<const unsigned char *>(input.c_str()),
+      input.size());
+
+    // copy ouput to std::string
+    std::string result{output};
+
+    EXPECT_THAT(result, (expected));
+  }
+}
+
+// see how fgets works which removes nees of using "tr" command and this is the
+// issue.
+// note that we we run below, then there is no need to use tr command.
+//
+// echo "...." | base64 | base64 -d
+//
+// However, when use fgets, this is an issue.
+
+#if 0
+ echo "vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64
+echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64
+
 echo "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1" | base64 | tr -d '\n'
 JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK
 
@@ -3143,7 +3249,7 @@ RDNENEU1OSZzdHJlYW10eXBlPTEK}
 
 TEST(CxxCaseBase64, check_decode_5)
 {
-  using namespace cxx_case_base64_bin;
+  using namespace cxx_case_base64;
 
   const char input[]{
     "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
@@ -3156,33 +3262,41 @@ TEST(CxxCaseBase64, check_decode_5)
     "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
     "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
     "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
-    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTE="};
 
-  const char input_2[]{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
-  std::string expected_2{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMDAwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAwNjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMjQ4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+  {
+    std::ostringstream drmData{};
 
-  EXPECT_THAT(strcmp(input, input_2), 0);
-  EXPECT_THAT(expected, expected_2);
+    drmData << input;
 
-  std::ostringstream drmData{};
+    std::string encodedData = base64_encode_bin(drmData.str());
 
-  drmData << input;
+    EXPECT_THAT(encodedData, expected);
 
-  // encode drmData using base64
-  // printf("input drmData {%s}\n", drmData.str().c_str());
-  // std::cout << "input drmData : " << drmData.str().c_str() << std::endl;
+    std::string decodedData = base64_decode_bin(encodedData);
 
-  std::string encodedData = base64_encode(drmData.str());
+    EXPECT_THAT(decodedData, std::string(input));
+  }
 
-  // printf("encoded drmData {%s}\n", encodedData.c_str());
-  // std::cout << "encoded drmData : " << encodedData << std::endl;
+  // OK
+  {
+    std::ostringstream drmData{};
 
-  EXPECT_THAT(encodedData, expected);
+    drmData << input;
 
-  std::string decodedData = base64_decode(encodedData);
+    std::string encodedData{};
 
-  EXPECT_THAT(decodedData, std::string(input));
+    base64_encode_as(drmData.str(), encodedData);
+
+    EXPECT_THAT(encodedData, expected);
+
+    std::string decodedData = base64_decode_bin(encodedData);
+    EXPECT_THAT(decodedData, std::string(input));
+  }
 }
+
+// NOTE: conclusion.
+// SHOULD NOT include NULL and NEW LINE in the input.
 
 // ={=========================================================================
 int main(int argc, char **argv)
