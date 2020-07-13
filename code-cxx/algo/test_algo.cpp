@@ -3499,7 +3499,7 @@ namespace algograde
   // use loop rather than using index of table as aboves
   //    60    70    80    90    100
   //    |     |     |     |*****|
-  //                 ***** 
+  //                 *****
   //  F    D     C     B     A
 
   std::string grade_3(int score)
@@ -3524,7 +3524,7 @@ namespace algograde
 
     return student_grade;
   }
-} // namespace algopad
+} // namespace algograde
 
 TEST(AlgoGrade, check_imps)
 {
@@ -3563,204 +3563,388 @@ TEST(AlgoGrade, check_imps)
   }
 }
 
-// ={=========================================================================
-// algo-intersect find if rectangles intersect
-//
-// from ANSIC 130. Handles point rather than each value.
-//
-// assumption about bot/and.
-//
-//     +--------+ top(x2, y2)      +--------+ bot(x2, y2)
-//     |        |                  |        |
-//     |        |                  |        |
-//     +--------+                  +--------+
-//  bot(x1,y1)                  top(x1,y1)
-//
-//
-// since depending on how Rect is defined, checking can be different in
-// is_point_in_rect().
-//
-// this assumes bot < point < top and if use top/bot way, it fails
-//
-// bool is_point_in_rect(const Point &point, const Rect &rect)
-// {
-//     return ((rect.bot_.x_ <= point.x_) && (point.x_ <= rect.top_.x_)) &&
-//         ((rect.bot_.y_ <= point.y_) && (point.y_ <= rect.top_.y_));
-// }
-//
-// this affect also the order of arguments to Rect(). However, not much point
-// of supporting no-assumption case. No, when tried it again, spend hours why
-// the check code fails depending on how Rect() is defined.
+/*
+={=========================================================================
+algo-intersect find if rectangles intersect
 
-namespace algo_intersect
+*ex-interview* From NDS CF office interview. 
+
+Implement the intersects method contained within the rectangle class below. The
+method should return true if the supplied rectangle intersects with the
+internally represented rectangle.
+
+from ANSIC 130. Handles point rather than each value.
+
+assumption about bot/and.
+
+   +--------+ top(x2, y2)      +--------+ bot(x2, y2)
+   |        |                  |        |
+   |        |                  |        |
+   +--------+                  +--------+
+bot(x1,y1)                  top(x1,y1)
+
+
+since depending on how Rect is defined, checking can be different in
+is_point_in_rect().
+
+this assumes bot < point < top and if use top/bot way, it fails
+
+bool is_point_in_rect(const Point &point, const Rect &rect)
 {
-  struct Point
-  {
-    // not a default ctor so have to define it
-    Point(const int x, const int y)
-        : x_(x)
-        , y_(y)
-    {}
-    int x_{};
-    int y_{};
-  };
+   return ((rect.bot_.x_ <= point.x_) && (point.x_ <= rect.top_.x_)) &&
+       ((rect.bot_.y_ <= point.y_) && (point.y_ <= rect.top_.y_));
+}
 
-  struct Rect
-  {
-    // not a default ctor so have to define it
-    // Rect(bot, top);
-    Rect(const Point &a, const Point &b)
-        : bot_(a)
-        , top_(b)
-    {}
-    Point bot_;
-    Point top_;
-  };
+this affect also the order of arguments to Rect(). However, not much point of
+supporting no-assumption case. No, when tried it again, spend hours why the
+check code fails depending on how Rect() is defined.
 
-  // bot.x <= x <= top.x AND bot.y <= y <= top.y
-  // should be AND
-  //
-  // support BOTH cases which Rect defines.
+NOTE: need to ask about how RECT is defined.
+ 
+*/
 
-  bool is_point_in_rect(const Point &point, const Rect &rect)
-  {
-    return ((rect.top_.x_ >= point.x_ && rect.bot_.x_ <= point.x_) ||
-            (rect.bot_.x_ >= point.x_ && rect.top_.x_ <= point.y_)) &&
-           ((rect.top_.y_ >= point.y_ && rect.bot_.y_ <= point.y_) ||
-            (rect.bot_.y_ >= point.y_ && rect.top_.y_ <= point.y_));
-  }
-
-  bool is_intersected(const Rect &r1, const Rect &r2)
-  {
-    return is_point_in_rect(r1.top_, r2) || is_point_in_rect(r1.bot_, r2);
-  }
-
-} // namespace algo_intersect
-
-TEST(AlgoIntersect, Intersected)
+namespace algointersect
 {
-  using namespace algo_intersect;
-
+  namespace first
   {
-    // bot/top
-    Rect a(Point(10, 10), Point(20, 20));
-    Rect b(Point(15, 15), Point(25, 25));
-    EXPECT_THAT(is_intersected(a, b), Eq(true));
+    struct Point
+    {
+      // not a default ctor so have to define it
+      Point(const int x, const int y)
+          : x_(x)
+          , y_(y)
+      {}
+      int x_{};
+      int y_{};
+    };
+
+    struct Rect
+    {
+      // not a default ctor so have to define it
+      // Rect(bot, top);
+      Rect(const Point &a, const Point &b)
+          : bot_(a)
+          , top_(b)
+      {}
+      Point bot_;
+      Point top_;
+    };
+
+    // bot.x <= x <= top.x AND bot.y <= y <= top.y
+    // should be AND
+    //
+    // support BOTH cases which Rect defines.
+
+    bool is_point_in_rect(const Point &point, const Rect &rect)
+    {
+      return ((rect.top_.x_ >= point.x_ && rect.bot_.x_ <= point.x_) ||
+              (rect.bot_.x_ >= point.x_ && rect.top_.x_ <= point.y_)) &&
+             ((rect.top_.y_ >= point.y_ && rect.bot_.y_ <= point.y_) ||
+              (rect.bot_.y_ >= point.y_ && rect.top_.y_ <= point.y_));
+    }
+
+    bool is_intersected(const Rect &r1, const Rect &r2)
+    {
+      return is_point_in_rect(r1.top_, r2) || is_point_in_rect(r1.bot_, r2);
+    }
+  } // namespace first
+
+  namespace second
+  {
+    struct Point
+    {
+      explicit Point(int xvalue, int yvalue)
+          : x{xvalue}
+          , y{yvalue}
+      {}
+      int x;
+      int y;
+    };
+
+    // to support both rect definition: bot/top and top/bot, can use point1 and
+    // point2 than top/bot name.
+    struct Rect
+    {
+      explicit Rect(const Point &t, const Point &b)
+          : top{t}
+          , bot{b}
+      {}
+      Point top;
+      Point bot;
+    };
+
+    // return true if point falls into the rect
+    bool is_point_in_rect(const Point &point, const Rect &rect)
+    {
+      // std::cout << "point {" << point.x << ", " << point.y << "}, rect{bot{"
+      //           << rect.bot.x << ", " << rect.bot.y << "}, top{" << rect.top.x
+      //           << ", " << rect.top.y << "}}" << std::endl;
+
+      // to support both rect definition: bot/top and top/bot.
+      if ((((rect.bot.x <= point.x) && (point.x <= rect.top.x)) &&
+           ((rect.bot.y <= point.y) && (point.y <= rect.top.y))) ||
+          (((rect.top.x <= point.x) && (point.x <= rect.bot.x)) &&
+           ((rect.top.y <= point.y) && (point.y <= rect.bot.y))))
+      {
+        // std::cout << "return true\n";
+        return true;
+      }
+      else
+      {
+        // std::cout << "return false\n";
+        return false;
+      }
+    }
+
+    bool is_intersect(const Rect &r1, const Rect &r2)
+    {
+      if (is_point_in_rect(r1.bot, r2) || is_point_in_rect(r1.top, r2))
+        return true;
+      else
+        return false;
+    }
+  } // namespace second
+} // namespace algointersect
+
+TEST(AlgoIntersect, check_imps)
+{
+  {
+    using namespace algointersect::first;
+
+    auto f = is_intersected;
+
+    {
+      // bot/top
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(15, 15), Point(25, 25));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // top/bot
+      Rect a(Point(20, 20), Point(10, 10));
+      Rect b(Point(25, 25), Point(15, 15));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // bot/top, inclues the same point
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(20, 20), Point(25, 25));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // bot/top, inclues the same point
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(25, 25), Point(35, 35));
+      EXPECT_THAT(f(a, b), Eq(false));
+    }
   }
 
   {
-    // top/bot
-    Rect a(Point(20, 20), Point(10, 10));
-    Rect b(Point(25, 25), Point(15, 15));
-    EXPECT_THAT(is_intersected(a, b), Eq(true));
-  }
+    using namespace algointersect::second;
 
-  {
-    // bot/top, inclues the same point
-    Rect a(Point(10, 10), Point(20, 20));
-    Rect b(Point(20, 20), Point(25, 25));
-    EXPECT_THAT(is_intersected(a, b), Eq(true));
-  }
+    auto f = is_intersect;
 
-  {
-    // bot/top, inclues the same point
-    Rect a(Point(10, 10), Point(20, 20));
-    Rect b(Point(25, 25), Point(35, 35));
-    EXPECT_THAT(is_intersected(a, b), Eq(false));
+    {
+      // bot/top
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(15, 15), Point(25, 25));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // top/bot
+      Rect a(Point(20, 20), Point(10, 10));
+      Rect b(Point(25, 25), Point(15, 15));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // bot/top, inclues the same point
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(20, 20), Point(25, 25));
+      EXPECT_THAT(f(a, b), Eq(true));
+    }
+
+    {
+      // bot/top, inclues the same point
+      Rect a(Point(10, 10), Point(20, 20));
+      Rect b(Point(25, 25), Point(35, 35));
+      EXPECT_THAT(f(a, b), Eq(false));
+    }
   }
 }
 
-// ={=========================================================================
-// algo-roman-numeric
+/*
+={=========================================================================
+algo-roman-numeric
 
-// Convert Arabic number to Roman number
-//
-// 1. the roman number has fixed mappings:
-//
-//  1       : I
-//  5       : V
-//  10      : X
-//  50      : L
-//  100     : C
-//  500     : D
-//  1000    : M
-//
-// 2. As itoa(), use loop, %, and / to get a digit to convert:
-//
-//      tens    2   1   0
-//              X   X   X
-//      digit   D   D   D
-//
-// 3. Divide 0-9 into sub-groups to get:
-//
-//  * 0 < digit < 4:
-//
-//      tens = 0:
-//          1       (1, 10**0)      I
-//          2       (2, 10**0)      II
-//          3       (3, 10**0)      III
-//
-//      tens = 1:
-//          10      (1, 10**1)      X
-//          20      (2, 10**1)      XX
-//          30      (3, 10**1)      XXX
-//
-//      tens = 2:
-//          100     (1, 10**2)      C
-//          200     (2, 10**2)      CC
-//          300     (3, 10**2)      CCC
-//      ...
-//
-//      To use the same function as 5 < digit < 9 case:
-//
-//      tens = 0:
-//                          (base, repeat, roman to repeat)
-//          1, 0+1          (0*10**0, 1, 10**0)     I
-//          2, 0+1          (0*10**0, 2, 10**0)     II
-//          3, 0+1          (0*10**0, 3, 10**0)     III
-//
-//  * 5 < digit < 9:
-//
-//      tens = 0:
-//                          (base, repeat, roman to repeat)
-//          6, 5+1          (5*10**0, 1, 10**0)     VI
-//          7, 5+2          (5*10**0, 2, 10**0)     VII
-//          8, 5+3          (5*10**0, 3, 10**0)     VIII
-//
-//      tens = 1:
-//          60, 50+10       (5*10**1, 1, 10**1)     LX
-//          70, 50+20       (5*10**1, 2, 10**1)     LXX
-//          89, 50+30       (5*10**1, 3, 10**1)     LXXX
-//
-//      tens = 2:
-//          600, 500+100    (5*10**1, 1, 10**1)     DC
-//          700, 500+200    (5*10**1, 2, 10**1)     DCC
-//          890, 500+300    (5*10**1, 3, 10**1)     DCCC
-//      ...
-//
-//  * 4 or 9
-//
-//      tens = 0:
-//          4, 5-1          (10**0 + (4+1)*10**0)   IV
-//          9, 10-1         (10**0 + (9+1)*10**0)   IX
-//
-//      tens = 1:
-//          40, 50-10       (10**1 + (4+1)*10**1)   XL
-//          90, 100-10      (10**1 + (9+1)*10**1)   XC
-//      ...
-//
-//  * 5
-//
-//      tens = 0:
-//          5,              (10**0*5)
-//
-//      tens = 1:
-//          50              (10**1*5)
-//
-//      tens = 2:
-//          500             (10**2*5)
+std::string to_roman(unsigned int arabic);
 
-namespace algo_roman
+Roman numerals chart
+
+1   5   10  50  100   500   1000
+I   V   X   L   C     D     M
+
+1   I     1
+2   II    1+1
+3   III   1+1+1
+4   IV    5-1
+5   V     5
+6   VI    5+1
+7   VII   5+1+1
+8   VIII  5+1+1+1
+9   IX    10-1
+10  X     10
+
+11  XI      10+1
+12  XII     10+1+1
+13  XIII    10+1+1+1
+14  XIV     10-1+5
+15  XV      10+5
+16  XVI     10+5+1
+17  XVII    10+5+1+1
+18  XVIII   10+5+1+1+1
+19  XIX     10-1+10
+20  XX      10+10
+
+21  XXI     10+10+1
+22  XXII    10+10+1+1
+23  XXIII   10+10+1+1+1
+24  XXIV    10+10-1+5
+25  XXV     10+10+5
+26  XXVI    10+10+5+1
+27  XXVII   10+10+5+1+1
+28  XXVIII  10+10+5+1+1+1
+29  XXIX    10+10-1+10
+30  XXX     10+10+10
+
+31  XXXI    10+10+10+1
+32  XXXII   10+10+10+1+1
+33  XXXIII  10+10+10+1+1+1
+34  XXXIV   10+10+10-1+5
+35  XXXV    10+10+10+5
+36  XXXVI   10+10+10+5+1
+37  XXXVII  10+10+10+5+1+1
+38  XXXVIII 10+10+10+5+1+1+1
+39  XXXIX   10+10+10-1+10
+40  XL      50-10
+
+41  XLI     50-10+1
+42  XLII    50-10+1+1
+43  XLIII   50-10+1+1+1
+44  XLIV    50-10-1+5
+45  XLV     50-10+5
+46  XLVI    50-10+5+1
+47  XLVII   50-10+5+1+1
+48  XLVIII  50-10+5+1+1+1
+49  XLIX    50-10-1+10
+50  L       50
+
+51  LI      50+1
+52  LII     50+1+1
+53  LIII    50+1+1+1
+54  LIV     50-1+5
+55  LV      50+5
+56  LVI     50+5+1
+57  LVII    50+5+1+1
+58  LVIII   50+5+1+1+1
+59  LIX     50-1+10
+60  LX      50+10
+...
+
+Convert Arabic number to Roman number
+
+1. the roman number has fixed mappings:
+
+1       : I
+5       : V
+10      : X
+50      : L
+100     : C
+500     : D
+1000    : M
+
+2. As itoa(), use loop, %, and / to get a digit to convert:
+
+    tens    2   1   0
+            X   X   X
+    digit   D   D   D
+
+3. Divide 0-9 into sub-groups to get:
+
+* 0 < digit < 4:
+
+    tens = 0:
+        1       (1, 10**0)      I
+        2       (2, 10**0)      II
+        3       (3, 10**0)      III
+
+    tens = 1:
+        10      (1, 10**1)      X
+        20      (2, 10**1)      XX
+        30      (3, 10**1)      XXX
+
+    tens = 2:
+        100     (1, 10**2)      C
+        200     (2, 10**2)      CC
+        300     (3, 10**2)      CCC
+    ...
+
+    To use the same function as 5 < digit < 9 case:
+
+    tens = 0:
+                        (base, repeat, roman to repeat)
+        1, 0+1          (0*10**0, 1, 10**0)     I
+        2, 0+1          (0*10**0, 2, 10**0)     II
+        3, 0+1          (0*10**0, 3, 10**0)     III
+
+* 5 < digit < 9:
+
+    tens = 0:
+                        (base, repeat, roman to repeat)
+        6, 5+1          (5*10**0, 1, 10**0)     VI
+        7, 5+2          (5*10**0, 2, 10**0)     VII
+        8, 5+3          (5*10**0, 3, 10**0)     VIII
+
+    tens = 1:
+        60, 50+10       (5*10**1, 1, 10**1)     LX
+        70, 50+20       (5*10**1, 2, 10**1)     LXX
+        89, 50+30       (5*10**1, 3, 10**1)     LXXX
+
+    tens = 2:
+        600, 500+100    (5*10**1, 1, 10**1)     DC
+        700, 500+200    (5*10**1, 2, 10**1)     DCC
+        890, 500+300    (5*10**1, 3, 10**1)     DCCC
+    ...
+
+* 4 or 9
+
+    tens = 0:
+        4, 5-1          (10**0 + (4+1)*10**0)   IV
+        9, 10-1         (10**0 + (9+1)*10**0)   IX
+
+    tens = 1:
+        40, 50-10       (10**1 + (4+1)*10**1)   XL
+        90, 100-10      (10**1 + (9+1)*10**1)   XC
+    ...
+
+* 5
+
+    tens = 0:
+        5,              (10**0*5)
+
+    tens = 1:
+        50              (10**1*5)
+
+    tens = 2:
+        500             (10**2*5)
+
+*/
+
+namespace algoroman
 {
   class RomanConvert
   {
@@ -3903,147 +4087,44 @@ namespace algo_roman
     }
   };
 
-} // namespace algo_roman
-
-TEST(AlgoRoman, ToRomans_1)
-{
-  using namespace algo_roman;
-
-  RomanConvert converter;
-
-  EXPECT_THAT(converter.convert(1), Eq("I"));
-  EXPECT_THAT(converter.convert(2), Eq("II"));
-  EXPECT_THAT(converter.convert(3), Eq("III"));
-  EXPECT_THAT(converter.convert(4), Eq("IV"));
-  EXPECT_THAT(converter.convert(5), Eq("V"));
-  EXPECT_THAT(converter.convert(6), Eq("VI"));
-  EXPECT_THAT(converter.convert(7), Eq("VII"));
-  EXPECT_THAT(converter.convert(8), Eq("VIII"));
-  EXPECT_THAT(converter.convert(9), Eq("IX"));
-  EXPECT_THAT(converter.convert(10), Eq("X"));
-  EXPECT_THAT(converter.convert(11), Eq("XI"));
-  EXPECT_THAT(converter.convert(12), Eq("XII"));
-  EXPECT_THAT(converter.convert(13), Eq("XIII"));
-  EXPECT_THAT(converter.convert(16), Eq("XVI"));
-  EXPECT_THAT(converter.convert(17), Eq("XVII"));
-  EXPECT_THAT(converter.convert(18), Eq("XVIII"));
-  EXPECT_THAT(converter.convert(20), Eq("XX"));
-  EXPECT_THAT(converter.convert(23), Eq("XXIII"));
-  EXPECT_THAT(converter.convert(41), Eq("XLI"));
-  EXPECT_THAT(converter.convert(45), Eq("XLV"));
-  EXPECT_THAT(converter.convert(50), Eq("L"));
-  EXPECT_THAT(converter.convert(80), Eq("LXXX"));
-  EXPECT_THAT(converter.convert(91), Eq("XCI"));
-  EXPECT_THAT(converter.convert(95), Eq("XCV"));
-  EXPECT_THAT(converter.convert(100), Eq("C"));
-  EXPECT_THAT(converter.convert(122), Eq("CXXII"));
-  EXPECT_THAT(converter.convert(152), Eq("CLII"));
-  EXPECT_THAT(converter.convert(196), Eq("CXCVI"));
-  EXPECT_THAT(converter.convert(247), Eq("CCXLVII"));
-  EXPECT_THAT(converter.convert(288), Eq("CCLXXXVIII"));
-  EXPECT_THAT(converter.convert(298), Eq("CCXCVIII"));
-  EXPECT_THAT(converter.convert(500), Eq("D"));
-  EXPECT_THAT(converter.convert(1000), Eq("M"));
-  EXPECT_THAT(converter.convert(1513), Eq("MDXIII"));
-  EXPECT_THAT(converter.convert(2999), Eq("MMCMXCIX"));
-  EXPECT_THAT(converter.convert(3447), Eq("MMMCDXLVII"));
-}
-
-namespace algo_roman
-{
-  string to_roman_2(unsigned int arabic)
+  // 1   5   10  50  100   500   1000
+  // I   V   X   L   C     D     M
+  // from TDD book
+  std::string to_roman_1(unsigned int value)
   {
-    string convert{};
+    std::string result{};
 
-    // note:
-    // 1. the order of element in the map matters
-    // 2. do not need 6?? in the map since it follows the same addition rule
-    // 3. to fix a warning on signed int and unsigned int comparion, use "u"
-    // suffix.
+    // // OK
+    // const std::vector<std::pair<int, std::string>> table = {
+    //   std::make_pair(1000, "M"),
+    //   std::make_pair(900, "CM"),
+    //   std::make_pair(500, "D"),
+    //   std::make_pair(400, "CD"),
+    //   std::make_pair(100, "C"),
+    //   std::make_pair(90, "XC"),
+    //   std::make_pair(50, "L"),
+    //   std::make_pair(40, "XL"),
+    //   std::make_pair(10, "X"),
+    //   std::make_pair(9, "IX"),
+    //   std::make_pair(5, "V"),
+    //   std::make_pair(4, "IV"),
+    //   std::make_pair(1, "I")};
 
-    const auto lookup_table = {make_pair(1000u, "M"),
-                               make_pair(900u, "CM"),
-                               // make_pair(600, "DC"),
-                               make_pair(500u, "D"),
-                               make_pair(400u, "CD"),
-                               make_pair(100u, "C"),
-                               //
-                               make_pair(90u, "XC"),
-                               // make_pair(60, "LX"),
-                               make_pair(50u, "L"),
-                               make_pair(40u, "XL"),
-                               make_pair(10u, "X"),
-                               //
-                               make_pair(9u, "IX"),
-                               // make_pair(6, "VI"),
-                               make_pair(5u, "V"),
-                               make_pair(4u, "IV"),
-                               make_pair(1u, "I")};
-
-    for (const auto e : lookup_table)
-    {
-      while (e.first <= arabic)
-      {
-        arabic -= e.first;
-        convert += e.second;
-      }
-    }
-
-    // cout << "converted: " << convert << endl;
-
-    return convert;
-  }
-
-} // namespace algo_roman
-
-// from TDD book
-
-TEST(AlgoRoman, ToRomans_2)
-{
-  using namespace algo_roman;
-
-  EXPECT_THAT(to_roman_2(1), Eq("I"));
-  EXPECT_THAT(to_roman_2(2), Eq("II"));
-  EXPECT_THAT(to_roman_2(3), Eq("III"));
-  EXPECT_THAT(to_roman_2(4), Eq("IV"));
-  EXPECT_THAT(to_roman_2(5), Eq("V"));
-  EXPECT_THAT(to_roman_2(6), Eq("VI"));
-  EXPECT_THAT(to_roman_2(7), Eq("VII"));
-  EXPECT_THAT(to_roman_2(8), Eq("VIII"));
-  EXPECT_THAT(to_roman_2(9), Eq("IX"));
-  EXPECT_THAT(to_roman_2(10), Eq("X"));
-  EXPECT_THAT(to_roman_2(11), Eq("XI"));
-  EXPECT_THAT(to_roman_2(12), Eq("XII"));
-  EXPECT_THAT(to_roman_2(13), Eq("XIII"));
-  EXPECT_THAT(to_roman_2(16), Eq("XVI"));
-  EXPECT_THAT(to_roman_2(17), Eq("XVII"));
-  EXPECT_THAT(to_roman_2(18), Eq("XVIII"));
-  EXPECT_THAT(to_roman_2(20), Eq("XX"));
-  EXPECT_THAT(to_roman_2(23), Eq("XXIII"));
-  EXPECT_THAT(to_roman_2(41), Eq("XLI"));
-  EXPECT_THAT(to_roman_2(45), Eq("XLV"));
-  EXPECT_THAT(to_roman_2(50), Eq("L"));
-  EXPECT_THAT(to_roman_2(80), Eq("LXXX"));
-  EXPECT_THAT(to_roman_2(91), Eq("XCI"));
-  EXPECT_THAT(to_roman_2(95), Eq("XCV"));
-  EXPECT_THAT(to_roman_2(100), Eq("C"));
-  EXPECT_THAT(to_roman_2(122), Eq("CXXII"));
-  EXPECT_THAT(to_roman_2(152), Eq("CLII"));
-  EXPECT_THAT(to_roman_2(196), Eq("CXCVI"));
-  EXPECT_THAT(to_roman_2(247), Eq("CCXLVII"));
-  EXPECT_THAT(to_roman_2(288), Eq("CCLXXXVIII"));
-  EXPECT_THAT(to_roman_2(298), Eq("CCXCVIII"));
-  EXPECT_THAT(to_roman_2(500), Eq("D"));
-  EXPECT_THAT(to_roman_2(1000), Eq("M"));
-  EXPECT_THAT(to_roman_2(1513), Eq("MDXIII"));
-  EXPECT_THAT(to_roman_2(2999), Eq("MMCMXCIX"));
-  EXPECT_THAT(to_roman_2(3447), Eq("MMMCDXLVII"));
-}
-
-namespace algo_roman
-{
-  const string to_roman_3(unsigned int value)
-  {
+    // // OK
+    // const auto table = {
+    //   std::make_pair(1000, "M"),
+    //   std::make_pair(900, "CM"),
+    //   std::make_pair(500, "D"),
+    //   std::make_pair(400, "CD"),
+    //   std::make_pair(100, "C"),
+    //   std::make_pair(90, "XC"),
+    //   std::make_pair(50, "L"),
+    //   std::make_pair(40, "XL"),
+    //   std::make_pair(10, "X"),
+    //   std::make_pair(9, "IX"),
+    //   std::make_pair(5, "V"),
+    //   std::make_pair(4, "IV"),
+    //   std::make_pair(1, "I")};
 
     // error: direct-list-initialization of ‘auto’ requires exactly one element [-fpermissive]
     // const auto roman_table{
@@ -4062,111 +4143,153 @@ namespace algo_roman
     //     make_pair(1u, "I")
     // };
 
-    const auto roman_table = {make_pair(1000u, "M"),
-                              make_pair(900u, "CM"),
-                              make_pair(500u, "D"),
-                              make_pair(400u, "CD"),
-                              make_pair(100u, "C"),
-                              make_pair(90u, "XC"),
-                              make_pair(50u, "L"),
-                              make_pair(40u, "XL"),
-                              make_pair(10u, "X"),
-                              make_pair(9u, "IX"),
-                              make_pair(5u, "V"),
-                              make_pair(4u, "IV"),
-                              make_pair(1u, "I")};
+    // // error: unable to deduce ‘const std::initializer_list<const auto>’ from ‘{{1000, "M"},
+    // const auto table = {{1000, "M"},
+    //                     {900, "CM"},
+    //                     {500, "D"},
+    //                     {400, "CD"},
+    //                     {100, "C"},
+    //                     {90, "XC"},
+    //                     {50, "L"},
+    //                     {40, "XL"},
+    //                     {10, "X"},
+    //                     {9, "IX"},
+    //                     {5, "V"},
+    //                     {4, "IV"},
+    //                     {1, "I"}};
 
-    string result{};
+    // OK
+    const std::initializer_list<std::pair<unsigned int, std::string>> table = {
+      {1000, "M"},
+      {900, "CM"},
+      {500, "D"},
+      {400, "CD"},
+      {100, "C"},
+      {90, "XC"},
+      {50, "L"},
+      {40, "XL"},
+      {10, "X"},
+      {9, "IX"},
+      {5, "V"},
+      {4, "IV"},
+      {1, "I"}};
 
-    for (const auto &e : roman_table)
+    for (const auto &e : table)
     {
-      // note: must be "<=" but not "<"
-
-      while (e.first <= value)
+      while (value >= e.first)
       {
         value -= e.first;
-        result += e.second;
+        result.append(e.second);
       }
     }
+
+    // if comment out "return result", crashes.
+    // From standard 6.6.3/2
+    // A return statement without an expression can be used only in functions
+    // that do not return a value, that is, a function with the return type
+    // void, a constructor (12.1), or a destructor (12.4). A return statement
+    // with an expression of non-void type can be used only in functions
+    // returning a value; the value of the expression is returned to the caller
+    // of the function. The expression is implicitly converted to the return
+    // type of the function in which it appears. A return statement can involve
+    // the construction and copy of a temporary object (12.2). Flowing off the
+    // end of a function is equivalent to a return with no value; this results
+    // in undefined behavior in a value-returning function.
 
     return result;
   }
 
-  // 2018
-  const string to_roman_4(unsigned int value)
-  {
-    const initializer_list<pair<unsigned int, string>> roman_table{{1000u, "M"},
-                                                                   {900u, "CM"},
-                                                                   {500u, "D"},
-                                                                   {400u, "CD"},
-                                                                   {100u, "C"},
-                                                                   {90u, "XC"},
-                                                                   {50u, "L"},
-                                                                   {40u, "XL"},
-                                                                   {10u, "X"},
-                                                                   {9u, "IX"},
-                                                                   {5u, "V"},
-                                                                   {4u, "IV"},
-                                                                   {1u, "I"}};
+} // namespace algoroman
 
-    string result{};
-
-    for (const auto &e : roman_table)
-    {
-      // note: must be "<=" but not "<"
-
-      while (e.first <= value)
-      {
-        value -= e.first;
-        result += e.second;
-      }
-    }
-
-    return result;
-  }
-
-} // namespace algo_roman
-
-TEST(AlgoRoman, ToRomans_3)
+TEST(AlgoRoman, check_to_roman)
 {
-  using namespace algo_roman;
+  using namespace algoroman;
 
-  EXPECT_THAT(to_roman_4(1), Eq("I"));
-  EXPECT_THAT(to_roman_4(2), Eq("II"));
-  EXPECT_THAT(to_roman_4(3), Eq("III"));
-  EXPECT_THAT(to_roman_4(4), Eq("IV"));
-  EXPECT_THAT(to_roman_4(5), Eq("V"));
-  EXPECT_THAT(to_roman_4(6), Eq("VI"));
-  EXPECT_THAT(to_roman_4(7), Eq("VII"));
-  EXPECT_THAT(to_roman_4(8), Eq("VIII"));
-  EXPECT_THAT(to_roman_4(9), Eq("IX"));
-  EXPECT_THAT(to_roman_4(10), Eq("X"));
-  EXPECT_THAT(to_roman_4(11), Eq("XI"));
-  EXPECT_THAT(to_roman_4(12), Eq("XII"));
-  EXPECT_THAT(to_roman_4(13), Eq("XIII"));
-  EXPECT_THAT(to_roman_4(16), Eq("XVI"));
-  EXPECT_THAT(to_roman_4(17), Eq("XVII"));
-  EXPECT_THAT(to_roman_4(18), Eq("XVIII"));
-  EXPECT_THAT(to_roman_4(20), Eq("XX"));
-  EXPECT_THAT(to_roman_4(23), Eq("XXIII"));
-  EXPECT_THAT(to_roman_4(41), Eq("XLI"));
-  EXPECT_THAT(to_roman_4(45), Eq("XLV"));
-  EXPECT_THAT(to_roman_4(50), Eq("L"));
-  EXPECT_THAT(to_roman_4(80), Eq("LXXX"));
-  EXPECT_THAT(to_roman_4(91), Eq("XCI"));
-  EXPECT_THAT(to_roman_4(95), Eq("XCV"));
-  EXPECT_THAT(to_roman_4(100), Eq("C"));
-  EXPECT_THAT(to_roman_4(122), Eq("CXXII"));
-  EXPECT_THAT(to_roman_4(152), Eq("CLII"));
-  EXPECT_THAT(to_roman_4(196), Eq("CXCVI"));
-  EXPECT_THAT(to_roman_4(247), Eq("CCXLVII"));
-  EXPECT_THAT(to_roman_4(288), Eq("CCLXXXVIII"));
-  EXPECT_THAT(to_roman_4(298), Eq("CCXCVIII"));
-  EXPECT_THAT(to_roman_4(500), Eq("D"));
-  EXPECT_THAT(to_roman_4(1000), Eq("M"));
-  EXPECT_THAT(to_roman_4(1513), Eq("MDXIII"));
-  EXPECT_THAT(to_roman_4(2999), Eq("MMCMXCIX"));
-  EXPECT_THAT(to_roman_4(3447), Eq("MMMCDXLVII"));
+  {
+    RomanConvert converter;
+
+    EXPECT_THAT(converter.convert(1), Eq("I"));
+    EXPECT_THAT(converter.convert(2), Eq("II"));
+    EXPECT_THAT(converter.convert(3), Eq("III"));
+    EXPECT_THAT(converter.convert(4), Eq("IV"));
+    EXPECT_THAT(converter.convert(5), Eq("V"));
+    EXPECT_THAT(converter.convert(6), Eq("VI"));
+    EXPECT_THAT(converter.convert(7), Eq("VII"));
+    EXPECT_THAT(converter.convert(8), Eq("VIII"));
+    EXPECT_THAT(converter.convert(9), Eq("IX"));
+    EXPECT_THAT(converter.convert(10), Eq("X"));
+    EXPECT_THAT(converter.convert(11), Eq("XI"));
+    EXPECT_THAT(converter.convert(12), Eq("XII"));
+    EXPECT_THAT(converter.convert(13), Eq("XIII"));
+    EXPECT_THAT(converter.convert(16), Eq("XVI"));
+    EXPECT_THAT(converter.convert(17), Eq("XVII"));
+    EXPECT_THAT(converter.convert(18), Eq("XVIII"));
+    EXPECT_THAT(converter.convert(20), Eq("XX"));
+    EXPECT_THAT(converter.convert(23), Eq("XXIII"));
+    EXPECT_THAT(converter.convert(41), Eq("XLI"));
+    EXPECT_THAT(converter.convert(45), Eq("XLV"));
+    EXPECT_THAT(converter.convert(50), Eq("L"));
+    EXPECT_THAT(converter.convert(80), Eq("LXXX"));
+    EXPECT_THAT(converter.convert(91), Eq("XCI"));
+    EXPECT_THAT(converter.convert(95), Eq("XCV"));
+    EXPECT_THAT(converter.convert(100), Eq("C"));
+    EXPECT_THAT(converter.convert(122), Eq("CXXII"));
+    EXPECT_THAT(converter.convert(152), Eq("CLII"));
+    EXPECT_THAT(converter.convert(196), Eq("CXCVI"));
+    EXPECT_THAT(converter.convert(247), Eq("CCXLVII"));
+    EXPECT_THAT(converter.convert(288), Eq("CCLXXXVIII"));
+    EXPECT_THAT(converter.convert(298), Eq("CCXCVIII"));
+    EXPECT_THAT(converter.convert(500), Eq("D"));
+    EXPECT_THAT(converter.convert(1000), Eq("M"));
+    EXPECT_THAT(converter.convert(1513), Eq("MDXIII"));
+    EXPECT_THAT(converter.convert(2999), Eq("MMCMXCIX"));
+    EXPECT_THAT(converter.convert(3447), Eq("MMMCDXLVII"));
+  }
+
+  {
+    const std::vector<std::function<std::string(unsigned int)>> imps{
+      to_roman_1};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(1), Eq("I"));
+      EXPECT_THAT(f(2), Eq("II"));
+      EXPECT_THAT(f(3), Eq("III"));
+      EXPECT_THAT(f(4), Eq("IV"));
+      EXPECT_THAT(f(5), Eq("V"));
+      EXPECT_THAT(f(6), Eq("VI"));
+      EXPECT_THAT(f(7), Eq("VII"));
+      EXPECT_THAT(f(8), Eq("VIII"));
+      EXPECT_THAT(f(9), Eq("IX"));
+      EXPECT_THAT(f(10), Eq("X"));
+      EXPECT_THAT(f(11), Eq("XI"));
+      EXPECT_THAT(f(12), Eq("XII"));
+      EXPECT_THAT(f(13), Eq("XIII"));
+      EXPECT_THAT(f(16), Eq("XVI"));
+      EXPECT_THAT(f(17), Eq("XVII"));
+      EXPECT_THAT(f(18), Eq("XVIII"));
+      EXPECT_THAT(f(20), Eq("XX"));
+      EXPECT_THAT(f(23), Eq("XXIII"));
+      EXPECT_THAT(f(41), Eq("XLI"));
+      EXPECT_THAT(f(45), Eq("XLV"));
+      EXPECT_THAT(f(50), Eq("L"));
+      EXPECT_THAT(f(80), Eq("LXXX"));
+      EXPECT_THAT(f(91), Eq("XCI"));
+      EXPECT_THAT(f(95), Eq("XCV"));
+      EXPECT_THAT(f(100), Eq("C"));
+      EXPECT_THAT(f(122), Eq("CXXII"));
+      EXPECT_THAT(f(152), Eq("CLII"));
+      EXPECT_THAT(f(196), Eq("CXCVI"));
+      EXPECT_THAT(f(247), Eq("CCXLVII"));
+      EXPECT_THAT(f(288), Eq("CCLXXXVIII"));
+      EXPECT_THAT(f(298), Eq("CCXCVIII"));
+      EXPECT_THAT(f(500), Eq("D"));
+      EXPECT_THAT(f(1000), Eq("M"));
+      EXPECT_THAT(f(1513), Eq("MDXIII"));
+      EXPECT_THAT(f(2999), Eq("MMCMXCIX"));
+      EXPECT_THAT(f(3447), Eq("MMMCDXLVII"));
+    }
+  }
 }
 
 // algo-leetcode-4

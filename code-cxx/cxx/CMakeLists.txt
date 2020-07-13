@@ -241,6 +241,9 @@ add_executable(bridge_client4 "bridge_client2.cpp"
   "bridge_abs.cpp"
   "bridge_con.cpp")
 
+# aout
+add_executable(aout "aout.cpp") 
+
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

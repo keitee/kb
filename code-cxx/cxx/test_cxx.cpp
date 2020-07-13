@@ -57,16 +57,6 @@ using namespace testing;
 2202:TEST(Reference, CString)
 2275:TEST(Reference, AccessOnReference)
 2298:TEST(Ratio, Ratio)
-2318:TEST(Time, SystemCall)
-2358:TEST(Time, SleepFor)
-2394:TEST(CxxTime, DurationCast)
-2480:TEST(Time, CronoClockDetails)
-2508:TEST(Time, SteadyClock)
-2579:TEST(Time, Timepoint)
-2599:TEST(Time, TimePointArithmetic)
-2645:TEST(Time, Facet)
-2722:TEST(Time, ElapsedTime)
-2957:TEST(Time, Snapper)
 3190:TEST(CxxFeaturesTest, UseIsspace)
 3201:// Q: If run it standalone, it runs slower than on in GTEST. WHY?
 3251:TEST(CxxFunctionObject, FunctionPointer)
@@ -3815,7 +3805,7 @@ TEST(CxxTime, check_system_call)
 // The local date and time is: Tue Jun 12 14:42:18 2018
 // The local date and time is: Tue Jun 12 14:42:28 2018
 
-TEST(Time, SleepFor)
+TEST(CxxTime, check_sleep_for)
 {
   // tm *localtm = localtime(&now);
   time_t now = time(0);
@@ -4054,7 +4044,7 @@ void print_clock_data(ostringstream &os)
   os << "- is ready: " << boolalpha << C::is_steady << endl;
 }
 
-TEST(Time, CronoClockDetails)
+TEST(CxxTime, check_various_clock)
 {
   ostringstream os;
 
@@ -4123,6 +4113,7 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
   std::time_t time = std::chrono::system_clock::to_time_t(tp);
 
   // std::string ts = std::ctime(&time);
+  // to get UTC:
   std::string ts = std::asctime(gmtime(&time));
 
   // remove trailing newline
@@ -4130,6 +4121,7 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
   return ts;
 }
 
+// util/chrono1.cpp
 // epoch: Thu Jan  1 01:00:00 1970
 // now  : Thu Apr 12 10:52:00 2018
 // min  : Tue Sep 21 00:11:29 1677
@@ -4153,29 +4145,47 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // book max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from
 // the book
 
-TEST(Time, Timepoint)
+TEST(CxxTime, check_timepoint)
 {
-  // print the epoch of this clock
+  {
+    // print the epoch of this system clock
 
-  // is equivalent to:
-  // std::chrono::time_point<std::chrono::system_clock> tp
-  std::chrono::system_clock::time_point tp;
+    // is equivalent to:
+    // std::chrono::time_point<std::chrono::system_clock> tp
+    // Thus, the default constructor, which yields the epoch, creates a timepoint,
+    std::chrono::system_clock::time_point tp;
+    cout << "epoch: " << as_string(tp) << endl;
 
-  cout << "epoch: " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::now();
+    cout << "now  : " << as_string(tp) << endl;
 
-  tp = std::chrono::system_clock::now();
-  cout << "now  : " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::time_point::min();
+    cout << "min  : " << as_string(tp) << endl;
 
-  tp = std::chrono::system_clock::time_point::min();
-  cout << "min  : " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::time_point::max();
+    cout << "max  : " << as_string(tp) << endl;
+  }
 
-  tp = std::chrono::system_clock::time_point::max();
-  cout << "max  : " << as_string(tp) << endl;
+  // tp.time_since_epoch()
+  // Returns the duration between the epoch and timepoint tp
+  {
+    auto tp = std::chrono::system_clock::now();
+
+    // compile error since no operator<<() is defined.
+    // std::cout << "now  : " << tp.time_since_epoch() << std::endl;
+    std::cout << "now in duration: " << tp.time_since_epoch().count()
+              << std::endl;
+
+    std::cout
+      << "now in seconds : "
+      << chrono::duration_cast<chrono::seconds>(tp.time_since_epoch()).count()
+      << std::endl;
+  }
 }
 
-TEST(Time, TimePointArithmetic)
+TEST(CxxTime, check_timepoint_arithmetic)
 {
-  ostringstream os;
+  std::ostringstream os{};
 
   // one day as seconds
   typedef chrono::duration<int, ratio<3600 * 24>> Days;
@@ -4296,7 +4306,7 @@ namespace cxx_time_elapsed
 
 } // namespace cxx_time_elapsed
 
-TEST(Time, ElapsedTime)
+TEST(CxxTime, check_elapsed_time)
 {
   using namespace cxx_time_elapsed;
 
