@@ -181,8 +181,12 @@ endif()
 
 
 # case_1.cpp
-add_executable(test_case_1 "case_1.cpp")
-target_link_libraries(test_case_1 Boost::thread)
+add_executable(issue_case_1 "case_1.cpp")
+target_link_libraries(issue_case_1 Boost::thread)
+
+# case_2.cpp
+add_executable(issue_case_2 "case_2.cpp")
+target_link_libraries(issue_case_2 Boost::thread)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

@@ -369,9 +369,10 @@ TEST(StringOperation, check_find_char)
   std::string coll{"There are two needles in this haystack with needles."};
 
   {
-    // Finds the first character equal to one of the characters in the given
+    // Finds the first character equal to "one of the characters" in the given
     // character sequence. The search considers only the interval [pos, size()).
-    // If the character is not present in the interval, npos will be
+    //
+    // If the character is not present in the interval, "npos" will be
     // returned.Finds the first character equal to one of the characters in the
     // given character sequence. The search considers only the interval [pos,
     // size()). If the character is not present in the interval, npos will be
@@ -382,6 +383,12 @@ TEST(StringOperation, check_find_char)
 
     auto pos = coll.find_first_of("n");
     EXPECT_THAT(pos, 14);
+  }
+
+  // "one of the characters"
+  {
+    auto pos = coll.find_first_of("ne");
+    EXPECT_THAT(pos, 2);
   }
 
   {
@@ -403,6 +410,25 @@ TEST(StringOperation, check_find_char)
 
 TEST(StringOperation, check_find_substring_1)
 {
+  // try to match "V" from "IV" only for one char so expects no match. However,
+  // that's not the case.
+  {
+    std::string coll1{"IV"};
+    std::string coll2{"V"};
+
+    // find sill search
+    EXPECT_THAT(coll1.find(coll2), 1);
+
+    // size_type find( const CharT* s, size_type pos, size_type count ) const;
+    // 2) Finds the first substring equal to the range [s, s+count). This range
+    // may contain null characters. NOTE on "s+count"
+
+    EXPECT_THAT(coll1.find(coll2.c_str(), 0, coll2.size()), 1);
+    EXPECT_THAT(coll1.find(coll2.c_str(), 0, coll2.size() - 1), 0);
+
+    EXPECT_THAT(coll1.compare(0, 1, coll2.c_str()), Ne(0));
+  }
+
   {
     std::string coll1{"There are two needles in this haystack with needles."};
     std::string coll2{"needle"};
@@ -411,7 +437,7 @@ TEST(StringOperation, check_find_substring_1)
     std::size_t found = coll1.find(coll2);
     EXPECT_THAT(found, 14);
 
-    // start from `found+1` and for 6 chars long
+    // start from `found+1` and for 6 chars long of "needles are small"
     found = coll1.find("needles are small", found + 1, 6);
     EXPECT_THAT(found, 44);
 
@@ -759,7 +785,7 @@ TEST(StringOperation, check_substr)
   // [11, end)
   EXPECT_THAT(coll.substr(11), "ability");
 
-  // note that the second is `length`
+  // note that the second is `length`. (start, length)
   EXPECT_THAT(coll.substr(5, 6), "change");
 
   EXPECT_THAT(coll.substr(0, 0), "");
@@ -767,7 +793,7 @@ TEST(StringOperation, check_substr)
 
 // string-add-char
 
-TEST(StringOperation, add_char)
+TEST(StringOperation, check_add_char)
 {
   // cxx-string-push-back
   // void push_back( CharT ch ); (until C++20)
@@ -1007,14 +1033,6 @@ TEST(StringCompare, check_member_function)
     EXPECT_THAT(true, (coll1 == coll2));
   }
 
-  {
-    std::string coll1{};
-    std::string coll2{"string compare"};
-
-    // equal
-    EXPECT_THAT(false, (coll1 == coll2));
-  }
-
   // no simple positive/negative value in lexicographical order but difference?
   {
     std::string coll1{"help"};
@@ -1044,6 +1062,12 @@ TEST(StringCompare, check_member_function)
     EXPECT_THAT(!!state.compare({"Active"}), true);
     EXPECT_THAT(!!state.compare({"NotAvailable"}), true);
   }
+
+  // int compare( size_type pos1, size_type count1, const CharT* s ) const;
+  // 5) Compares a [pos1, pos1+count1) substring of this string to the
+  // null-terminated character sequence beginning at the character pointed to by
+  // s with length Traits::length(s) If count1 > size() - pos1 the substring is
+  // [pos1, size()).
 
   {
     std::string coll1{"help"};

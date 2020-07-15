@@ -2498,6 +2498,23 @@ TEST(CxxCtor, check_init_list)
 {
   using namespace cxx_init_list;
 
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
+  }
+
+  {
+    std::vector<Foo> coll{Foo("one"), Foo("two"), Foo("three")};
+    EXPECT_THAT(coll[0].return_mesg(), "one and converting ctor and copy ctor");
+  }
+
+  // std::string return_mesg() { return os_.str(); }
+  {
+    Foo foo("one");
+    std::vector<std::function<std::string(Foo &)>> coll{&Foo::return_mesg};
+    EXPECT_THAT(coll[0](foo), "one and converting ctor");
+  }
+
   // copy, brace init
   {
 
@@ -5149,13 +5166,18 @@ namespace cxx_callable
 
 // on member function.
 //
-// NOTE on syntax since "has to specify the target". For example, update_10()
+// NOTE NOTE on syntax since "has to specify the target". For example, update_10()
 // takes no argument but has to say:
 //
 // std::function<void(Foo &)> op = &Foo::update_10;
 //                    ^^^^^
+// error: conversion from ‘std::__cxx11::string (cxx_init_list::Foo::*)() {aka
+// std::__cxx11::basic_string<char> (cxx_init_list::Foo::*)()}’ to non-scalar
+// type ‘std::function<std::__cxx11::basic_string<char>()>’ requested
+//
+//     std::function<std::string()> f = &Foo::return_mesg;
 
-TEST(CxxCallable, check_std_function)
+TEST(CxxCallable, check_function)
 {
   using namespace cxx_callable;
 
@@ -5330,7 +5352,7 @@ TEST(CxxCallable, check_std_function_2)
 //
 // the point is std::bind() is more flexible.
 
-TEST(CxxCallable, check_std_memfn)
+TEST(CxxCallable, check_memfn)
 {
   using namespace cxx_callable;
 
@@ -5367,19 +5389,136 @@ TEST(CxxCallable, check_std_memfn)
   //   EXPECT_THAT(foo.get_value(), 110);
   // }
 
-  // use reference
+  // for_each() pass reference
+  //
+  // namespace algo_code
+  // {
+  //   template <typename _InputIterator, typename _Function>
+  //   _Function
+  //   for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+  //   {
+  //     // note: call op but not use return
+  //     for (; __first != __last; ++__first)
+  //       __f(*__first);
+  //     return _GLIBCXX_MOVE(__f);
+  //   }
+  //
+  //   template <typename _InputIterator,
+  //             typename _OutputIterator,
+  //             typename _UnaryOperation>
+  //   _OutputIterator transform(_InputIterator __first,
+  //                             _InputIterator __last,
+  //                             _OutputIterator __result,
+  //                             _UnaryOperation __unary_op)
+  //   {
+  //     for (; __first != __last; ++__first, ++__result)
+  //       // note: write to output to output iterator and unary
+  //       *__result = __unary_op(*__first);
+  //     return __result;
+  //   }
+  // } // namespace algo_code
   {
-    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+    std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    std::vector<size_t> result{};
 
     auto op = std::mem_fn(&Foo::update_10);
 
-    for_each(coll.begin(), coll.end(), op);
+    std::for_each(coll.begin(), coll.end(), op);
 
     // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+    std::transform(coll.begin(),
+                   coll.end(),
+                   back_inserter(result),
+                   print_value);
 
     EXPECT_THAT(result, ElementsAre(11, 12, 13));
+  }
+
+  // use pointer
+  {
+    Foo foo = Foo(100);
+
+    // see how to define pointer to member function
+    // error
+    // void (*op)(void);
+    void (Foo::*op)(void);
+
+    // `Unlike ordinary function pointer, no automatic conversion` between a
+    // member funtion and a pointer to that function.
+    // must explicitly use address-of operator
+    // error
+    // op = Foo::update_10;
+    op = &Foo::update_10;
+
+    // see how to call
+    // error: must use ‘.*’ or ‘->*’ to call pointer-to-member
+    // function in ‘op (...)’, e.g. ‘(... ->* op) (...)’
+    //      op(foo);
+    //            ^
+    // op(foo);
+    //
+    // When initialize a pointer to member, that pointer does 'not' yet point to
+    // any data. Supply the object when we dereference that pointer. Analogous
+    // to the member access operators, . and ->,
+    (&foo->*op)();
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    std::vector<decltype(&Foo::update_10)> coll{&Foo::update_10,
+                                                &Foo::update_20,
+                                                &Foo::update_30};
+
+    Foo foo = Foo(100);
+
+    // OK
+    (&foo->*coll[0])();
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    auto f = std::mem_fn(&Foo::update_10);
+
+    std::initializer_list<decltype(f)> coll{std::mem_fn(&Foo::update_10),
+                                            std::mem_fn(&Foo::update_20),
+                                            std::mem_fn(&Foo::update_30)};
+
+    Foo foo = Foo(100);
+
+    auto it = coll.begin();
+
+    (*it)(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use std::function
+  {
+    // error: could not convert ‘{std::mem_fn<void() noexcept,
+    // cxx_callable::Foo>(&cxx_callable::Foo::update_10), std::mem_fn<void()
+    // noexcept, cxx_callable::Foo>(&cxx_callable::Foo::update_20),
+    // std::mem_fn<void() noexcept,
+    // cxx_callable::Foo>(&cxx_callable::Foo::update_30)}’ from ‘<brace-enclosed
+    // initializer list>’ to ‘std::vector<std::function<void()> >’
+    //
+    // std::mem_fn(&Foo::update_30)};
+    //
+    // std::vector<std::function<void()>> coll = {std::mem_fn(&Foo::update_10),
+    //                                            std::mem_fn(&Foo::update_20),
+    //                                            std::mem_fn(&Foo::update_30)};
+
+    std::vector<std::function<void(Foo &)>> coll = {
+      std::mem_fn(&Foo::update_10),
+      std::mem_fn(&Foo::update_20),
+      std::mem_fn(&Foo::update_30)};
+
+    Foo foo = Foo(100);
+
+    coll[0](foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
   }
 }
 
@@ -14047,84 +14186,25 @@ TEST(CxxRandom, check_distribution_5)
 // cxx-17
 TEST(CxxAny, check_any) {}
 
-#if 0
+/*
+={=========================================================================
+cxx-namespace
 
-// ={=========================================================================
-// cxx-coredump os-coredump
+       #include <math.h>
 
-*cxx-issue-case* *cxx-vaarg-issue*
-This not only cause compile warnings. It causes core dump on embedded which
-is very difficult to get call traces since it's crashes in libc.
+       double sqrt(double x);
+       float sqrtf(float x);
+       long double sqrtl(long double x);
 
-But works okay in PC build
+https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#sf6-use-using-namespace-directives-for-transition-for-foundation-libraries-such-as-std-or-within-a-local-scope-only
 
-#endif
+*/
 
-TEST(CxxCoredump, check_vaarg_issue)
-{
-  typedef long int int64;
+TEST(CxxNamespace, check_conflict) {}
 
-  int64 value{-1};
-
-  EXPECT_THAT(sizeof(int64), 8);
-
-  // cause core
-  printf("value (%ld)\n", value);
-}
-
-#if 0
-
-[ RUN      ] StringCtor.check_crash
-unknown file: Failure
-C++ exception with description "basic_string::_M_construct null not valid" thrown in the test body.
-[  FAILED  ] StringCtor.check_crash (0 ms)
-
-may wonder who will do this. However, it happens when making changes and caused
-half a day to find out why.
-
-was:
-
-  struct DrmState
-  {
-    std::string state{};
-    int euid{};
-  };
-
-DrmController::DrmController(PlaybackService *service)
-    : m_state{AS_STATE_UNAVAILABLE, 0}
-{
-  ...
-}
-
-now, due to requirment change, have to make euid as string. so did that in code
-but when runs it on the box, keep crashing while cannot see why and when all
-changes looks okay. still see crash even when remove all codes changing euid.
-Sadly, no backtrace or useful from core since it crashes very early.
-
-the fix:
-
-  struct DrmState
-  {
-    std::string state{};
-    std::string euid{};
-  };
-
-DrmController::DrmController(PlaybackService *service)
-    : m_state{AS_STATE_UNAVAILABLE, ""}
-{
-}
-
-The problem is when init std::string with 0 which is left while makeing changes.
-WOW.
-
-#endif
-
-TEST(CxxCoredump, check_string_ctor)
-{
-  std::string s = 0;
-}
-
-// ={=========================================================================
+/*
+={=========================================================================
+*/
 
 int main(int argc, char **argv)
 {

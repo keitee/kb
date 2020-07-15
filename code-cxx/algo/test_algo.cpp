@@ -3779,7 +3779,7 @@ TEST(AlgoIntersect, check_imps)
 
 /*
 ={=========================================================================
-algo-roman-numeric
+algo-roman-to-roman
 
 std::string to_roman(unsigned int arabic);
 
@@ -4292,8 +4292,11 @@ TEST(AlgoRoman, check_to_roman)
   }
 }
 
-// algo-leetcode-4
 /*
+={=========================================================================
+algo-roman-to-integer
+
+algo-leetcode-4
 13. Roman to Integer, Easy
 
 Roman numerals are represented by seven different symbols: I, V, X, L, C, D and M.
@@ -4330,7 +4333,7 @@ see algo-roman for integer to roman conversion which is rated as:
 
 */
 
-namespace algo_roman
+namespace algoroman
 {
   // Runtime: 52 ms, faster than 97.00% of C++ online submissions for Roman to
   // Integer.
@@ -4338,10 +4341,10 @@ namespace algo_roman
   // Memory Usage: 30.7 MB, less than 96.08% of C++ online submissions for Roman
   // to Integer.
 
-  int to_integer_1(std::string input)
+  int to_int_1(const std::string &input)
   {
     // do not use this from since "M" is deduced to "const char*" but want to
-    // use it as string so that cah use size() on it. Or can add size member in
+    // use it as string so that can use size() on it. Or can add size member in
     // the table.
     //
     // const auto table = {
@@ -4385,36 +4388,21 @@ namespace algo_roman
     return result;
   }
 
-  int to_integer_2(std::string input)
+  int to_int_2(const std::string &input)
   {
-    // error: direct-list-initialization of ‘auto’ requires exactly one element [-fpermissive]
-    // const auto table{make_pair(string("M"), 1000),
-    //                  make_pair(string("CM"), 900),
-    //                  make_pair(string("D"), 500),
-    //                  make_pair(string("CD"), 400),
-    //                  make_pair(string("C"), 100),
-    //                  make_pair(string("XC"), 90),
-    //                  make_pair(string("L"), 50),
-    //                  make_pair(string("XL"), 40),
-    //                  make_pair(string("X"), 10),
-    //                  make_pair(string("IX"), 9),
-    //                  make_pair(string("V"), 5),
-    //                  make_pair(string("IV"), 4),
-    //                  make_pair(string("I"), 1)};
-
-    const auto table = {make_pair(string("M"), 1000),
-                        make_pair(string("CM"), 900),
-                        make_pair(string("D"), 500),
-                        make_pair(string("CD"), 400),
-                        make_pair(string("C"), 100),
-                        make_pair(string("XC"), 90),
-                        make_pair(string("L"), 50),
-                        make_pair(string("XL"), 40),
-                        make_pair(string("X"), 10),
-                        make_pair(string("IX"), 9),
-                        make_pair(string("V"), 5),
-                        make_pair(string("IV"), 4),
-                        make_pair(string("I"), 1)};
+    const auto table = {make_pair(std::string("M"), 1000),
+                        make_pair(std::string("CM"), 900),
+                        make_pair(std::string("D"), 500),
+                        make_pair(std::string("CD"), 400),
+                        make_pair(std::string("C"), 100),
+                        make_pair(std::string("XC"), 90),
+                        make_pair(std::string("L"), 50),
+                        make_pair(std::string("XL"), 40),
+                        make_pair(std::string("X"), 10),
+                        make_pair(std::string("IX"), 9),
+                        make_pair(std::string("V"), 5),
+                        make_pair(std::string("IV"), 4),
+                        make_pair(std::string("I"), 1)};
 
     int result{};
     size_t start{};
@@ -4430,103 +4418,207 @@ namespace algo_roman
 
     return result;
   }
-} // namespace algo_roman
 
-TEST(AlgoRoman, ToInteger)
-{
-  using namespace algo_roman;
-
+  int to_int_3(const std::string &roman)
   {
-    const auto func = to_integer_1;
+    const std::vector<std::pair<std::string, int>> table = {{"M", 1000},
+                                                            {"CM", 900},
+                                                            {"D", 500},
+                                                            {"CD", 400},
+                                                            {"C", 100},
+                                                            {"XC", 90},
+                                                            {"L", 50},
+                                                            {"XL", 40},
+                                                            {"X", 10},
+                                                            {"IX", 9},
+                                                            {"V", 5},
+                                                            {"IV", 4},
+                                                            {"I", 1}};
+    size_t run{};
+    int value{};
 
-    EXPECT_THAT(func("I"), 1);
-    EXPECT_THAT(func("II"), 2);
-    EXPECT_THAT(func("III"), 3);
-    EXPECT_THAT(func("IV"), 4);
-    EXPECT_THAT(func("V"), 5);
-    EXPECT_THAT(func("VI"), 6);
-    EXPECT_THAT(func("VII"), 7);
-    EXPECT_THAT(func("VIII"), 8);
-    EXPECT_THAT(func("IX"), 9);
-    EXPECT_THAT(func("X"), 10);
-    EXPECT_THAT(func("XI"), 11);
-    EXPECT_THAT(func("XII"), 12);
-    EXPECT_THAT(func("XIII"), 13);
-    EXPECT_THAT(func("XVI"), 16);
-    EXPECT_THAT(func("XVII"), 17);
-    EXPECT_THAT(func("XVIII"), 18);
-    EXPECT_THAT(func("XX"), 20);
-    EXPECT_THAT(func("XXIII"), 23);
-    EXPECT_THAT(func("XLI"), 41);
-    EXPECT_THAT(func("XLV"), 45);
-    EXPECT_THAT(func("L"), 50);
-    EXPECT_THAT(func("LXXX"), 80);
-    EXPECT_THAT(func("XCI"), 91);
-    EXPECT_THAT(func("XCV"), 95);
-    EXPECT_THAT(func("C"), 100);
-    EXPECT_THAT(func("CXXII"), 122);
-    EXPECT_THAT(func("CLII"), 152);
-    EXPECT_THAT(func("CXCVI"), 196);
-    EXPECT_THAT(func("CCXLVII"), 247);
-    EXPECT_THAT(func("CCLXXXVIII"), 288);
-    EXPECT_THAT(func("CCXCVIII"), 298);
-    EXPECT_THAT(func("D"), 500);
-    EXPECT_THAT(func("M"), 1000);
-    EXPECT_THAT(func("MDXIII"), 1513);
-    EXPECT_THAT(func("MMCMXCIX"), 2999);
-    EXPECT_THAT(func("MMMCDXLVII"), 3447);
+    for (const auto &e : table)
+    {
+      while (0 == roman.compare(run, e.first.size(), e.first.c_str()))
+      {
+        run += e.first.size();
+        value += e.second;
+      }
+    }
+
+    return value;
   }
+} // namespace algoroman
+
+TEST(AlgoRoman, check_to_int)
+{
+  using namespace algoroman;
 
   {
-    const auto func = to_integer_2;
+    const std::vector<std::function<int(const std::string &)>> imps{to_int_1,
+                                                                    to_int_2,
+                                                                    to_int_3};
 
-    EXPECT_THAT(func("I"), 1);
-    EXPECT_THAT(func("II"), 2);
-    EXPECT_THAT(func("III"), 3);
-    EXPECT_THAT(func("IV"), 4);
-    EXPECT_THAT(func("V"), 5);
-    EXPECT_THAT(func("VI"), 6);
-    EXPECT_THAT(func("VII"), 7);
-    EXPECT_THAT(func("VIII"), 8);
-    EXPECT_THAT(func("IX"), 9);
-    EXPECT_THAT(func("X"), 10);
-    EXPECT_THAT(func("XI"), 11);
-    EXPECT_THAT(func("XII"), 12);
-    EXPECT_THAT(func("XIII"), 13);
-    EXPECT_THAT(func("XVI"), 16);
-    EXPECT_THAT(func("XVII"), 17);
-    EXPECT_THAT(func("XVIII"), 18);
-    EXPECT_THAT(func("XX"), 20);
-    EXPECT_THAT(func("XXIII"), 23);
-    EXPECT_THAT(func("XLI"), 41);
-    EXPECT_THAT(func("XLV"), 45);
-    EXPECT_THAT(func("L"), 50);
-    EXPECT_THAT(func("LXXX"), 80);
-    EXPECT_THAT(func("XCI"), 91);
-    EXPECT_THAT(func("XCV"), 95);
-    EXPECT_THAT(func("C"), 100);
-    EXPECT_THAT(func("CXXII"), 122);
-    EXPECT_THAT(func("CLII"), 152);
-    EXPECT_THAT(func("CXCVI"), 196);
-    EXPECT_THAT(func("CCXLVII"), 247);
-    EXPECT_THAT(func("CCLXXXVIII"), 288);
-    EXPECT_THAT(func("CCXCVIII"), 298);
-    EXPECT_THAT(func("D"), 500);
-    EXPECT_THAT(func("M"), 1000);
-    EXPECT_THAT(func("MDXIII"), 1513);
-    EXPECT_THAT(func("MMCMXCIX"), 2999);
-    EXPECT_THAT(func("MMMCDXLVII"), 3447);
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f("I"), 1);
+      EXPECT_THAT(f("II"), 2);
+      EXPECT_THAT(f("III"), 3);
+      EXPECT_THAT(f("IV"), 4);
+      EXPECT_THAT(f("V"), 5);
+      EXPECT_THAT(f("VI"), 6);
+      EXPECT_THAT(f("VII"), 7);
+      EXPECT_THAT(f("VIII"), 8);
+      EXPECT_THAT(f("IX"), 9);
+      EXPECT_THAT(f("X"), 10);
+      EXPECT_THAT(f("XI"), 11);
+      EXPECT_THAT(f("XII"), 12);
+      EXPECT_THAT(f("XIII"), 13);
+      EXPECT_THAT(f("XVI"), 16);
+      EXPECT_THAT(f("XVII"), 17);
+      EXPECT_THAT(f("XVIII"), 18);
+      EXPECT_THAT(f("XX"), 20);
+      EXPECT_THAT(f("XXIII"), 23);
+      EXPECT_THAT(f("XLI"), 41);
+      EXPECT_THAT(f("XLV"), 45);
+      EXPECT_THAT(f("L"), 50);
+      EXPECT_THAT(f("LXXX"), 80);
+      EXPECT_THAT(f("XCI"), 91);
+      EXPECT_THAT(f("XCV"), 95);
+      EXPECT_THAT(f("C"), 100);
+      EXPECT_THAT(f("CXXII"), 122);
+      EXPECT_THAT(f("CLII"), 152);
+      EXPECT_THAT(f("CXCVI"), 196);
+      EXPECT_THAT(f("CCXLVII"), 247);
+      EXPECT_THAT(f("CCLXXXVIII"), 288);
+      EXPECT_THAT(f("CCXCVIII"), 298);
+      EXPECT_THAT(f("D"), 500);
+      EXPECT_THAT(f("M"), 1000);
+      EXPECT_THAT(f("MDXIII"), 1513);
+      EXPECT_THAT(f("MMCMXCIX"), 2999);
+      EXPECT_THAT(f("MMMCDXLVII"), 3447);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-recursion-hanoi
+/*
+={=========================================================================
+algo-recursion-hanoi
+
+The recursion is `divide-and-conquer` as it reduce the large problem to one or
+more problems of a similar nature but a smaller size. 
+
+Must determine the `stopping-rule`, the smallest case because there must be some
+way that the recursion stops.
+
+
+the-tower-of-hanoi
+
+The idea is to concentrate not on the first step, but rather on the hardest
+step: moving the bottom disk because condition is that only one disk can be
+moved at a time and the bottom, largest, one can never be on top of any other.
+
+Assume that there are 64 disks:
+
+note that disk is disk num, disk num 0, disk num 1, ...
+
+Move(disk, start, finish, temp);
+
+Move(64, 1, 3, 2)
+{
+  // moves 63th from 1 to 2
+  Move(63, 1, 2, 3);
+
+  // moves 64th from 1 to 3 since there is no 63th on top of it
+  printf("move disk 64 from tower 1 to 3.\n");
+
+  // moves 63th from 2 to 3
+  Move(63, 2, 3, 1);
+}
+
+The stopping rule is when there is no disk to be moved, there is nothing to do.
+
+
+This is a tool to visualize recursive call in which node represents recursion
+call. The time requirement is the total number of nodes, vertices, in a
+recursion tree since traverse all nodes and the space(stack space) is the
+depth of tree, not the number of nodes.
+
+                                                          Move(3, 1,3,2) ()
+
+                             Move(2, 1,2,3) ()                             ...
+
+         Move(1, 1,3,2) ()                      Move(1, 3,2,1) ()          
+
+Move(0, 1,2,3) ()  Move(0, 2,3,1) ()   Move(0, 3,1,2) ()  Move(0, 1,2,3) ()
+
+
+disks are 0, 1, 2, 3
+
+----(1) Move(3,1,3,2)
+------(2) Move(2,1,2,3)                {
+--------(3) Move(1,1,3,2)
+----------(4) Move(0,1,2,3)
+                move 0 disk, 1 -> 2
+              move 1 disk, 1 -> 3
+----------(4) Move(0,2,3,1)
+                move 0 disk, 2 -> 3
+
+            move 2 disk, 1 -> 2
+
+--------(3) Move(1,3,2,1)
+----------(4) Move(0,3,1,2)
+                move 0 disk, 3 -> 1
+              move 1 disk, 3 -> 2
+----------(4) Move(0,1,2,3)
+                move 0 disk, 1 -> 2    }
+
+          move 3 disk, 1 -> 3
+
+------(2) Move(2,2,3,1)
+--------(3) Move(1,2,1,3)
+----------(4) Move(0,2,3,1)
+                move 0 disk, 2 -> 3
+              move 1 disk, 2 -> 1
+----------(4) Move(0,3,1,2)
+                move 0 disk, 3 -> 1
+            move 2 disk, 2 -> 3
+--------(3) Move(1,1,3,2)
+----------(4) Move(0,1,2,3)
+                move 0 disk, 1 -> 2
+              move 1 disk, 1 -> 3
+----------(4) Move(0,2,3,1)
+                move 0 disk, 2 -> 3
+[       OK ] (3 ms)
+
+
+The number of non-leafs, that is the number of moves for 64 is 2^64-1. This
+is about 5x10^11 years where 2x10^10 is 20 billion years
+
+>>> 2**64
+18446744073709551616L
+
+>>> 2**24
+16777216
+
+when DISK is 24:
+...
+stop recursion count #25
+move #2 disk: 1 -> 3
+move #0 disk: 2 -> 1
+stop recursion count #25
+move #1 disk: 2 -> 3
+move #0 disk: 1 -> 3
+stop recursion count #25
+[       OK ] (77854 ms)
+
+*/
 
 namespace algo_recursion_hanoi
 {
-  unsigned int recursion_depth;
+  bool print_recursion{false};
 
-  void print_depth(bool dash, unsigned int depth)
+  void print_recursion_depth(bool dash, unsigned int depth)
   {
     for (unsigned int i = 0; i <= depth; ++i)
     {
@@ -4542,77 +4634,55 @@ namespace algo_recursion_hanoi
       cout << "      ";
   }
 
-  void move_disk(int count, int start, int finish, int temp)
+  void move_disk(int disknum, int start, int finish, int temp)
   {
-    // ++calls;
+    static int recursion_depth{};
+
     ++recursion_depth;
-    print_depth(true, recursion_depth);
 
-    cout << "Move(" << count << "," << start << "," << finish << "," << temp
-         << ")" << endl;
-
-    if (count > 0)
+    if (print_recursion)
     {
-      move_disk(count - 1, start, temp, finish);
-
-      print_depth(false, recursion_depth);
-      cout << "move " << count << " disk, " << start << " -> " << finish
-           << endl;
-
-      move_disk(count - 1, temp, finish, start);
+      print_recursion_depth(true, recursion_depth);
+      std::cout << "Move(" << disknum << "," << start << "," << finish << ","
+                << temp << ")" << std::endl;
     }
+
+    if (disknum > 0)
+    {
+      // move #disknum-1 to temp
+      move_disk(disknum - 1, start, temp, finish);
+
+      // move #disknum
+      if (print_recursion)
+      {
+        print_recursion_depth(false, recursion_depth);
+      }
+
+      std::cout << "move #" << disknum << " disk: " << start << " -> " << finish
+                << std::endl;
+
+      // move #disknum-1 to finish
+      move_disk(disknum - 1, temp, finish, start);
+    }
+    // stopping condition. no more recursion.
     else
     {
-      print_depth(false, recursion_depth);
-      cout << "move " << count << " disk, " << start << " -> " << finish
-           << endl;
+      // move #disknum
+      if (print_recursion)
+      {
+        print_recursion_depth(false, recursion_depth);
+      }
+
+      std::cout << "move #" << disknum << " disk: " << start << " -> " << finish
+                << std::endl;
+      std::cout << "stop recursion count #" << recursion_depth << std::endl;
     }
 
     --recursion_depth;
   }
-
 } // namespace algo_recursion_hanoi
 
-// disks are 0, 1, 2, 3
-//
-// [ RUN      ] AlgoRecursion.Hanoi
-// ----(1) Move(3,1,3,2)
-// ------(2) Move(2,1,2,3)                {
-// --------(3) Move(1,1,3,2)
-// ----------(4) Move(0,1,2,3)
-//                 move 0 disk, 1 -> 2
-//               move 1 disk, 1 -> 3
-// ----------(4) Move(0,2,3,1)
-//                 move 0 disk, 2 -> 3
-//
-//             move 2 disk, 1 -> 2
-//
-// --------(3) Move(1,3,2,1)
-// ----------(4) Move(0,3,1,2)
-//                 move 0 disk, 3 -> 1
-//               move 1 disk, 3 -> 2
-// ----------(4) Move(0,1,2,3)
-//                 move 0 disk, 1 -> 2    }
-//
-//           move 3 disk, 1 -> 3
-//
-// ------(2) Move(2,2,3,1)
-// --------(3) Move(1,2,1,3)
-// ----------(4) Move(0,2,3,1)
-//                 move 0 disk, 2 -> 3
-//               move 1 disk, 2 -> 1
-// ----------(4) Move(0,3,1,2)
-//                 move 0 disk, 3 -> 1
-//             move 2 disk, 2 -> 3
-// --------(3) Move(1,1,3,2)
-// ----------(4) Move(0,1,2,3)
-//                 move 0 disk, 1 -> 2
-//               move 1 disk, 1 -> 3
-// ----------(4) Move(0,2,3,1)
-//                 move 0 disk, 2 -> 3
-// [       OK ] AlgoRecursion.Hanoi (3 ms)
-
-TEST(AlgoRecursion, Hanoi)
+TEST(AlgoRecursion, check_hanoi)
 {
   using namespace algo_recursion_hanoi;
 
@@ -4621,8 +4691,368 @@ TEST(AlgoRecursion, Hanoi)
   move_disk(DISKS, 1, 3, 2);
 }
 
-// ={=========================================================================
-// algo-recursion-fibonacci
+/*
+={=========================================================================
+algo-recursion-count-and-say algo-leetcode-12
+
+38. Count and Say, Easy
+
+The count-and-say sequence is the sequence of integers with the first five terms
+as following:
+
+1.     1
+2.     11
+3.     21
+4.     1211
+5.     111221
+
+1 is read off as "one 1" or 11.
+
+11 is read off as "two 1s" or 21.
+
+21 is read off as "one 2, then one 1" or 1211.
+
+Given an integer n where 1 ≤ n ≤ 30, generate the nth term of the count-and-say
+sequence.
+
+Note: Each term of the sequence of integers will be represented as a string.
+
+Example 1:
+Input: 1
+Output: "1"
+
+Example 2:
+Input: 4
+Output: "1211"
+
+string count_and_say(int n);
+
+note:
+
+the problem is to make string output which is done by counting numbers and what
+the number is for the previous. That is "count and what"
+
+starts new counting when see different char.
+
+*/
+
+namespace leetcode_easy_012
+{
+  string count_string_1(string const &input)
+  {
+    char current_char{};
+    size_t count{};
+    string result{};
+
+    for (auto ch : input)
+    {
+      if (ch == current_char)
+        ++count;
+      else
+      {
+        // to handle the first read
+        if (count != 0)
+          result += to_string(count) + current_char;
+
+        current_char = ch;
+        count        = 1;
+      }
+    }
+
+    // to handle when input ends
+    result += to_string(count) + current_char;
+
+    // cout << "result: " << result << endl;
+
+    return result;
+  }
+
+  // to remove handling of the first char read
+
+  string count_string_2(string const &input)
+  {
+    char current_char = input[0];
+    size_t count{1};
+    string result{};
+
+    for (size_t i = 1; i < input.size(); ++i)
+    {
+      if (input[i] == current_char)
+        ++count;
+      else
+      {
+        result += to_string(count) + current_char;
+        current_char = input[i];
+        count        = 1;
+      }
+    }
+
+    // to handle then input ends
+    result += to_string(count) + current_char;
+
+    return result;
+  }
+
+  // Given an integer n where 1 ≤ n ≤ 30,
+
+  string count_and_say_1(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto result = count_and_say_1(n - 1);
+    return count_string_1(result);
+  }
+
+  string count_and_say_2(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto result = count_and_say_2(n - 1);
+    return count_string_2(result);
+  }
+
+  // to make a single function
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Count and
+  // Say.
+  //
+  // Memory Usage: 9.1 MB, less than 35.44% of C++ online submissions for Count
+  // and Say.
+
+  string count_and_say_3(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto input = count_and_say_3(n - 1);
+
+    // return count_string_2(result);
+    // string count_string_2(string const &input)
+    {
+      char current_char = input[0];
+      size_t count{1};
+      string result{};
+
+      for (size_t i = 1; i < input.size(); ++i)
+      {
+        if (input[i] == current_char)
+          ++count;
+        else
+        {
+          result += to_string(count) + current_char;
+          current_char = input[i];
+          count        = 1;
+        }
+      }
+
+      // to handle then input ends
+      result += to_string(count) + current_char;
+
+      return result;
+    }
+  }
+} // namespace leetcode_easy_012
+
+TEST(AlgoRecursion, check_count_and_say_1)
+{
+  using namespace leetcode_easy_012;
+
+  {
+    // 2th
+    EXPECT_THAT(count_string_1("1"), "11");
+    // 3th
+    EXPECT_THAT(count_string_1("11"), "21");
+    // 4th
+    EXPECT_THAT(count_string_1("21"), "1211");
+    // 5th
+    EXPECT_THAT(count_string_1("1211"), "111221");
+    // 6th
+    EXPECT_THAT(count_string_1("111221"), "312211");
+
+    EXPECT_THAT(count_and_say_1(2), "11");
+    EXPECT_THAT(count_and_say_1(3), "21");
+    EXPECT_THAT(count_and_say_1(4), "1211");
+    EXPECT_THAT(count_and_say_1(5), "111221");
+    EXPECT_THAT(count_and_say_1(6), "312211");
+
+    EXPECT_THAT(count_and_say_3(2), "11");
+    EXPECT_THAT(count_and_say_3(3), "21");
+    EXPECT_THAT(count_and_say_3(4), "1211");
+    EXPECT_THAT(count_and_say_3(5), "111221");
+    EXPECT_THAT(count_and_say_3(6), "312211");
+  }
+
+  // up to "4462" long
+  {
+    for (int i = 1; i <= 30; ++i)
+    {
+      count_and_say_1(i).size();
+      // cout << count_and_say(i).size() << endl;
+    }
+
+    for (int i = 1; i <= 30; ++i)
+    {
+      count_and_say_2(i).size();
+    }
+  }
+}
+
+namespace algo_recursion_count_and_say
+{
+  // wrong interpretation which supports
+  // EXPECT_THAT(count_and_say(6), "2111121211");
+  std::string build_cound_and_say_1(const std::string &result)
+  {
+    // special case since the rest will be covered the table below.
+    if (result == "1")
+      return "11";
+
+    std::map<std::string, std::string> table{{"11", "21"},
+                                             {"21", "1211"},
+                                             {"12", "1112"}};
+
+    std::string build{};
+
+    for (size_t pos = 0; pos < result.size();)
+    {
+      // note that the second is `length`. (start, length). gets two chars
+      // always.
+      std::string token = result.substr(pos, 2);
+
+      try
+      {
+        build += table.at(token);
+        pos += token.size();
+      } catch (const std::exception &e)
+      {
+        std::cout << "except " << e.what() << std::endl;
+      }
+    }
+
+    return build;
+  }
+
+  std::string count_and_say_1(int value)
+  {
+    // stopping rule
+    if (value == 1)
+      return "1";
+    else
+    {
+      std::string result = count_and_say_1(value - 1);
+
+      // build string count and say of the given result
+      return build_cound_and_say_1(result);
+    }
+  }
+
+  // supports
+  // EXPECT_THAT(count_and_say_3(6), "312211");
+  std::string build_cound_and_say_2(const std::string &result)
+  {
+    // special case since the rest will be covered the table below.
+    if (result == "1")
+      return "11";
+
+    std::string build{};
+    size_t current_count{};
+    char current_char{};
+
+    for (auto e : result)
+    {
+      // when see a different char
+      if (e != current_char)
+      {
+        if (current_char)
+        {
+          // build token out of current char and count
+          build += std::to_string(current_count);
+          build += current_char;
+        }
+
+        current_char  = e;
+        current_count = 1;
+      }
+      // when see the same char
+      else
+        ++current_count;
+    }
+
+    // build token out of current char and count
+    build += std::to_string(current_count);
+    build += current_char;
+
+    return build;
+  }
+
+  std::string count_and_say_2(int value)
+  {
+    // stopping rule
+    if (value == 1)
+      return "1";
+    else
+    {
+      std::string result = count_and_say_2(value - 1);
+
+      // build string count and say of the given result
+      return build_cound_and_say_2(result);
+    }
+  }
+} // namespace algo_recursion_count_and_say
+
+TEST(AlgoRecursion, check_count_and_say_2)
+{
+  using namespace algo_recursion_count_and_say;
+
+  {
+    auto f = build_cound_and_say_1;
+
+    EXPECT_THAT(f("11"), "21");
+    EXPECT_THAT(f("21"), "1211");
+    EXPECT_THAT(f("12"), "1112");
+    EXPECT_THAT(f("1211"), "111221");
+    EXPECT_THAT(f("111221"), "2111121211");
+  }
+
+  {
+    auto f = count_and_say_1;
+
+    EXPECT_THAT(f(1), "1");
+    EXPECT_THAT(f(2), "11");
+    EXPECT_THAT(f(3), "21");
+    EXPECT_THAT(f(4), "1211");
+    EXPECT_THAT(f(5), "111221");
+    EXPECT_THAT(f(6), "2111121211");
+  }
+
+  {
+    auto f = build_cound_and_say_2;
+
+    EXPECT_THAT(f("11"), "21");
+    EXPECT_THAT(f("21"), "1211");
+    EXPECT_THAT(f("12"), "1112");
+    EXPECT_THAT(f("1211"), "111221");
+    EXPECT_THAT(f("111221"), "312211");
+  }
+
+  {
+    auto f = count_and_say_2;
+
+    EXPECT_THAT(f(1), "1");
+    EXPECT_THAT(f(2), "11");
+    EXPECT_THAT(f(3), "21");
+    EXPECT_THAT(f(4), "1211");
+    EXPECT_THAT(f(5), "111221");
+    EXPECT_THAT(f(6), "312211");
+  }
+}
+
+/*
+={=========================================================================
+algo-recursion-fibonacci
+*/
 
 namespace algo_recursion_fibonacci
 {
@@ -4666,10 +5096,9 @@ namespace algo_recursion_fibonacci
 
     return current;
   }
-
 } // namespace algo_recursion_fibonacci
 
-TEST(AlgoRecursion, Fibonacci)
+TEST(AlgoRecursion, check_fibonacci)
 {
   using namespace algo_recursion_fibonacci;
 
@@ -4684,8 +5113,10 @@ TEST(AlgoRecursion, Fibonacci)
   EXPECT_THAT(fibonacci_2(7), 13);
 }
 
-// algo-leetcode-18
 /*
+={=========================================================================
+algo-recursion-climbing-stairs algo-leetcode-18
+
 70. Climbing Stairs, Easy
 
 You are climbing a stair case. It takes n steps to reach to the top.
@@ -4696,32 +5127,30 @@ climb to the top?
 Note: Given n will be a positive integer.
 
 Example 1:
-Input: 2
+Input: n = 2
 Output: 2
 Explanation: There are two ways to climb to the top.
 1. 1 step + 1 step
 2. 2 steps
 
 Example 2:
-Input: 3
+Input: n = 3
 Output: 3
 Explanation: There are three ways to climb to the top.
 1. 1 step + 1 step + 1 step
 2. 1 step + 2 steps
 3. 2 steps + 1 step
  
-*/
-
-/*
 
 Approach 1: Brute Force
 
 In this brute force approach we take all possible step combinations i.e. 1 and
-2, at every step. At every step we are calling the function
-climbStairsclimbStairs for step 1 and 2, and return the sum of returned values
-of both functions.
+2, at every step. At every step we are calling the function climbStairs for step
+1 and 2, and return the sum of returned values of both functions.
 
-climbStairs(i,n)=(i+1,n)+climbStairs(i+2,n)
+int climb_stairs(int start, int end);
+
+climbStairs(i, n) = ("i+1",n) + climbStairs("i+2", n)
 
 where i defines the current step and n defines the destination step.
 
@@ -4734,13 +5163,17 @@ N = 2
 
     (1,2)       (2,2)
                 ret 1
-(2,2)   (3,2) 
-ret 1   ret 0
+(2,2)  (3,2) 
+ret 1  ret 0
 
 return 1 means found and return 0 means not found.
 
 Space complexity : O(n) The depth of the recursion tree can go upto n.
 
+NOTE:
+1. need to know whether it reaches to "n" or not.
+2. return value if num of way to reach "n"
+ 
 */
 
 namespace leetcode_easy_018
@@ -4758,7 +5191,7 @@ namespace leetcode_easy_018
   int climbStairs_1(int n) { return climb_stairs(0, n); }
 } // namespace leetcode_easy_018
 
-TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_1)
+TEST(AlgoRecusrion, check_climb_stairs_1)
 {
   using namespace leetcode_easy_018;
   auto func = climbStairs_1;
@@ -4821,7 +5254,7 @@ namespace leetcode_easy_018
   }
 } // namespace leetcode_easy_018
 
-TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_2)
+TEST(AlgoRecusrion, check_climb_stairs_2)
 {
   using namespace leetcode_easy_018;
   auto func = climbStairs_2;

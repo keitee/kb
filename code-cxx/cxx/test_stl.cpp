@@ -2161,13 +2161,13 @@ TEST(StlSet, check_merge)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxMap, check_find)
+TEST(StlMap, check_find)
 {
   {
     std::map<float, float>
       coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
 
-    // find with key
+    // find() returns a pair
     {
       // *cxx-error*
       // when tries to use custom matcher, get's link error
@@ -2180,10 +2180,17 @@ TEST(CxxMap, check_find)
       EXPECT_THAT(it->second, 2);
     }
 
-    // returns value
+    // at() returns value
     {
       auto value = coll.at(3.0);
       EXPECT_THAT(value, 2);
+    }
+
+    // Returns a reference to the mapped value of the element with key
+    // equivalent to key. If no such element exists, an exception of type
+    // `std::out_of_range` is thrown.
+    {
+      EXPECT_THROW(coll.at(8.0), std::out_of_range);
     }
 
     // find with value
@@ -2559,82 +2566,96 @@ TEST(CxxMap, map_Copy)
   }
 }
 
-TEST(MapMulti, check_equal_range_1)
+TEST(StlMapMulti, check_equal_range_1)
 {
-  std::string str = "total";
-
-  std::multimap<std::string, std::string> authors;
-
-  // *cxx-map-insert*
-  authors.insert({"Kit, Park", "How to get through"});
-  authors.insert({"Barth, John", "Sot-Weed Factor"});
-  authors.insert({"Barth, John", "Lost in the Funhouse"});
-  authors.insert({"Andy, Steve", "Enterprise"});
-  authors.insert({"Barth, John", "A way to success"});
-
-  std::string search_item("Barth, John");
-
-  auto entries = authors.count(search_item); // num of elements
-  EXPECT_THAT(entries, 3);
-
-  // use iter
+  // when found, returns iterator to the first item.
   {
-    vector<string> result{};
-    auto iter = authors.find(search_item); // first entry
+    std::multimap<std::string, std::string> authors{
+      {"Kit, Park", "How to get through"},
+      {"Barth, John", "Sot-Weed Factor"},
+      {"Barth, John", "Lost in the Funhouse"},
+      {"Andy, Steve", "Enterprise"},
+      {"Barth, John", "A way to success"}};
 
-    while (entries)
-    {
-      result.push_back(iter->second);
-      ++iter;
-      --entries;
-    }
+    auto it = authors.find("Barth, John");
 
-    EXPECT_THAT(result,
-                ElementsAre("Sot-Weed Factor",
-                            "Lost in the Funhouse",
-                            "A way to success"));
+    EXPECT_THAT(it->second, "Sot-Weed Factor");
   }
 
-  // use _bound() calls
   {
-    vector<string> result{};
+    std::multimap<std::string, std::string> authors;
 
-    for (auto begin = authors.lower_bound(search_item),
-              end   = authors.upper_bound(search_item);
-         begin != end;
-         ++begin)
+    // *cxx-map-insert*
+    authors.insert({"Kit, Park", "How to get through"});
+    authors.insert({"Barth, John", "Sot-Weed Factor"});
+    authors.insert({"Barth, John", "Lost in the Funhouse"});
+    authors.insert({"Andy, Steve", "Enterprise"});
+    authors.insert({"Barth, John", "A way to success"});
+
+    std::string search_item("Barth, John");
+
+    auto entries = authors.count(search_item); // num of elements
+    EXPECT_THAT(entries, 3);
+
+    // use iter
     {
-      result.push_back(begin->second);
+      vector<string> result{};
+      auto iter = authors.find(search_item); // first entry
+
+      while (entries)
+      {
+        result.push_back(iter->second);
+        ++iter;
+        --entries;
+      }
+
+      EXPECT_THAT(result,
+                  ElementsAre("Sot-Weed Factor",
+                              "Lost in the Funhouse",
+                              "A way to success"));
     }
 
-    EXPECT_THAT(result,
-                ElementsAre("Sot-Weed Factor",
-                            "Lost in the Funhouse",
-                            "A way to success"));
-  }
-
-  // use equal_range()
-  // return pair of iter in range [first, off-the-end). Like above, if not found
-  // return the same.
-  {
-    vector<string> result{};
-    auto iter = authors.find(search_item); // first entry
-
-    for (auto rpos = authors.equal_range(iter->first);
-         rpos.first != rpos.second;
-         ++rpos.first)
+    // use _bound() calls
     {
-      result.push_back(rpos.first->second);
+      vector<string> result{};
+
+      for (auto begin = authors.lower_bound(search_item),
+                end   = authors.upper_bound(search_item);
+           begin != end;
+           ++begin)
+      {
+        result.push_back(begin->second);
+      }
+
+      EXPECT_THAT(result,
+                  ElementsAre("Sot-Weed Factor",
+                              "Lost in the Funhouse",
+                              "A way to success"));
     }
 
-    EXPECT_THAT(result,
-                ElementsAre("Sot-Weed Factor",
-                            "Lost in the Funhouse",
-                            "A way to success"));
+    // use equal_range()
+    // return pair of iter in range [first, off-the-end). Like above, if not found
+    // return the same.
+    {
+      vector<string> result{};
+      auto iter = authors.find(search_item); // first entry
+
+      for (auto rpos = authors.equal_range(iter->first);
+           rpos.first != rpos.second;
+           ++rpos.first)
+      {
+        result.push_back(rpos.first->second);
+      }
+
+      EXPECT_THAT(result,
+                  ElementsAre("Sot-Weed Factor",
+                              "Lost in the Funhouse",
+                              "A way to success"));
+    }
   }
 }
 
-TEST(MapMulti, check_equal_range_2)
+TEST(StlMapMulti, check_equal_range_2)
 {
   // build occurance multi-map<count, pair<value,count>>
   std::multimap<int, std::pair<int, int>> omap{};
