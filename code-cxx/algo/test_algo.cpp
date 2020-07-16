@@ -5052,6 +5052,42 @@ TEST(AlgoRecursion, check_count_and_say_2)
 /*
 ={=========================================================================
 algo-recursion-fibonacci
+
+The Fibonacci Sequence is the series of numbers:
+
+0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
+The definition is:
+
+F0 = 0.
+F1 = 1.
+Fn = Fn-1 + Fn-2 for n >= 2
+
+int fibonacci(int n)
+{
+  if( n <= 0 )
+    return 0;
+  else if( n==1 )
+    return 1;
+  else
+    return fibonacci(n-1) + fibonacci(n-2);
+}
+
+Far more wasteful example than factorial example, the calculation of f7, when
+use recursive because when see recursion tree, figure 3.18, DSAPD, after f5 is
+calculated on the way to f6 in the left side of tre, it will be lost and
+unavailable when it is later needed to get f7 in the right side of tree. Have
+to calculate it again. O(2^n) tree
+
+The interative version is:
+
+current   one back(fn-1)   two back(fn-2)
+2       = 1              + 0
+3       = 2              + 1
+4       = 3              + 2
+5       = 4              + 3
+6       = 5              + 4
+...
 */
 
 namespace algo_recursion_fibonacci
@@ -5180,6 +5216,7 @@ namespace leetcode_easy_018
 {
   int climb_stairs(int start, int end)
   {
+    // stopping condition
     if (start == end)
       return 1;
     else if (start > end)
@@ -5203,12 +5240,11 @@ TEST(AlgoRecusrion, check_climb_stairs_1)
 }
 
 /*
-Approach 2: Recursion with memoization
+Approach 2: Recursion with memory
 
 In the previous approach we are redundantly calculating the result for every
-step. Instead, we can store the result at each step in memomemo array and
-directly returning the result from the memo array whenever that function is
-called again.
+step. Instead, we can store the result at each step in memo array and directly
+returning the result from the memo array whenever that function is called again.
 
 In this way we are *pruning* recursion tree with the help of memo array and
 reducing the size of recursion tree upto n.
@@ -5220,21 +5256,20 @@ lost. So can keep them and use it then better performance)
 Time complexity : O(n). Size of recursion tree can go upto nn.
 Space complexity : O(n). The depth of recursion tree can go upto nn. 
 
-see time difference between recursion and iterative version
+NOTE:
+1. add checking memo value in the stopping condition which removes recursion
+calls or prunes tree.
 
-[ RUN      ] LeetCode.Easy_018_ClimbStairs_1
-[       OK ] LeetCode.Easy_018_ClimbStairs_1 (52 ms)
-[ RUN      ] LeetCode.Easy_018_ClimbStairs_2
-[       OK ] LeetCode.Easy_018_ClimbStairs_2 (0 ms)
-[ RUN      ] LeetCode.Easy_018_ClimbStairs_3
-[       OK ] LeetCode.Easy_018_ClimbStairs_3 (0 ms)
+2. memo[index] means the num of ways to reach to the end from that index. so no
+need to call the function to get the same result.
  
 */
 
 namespace leetcode_easy_018
 {
-  int climb_stairs(int start, int end, vector<int> &memo)
+  int climb_stairs(int start, int end, std::vector<int> &memo)
   {
+    // stopping condition
     if (start == end)
       return 1;
     else if (start > end)
@@ -5244,12 +5279,14 @@ namespace leetcode_easy_018
 
     memo[start] =
       climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
+
     return memo[start];
   }
 
   int climbStairs_2(int n)
   {
-    vector<int> memo(n + 1, 0);
+    std::vector<int> memo(n + 1, 0);
+
     return climb_stairs(0, n, memo);
   }
 } // namespace leetcode_easy_018
@@ -5257,6 +5294,7 @@ namespace leetcode_easy_018
 TEST(AlgoRecusrion, check_climb_stairs_2)
 {
   using namespace leetcode_easy_018;
+
   auto func = climbStairs_2;
 
   EXPECT_THAT(func(2), 2);
@@ -5291,7 +5329,7 @@ dp[i]=dp[i-1]+dp[i-2]
 
 Approach 4: Fibonacci Number
 
-In the above approach we have used dpdp array where dp[i]=dp[i-1]+dp[i-2]. It
+In the above approach we have used dp array where dp[i]=dp[i-1]+dp[i-2]. It
 can be easily analysed that dp[i] is nothing but ith fibonacci number.
 
 means the dp value sequence. this is fibonacci sequence:
@@ -5336,6 +5374,24 @@ their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
   }
 */
 
+// to show value sequence is fibonacci series
+TEST(AlgoRecusrion, check_climb_stairs_value_sqquence)
+{
+  using namespace leetcode_easy_018;
+
+  auto func = climbStairs_2;
+
+  EXPECT_THAT(func(0), 1);
+  EXPECT_THAT(func(1), 1);
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(5), 8);
+  EXPECT_THAT(func(6), 13);
+  EXPECT_THAT(func(7), 21);
+  EXPECT_THAT(func(8), 34);
+}
+
 namespace leetcode_easy_018
 {
   int climbStairs_3(int n)
@@ -5364,9 +5420,10 @@ namespace leetcode_easy_018
   };
 } // namespace leetcode_easy_018
 
-TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_3)
+TEST(AlgoRecusrion, check_climb_stairs_3)
 {
   using namespace leetcode_easy_018;
+
   auto func = climbStairs_3;
 
   EXPECT_THAT(func(2), 2);
@@ -5374,6 +5431,24 @@ TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_3)
   EXPECT_THAT(func(4), 5);
   EXPECT_THAT(func(30), 1346269);
 }
+
+/*
+see time difference between recursion and iterative version
+
+[ RUN      ] AlgoRecusrion.check_climb_stairs_1
+[       OK ] AlgoRecusrion.check_climb_stairs_1 (10 ms)
+[ RUN      ] AlgoRecusrion.check_climb_stairs_2
+[       OK ] AlgoRecusrion.check_climb_stairs_2 (0 ms)
+[ RUN      ] AlgoRecusrion.check_climb_stairs_3
+[       OK ] AlgoRecusrion.check_climb_stairs_3 (0 ms)
+
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_1
+[       OK ] LeetCode.Easy_018_ClimbStairs_1 (52 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_2
+[       OK ] LeetCode.Easy_018_ClimbStairs_2 (0 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_3
+[       OK ] LeetCode.Easy_018_ClimbStairs_3 (0 ms)
+*/
 
 // ={=========================================================================
 // algo-recursion-factorial
@@ -5963,25 +6038,7 @@ TEST(DISABLED_AlgoMaze, Array20x20)
 
 /*
 ={=========================================================================
-algo-count-bits count same bits between two integers
-
-A = 35 = 10 0011
-B =  9 =    1001
-
-Ans = 2 because only counts bit positions which are valid position in both
-integers.
-
-From ansic, p50.
-The function counts the number of 1 bits in its integer argument.
-
-1. The key is not to use sizeof operator
-2. unsigned int
-
-*cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
-guaranteed 0 values.
-
-3. use independent of type.
-
+algo-bits-count-bits count same bits between two integers
 
 191. Number of 1 Bits, Easy
 
@@ -6014,6 +6071,8 @@ Output: 31
 Explanation: 
 The input binary string 11111111111111111111111111111101 has a total of thirty
 one '1' bits.
+
+int get_hamming_weight(uint32_t n);
  
 Note:
 
@@ -6028,7 +6087,6 @@ notation. Therefore, in Example 3 above the input represents the signed integer
 
 */
 
-// namespace leetcode_easy_191
 namespace algo_bit
 {
   // as with itoa
@@ -6038,8 +6096,7 @@ namespace algo_bit
   //
   // Memory Usage: 8.1 MB, less than 70.42% of C++ online submissions for Number
   // of 1 Bits.
-
-  int hammingWeight_1(uint32_t n)
+  int get_hamming_weight_1(uint32_t n)
   {
     int count{};
 
@@ -6054,21 +6111,19 @@ namespace algo_bit
     return count;
   }
 
-  // since input is unsigned int, can use >> shift
-
-  int hammingWeight_2(uint32_t n)
+  int get_hamming_weight_2(uint32_t n)
   {
-    int count{};
+    int set_count{};
 
     while (n)
     {
-      if (n & 0x01)
-        count++;
+      if (n & 0x1)
+        ++set_count;
 
       n >>= 1;
     }
 
-    return count;
+    return set_count;
   }
 
   // page 51. exercise 2-9. In a two's complement number system, x &= (x-1)
@@ -6110,7 +6165,7 @@ namespace algo_bit
   // note: And(&) is faster than shift operation? Yes and also there is no `if`
   // in the loop.
 
-  int count_bit(uint32_t n)
+  int get_hamming_weight_3(uint32_t n)
   {
     int count{};
 
@@ -6119,63 +6174,12 @@ namespace algo_bit
 
     return count;
   }
-} // namespace algo_bit
 
-TEST(AlgoBit, see_count_bits_1)
-{
-  using namespace algo_bit;
+  // known as "compute parity"
+  // return 0 if there even number of 1
+  // return 1 if there odd number of 1
 
-  {
-    auto func = hammingWeight_1;
-
-    // Input: 00000000000000000000000000001011, 11
-    EXPECT_THAT(func(11), 3);
-
-    // Input: 00000000000000000000000010000000, 128
-    EXPECT_THAT(func(128), 1);
-
-    // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(func(4294967293), 31);
-  }
-
-  // same
-  {
-    auto func = hammingWeight_2;
-
-    EXPECT_THAT(func(11), 3);
-    EXPECT_THAT(func(128), 1);
-    EXPECT_THAT(func(4294967293), 31);
-  }
-
-  // same
-  {
-    auto func = count_bit;
-
-    EXPECT_THAT(func(11), 3);
-    EXPECT_THAT(func(128), 1);
-    EXPECT_THAT(func(4294967293), 31);
-  }
-
-  // same
-  {
-    EXPECT_THAT(__builtin_popcount(11), 3);
-    EXPECT_THAT(__builtin_popcount(128), 1);
-    EXPECT_THAT(__builtin_popcount(4294967293), 31);
-  }
-}
-
-// known as "compute parity"
-//
-// if we change:
-//  return 0 if there even number of 1
-//  return 1 if there odd number of 1
-
-namespace algo_bit
-{
-  // if use the same approach
-  // int hammingWeight_2(uint32_t n);
-
-  int func_1(uint32_t n)
+  bool get_parity_1(uint32_t n)
   {
     uint32_t count{};
 
@@ -6190,32 +6194,9 @@ namespace algo_bit
     return ((count % 2) == 0 ? 0 : 1);
   }
 
-  int func_2(uint32_t n)
-  {
-    uint32_t result{};
-
-    while (n)
-    {
-      if (n & 0x1)
-      {
-        // even to odd
-        if (result == 0)
-          result = 1;
-        // odd to even, if result == 1
-        else
-          result = 0;
-      }
-
-      n >>= 1;
-    }
-
-    return result;
-  }
-
   // performance improvement? cxx-xor
   // see algo-occurance find a number seen odd times cxx-xor
-
-  int func_3(uint32_t n)
+  bool get_parity_2(uint32_t n)
   {
     uint32_t result{};
 
@@ -6230,84 +6211,83 @@ namespace algo_bit
   }
 } // namespace algo_bit
 
-TEST(AlgoBit, see_count_bits_2)
+TEST(AlgoBit, check_hamming_weight)
 {
   using namespace algo_bit;
 
   {
-    auto func = func_1;
+    std::vector<std::function<int(unsigned int)>> imps{get_hamming_weight_1,
+                                                       get_hamming_weight_2,
+                                                       get_hamming_weight_3};
 
-    // Input: 00000000000000000000000000001011, 11
-    EXPECT_THAT(func(11), 1);
+    for (const auto &f : imps)
+    {
+      // Input: 00000000000000000000000000001011, 11
+      EXPECT_THAT(f(11), 3);
 
-    // Input: 00000000000000000000000010000001, 128
-    EXPECT_THAT(func(129), 0);
+      // Input: 00000000000000000000000010000000, 128
+      EXPECT_THAT(f(128), 1);
 
-    // Input: 11111111111111111111111111111101, 4294967293
-    EXPECT_THAT(func(4294967293), 1);
+      // Input: 11111111111111111111111111111101, 4294967293
+      EXPECT_THAT(f(4294967293), 31);
+    }
+  }
+
+  // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
+  // 6.59 Other Built-in Functions Provided by GCC
+  // Built-in Function: int __builtin_popcount (unsigned int x)
+  // Returns the number of 1-bits in x.
+  // error: built-in function ‘__builtin_popcount’ must be directly called
+  {
+    EXPECT_THAT(__builtin_popcount(11), 3);
+    EXPECT_THAT(__builtin_popcount(128), 1);
+    EXPECT_THAT(__builtin_popcount(4294967293), 31);
   }
 
   {
-    auto func = func_2;
+    std::vector<std::function<int(unsigned int)>> imps{get_parity_1,
+                                                       get_parity_2};
 
-    EXPECT_THAT(func(11), 1);
-    EXPECT_THAT(func(129), 0);
-    EXPECT_THAT(func(4294967293), 1);
-  }
+    for (const auto &f : imps)
+    {
+      // Input: 00000000000000000000000000001011, 11
+      EXPECT_THAT(f(11), true);
 
-  {
-    auto func = func_3;
+      // Input: 00000000000000000000000010000001, 129
+      EXPECT_THAT(f(129), false);
 
-    EXPECT_THAT(func(11), 1);
-    EXPECT_THAT(func(129), 0);
-    EXPECT_THAT(func(4294967293), 1);
+      // Input: 11111111111111111111111111111101, 4294967293
+      EXPECT_THAT(f(4294967293), true);
+    }
   }
 }
 
-namespace algo_bit
-{
-  // note:
-  // used to loop count running on two inputs to get common bit coutns for early
-  // attempts. However, turns out it's not necessary.
-  //
-  // returns MSB position which starts from 1 since input >> is evalueated after
-  // ++count but not 0th.
+/*
 
-  uint32_t get_msb_pos_1(const uint32_t value)
-  {
-    uint32_t count{};
-    uint32_t input = value;
+A = 35 = 10 0011
+B =  9 =    1001
 
-    // do not need to check like: if (input &1) to increase count for every
-    // interation since when runs out 1, input becomes 0 and the loop ends.
-    for (; input != 0; input >>= 1)
-      ++count;
+Ans = 2 because only counts bit positions which are valid position in both
+integers.
 
-    return count;
-  }
+From ansic, p50.
+The function counts the number of 1 bits in its integer argument.
 
-} // namespace algo_bit
+1. The key is not to use sizeof operator
+2. unsigned int
 
-TEST(AlgoBit, GetMSBPosition)
-{
-  using namespace algo_bit;
+*cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
+guaranteed 0 values.
 
-  // A = 35 = 10 0011
-  // B =  9 =    1001
-  EXPECT_THAT(get_msb_pos_1(35), Eq(6));
-  EXPECT_THAT(get_msb_pos_1(9), Eq(4));
+3. use independent of type.
 
-  // count_bit() is different since has high MSB and has 0s in the lower bits.
-
-  EXPECT_THAT(count_bit(35), 3);
-  EXPECT_THAT(count_bit(9), 2);
-}
+*/
 
 namespace algo_bit
 {
   // 2018.0619
   // 1. unsigned int
-  int count_bits_18_0619(const unsigned int a, const unsigned int b)
+  int get_common_bits_1(uint32_t a, uint32_t b)
   {
     // get min and max
     auto input = minmax(a, b);
@@ -6354,7 +6334,7 @@ namespace algo_bit
   }
 
   // 2018.07
-  int count_bits_18_0717(const unsigned int a, const unsigned int b)
+  int get_common_bits_2(uint32_t a, uint32_t b)
   {
     // get min and max
     auto input = minmax(a, b);
@@ -6377,7 +6357,7 @@ namespace algo_bit
   }
 
   // 2019.03
-  int count_common_bits(uint32_t a, uint32_t b)
+  int get_common_bits_3(uint32_t a, uint32_t b)
   {
     uint32_t count{};
 
@@ -6390,39 +6370,62 @@ namespace algo_bit
     return count;
   }
 
+  // 2020.07
+  int get_common_bits_4(uint32_t x, uint32_t y)
+  {
+    int common_count{};
+
+    while (x && y)
+    {
+      if ((x & 0x1) == (y & 0x1))
+        ++common_count;
+
+      x >>= 1;
+      y >>= 1;
+    }
+
+    return common_count;
+  }
 } // namespace algo_bit
 
-TEST(AlgoBit, CommonBits)
+TEST(AlgoBit, check_common_bits)
 {
   using namespace algo_bit;
 
   {
-    //   9,   1001
-    //  35, 100011,   mask, 15 (1111),  max, 3(0011)
-    //                                    9,   1001
-    //                                  xor,   1010
-    //                                  ans, 2
-    EXPECT_THAT(count_bits_18_0717(35, 9), 2);
+    std::vector<std::function<int(unsigned int, unsigned int)>> imps{
+      get_common_bits_1,
+      get_common_bits_2,
+      get_common_bits_3,
+      get_common_bits_4};
 
-    // 55 = 100111,  mask, 7 (0111),   max, 7(0111)
-    //                                    5,    101
-    //                                  xor, 2( 010)
-    //                                  ans, 2
-    EXPECT_THAT(count_bits_18_0717(55, 5), 2);
-  }
-  {
-    auto func = count_common_bits;
-    EXPECT_THAT(func(35, 9), 2);
-    EXPECT_THAT(func(55, 5), 2);
+    for (const auto &f : imps)
+    {
+      //   9,   1001
+      //  35, 100011,   mask, 15 (1111),  max, 3(0011)
+      //                                    9,   1001
+      //                                  xor,   1010
+      //                                  ans, 2
+      EXPECT_THAT(f(35, 9), 2);
+
+      // 55 = 100111,  mask, 7 (0111),   max, 7(0111)
+      //                                    5,    101
+      //                                  xor, 2( 010)
+      //                                  ans, 2
+      EXPECT_THAT(f(55, 5), 2);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-reverse-bit
+/*
+={=========================================================================
+algo-bits-reverse
 
-/* 190. Reverse Bits, Easy
+190. Reverse Bits, Easy
 
 Reverse bits of a given 32 bits unsigned integer.
+
+uint32_t reverse_bits(uint32_t n);
 
 Example 1:
 
@@ -6441,87 +6444,215 @@ Output: 10111111111111111111111111111111
 
 Explanation: 
 The input binary string 11111111111111111111111111111101 represents the unsigned
-integer 4294967293, so return 3221225471 which its binary representation is
-10101111110010110010011101101001.
+integer 4294967293, so return 3221225471.
  
+note:
+input string?
+
 */
 
 namespace algo_bit
 {
-  // initial thought was to use mix of atoi and itoa
+  // >>> bin(43261596)
+  // '0b10100101000001111010011100'
+  // >>> bin(964176192)
+  // '0b111001011110000010100101000000'
+  // >>> bin(15065253)
+  // '0b111001011110000010100101'
+  //
+  // >>> bin(15065253) is correct when simply reversing bits. why different?
+  // since input has leasing 0s.
+  //
+  // >>> bin(43261596)
+  // '0b????.??10.1001.0100.0001.1110.1001.1100'
+  // >>> bin(964176192)
+  // '0b0011.1001.0111.1000.0010.1001.0100.0000'
+
+  uint32_t reverse_bits_1(uint32_t n)
+  {
+    uint32_t result{};
+
+    while (n)
+    {
+      result <<= 1;
+      result |= (n & 0x1);
+
+      n >>= 1;
+    }
+
+    return result;
+  }
+
+  // from online
+  uint32_t reverse_bits_2(uint32_t n)
+  {
+    int reverse = 0;
+
+    for (int i = 0; i < 32; i++)
+    {
+      reverse = (reverse << 1) | (n & 1);
+      n >>= 1;
+    }
+
+    return reverse;
+  }
+
+  // revise reverse_bits_1()
+  // Runtime: 4 ms, faster than 69.13% of C++ online submissions for Reverse Bits.
+  // Memory Usage: 5.9 MB, less than 91.90% of C++ online submissions for Reverse Bits.
+  uint32_t reverse_bits_3(uint32_t n)
+  {
+    uint32_t result{};
+
+    for (size_t i = 0; i < 32; ++i)
+    {
+      result = (result <<= 1) | (n & 0x1);
+      n >>= 1;
+    }
+
+    return result;
+  }
+
+  // NOTE: the key is it's "32" bits
 
   // from discussion:
   //
   // O(1) bit operation C++ solution (8ms), tworuler
   //
   // for 8 bit binary number abcdefgh, the process is as follow:
-  // abcdefgh -> efghabcd -> ghefcdab -> hgfedcba
+  // abcdefgh -> [efgh]abcd -> [gh][ef]cdab -> [hgfe]dcba
 
   // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Reverse
   // Bits.
   //
   // Memory Usage: 8 MB, less than 79.46% of C++ online submissions for Reverse
   // Bits.
+  //
+  // exchange 16, 8, 4, 2, 1 bits.
 
-  uint32_t reverseBits(uint32_t n)
+  uint32_t reverse_bits_4(uint32_t n)
   {
     // abcdefgh -> efghabcd
     n = (n >> 16) | (n << 16);
 
-    // efghabcd -> ghefcdab
+    // efghabcd -> gh[ef]cd[ab]
     // ef00ab00 >> 00ef00ab, 00gh00cd << gh00cd00
     n = ((n & 0xff00ff00) >> 8) | ((n & 0x00ff00ff) << 8);
 
     // ghefcdab -> hgfedcba
     n = ((n & 0xf0f0f0f0) >> 4) | ((n & 0x0f0f0f0f) << 4);
 
+    // 1100 and 0011
     n = ((n & 0xcccccccc) >> 2) | ((n & 0x33333333) << 2);
+    // 1010 and 0101
     n = ((n & 0xaaaaaaaa) >> 1) | ((n & 0x55555555) << 1);
 
     return n;
   }
 
+  // NOTE: faster than for loop.
 } // namespace algo_bit
 
-TEST(AlgoBit, ReverseBits)
+TEST(AlgoBit, check_reverse_bits)
 {
   using namespace algo_bit;
 
-  EXPECT_THAT(reverseBits(43261596), 964176192);
-  EXPECT_THAT(reverseBits(4294967293), 3221225471);
+  {
+    std::vector<std::function<int(unsigned int)>> imps{reverse_bits_2,
+                                                       reverse_bits_3,
+                                                       reverse_bits_4};
+
+    for (const auto &f : imps)
+    {
+
+      EXPECT_THAT(f(43261596), 964176192);
+      EXPECT_THAT(f(4294967293), 3221225471);
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-equi
+/*
+={=========================================================================
+algo-equi-index
 
-namespace algo_equi
+codility: equilibrium index of a sequence
+
+The equilibrium index of a sequence is an index such that the sum of elements
+at lower indexes is equal to the sum of elements at higher indexes. For
+example, in a sequence A:
+
+A[0]=-7 A[1]=1 A[2]=5 A[3]=2 A[4]=-4 A[5]=3 A[6]=0    [-7, 1, 5, 2, -4, 3, 0]
+
+3 is an equilibrium index, because: A[0]+A[1]+A[2]=A[4]+A[5]+A[6]
+
+6 is also an equilibrium index, because: A[0]+A[1]+A[2]+A[3]+A[4]+A[5]=0 (The
+sum of zero elements is zero) 
+
+7 is not an equilibrium index - because it is not a valid index of sequence A.
+
+If you still have doubts, here is a precise definition: 
+
+The integer k is an equilibrium index of a sequence A[0],A[1]..,A[n-1] if and
+only if 0<= k and sum(A[0..(k-1)])=sum(A[(k+1)..(n-1)]). Assume the sum of
+zero elements is equal to zero.
+
+Write a function
+
+int equi(int A[], int n);
+
+that, given a sequence, returns its equilibrium index (any) or -1 if no
+equilibrium index exists. `Assume that the sequence may be very long.` 
+
+The problem can be solved by using various approaches, the most common being
+simply to follow the equilibrium definition:
+
+// while moving index, continues to sum right and left sum.
+
+int equi ( int A[], int n ) {
+
+  int k, m, lsum, rsum; 
+
+  for(k = 0; k < n; ++k) { 
+    lsum = 0; rsum = 0;
+    for(m = 0; m < k; ++m) lsum += A[m]; 
+    for(m = k + 1; m < n; ++m) rsum += A[m];  
+    if (lsum == rsum) return k;
+  } 
+  return -1; 
+} 
+
+Unfortunately, this approach has two disadvantages:
+
+o it fails on large input data sets, since the time complexity is O(n2)
+
+o it fails on large input values (for example if the input array contains
+    values like MIN/MAX_INT) due to the arithmetic overflows
+
+We can fix the first problem with a better algorithm, and the second problem
+with a better data-type (for example, using long long type instead of int for
+    sum computations). 
+  
+The key observation for better running time is to update the left/right sums
+in constant time instead of recomputing them from the scratch. O(n)
+
+      [0] [ ] [ ] ... [ ]
+   ->     <------------->
+   lsum   rsum
+
+      [0] [1] [ ] ... [ ]
+   ----->     <------------->
+   lsum   rsum
+
+      [0] [1] [2] [3] ... [ ]
+   --------->     <------------->
+   lsum   rsum
+
+*/
+
+namespace algo_equi_index
 {
-  // brute force
-  int equi_1(int A[], int n)
-  {
-    int start{}, index{};
-
-    for (index = 0; index < n; ++index)
-    {
-      // have to reset them on every loop
-      int left_sum{}, right_sum{};
-
-      for (start = 0; start < index; ++start)
-        left_sum += A[start];
-
-      for (start = index + 1; start < n; ++start)
-        right_sum += A[start];
-
-      if (left_sum == right_sum)
-        return index;
-    }
-
-    return -1;
-  }
-
-  // use total sum
-
-  int equi_2(int A[], int n)
+  // old. use total sum
+  int equi_index_1(const int A[], int n)
   {
     int index{};
 
@@ -6546,9 +6677,8 @@ namespace algo_equi
     return -1;
   }
 
-  // same as 2() but remove if by moving equal check
-
-  int equi_3(int A[], int n)
+  // old. same as above but remove if by moving equal check
+  int equi_index_2(const int A[], int n)
   {
     int index{};
 
@@ -6575,9 +6705,8 @@ namespace algo_equi
     return -1;
   }
 
-  // do not use total_sum variable since rsum is total
-
-  int equi_4(int A[], int n)
+  // old. do not use total_sum variable since rsum is total
+  int equi_index_3(const int A[], int n)
   {
     if (!n || !A)
       return -1;
@@ -6600,123 +6729,155 @@ namespace algo_equi
     return -1;
   }
 
-} // namespace algo_equi
+  // 2020.07
+  int equi_index_4(const int A[], int n)
+  {
+    long long rsum{}, lsum{};
 
-TEST(AlgoEquilbrium, Equi)
+    // gets the rsum
+    for (int i = 0; i < n; ++i)
+      rsum += A[i];
+
+    for (int i = 0; i < n; ++i)
+    {
+      if ((i - 1) >= 0)
+        lsum += A[i - 1];
+
+      rsum -= A[i];
+
+      if (lsum == rsum)
+        return i;
+    }
+
+    // found no equi index.
+    return -1;
+  }
+
+  // 2020.07
+  int equi_index_5(const int A[], int n)
+  {
+    long long rsum{}, lsum{};
+
+    // gets the rsum
+    for (int i = 0; i < n; ++i)
+      rsum += A[i];
+
+    for (int i = 0; i < n; ++i)
+    {
+      rsum -= A[i];
+
+      if (lsum == rsum)
+        return i;
+
+      lsum += A[i];
+    }
+
+    // found no equi index.
+    return -1;
+  }
+} // namespace algo_equi_index
+
+TEST(AlgoEquilbrium, check_equi_index)
 {
-  using namespace algo_equi;
-
-  int coll[] = {-7, 1, 5, 2, -4, 3, 0};
+  using namespace algo_equi_index;
 
   {
-    auto func = equi_1;
-    EXPECT_THAT(func(coll, 7), 3);
-  }
-  {
-    auto func = equi_2;
-    EXPECT_THAT(func(coll, 7), 3);
-  }
-  {
-    auto func = equi_3;
-    EXPECT_THAT(func(coll, 7), 3);
-  }
-  {
-    auto func = equi_4;
-    EXPECT_THAT(func(coll, 7), 3);
+    // error: on define function<> when has array argument
+    // std::vector<std::function<int(const int[], int)>> imps{equi_index_1};
+
+    auto imps = {equi_index_1,
+                 equi_index_2,
+                 equi_index_3,
+                 equi_index_4,
+                 equi_index_5};
+
+    const int coll[]{-7, 1, 5, 2, -4, 3, 0};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll, 7), 3);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-equi-tape
+/*
+={=========================================================================
+algo-equi-tape
 
-namespace algo_equi
+https://codility.com/train/
+
+When choose C++
+
+A non-empty zero-indexed array A consisting of N integers is given. Array A
+represents numbers on a tape.
+
+Any integer P, such that 0 < P < N, splits this tape into two non-empty parts: 
+A[0], A[1], ..., A[P - 1] and A[P], A[P + 1], ..., A[N - 1].
+
+The difference between the two parts is the value of: 
+|(A[0] + A[1] + ... + A[P - 1]) - (A[P] + A[P + 1] + ... + A[N - 1])|
+
+In other words, it is the absolute difference between the sum of the first part
+and the sum of the second part.
+
+For example, consider array A such that:
+
+  A[0] = 3    _ (split point)
+  A[1] = 1    _
+  A[2] = 2    _
+  A[3] = 4    _
+  A[4] = 3
+
+We can split this tape in four places:
+
+  P = 1, difference = |3 - 10| = 7
+  P = 2, difference = |4 - 9 | = 5
+  P = 3, difference = |6 - 7 | = 1
+  P = 4, difference = |10 - 3| = 7
+
+Write a function:
+
+int solution(vector<int> &A);
+
+that, given a non-empty zero-indexed array A of N integers, returns the
+`minimal-difference`, but not index, that can be achieved.
+
+For example, given:
+
+  A[0] = 3
+  A[1] = 1
+  A[2] = 2
+  A[3] = 4
+  A[4] = 3
+
+the function should return `minimal difference` 1 when P = 3, as explained above.
+
+Assume that:
+
+N is an integer within the range [2..100,000];
+each element of array A is an integer within the range [-1,000..1,000].
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(N), beyond input storage (not counting
+    the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+you can also use includes, for example:
+#include <algorithm>
+
+note:
+If calculate first and second half sum every time when moves array index, time
+complexity would be O(N*N).
+
+*/
+
+namespace algo_equi_tape
 {
-  int equi_tape_1(vector<int> &A)
-  {
-    int abs_diff{};
-    int saved_diff = numeric_limits<int>::max();
-    long long right_sum{}, left_sum{};
-
-    for (unsigned int i = 0; i < A.size(); ++i)
-      right_sum += A[i];
-
-    for (unsigned int i = 0; i < A.size() - 1; ++i)
-    {
-      left_sum += A[i];
-      right_sum -= A[i];
-
-      abs_diff = abs(left_sum - right_sum);
-      if (abs_diff < saved_diff)
-      {
-        saved_diff = abs_diff;
-      }
-    }
-
-    return saved_diff;
-  }
-
-  int equi_tape_2(vector<int> &A)
-  {
-    if (!A.size())
-      return -1;
-
-    // note:
-    long long tsum = 0;
-
-    // size N, [0, N-1]
-    for (unsigned int i = 0; i < A.size(); i++)
-      tsum += A[i];
-
-    long long rsum = 0, lsum = 0;
-    int runabs = INT_MAX, curabs = 0;
-
-    for (unsigned int i = 0; i < A.size() - 1; i++)
-    {
-      lsum += A[i];
-      rsum = tsum - lsum;
-
-      curabs = abs(lsum - rsum);
-
-      if (runabs > curabs)
-        runabs = curabs;
-    }
-
-    return runabs;
-  }
-
-  int equi_tape_3(vector<int> &A)
-  {
-    if (!A.size())
-      return -1;
-
-    // note:
-    long long rsum = 0;
-
-    // size N, [0, N-1]
-    for (unsigned int i = 0; i < A.size(); i++)
-      rsum += A[i];
-
-    long long lsum = 0;
-    int runabs = INT_MAX, curabs = 0;
-
-    // [0, N-2] since no need to process the last element
-    for (unsigned int i = 0; i < A.size() - 1; i++)
-    {
-      lsum += A[i];
-      rsum -= A[i];
-
-      curabs = abs(lsum - rsum);
-
-      if (runabs > curabs)
-        runabs = curabs;
-    }
-
-    return runabs;
-  }
-
   // model answer
-
-  int equi_tape_4(vector<int> &A)
+  int equi_tape_1(std::vector<int> &A)
   {
     // write your code in C++98
     if (!A.size())
@@ -6730,8 +6891,10 @@ namespace algo_equi
 
     lsum = A[0];
 
-    // note:
-    // it is okay to use (n-1)th to calc lsum since not used anyway. WHY?
+    // it is okay to use (n-1)th? WHY?
+    // because lsum is used after getting abs value so the last is not used in
+    // that calcuation.
+
     for (size_t i = 1; i < A.size(); i++)
     {
       rsum = sum - lsum;
@@ -6746,22 +6909,54 @@ namespace algo_equi
     return cmin;
   }
 
-} // namespace algo_equi
+  // 2020.07
+  int equi_tape_2(std::vector<int> &A)
+  {
+    long long rsum{}, lsum{};
+    int current_min{std::numeric_limits<int>::max()};
 
-TEST(AlgoEquilbrium, EquiTape)
+    // gets the rsum
+    for (int i = 0; i < A.size(); ++i)
+      rsum += A[i];
+
+    // NOTE: [0, N-2] since no need to process the last element
+    // for (int i = 0; i < A.size(); ++i)
+
+    for (int i = 0; i < A.size() - 1; ++i)
+    {
+      lsum += A[i];
+      rsum -= A[i];
+
+      auto min = std::abs(lsum - rsum);
+
+      if (current_min > min)
+        current_min = min;
+    }
+
+    return current_min;
+  }
+} // namespace algo_equi_tape
+
+TEST(AlgoEquilbrium, check_equi_tape)
 {
-  using namespace algo_equi;
+  using namespace algo_equi_tape;
 
-  vector<int> coll{3, 2, 1, 4, 3};
+  {
+    auto imps = {equi_tape_1, equi_tape_2};
 
-  EXPECT_THAT(equi_tape_1(coll), 1);
-  EXPECT_THAT(equi_tape_2(coll), 1);
-  EXPECT_THAT(equi_tape_3(coll), 1);
-  EXPECT_THAT(equi_tape_4(coll), 1);
+    std::vector<int> coll{3, 2, 1, 4, 3};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 1);
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-water-volume
+/*
+={=========================================================================
+algo-water-volume
+*/
 
 namespace algo_water_volume
 {

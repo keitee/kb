@@ -10985,14 +10985,14 @@ TEST(CxxBit, check_bitset)
 
   {
     unsigned int value = 1024;
-    bitset<32> coll{value};
+    std::bitset<32> coll{value};
     EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
   }
 
   // note: can use variable to set size of bitset.
   {
     const int x = 40;
-    bitset<x> coll(1U);
+    std::bitset<x> coll(1U);
     EXPECT_THAT(coll.size(), 40);
   }
 
