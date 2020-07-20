@@ -1536,38 +1536,75 @@ TEST(CxxExpression, show_switch)
 
 namespace cxx_if
 {
-  bool f1(std::string &s)
+  bool f1(std::string &s, bool flag)
   {
     s += "f1 return true,";
-    return true;
+    return flag;
   }
-  bool f2(std::string &s)
+
+  bool f2(std::string &s, bool flag)
   {
     s += "f2 return true,";
-    return true;
+    return flag;
   }
-  bool f3(std::string &s)
+
+  bool f3(std::string &s, bool flag)
   {
     s += "f3 return true";
-    return true;
+    return flag;
   }
 } // namespace cxx_if
 
-// see that a sequence of calls are called if all returns true
-TEST(CxxExpression, show_if)
+TEST(CxxExpression, check_if_chain)
 {
   using namespace cxx_if;
 
-  std::string ret{};
+  // see that a sequence of calls are called if all returns true. that is, only
+  // when first "if" fails, second "if" runs.
+  {
+    std::string ret{};
 
-  if (!f1(ret))
-    std::cout << "f1 return false" << std::endl;
-  else if (!f2(ret))
-    std::cout << "f2 return false" << std::endl;
-  else if (!f3(ret))
-    std::cout << "f3 return false" << std::endl;
+    if (!f1(ret, true))
+      std::cout << "f1 return false" << std::endl;
+    else if (!f2(ret, true))
+      std::cout << "f2 return false" << std::endl;
+    else if (!f3(ret, true))
+      std::cout << "f3 return false" << std::endl;
 
-  EXPECT_THAT(ret, "f1 return true,f2 return true,f3 return true");
+    EXPECT_THAT(ret, "f1 return true,f2 return true,f3 return true");
+  }
+
+  {
+    std::string ret{};
+
+    if (!f1(ret, false))
+      std::cout << "f1 return false" << std::endl;
+    else if (!f2(ret, false))
+      std::cout << "f2 return false" << std::endl;
+    else if (!f3(ret, false))
+      std::cout << "f3 return false" << std::endl;
+
+    EXPECT_THAT(ret, "f1 return true,");
+  }
+}
+
+// "else if(0 == (e % 2))" means effectively 
+// "else if((e >= 3) && (0 == (e % 2))) so has "implicit" condition.
+TEST(CxxExpression, check_if_else)
+{
+  std::vector<int> coll{1,2,3,4,5,6,7};
+  std::vector<int> result1{};
+  std::vector<int> result2{};
+
+  for (auto e: coll)
+  {
+    if (e < 3)
+      result1.push_back(e);
+    else if(0 == (e % 2))
+      result2.push_back(e);
+  }
+
+  EXPECT_THAT(result2, ElementsAre(4,6));
 }
 
 TEST(CxxExpression, show_loop)
@@ -1622,7 +1659,6 @@ TEST(CxxExpression, show_loop)
 
 // ={=========================================================================
 // cxx-pair
-
 // typeid : St16initializer_listIKSt4pairIiPKcEE
 
 namespace cxx_pair
@@ -1826,8 +1862,10 @@ TEST(Pair, Initialisation)
   // };
 }
 
-TEST(Pair, Comparison)
+// see *cxx-pair-comparison*
+TEST(CxxPair, check_comparison)
 {
+  // check on .first
   {
     auto p1 = make_pair(1, 2);
     auto p2 = make_pair(3, 2);
@@ -1836,17 +1874,10 @@ TEST(Pair, Comparison)
     EXPECT_THAT(p1 < p2, true);
   }
 
+  // if .first is equal and see .second
   {
     auto p1 = make_pair(1, 2);
     auto p2 = make_pair(1, 3);
-
-    EXPECT_THAT(p1 > p2, false);
-    EXPECT_THAT(p1 < p2, true);
-  }
-
-  {
-    auto p1 = make_pair(13, 2);
-    auto p2 = make_pair(13, 4);
 
     EXPECT_THAT(p1 > p2, false);
     EXPECT_THAT(p1 < p2, true);
@@ -6073,7 +6104,7 @@ TEST(CxxCallable, check_lambda_capture_and_return_1)
     EXPECT_THAT(func(), "this is a callback");
   }
 
-  // deduced return is integer
+  // parameter list is optional. deduced return is integer
   {
     auto func = [] { return 42; };
 
@@ -6087,7 +6118,7 @@ TEST(CxxCallable, check_lambda_capture_and_return_1)
     EXPECT_THAT(func(), 42.0);
   }
 
-  // no deduction
+  // no deduction on return
   {
     auto func = []() -> double { return 42; };
 
@@ -11345,14 +11376,90 @@ TEST(CxxBit, bit_Overflow)
 }
 
 // ={=========================================================================
-// cxx-max
+// cxx-min-cxx-max
 
-TEST(MinMax, Order)
+TEST(CxxMinMax, check_order)
 {
-  auto value1 = max(10, 20);
-  auto value2 = max(20, 10);
+  auto value1 = std::max(10, 20);
+  auto value2 = std::max(20, 10);
 
   EXPECT_TRUE(value1 == value2);
+}
+
+namespace cxx_min_max
+{
+  bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
+} // namespace cxx_min_max
+
+TEST(CxxMinMax, check_on_list)
+{
+  {
+    std::deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+    // https://en.cppreference.com/w/cpp/algorithm/max
+    // template< class T >
+    // T max( std::initializer_list<T> ilist );
+
+    EXPECT_THAT(std::max({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), 6);
+    EXPECT_THAT(std::min({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), -3);
+  }
+
+  // same for vector
+  {
+    std::vector<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+    EXPECT_THAT(std::max({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), 6);
+    EXPECT_THAT(std::min({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), -3);
+
+    // compile error so have to use xxx_element().
+    // EXPECT_THAT(std::max(coll), 6);
+    // EXPECT_THAT(std::min(coll), -3);
+  }
+}
+
+TEST(CxxMinMax, check_difference)
+{
+  using namespace cxx_min_max;
+
+  {
+    std::deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+    // NOTE: does it matter since we want max value but not index of max
+    // element? yes if want to know the pos of it
+    //
+    // If more than one minimum or maximum element exists, min_element() and
+    // max_element() return `the first` found; minmax_element() returns the first
+    // minimum but the last maximum element, so max_element() and minmax_element()
+    // don’t yield the same maximum element.
+
+    EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+    EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+
+    // get the first
+    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())),
+                4);
+
+    // return iterator pair
+    // Note also that minmax_element() yields `the last maximum`, so the distance
+    // 9.
+    auto minmax = minmax_element(coll.begin(), coll.end());
+    EXPECT_THAT(*(minmax.first), -3); // first minimum
+    EXPECT_THAT(*(minmax.second), 6); // last maximum
+
+    // last maximum is 6 which is the last element so minmax returns the last
+    // max.
+    EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
+
+    // see difference
+    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+    EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
+                         max_element(coll.begin(), coll.end())),
+                -1);
+
+    // min/max of absolute values
+    EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
+    EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+  }
 }
 
 // ={=========================================================================

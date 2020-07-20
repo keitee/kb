@@ -6956,12 +6956,208 @@ TEST(AlgoEquilbrium, check_equi_tape)
 /*
 ={=========================================================================
 algo-water-volume
+
+How much water between walls?
+http://qandwhat.runkite.com/i-failed-a-twitter-interview/
+
+Consider the following picture:
+              _ _
+7             7 7 _
+6   _         # # 6
+5   5         # # #
+4   #       4 # # #
+3 _ #     3 # # # #
+2 2 #   2 # # # # #
+1 # # 1 # # # # # #
+  -----------------
+  0 1 2 3 4 5 6 7 8
+
+In this picture we have walls of different heights. This picture is
+represented by an array of integers, where the value at each index is the
+height of the wall. The picture above is represented with an array as
+[2,5,1,2,3,4,7,7,6].
+
+Now imagine it rains. How much water is going to be accumulated in puddles
+between walls?
+
+              _ _
+7             7 7 _
+6   _         # # 6
+5   5 * * * * # # #
+4   # * * * 4 # # #
+3 _ # * * 3 # # # #
+2 2 # * 2 # # # # #
+1 # # 1 # # # # # #
+  -----------------
+  0 1 2 3 4 5 6 7 8
+
+We count volume in square blocks of 1X1. So in the picture above, everything
+to the left of index 1 spills out. Water to the right of index 7 also spills
+out. We are left with a puddle between 1 and 6 and the volume is 10. 
+
+
+The first thing I tried to do was to figure out how much water we would have
+at any given index. This stroke a resemblance with Calculus and integrals, so
+I immediately remembered that looking for local maximums could be of use. And
+indeed, in the picture above, the water above index 2 is bounded by the
+smaller of the two surrounding maximums at index 1 and 6. 
+
+I was thinking out loud: "What if we found all the local maximums, and filled
+in water between them. Would that work?"
+
+"Yeah, that should work" replied Justin.
+
+So I went ahead and coded this solution. Then Justin asked me for a bunch of
+test cases which I provided. All the test cases we talked about seemed to
+work.
+
+"Do you have questions for me?" Justin asked. "How did I do?" "Reasonably
+well. Your solution does 2 passes, but there is a more interesting one that
+does only 1"
+
+
+The flaw:
+
+The second I hung up I realized my solution was wrong. Think about this input:
+
+[2, 5, 1, 3, 1, 2, 1, 7, 7, 6]
+
+My solution solved between the local maximums and looked like this: 
+
+7               # # _
+6   _           # # #
+5   #           # # #
+4   #           # # #
+3 _ # * #       # # #
+2 # # * # * # * # # #
+1 # # 1 # # # # # # #
+  --------------- ---
+  0 1 2 3 4 5 6 7 7 8
+
+But the result should have been one puddle between the two taller towers: 
+
+7               # # _
+6   _           # # #
+5   # * * * * * # # #
+4   # * * * * * # # #
+3 _ # * # * * * # # #
+2 # # * # * # * # # #
+1 # # 1 # # # # # # #
+  --------------- ---
+  0 1 2 3 4 5 6 7 7 8
+
+Now I ask myself: what have I learned from this? Realistically - not much. I
+am upset that the interviewer didn't ask me the right questions to guide me
+towards the right train of thought. I don't know why Justin told me "this
+should work," when my solution in fact didn't. I know that this should have
+come up in the test cases he asked for, but since I missed the flaw when
+coming up with the algorithm, I didn't think of testing for it. 
+
+
+2014.04.12. Initial thought by drawings is that
+
+o only have waters when there is down-and-up, i.e., 5-1-2. 
+o there are as many as down-and-ups in a array. 
+o when goes down including the start from 0 index, set the hightest.
+o when goes up, check with the previous heightest to see which is less than, 
+  then there is water up to the less on hight.
+
+This has the same flaw as the author's initial try has since only get the part.
+
+
+two-pass solution
+
+If we traverse the list from left to right, the amount of water at each index is
+at most the largest value we have discovered so far. That means that 
+
+"if we knew that there is something larger or equal to it somewhere on the
+right" we would know exactly how much water we can hold without spilling. 
+
+Same goes for traversing in the opposite direction: if we know we have found
+something larger on the left than the largest thing on the right, we can safely
+fill up water.
+
+With this in mind, one solution would be to first find the absolute maximum
+value, traverse from the left to the maximum, and then traverse from the right
+to the maximum. This solution does 2 passes: one to find the maximum, and the
+other is split into two subtraversals.
+
+This approach is to find the max in the list and have two traversals to the
+max. 
+
+left ...              max ... right
+sum towards to max -> *
+                        <- sum towards to max
+
+So first pass to find the max in the list and second pass to sum waters.
+
+
+The solution in one pass (shown in the gist) avoids finding the maximum value
+by moving two pointers from the opposite ends of the array towards each other.
+If the largest value found to the left of the left pointer is smaller than the
+largest value found to the right of the right pointer, then move the left
+pointer one index to the right. Otherwise move the right pointer one index to
+the left. Repeat until the two pointers intersect. This is a wordy
+explanation, but the code is really simple.
+
+class Ideone
+{
+  public static void main (String[] args) throws java.lang.Exception
+  {
+    int[] myIntArray = {2, 5, 1, 2, 3, 4, 7, 7, 6};
+    System.out.println(calculateVolume(myIntArray));
+  }
+
+  public static int calculateVolume(int[] land) {
+    int leftMax = 0;
+    int rightMax = 0;
+    int left = 0;
+    int right = land.length - 1;
+    int volume = 0;
+
+    while(left < right) {
+
+      // update current max for left and right.
+      if(land[left] > leftMax) {
+        leftMax = land[left];
+      }
+      if(land[right] > rightMax) {
+        rightMax = land[right];
+      }
+
+      // decide to which direction it start to sum. Should from the lesser. If
+      // equals, from right but do not matter when start from left.
+
+
+      if(leftMax >= rightMax) {
+        volume += rightMax - land[right];
+        right--;
+      } else {
+        volume += leftMax - land[left];
+        left++;
+      }
+    }
+
+    return volume;
+  }
+}
+
 */
 
 namespace algo_water_volume
 {
-  // two pass algo
+  // two pass
+  //
+  // To contain water, the other side should be at least >= than the height of
+  // the side. Having max pos and moving towards to that make sure that and
+  // there is no need to worry about spilling water and simply do sum along the
+  // way.
+  //
+  // One pass removes the step to get the max since while moving right and left
+  // towards bigger one, the max remains at the end and do the same for one
+  // pass.
 
+  // old
   int water_volume_1(vector<int> const &A)
   {
     int max_value{};
@@ -7003,9 +7199,51 @@ namespace algo_water_volume
     return volume;
   }
 
-  // one pass
+  // 2020.07
+  int water_volume_2(std::vector<int> const &A)
+  {
+    // get the max in the input. the first max if there are multiples and not a
+    // problem when getting sum of left and right traversal since when max ==
+    // value in right traversal, do nothing.
+    auto max_it    = std::max_element(A.cbegin(), A.cend());
+    auto max_value = *max_it;
+    auto max_pos   = std::distance(A.cbegin(), max_it);
 
-  int water_volume_2(vector<int> const &A)
+    int max_current{};
+    int sum_left{};
+    int sum_right{};
+
+    // left subtraversal
+    max_current = 0;
+
+    for (int left = 0; left < max_pos; ++left)
+    {
+      if (A[left] > max_current)
+        max_current = A[left];
+      else if ((A[left] < max_current) && (max_current <= max_value))
+      {
+        sum_left += (max_current - A[left]);
+      }
+    }
+
+    // right subtraversal
+    max_current = 0;
+
+    for (int right = A.size() - 1; right > max_pos; --right)
+    {
+      if (A[right] > max_current)
+        max_current = A[right];
+      else if ((A[right] < max_current) && (max_current <= max_value))
+      {
+        sum_right += (max_current - A[right]);
+      }
+    }
+
+    return sum_left + sum_right;
+  }
+
+  // one pass. old
+  int water_volume_3(vector<int> const &A)
   {
     int right_max{std::numeric_limits<int>::min()};
     int left_max{std::numeric_limits<int>::min()};
@@ -7056,7 +7294,11 @@ namespace algo_water_volume
     return volume;
   }
 
-  int water_volume_3(vector<int> const &A)
+  // one pass. old
+  // simpler since there is no "if" checks on max() and getting sum since there
+  // is no changes when ?max is same as A[?]
+
+  int water_volume_4(vector<int> const &A)
   {
     size_t lindex{};
     size_t rindex{A.size() - 1};
@@ -7082,75 +7324,143 @@ namespace algo_water_volume
 
     return volume;
   }
+
+  // one pass. 2020.07
+  int water_volume_5(std::vector<int> const &A)
+  {
+    int sum_left{};
+    int sum_right{};
+
+    size_t run_left{};
+    size_t run_right{};
+
+    int max_left{};
+    int max_right{};
+
+    for (run_left = 0, run_right = A.size() - 1; run_left < run_right;)
+    {
+      // when left is smaller, move left
+      if (A[run_left] < A[run_right])
+      {
+        if (A[run_left] > max_left)
+          max_left = A[run_left];
+        else if (A[run_left] < max_left)
+        {
+          sum_left += (max_left - A[run_left]);
+        }
+
+        ++run_left;
+      }
+
+      // when right is smaller, move right to left.
+      // NOTE: should have "=" on if to make for loop ends although do not
+      // affect sum math. otherwise, the loof do not end.
+
+      if (A[run_right] <= A[run_left])
+      {
+        if (A[run_right] > max_right)
+          max_right = A[run_right];
+        else if (A[run_right] < max_right)
+        {
+          sum_right += (max_right - A[run_right]);
+        }
+
+        --run_right;
+      }
+    }
+
+    return sum_left + sum_right;
+  }
 } // namespace algo_water_volume
 
-TEST(AlgoWaterVolume, TwoPass)
-{
-  using namespace algo_water_volume;
-
-  auto func = water_volume_1;
-
-  {
-    vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
-    EXPECT_THAT(func(coll), 10);
-  }
-  {
-    vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
-    EXPECT_THAT(func(coll), 17);
-  }
-  {
-    vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
-    EXPECT_THAT(func(coll), 21);
-  }
-}
-
-TEST(AlgoWaterVolume, OnePass)
+TEST(AlgoWaterVolume, check_water_volume)
 {
   using namespace algo_water_volume;
 
   {
-    auto func = water_volume_2;
+    auto imps = {water_volume_1,
+                 water_volume_2,
+                 water_volume_3,
+                 water_volume_4,
+                 water_volume_5};
 
+    for (const auto &f : imps)
     {
-      vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
-      EXPECT_THAT(func(coll), 10);
-    }
-    {
-      vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
-      EXPECT_THAT(func(coll), 17);
-    }
-    {
-      vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
-      EXPECT_THAT(func(coll), 21);
-    }
-  }
+      // 4+3+2+1 = 10
+      {
+        std::vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
+        EXPECT_THAT(f(coll), 10);
+      }
 
-  {
-    auto func = water_volume_3;
+      // 4+3+2+1 = 10, when 5 is max and there are multiple 5
+      {
+        std::vector<int> coll{2, 5, 1, 2, 3, 4, 5, 5, 4};
+        EXPECT_THAT(f(coll), 10);
+      }
 
-    {
-      vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
-      EXPECT_THAT(func(coll), 10);
-    }
-    {
-      vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
-      EXPECT_THAT(func(coll), 17);
-    }
-    {
-      vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
-      EXPECT_THAT(func(coll), 21);
+      {
+        std::vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
+        EXPECT_THAT(f(coll), 17);
+      }
+      {
+        std::vector<int>
+          coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
+        EXPECT_THAT(f(coll), 21);
+      }
     }
   }
 }
 
-// ={=========================================================================
-// algo-frog-jump
+/*
+={=========================================================================
+algo-frog-jump
+
+codility, frog jump
+
+A small frog wants to get to the other side of the road. The frog is currently
+located at position X and wants to get to a position greater than or equal to
+Y. The small frog always jumps a fixed distance, D.
+
+Count the minimal number of jumps that the small frog must perform to reach
+its target.
+
+Write a function:
+
+int solution(int X, int Y, int D); 
+
+that, given three integers X, Y and D, returns the minimal number of jumps
+from position X to a position equal to or greater than Y.
+
+For example, given:
+
+  X = 10
+  Y = 85
+  D = 30
+
+the function should return 3, because the frog will be positioned as follows:
+
+  after the first jump, at position 10 + 30 = 40
+  after the second jump, at position 10 + 30 + 30 = 70
+  after the third jump, at position 10 + 30 + 30 + 30 = 100
+
+Assume that:
+
+X, Y and D are integers within the range [1..1,000,000,000];
+X <= Y.
+
+Complexity:
+
+expected worst-case time complexity is O(1);
+expected worst-case space complexity is O(1).
+
+note: key conditions are: X and Y is > 0. X <= Y.
+
+*/
 
 namespace algo_frog_jump
 {
   // brute force but this is not O(1) since loop may be long if Y  is big
   // enough.
-
   int frog_jump_1(int X, int Y, int D)
   {
     int count{};
@@ -7162,7 +7472,6 @@ namespace algo_frog_jump
   }
 
   // model
-
   int frog_jump_2(int X, int Y, int D)
   {
     int quotient  = (Y - X) / D;
@@ -7209,110 +7518,200 @@ namespace algo_frog_jump
       return jump + 1;
   }
 
+  // 2020.07. same as _2
+  int frog_jump_4(int X, int Y, int D)
+  {
+    auto diff{Y - X};
+    auto quotient{diff / D};
+    auto remainder{diff % D};
+
+    return quotient + (remainder ? 1 : 0);
+  }
 } // namespace algo_frog_jump
 
-TEST(AlgoFrogJump, FrogJump)
+TEST(AlgoFrogJump, check_frog_jump)
 {
   using namespace algo_frog_jump;
 
-  EXPECT_THAT(frog_jump_1(10, 85, 30), 3);
-  EXPECT_THAT(frog_jump_1(10, 10, 30), 0);
+  {
+    auto imps = {frog_jump_1, frog_jump_2, frog_jump_3, frog_jump_4};
 
-  EXPECT_THAT(frog_jump_2(10, 85, 30), 3);
-  EXPECT_THAT(frog_jump_2(10, 10, 30), 0);
-
-  EXPECT_THAT(frog_jump_3(10, 85, 30), 3);
-  EXPECT_THAT(frog_jump_3(10, 10, 30), 0);
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(10, 85, 30), 3);
+      EXPECT_THAT(f(10, 10, 30), 0);
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-minmax
+/*
+={=========================================================================
+algo-minmax
+
+{
+  // bits/predefined_ops.h
+  // this is a bit different from cxx-less but do the same.
+
+  struct _Iter_less_iter
+  {
+    template<typename _Iterator1, typename _Iterator2>
+      bool
+      operator()(_Iterator1 __it1, _Iterator2 __it2) const
+      { return *__it1 < *__it2; }
+  };
+
+  // bits/stl_algo.h
+
+  **
+   *  @brief  Return the maximum element in a range.
+   *  @ingroup sorting_algorithms
+   *  @param  __first  Start of range.
+   *  @param  __last   End of range.
+   *  @return  Iterator referencing the first instance of the largest value.
+
+  template<typename _ForwardIterator>
+    inline _ForwardIterator
+    max_element(_ForwardIterator __first, _ForwardIterator __last)
+    {
+      return _GLIBCXX_STD_A::__max_element(__first, __last,
+        __gnu_cxx::__ops::__iter_less_iter());
+    }
+
+  template<typename _ForwardIterator, typename _Compare>
+    _ForwardIterator
+    __max_element(_ForwardIterator __first, _ForwardIterator __last,
+      _Compare __comp)
+    {
+      if (__first == __last) return __first;
+      _ForwardIterator __result = __first;
+      while (++__first != __last)
+        if (__comp(__result, __first))
+          __result = __first;
+      return __result;
+    }
+}
+
+*/
 
 namespace algo_min_max
 {
-
   bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
-
-  using ITERATOR = std::deque<int>::iterator;
-
-  pair<ITERATOR, ITERATOR> my_minmax(ITERATOR begin, ITERATOR end)
-  {
-    auto min = numeric_limits<int>::max();
-    auto max = numeric_limits<int>::min();
-
-    ITERATOR min_iter = begin;
-    ITERATOR max_iter = begin;
-
-    for (; begin != end; ++begin)
-    {
-
-      if (*begin < min)
-      {
-        min      = *begin;
-        min_iter = begin;
-      }
-
-      // add '=' to support the last max as minmax_element()
-      if (max <= *begin)
-      {
-        max      = *begin;
-        max_iter = begin;
-      }
-    }
-
-    return make_pair(min_iter, max_iter);
-  }
 } // namespace algo_min_max
 
-TEST(AlgoMinMax, Stl)
+// copied from cxx-min-cxx-max
+TEST(AlgoMinMax, check_stl_imps)
 {
   using namespace algo_min_max;
 
-  deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+  {
+    std::deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
 
-  // If more than one minimum or maximum element exists, min_element() and
-  // max_element() return `the first` found; minmax_element() returns the first
-  // minimum but the last maximum element, so max_element() and minmax_element()
-  // don’t yield the same maximum element.
+    // NOTE: does it matter since we want max value but not index of max
+    // element? yes if want to know the pos of it
+    //
+    // If more than one minimum or maximum element exists, min_element() and
+    // max_element() return `the first` found; minmax_element() returns the first
+    // minimum but the last maximum element, so max_element() and minmax_element()
+    // don’t yield the same maximum element.
 
-  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+    EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+    EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
 
-  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
-  EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())), 4);
+    // get the first
+    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())),
+                4);
 
-  // return iterator pair
-  // Note also that minmax_element() yields `the last maximum`, so the distance
-  // 9.
-  auto minmax = minmax_element(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3); // first minimum
-  EXPECT_THAT(*(minmax.second), 6); // last maximum
+    // return iterator pair
+    // Note also that minmax_element() yields `the last maximum`, so the distance
+    // 9.
+    auto minmax = minmax_element(coll.begin(), coll.end());
+    EXPECT_THAT(*(minmax.first), -3); // first minimum
+    EXPECT_THAT(*(minmax.second), 6); // last maximum
 
-  // last maximum is 6 which is the last element
-  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
+    // last maximum is 6 which is the last element so minmax returns the last
+    // max.
+    EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
 
-  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-  EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
-                       max_element(coll.begin(), coll.end())),
-              -1);
+    // see difference
+    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+    EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
+                         max_element(coll.begin(), coll.end())),
+                -1);
 
-  // min/max of absolute values
-  EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
-  EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+    // min/max of absolute values
+    EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
+    EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+  }
 }
 
 namespace algo_min_max
 {
-  struct _Iter_less
+  struct my_less_1
   {
     template <typename _Iterator1, typename _Iterator2>
-    bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
+    bool operator()(_Iterator1 it1, _Iterator2 it2)
     {
-      return *__it1 < *__it2;
+      // see *cxx-pair-comparison*
+      return *it1 < *it2;
     }
   };
 
+  // use single iterator type
+  struct my_less_2
+  {
+    template <typename _Iterator1>
+    bool operator()(_Iterator1 it1, _Iterator1 it2)
+    {
+      // see *cxx-pair-comparison*
+      return *it1 < *it2;
+    }
+  };
+
+  // should make it template structure and if not, see:
+  // error: ‘algopad::my_less_2’ is not a template
+  //  template <typename _Iterator, typename _Compare = my_less_2<_Iterator>>
+
+  template <typename _Iterator1>
+  struct my_less_3
+  {
+    bool operator()(_Iterator1 it1, _Iterator1 it2)
+    {
+      // see *cxx-pair-comparison*
+      return *it1 < *it2;
+    }
+  };
+
+  // implement own min/max_element()
+  // max_element(coll.begin(), coll.end();
+  //
+  // 1. how to define value_type of _Iterator? no need to define var for current
+  // max value and comp function. All we need are iterators
+  // 2. see comp is a copy
+
   template <typename _Iterator, typename _Compare>
-  _Iterator my_max_element(_Iterator __first, _Iterator __last, _Compare __comp)
+  _Iterator my_max_element_1(_Iterator it1, _Iterator it2, _Compare comp)
+  {
+    // need to handle when there is only one element. otherwise, would access
+    // to end which is error.
+    if (it1 == it2)
+      return it1;
+
+    _Iterator result = it1;
+
+    for (++it1; it1 != it2; ++it1)
+    {
+      // if "current < *it", that is get new max
+      if (comp(result, it1))
+        result = it1;
+    }
+
+    return result;
+  }
+
+  // "first and last" var naming seems better.
+  template <typename _Iterator, typename _Compare>
+  _Iterator
+  my_max_element_2(_Iterator __first, _Iterator __last, _Compare __comp)
   {
     // if thre is only one
     if (__first == __last)
@@ -7328,10 +7727,29 @@ namespace algo_min_max
     return __result;
   }
 
-  // note: do by simply reversing comp()
+  // "first and last" var naming seems better. default comp
+  template <typename _Iterator, typename _Compare = my_less_3<_Iterator>>
+  _Iterator my_max_element_3(_Iterator __first,
+                             _Iterator __last,
+                             _Compare __comp = _Compare())
+  {
+    // if thre is only one
+    if (__first == __last)
+      return __first;
+
+    _Iterator __result = __first;
+
+    // if *__result < *__first
+    while (++__first != __last)
+      if (__comp(__result, __first))
+        __result = __first;
+
+    return __result;
+  }
 
   template <typename _Iterator, typename _Compare>
-  _Iterator my_min_element(_Iterator __first, _Iterator __last, _Compare __comp)
+  _Iterator
+  my_min_element_2(_Iterator __first, _Iterator __last, _Compare __comp)
   {
     if (__first == __last)
       return __first;
@@ -7339,38 +7757,72 @@ namespace algo_min_max
     _Iterator __result = __first;
 
     while (++__first != __last)
-      // if (comp(__result, __first))
+      if (!__comp(__result, __first))
+        __result = __first;
+
+    return __result;
+  }
+
+  // same but "if (__comp(__first, __result))" which seems better
+  template <typename _Iterator, typename _Compare>
+  _Iterator
+  my_min_element_3(_Iterator __first, _Iterator __last, _Compare __comp)
+  {
+    if (__first == __last)
+      return __first;
+
+    _Iterator __result = __first;
+
+    while (++__first != __last)
       if (__comp(__first, __result))
         __result = __first;
 
     return __result;
   }
 
+  // std-minmax
+  // If more than one minimum or maximum element exists, min_element() and
+  // max_element() return `the first` found;
+  //
+  // minmax_element() returns the first minimum but the last maximum element, so
+  // max_element() and minmax_element() don’t yield the same maximum element.
+
+  template <typename _Iterator>
+  std::pair<_Iterator, _Iterator> my_minmax_element_1(_Iterator __first,
+                                                      _Iterator __last)
+  {
+    if (__first == __last)
+      return std::make_pair(__first, __last);
+
+    _Iterator __max = __first;
+    _Iterator __min = __first;
+
+    while (++__first != __last)
+    {
+      // get max. add "=" to get the last max as std version
+      if (*__max <= *__first)
+        __max = __first;
+
+      // get min
+      if (*__first < *__min)
+        __min = __first;
+    }
+
+    return std::make_pair(__min, __max);
+  }
 } // namespace algo_min_max
 
-TEST(AlgoMinMax, UseOwn)
+TEST(AlgoMinMax, check_own_imps)
 {
   using namespace algo_min_max;
 
-  {
-    deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
-
-    // return iterator pair
-    // Note also that minmax_element() yields `the last maximum`, so the distance
-    // 9.
-    auto minmax = my_minmax(coll.begin(), coll.end());
-    EXPECT_THAT(*(minmax.first), -3);
-    EXPECT_THAT(*(minmax.second), 6);
-    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-  }
-
-  // on map
+  // on std-map
   {
     // sorted by key
     std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
-    auto e = max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, make_pair(13, 1));
+    auto e = std::max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, std::make_pair(13, 1));
 
     // ForwardIterator
     // max_element (ForwardIterator beg, ForwardIterator end, CompFunc op)
@@ -7386,7 +7838,7 @@ TEST(AlgoMinMax, UseOwn)
         return e1.second < e2.second;
       });
 
-    EXPECT_THAT(*maxelem, make_pair(5, 3));
+    EXPECT_THAT(*maxelem, std::make_pair(5, 3));
   }
 
   // multimap
@@ -7408,8 +7860,8 @@ TEST(AlgoMinMax, UseOwn)
     // Q: how max_element() finds the max on the second?
     // see *cxx-pair-comparison*
 
-    auto e = max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, make_pair(13, 12));
+    auto e = std::max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, std::make_pair(13, 12));
   }
 
   // max_element
@@ -7417,9 +7869,26 @@ TEST(AlgoMinMax, UseOwn)
     // sorted by key
     std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
-    auto pos = my_max_element(counts.begin(), counts.end(), _Iter_less());
+    {
+      auto pos = my_max_element_1(counts.begin(), counts.end(), my_less_1());
+      EXPECT_THAT(*pos, std::make_pair(13, 1));
+    }
 
-    EXPECT_THAT(*pos, make_pair(13, 1));
+    {
+      auto pos = my_max_element_2(counts.begin(), counts.end(), my_less_1());
+      EXPECT_THAT(*pos, std::make_pair(13, 1));
+    }
+  }
+
+  // max_element with default comp
+  {
+    // sorted by key
+    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
+
+    {
+      auto pos = my_max_element_3(counts.begin(), counts.end());
+      EXPECT_THAT(*pos, std::make_pair(13, 1));
+    }
   }
 
   // min_element
@@ -7427,9 +7896,43 @@ TEST(AlgoMinMax, UseOwn)
     // sorted by key
     std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
-    auto pos = my_min_element(counts.begin(), counts.end(), _Iter_less());
+    {
+      auto pos = my_min_element_2(counts.begin(), counts.end(), my_less_1());
+      EXPECT_THAT(*pos, std::make_pair(1, 2));
+    }
 
-    EXPECT_THAT(*pos, make_pair(1, 2));
+    {
+      auto pos = my_min_element_3(counts.begin(), counts.end(), my_less_1());
+      EXPECT_THAT(*pos, std::make_pair(1, 2));
+    }
+  }
+
+  // min_element and my_less_2
+  {
+    // sorted by key
+    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
+
+    {
+      auto pos = my_min_element_2(counts.begin(), counts.end(), my_less_2());
+      EXPECT_THAT(*pos, std::make_pair(1, 2));
+    }
+
+    {
+      auto pos = my_min_element_3(counts.begin(), counts.end(), my_less_2());
+      EXPECT_THAT(*pos, std::make_pair(1, 2));
+    }
+  }
+
+  {
+    std::vector<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+    // return iterator pair
+    // Note also that minmax_element() yields `the last maximum`, so the distance
+    // 9.
+    auto minmax = my_minmax_element_1(coll.begin(), coll.end());
+    EXPECT_THAT(*(minmax.first), -3);
+    EXPECT_THAT(*(minmax.second), 6);
+    EXPECT_THAT(std::distance(minmax.first, minmax.second), 9);
   }
 }
 

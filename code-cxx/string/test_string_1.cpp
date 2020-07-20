@@ -935,7 +935,7 @@ TEST(StringOperation, EraseReplace)
 
 // cxx-string-assign
 
-TEST(CxxString, Assign)
+TEST(CxxString, check_assign)
 {
   {
     std::string coll;

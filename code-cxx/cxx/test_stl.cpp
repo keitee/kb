@@ -2161,7 +2161,36 @@ TEST(StlSet, check_merge)
 // ={=========================================================================
 // cxx-map
 
-TEST(StlMap, check_find)
+TEST(CxxMap, check_begin_return)
+{
+  {
+    std::map<int, int>
+      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
+
+    auto it1 = coll.begin();
+    auto it2 = ++coll.begin();
+
+    EXPECT_THAT(*it1, std::make_pair(1, 7));
+    EXPECT_THAT(*it2, std::make_pair(2, 4));
+  }
+}
+
+TEST(CxxMap, check_compare)
+{
+  {
+    std::map<int, int>
+      coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
+
+    auto it1 = coll.begin();      // {1, 7}
+    auto it2 = ++coll.begin();    // {2, 4}
+
+    // this is std::pair comparison and see *cxx-pair-comparison*
+    EXPECT_THAT(*it1 < *it2, true);
+    EXPECT_THAT(*it2 < *it1, false);
+  }
+}
+
+TEST(CxxMap, check_find)
 {
   {
     std::map<float, float>
@@ -3949,74 +3978,6 @@ TEST(AlgoForEach, GetMean)
   double mean = for_each(coll.begin(), coll.end(), MeanValue());
 
   EXPECT_THAT(mean, DoubleEq(4.5));
-}
-
-// ={=========================================================================
-// cxx-min-max
-
-namespace stl_min_max
-{
-  bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
-} // namespace stl_min_max
-
-TEST(StlMinMax, stl_min_max)
-{
-  using namespace stl_min_max;
-
-  {
-    deque<int> coll;
-    INSERT_ELEMENTS(coll, 2, 6);
-    INSERT_ELEMENTS(coll, -3, 6);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
-
-    // https://en.cppreference.com/w/cpp/algorithm/max
-    // template< class T >
-    // T max( std::initializer_list<T> ilist );
-
-    EXPECT_THAT(std::max({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), 6);
-    EXPECT_THAT(std::min({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), -3);
-  }
-
-  {
-    deque<int> coll;
-    INSERT_ELEMENTS(coll, 2, 6);
-    INSERT_ELEMENTS(coll, -3, 6);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
-
-    // If more than one minimum or maximum element exists, min_element() and
-    // max_element() return `the first` found; minmax_element() returns the first
-    // minimum but the last maximum element, so max_element() and minmax_element()
-    // don’t yield the same maximum element.
-
-    EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
-
-    EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
-    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())),
-                4);
-
-    // return iterator pair
-    // Note also that minmax_element() yields `the last maximum`, so the distance
-    // 9.
-    auto minmax = minmax_element(coll.begin(), coll.end());
-    EXPECT_THAT(*(minmax.first), -3); // first minimum
-    EXPECT_THAT(*(minmax.second), 6); // last maximum
-
-    // last maximum is 6 which is the last element
-    EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
-
-    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-    EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
-                         max_element(coll.begin(), coll.end())),
-                -1);
-
-    // min/max of absolute values
-    EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
-    EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
-  }
 }
 
 // ={=========================================================================

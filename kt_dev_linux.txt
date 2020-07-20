@@ -8083,7 +8083,7 @@ SYNOPSIS
 
 1. Setup minicon with -s switch
 
-$ minicom -s
+$ minicom -s <config>
 
 COMMAND-LINE
        -s, --setup
@@ -23740,7 +23740,6 @@ should always be quoted when they are a variable (never write ${MY_PATH},
 always should be "${MY_PATH}").
 
 
-
 ={============================================================================
 *kt_linux_tool_140* make-cmake-tutorial
 
@@ -24087,7 +24086,7 @@ compatibility.
 
 
 ={============================================================================
-*kt_linux_tool_140* make-cmake-target
+*kt_linux_tool_140* make-cmake-target cmake-find-package
 
 https://pabloariasal.github.io/2018/02/19/its-time-to-do-cmake-right/
 
@@ -24103,6 +24102,7 @@ depend on and use each other.
 
 `Targets have properties.` Properties of a target are the source files it’s
 built from, the compiler options it requires, the libraries it links against.
+
 In modern CMake you create a list of targets and define the necessary
 properties on them.
 
@@ -24139,13 +24139,112 @@ both PRIVATE and INTERFACE scopes.
 All of this is better understood with an example.
 
 
+libjsonutils
+
+Imagine that you are writing a json utily library, libjsonutils, that parses
+json files from a provided location. Json files can be located on your local
+file system, as well as accessible via some URL.
+
+The library has the following structure:
+
+# from git code
+.
+├── cmake
+│   ├── FindRapidJSON.cmake
+│   ├── GoogleTest-CMakeLists.txt.in
+│   └── JSONUtilsConfig.cmake.in
+├── CMakeLists.txt
+├── include
+│   └── jsonutils
+│       └── json_utils.h
+├── readme
+├── src
+│   ├── file_utils.h
+│   └── json_utils.cpp
+└── test
+    ├── CMakeLists.txt
+    └── src
+        └── main.cpp
+
+We have a single public header, were we define the loadJson() function:
+
+Now let’s define some properties on our target. Why not start with the include
+directories?
+
+<<< CMakeLists.txt
+# Set target properties
+target_include_directories(jsonutils
+    PUBLIC
+        $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+>>>
+
+Our headers are located in two different places: inside src/, which contains a
+utility header called file_utils.h, and in include/, where our public header
+json_utils.h lives. For building our library we need all headers in both
+locations (json_utils.cpp includes both), so INCLUDE_DIRS must contain src/,
+          as well as include/.
+
+On the other hand, users of jsonutils only need to know about the location of
+the public header json_utils.h, so INTERFACE_INCLUDE_DIRS only needs to
+contain include/, but not src/.
+
+There is still a problem, though. While building jsonutils, include/ is at
+/home/pablo/libjsonutils/include/, but after installing our library, it will
+be under ${CMAKE_INSTALL_PREFIX}/include/. Therefore, the location of this
+directory needs to be different depending on whether we are building or
+installing the library. To solve this problem, we use generator expressions,
+which set the correct path depending on the situation.
+
+
+Model dependencies with target_link_libraries
+
+<<< CMakeLists.txt
+
+# Declare dependencies
+set(MIN_BOOST_VERSION 1.70)
+find_package(boost_headers ${MIN_BOOST_VERSION} REQUIRED CONFIG)
+find_package(boost_regex ${MIN_BOOST_VERSION} REQUIRED CONFIG)
+
+target_link_libraries(jsonutils
+    PUBLIC
+        Boost::headers RapidJSON::RapidJSON
+    PRIVATE
+        Boost::regex
+)
+
+>>>
+
+This means that `users of JSONUtils` don’t just require JSONUtil’s interface
+properties, but also the interface properties of its interface dependencies
+(which define the public headers of boost and rapidjson in this case), and
+those of the dependencies of the dependencies, etc.
+
+But how does CMake solve this problem? Easy, it adds all interface properties
+of Boost::boost and RapidJSON::RapidJSON to the corresponding JSONUtil’s own
+interface properties. This means that users of JSONUtils will transitively
+receive the interface properties of targets all up `the dependency chain.`
+
+On the other hand, Boost::regex is only used internally and can be a private
+dependency. Here, Boost::regexes interface properties will be appended to the
+corresponding JSONUtil’s private properties, and won’t be propagated to users.
+
+Isn’t this beautiful? Usage requirements are propagated and build requirements
+encapsulated. Welcome to modern CMake.
+
+
+Sex, Drugs and Imported Targets
+
 Note that Boost::boost and RapidJSON::RapidJSON are targets themselves. But
 where did they come from? I haven’t told you the most breathtaking fact about
 targets yet: `targets can be exported.` Exported targets can be later imported
 into other projects.
 
 When we call find_package(Boost 1.55 REQUIRED COMPONENTS regex), CMake will
-execute `FindBoost.cmake`, where the targets Boost::boost and Boost::regex will
+execute FindBoost.cmake, where the targets Boost::boost and Boost::regex will
 be imported, allowing us to depend on them via target_link_libraries().
 
 Our projects have structure, as they are build as a collection of encapsulated
@@ -24153,13 +24252,32 @@ targets, and CMake handles transitive requirements for us. You might be
 wondering with tears in your eyes how beautiful life can be, but boy are up
 for a revelation.
 
+
+<<< libjsonutils/CMakeLists.txt
+
+# Declare dependencies
+
+set(MIN_RapidJSON_VERSION 1.1)
+find_package(RapidJSON ${MIN_RapidJSON_VERSION} REQUIRED MODULE)
+
+target_link_libraries(jsonutils
+    PUBLIC
+        Boost::headers RapidJSON::RapidJSON
+    PRIVATE
+        Boost::regex
+)
+
+>>>
+
 Let’s try to build jsonutils:
 
 CMake Error at CMakeLists.txt:9
     Target "JSONUtils" links to target "RapidJSON::RapidJSON" but the target was not found.
 
 
-Good boys export their targetsPermalink
+Good boys export their targets
+
+# RapidJSONConfig.cmake should be in the system when installs rapidjson.
 
 The imported target RapidJSON::RapidJSON could not be found, because
 RapidJSONConfig.cmake did not create it. Let’s inspect what rapidjson does in
@@ -24171,8 +24289,8 @@ message(STATUS "RapidJSON found. Headers: ${RAPIDJSON_INCLUDE_DIRS}")
 
 Yes, welcome to hell. This is where the real pain begins: 3rdparty
 dependencies. In the case of rapidjson, a single variable is set to point to
-its include directories. This is exactly what we don’t want, we don’t want
-variables, we want targets!
+its include directories. This is exactly what we don’t want, 
+`we don’t want variables, we want targets!`
 
 In my case, 70% of my dependencies didn’t define any targets in their find
 modules or configs. The reality is that CMake usage is an anarchy. There are
@@ -24180,44 +24298,108 @@ few rules and too much flexibility. We need standard practices, we need
 guidelines. We have design patterns for C++, why not for CMake?
 
 {
-https://cmake.org/cmake/help/v3.13/command/find_package.html?highlight=find_package
+  # do not work
+  set (CMAKE_FIND_ROOT_PATH "/media/keitee/ssd2/rdk/2.0/sysroots/armv7ahf-neon-rdk-linux-gnueabi/")
+  set (CMAKE_SYSROOT "/media/keitee/ssd2/rdk/2.0/sysroots/armv7ahf-neon-rdk-linux-gnueabi/")
+  
+  # work and do not search recursively under PATH
+  find_path(MAPI_RPC_INCLUDE_DIR 
+    NAMES MediaRiteApiRpc.h
+    PATHS /usr/share/mediarite/include
+    PATH_SUFFIXES MediaRiteApi/Rpc)
+  
+  find_path(MAPI_API_INCLUDE_DIR 
+    NAMES MediaRiteApiTypes.h
+    PATHS /usr/share/mediarite/include
+    PATH_SUFFIXES MediaRiteApi)
+  
+  find_path(MAPI_BASIC_INCLUDE_DIR 
+    NAMES Basic.h
+    PATHS /usr/share/mediarite/include/Basic
+    PATH_SUFFIXES Basic)
+  
+  find_path(MAPI_STDLIB_INCLUDE_DIR 
+    NAMES FutarqueTypes.h
+    PATHS /usr/share/mediarite/include
+    PATH_SUFFIXES Basic/FutarqueStdLib)
+  
+  find_library(MAPI_BASIC_LIBRARY_DIR NAMES libFutarqueBasic.so
+    PATHS "/usr/share/mediarite/lib")
+  
+  find_library(MAPI_RPC_LIBRARY_DIR NAMES libMapiRpc.so
+    PATHS "/usr/share/mediarite/lib")
+}
 
-Finds and loads settings from an external project. <PackageName>_FOUND will be
-set to indicate whether the package was found. When the package is found
-package-specific information is provided through variables and Imported
-Targets documented by the package itself.
+{
+  https://cmake.org/cmake/help/v3.13/command/find_package.html?highlight=find_package
 
-The command has `two modes` by which it searches for packages: “Module” mode and
-“Config” mode. The above signature selects Module mode. If no module is found
-the command `falls back to Config mode`, described below. This fall back is
-disabled if the MODULE option is given.
+  Finds and loads settings from an external project. 
 
-In Module mode, CMake searches for a file called `Find<PackageName>.cmake` in
-the CMAKE_MODULE_PATH followed by the CMake installation. If the file is
-found, it is read and processed by CMake. It is responsible for finding the
-package, checking the version, and producing any needed messages. Some
-find-modules provide limited or no support for versioning; check the module
-documentation.
+  find_package(<PackageName> [version] [EXACT] [QUIET] [MODULE]
+               [REQUIRED] [[COMPONENTS] [components...]]
+               [OPTIONAL_COMPONENTS components...]
+               [NO_POLICY_SCOPE])
+
+  `<PackageName>_FOUND` will be set to indicate whether the package was found.
+  When the package is found package-specific information is provided through
+  variables and Imported Targets documented by the package itself.
+
+  The command has `two modes` by which it searches for packages: “Module” mode and
+  “Config” mode. The above signature selects Module mode. If no module is found
+  the command `falls back to Config mode`, described below. This fall back is
+  disabled if the MODULE option is given.
+
+  In Module mode, CMake searches for a file called `Find<PackageName>.cmake` in
+  the `CMAKE_MODULE_PATH` followed by the CMake installation. If the file is
+  found, it is read and processed by CMake. It is responsible for finding the
+  package, checking the version, and producing any needed messages. Some
+  find-modules provide limited or no support for versioning; check the module
+  documentation.
 
 
-Config mode search attempts to locate a configuration file provided by the
-package to be found. A cache entry called <PackageName>_DIR is created to hold
-the directory containing the file. By default the command searches for a
-package with the name <PackageName>. If the NAMES option is given the names
-following it are used instead of <PackageName>. The command searches for a
-file called `<PackageName>Config.cmake` or
-<lower-case-package-name>-config.cmake for each name specified. A replacement
-set of possible configuration file names may be given using the CONFIGS
-option. The search procedure is specified below. 
+  `Config mode search` attempts to locate a configuration file provided by the
+  package to be found. A cache entry called <PackageName>_DIR is created to hold
+  the directory containing the file. By default the command searches for a
+  package with the name <PackageName>. If the NAMES option is given the names
+  following it are used instead of <PackageName>. The command searches for a
+  file called `<PackageName>Config.cmake` or
+  <lower-case-package-name>-config.cmake for each name specified. A replacement
+  set of possible configuration file names may be given using the CONFIGS
+  option. The search procedure is specified below. 
 
-Once found, the configuration file is read and processed by CMake. Since the
-file is provided by the package it already knows the location of package
-contents. The full path to the configuration file is stored in the cmake
-variable `<PackageName>_CONFIG`.
+  Once found, the configuration file is read and processed by CMake. Since the
+  file is provided by the package it already knows the location of package
+  contents. The full path to the configuration file is stored in the cmake
+  variable `<PackageName>_CONFIG`.
+}
+{
+  https://cmake.org/cmake/help/v3.13/command/find_library.html?highlight=find_library
+
+  A short-hand signature is:
+
+  find_library (<VAR> name1 [path1 path2 ...])
+
+  This command is used to find a library. A cache entry named by <VAR> is
+  created to store the result of this command. If the library is found the
+  result is stored in the variable and the search will not be repeated unless
+  the variable is cleared. If nothing is found, the result will be
+  <VAR>-NOTFOUND, and the search will be attempted again the next time
+  find_library is invoked with the same variable.
+
+  Options include:
+
+  NAMES
+  Specify one or more possible names for the library.
+
+  When using this to specify names with and without a version suffix, we
+  recommend specifying the unversioned name first so that locally-built
+  packages can be found before those provided by distributions.
 }
 
 
-If you want it done right do it yourself. So what can you do in these cases?
+If you want it done right do it yourself. 
+
+So what can you do in these cases?
 
 Daniel Pfeifer advises to report such usage as a bug to the library
 developers. I agree. Upstreams should support downstream’s modern target-based
@@ -24227,6 +24409,7 @@ alternatives that do support modern cmake usage?
 In this case, however, there is no other option other taking matters into your
 own hands and write FindRapidJSON.cmake ourselves:
 
+<<<
 # FindRapidJSON.cmake
 #
 # Finds the rapidjson library
@@ -24243,10 +24426,44 @@ own hands and write FindRapidJSON.cmake ourselves:
 # Author: Pablo Arias - pabloariasal@gmail.com
 
 find_package(PkgConfig)
+
+# https://cmake.org/cmake/help/v3.13/module/FindPkgConfig.html?highlight=pkg_check_modules#command:pkg_check_modules
+# Checks for all the given modules, setting a variety of result variables in
+# the calling scope.
+#
+# The following variables may be set upon return. Two sets of values exist,
+# one for the common case `(<XXX> = <prefix>)` and another for the information
+# pkg-config provides when it is called with the --static option (<XXX> =
+# <prefix>_STATIC):
+#
+# <XXX>_INCLUDE_DIRS   ... the '-I' preprocessor flags (without the '-I')
+
 pkg_check_modules(PC_RapidJSON QUIET RapidJSON)
 
 # This command is used to find a directory containing the named file. A cache
 # entry named by <VAR> is created to store the result of this command.
+#
+# https://cmake.org/cmake/help/v3.13/command/find_path.html?highlight=find_path
+#
+# A short-hand signature is:
+# find_path (<VAR> name1 [path1 path2 ...])
+#
+# This command is used to find a directory containing the named file. A cache
+# entry named by <VAR> is created to store the result of this command. If the
+# file in a directory is found the result is stored in the variable and the
+# search will not be repeated unless the variable is cleared. If nothing is
+# found, the result will be <VAR>-NOTFOUND, and the search will be attempted
+# again the next time find_path is invoked with the same variable.
+#
+# Options include:
+#
+# HINTS, PATHS 
+# Specify directories to search in addition to the default locations. The ENV
+# var sub-option reads paths from a system environment variable.
+#
+# PATH_SUFFIXES
+# Specify additional subdirectories to check below each directory location
+# otherwise considered.
 
 find_path(`RapidJSON_INCLUDE_DIR`
     NAMES rapidjson.h
@@ -24259,14 +24476,47 @@ set(RapidJSON_VERSION ${PC_RapidJSON_VERSION})
 # Mark the named cached variables as advanced.
 mark_as_advanced(RapidJSON_FOUND RapidJSON_INCLUDE_DIR RapidJSON_VERSION)
 
+
+# find_package_handle_standard_args
+#
+# This module provides a function intended to be used in Find Modules
+# implementing find_package(<PackageName>) calls. It handles the REQUIRED,
+# QUIET and version-related arguments of find_package. It also sets the
+# `<PackageName>_FOUND` variable. The package is considered found if all
+# variables listed contain valid results, e.g. valid filepaths.
+#
+# There are two signatures:
+# 
+# find_package_handle_standard_args(<PackageName>
+#   (DEFAULT_MSG|<custom-failure-message>)
+#   <required-var>...
+#   )
+# 
+# find_package_handle_standard_args(<PackageName>
+#   [FOUND_VAR <result-var>]
+#   [REQUIRED_VARS <required-var>...]
+#   [VERSION_VAR <version-var>]
+#   [HANDLE_COMPONENTS]
+#   [CONFIG_MODE]
+#   [FAIL_MESSAGE <custom-failure-message>]
+#   )
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(RapidJSON
     REQUIRED_VARS RapidJSON_INCLUDE_DIR
     VERSION_VAR RapidJSON_VERSION
 )
 
+# Get a specific component of a full filename.
+# https://cmake.org/cmake/help/v3.13/command/get_filename_component.html?highlight=get_filename_component
+# get_filename_component(<VAR> <FileName> <COMP> [CACHE])
+# Set <VAR> to a component of <FileName>, where <COMP> is one of:
+# DIRECTORY = Directory without file name
+
 if(RapidJSON_FOUND)
-    set(`RapidJSON_INCLUDE_DIRS` ${RapidJSON_INCLUDE_DIR})
+    # set(`RapidJSON_INCLUDE_DIRS` ${RapidJSON_INCLUDE_DIR})
+    # Set include dirs to parent, to enable includes like #include <rapidjson/document.h>
+    get_filename_component(RapidJSON_INCLUDE_DIRS ${RapidJSON_INCLUDE_DIR} DIRECTORY)
 endif()
 
 if(RapidJSON_FOUND AND NOT TARGET RapidJSON::RapidJSON)
@@ -24275,6 +24525,7 @@ if(RapidJSON_FOUND AND NOT TARGET RapidJSON::RapidJSON)
         INTERFACE_INCLUDE_DIRECTORIES "${RapidJSON_INCLUDE_DIR}"
     )
 endif()
+>>>
 
 This is a very simple find module that looks for rapidjson’s headers in the
 system and `creates the imported target RapidJSON::RapidJSON` that we require. I
@@ -24284,13 +24535,17 @@ is no correponding .a or .so, `but just defines usage requirements.`
 
 This is how you do CMake
 
+NOTE: this is to make your module such as library "exported" so that can be
+used by users.
+
 We want jsonutils to integrate in a target-based build system of downstreams.
 This means that all they have to do to use jsonutils is this:
 (as shown example below)
 
+<<< user's CMakeLists.txt
 find_package(JSONUtils 1.0 REQUIRED)
 target_link_libraries(example `JSONUtils::JSONUtils`)
-
+>>>
 
 To achieve this we need to do two things. 
 
