@@ -6784,6 +6784,10 @@ TEST(AlgoEquilbrium, check_equi_index)
   {
     // error: on define function<> when has array argument
     // std::vector<std::function<int(const int[], int)>> imps{equi_index_1};
+    //
+    // OK, same
+    // std::initializer_list<std::function<int(const std::vector<int> &)>> imps = {
+    //  check_perm_4};
 
     auto imps = {equi_index_1,
                  equi_index_2,
@@ -7936,759 +7940,737 @@ TEST(AlgoMinMax, check_own_imps)
   }
 }
 
-// ={=========================================================================
-// algo-find-missing
+/*
+={=========================================================================
+algo-find-missing
 
-int find_missing_0623(const vector<int> &A)
+codility, find missing element. PermMissingElem
+
+A zero-indexed array A consisting of N different integers is given. The array
+contains integers in the range [1..(N + 1)], which means that exactly one
+element is missing.
+
+Your goal is to find that missing element.
+
+Write a function:
+
+int solution(int A[], int N);
+int solution(const vector<int> &A);
+
+that, given a zero-indexed array A, returns the value of the missing element.
+
+For example, given array A such that:
+
+  A[0] = 2
+  A[1] = 3
+  A[2] = 1
+  A[3] = 5
+
+the function should return 4, as it is the missing element.
+
+Assume that:
+
+N is an integer within the range [0..100,000]; the elements of A are all
+distinct; each element of array A is an integer within the range [1..(N + 1)].
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(1), beyond input storage (not
+counting the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+fails when N=0.
+
+score: 90 of 100
+Detected time complexity: O(N)
+
+empty list and single element 	0.020 s. 	WRONG ANSWER got 0 expected 1
+
+This is about permutation. For example, {1,2,3,4,5} can have
+
+{1,2,3,4} is missing 5
+{2,3,4,5} is missing 1
+{1,3,4,5} is missing 2
+
+Reversely,
+if N==3 inputs are given, then it's one of permutation of 4. [1,4]
+if N==2 inputs are given, then it's one of permutation of 3. [1,3]
+if N==1 inputs are given, then it's one of permutation of 2. [1,2]
+if N==0 inputs are given, then it's one of permutation of 1. [1] so the
+missing is always 1.
+
+
+note on "different integers" so no duplicates on the input
+ 
+*/
+
+namespace algo_find_missing
 {
-  int N = A.size();
-  int total_sum{};
-  for (int i = 1; i <= N + 1; ++i)
-    total_sum += i;
-
-  int local_sum{};
-  for (auto e : A)
-    local_sum += e;
-
-  // cout << "total: " << total_sum << ", local: " << local_sum << endl;
-  return total_sum - local_sum;
-}
-
-TEST(AlgoFindMissing, 0623)
-{
-  EXPECT_THAT(find_missing_0623({2, 3, 1, 5}), 4);
-  EXPECT_THAT(find_missing_0623({1, 2, 3, 4}), 5);
-  EXPECT_THAT(find_missing_0623({2, 3, 4, 5}), 1);
-  EXPECT_THAT(find_missing_0623({1, 3, 4, 5}), 2);
-  EXPECT_THAT(find_missing_0623({}), 1);
-}
-
-// fails when N=0.
-//
-// score: 90 of 100
-// Detected time complexity: O(N)
-//
-// empty list and single element 	0.020 s. 	WRONG ANSWER got 0 expected 1
-//
-// This is about permutation. For example, {1,2,3,4,5} can have
-//
-// {1,2,3,4} is missing 5
-// {2,3,4,5} is missing 1
-// {1,3,4,5} is missing 2
-//
-// Reversely,
-// if N==3 inputs are given, then it's one of permutation of 4. [1,4]
-// if N==2 inputs are given, then it's one of permutation of 3. [1,3]
-// if N==1 inputs are given, then it's one of permutation of 2. [1,2]
-// if N==0 inputs are given, then it's one of permutation of 1. [1] so the
-// missing is always 1.
-
-int find_missing_old(const vector<int> &A)
-{
-  // write your code in C++98
-  if (!A.size())
-    return 0;
-
-  long long isum = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-    isum += A[i];
-
-  long long csum = 0;
-
-  for (unsigned int i = 1; i <= A.size() + 1; i++)
-    csum += i;
-
-  return csum - isum;
-}
-
-TEST(AlgoFindMissing, find_missing_old)
-{
-  EXPECT_THAT(find_missing_old({2, 3, 1, 5}), 4);
-  EXPECT_THAT(find_missing_old({1, 2, 3, 4}), 5);
-  EXPECT_THAT(find_missing_old({2, 3, 4, 5}), 1);
-  EXPECT_THAT(find_missing_old({1, 3, 4, 5}), 2);
-  // fails
-  // EXPECT_THAT(find_missing_old({}), 1);
-}
-
-int find_missing_old_fix(const vector<int> &A)
-{
-  // write your code in C++98
-  long long isum = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-    isum += A[i];
-
-  long long csum = 0;
-
-  for (unsigned int i = 1; i <= A.size() + 1; i++)
-    csum += i;
-
-  return csum - isum;
-}
-
-TEST(AlgoFindMissing, find_missing_old_fix)
-{
-  EXPECT_THAT(find_missing_old_fix({2, 3, 1, 5}), 4);
-  EXPECT_THAT(find_missing_old_fix({1, 2, 3, 4}), 5);
-  EXPECT_THAT(find_missing_old_fix({2, 3, 4, 5}), 1);
-  EXPECT_THAT(find_missing_old_fix({1, 3, 4, 5}), 2);
-  EXPECT_THAT(find_missing_old_fix({}), 1);
-}
-
-int find_missing_old_two(const vector<int> &A)
-{
-  // write your code in C++98
-  long long isum = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-    isum += A[i];
-
-  // use the fact that sum{1..N} is N(N+1)/2 and take cauiton on integer
-  // division. so not n*((n+1)/2)
-
-  int n          = A.size() + 1;
-  long long csum = (n * (n + 1)) / 2;
-
-  return csum - isum;
-}
-
-TEST(AlgoFindMissing, find_missing_old_two)
-{
-  EXPECT_THAT(find_missing_old_two({2, 3, 1, 5}), 4);
-  EXPECT_THAT(find_missing_old_two({1, 2, 3, 4}), 5);
-  EXPECT_THAT(find_missing_old_two({2, 3, 4, 5}), 1);
-  EXPECT_THAT(find_missing_old_two({1, 3, 4, 5}), 2);
-  EXPECT_THAT(find_missing_old_two({}), 1);
-}
-
-// ={=========================================================================
-// algo-find-perm
-
-// 2018.06.25
-int find_perm_0625(const vector<int> &A)
-{
-  //  int N = A.size();
-  int total_sum{};
-  int input_max{};
-
-  for (auto e : A)
+  // removes one loop
+  int find_missing_element_1(const std::vector<int> &A)
   {
-    if (e > input_max)
-      input_max = e;
+    auto num = A.size();
+    long long expected{}, input{};
 
-    total_sum += e;
+    // use the fact that sum{1..N} is N(N+1)/2 and take cauiton on integer
+    // division. so not n*((n+1)/2)
+    {
+      auto n   = A.size() + 1;
+      expected = (n * (n + 1)) / 2;
+    }
+
+    for (size_t i = 0; i < num; ++i)
+    {
+      input += A[i];
+    }
+
+    return expected - input;
   }
 
-  int perm_sum = (input_max * (input_max + 1)) / 2;
-
-  cout << "total: " << total_sum << ", perm: " << perm_sum << endl;
-
-  return total_sum == perm_sum;
-}
-
-TEST(AlgoFindPerm, 0625)
-{
-  EXPECT_THAT(find_perm_0625({4, 1, 3, 2, 1}), 0);
-  EXPECT_THAT(find_perm_0625({1, 4, 1}), 0);
-  // fails
-  // EXPECT_THAT(find_perm_0625({9,5,7,3,2,7,3,1,10,8}),0);
-}
-
-// based on old tries. N's permutation and it downs to algo-unique in the end so
-// if don't need to be defensive about input value, can return false as soon as
-// see duplicates.
-//
-// fails on:
-// extreme_min_max
-// single element with minimal/maximal value
-// large_range
-// sequence 1, 2, ..., N, N = ~100,000
-
-int find_perm_0625_02(const vector<int> &A)
-{
-  int count{};
-  int input_max{};
-
-  vector<bool> lookup(A.size() + 1);
-
-  for (auto e : A)
+  int find_missing_element_2(const std::vector<int> &A)
   {
-    if (e > input_max)
-      input_max = e;
+    auto num = A.size();
+    long long expected{}, input{};
 
-    if (lookup[e] == true)
-      return false;
-    else
+    for (size_t i = 1; i <= num + 1; ++i)
     {
-      lookup[e] = true;
-      ++count;
+      expected += i;
+    }
+
+    for (size_t i = 0; i < num; ++i)
+    {
+      input += A[i];
+    }
+
+    return expected - input;
+  }
+} // namespace algo_find_missing
+
+TEST(AlgoFindMissing, check_find_missing)
+{
+  using namespace algo_find_missing;
+
+  {
+    auto imps = {find_missing_element_1, find_missing_element_2};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f({2, 3, 1, 5}), 4);
+      EXPECT_THAT(f({1, 2, 3, 4}), 5);
+      EXPECT_THAT(f({2, 3, 4, 5}), 1);
+      EXPECT_THAT(f({1, 3, 4, 5}), 2);
+      EXPECT_THAT(f({}), 1);
     }
   }
-
-  // size_t perm_sum = (input_max*(input_max+1))/2;
-
-  cout << "input_max: " << input_max << ", perm: " << count << endl;
-
-  return count == input_max;
 }
 
-// so keys:
-// no duplicate
-// N, input max is A.size()
-// all values <= N, input max
-//
-// 100% pass
-// Detected time complexity: O(N * log(N)) or O(N)
+/*
+={=========================================================================
+algo-find-missing-integer
 
-int find_perm_0625_03(const vector<int> &A)
+TODO: DO NOT UNDERSTAND
+
+Find the minimal positive integer not occurring in a given sequence.
+
+Write a function:
+
+int solution(int A[], int N); 
+
+that, given a non-empty zero-indexed array A of N integers, returns the
+  minimal positive integer that does not occur in A.
+
+For example, given:
+
+  A[0] = 1    
+  A[1] = 3    
+  A[2] = 6
+  A[3] = 4    
+  A[4] = 1    
+  A[5] = 2
+
+the function should return 5.
+
+Assume that:
+
+N is an integer within the range [1..100,000]; each element of array A is an
+integer within the range [-2,147,483,648..2,147,483,647].
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(N), beyond input storage (not
+    counting the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+*/
+
+namespace algo_find_missing_integer
 {
-  int count{};
-  int input_max = A.size();
-
-  vector<bool> lookup(input_max + 1);
-
-  for (auto e : A)
-  {
-    if (e > input_max || lookup[e] == true)
-      return false;
-    else
-    {
-      lookup[e] = true;
-      ++count;
-    }
-  }
-
-  // size_t perm_sum = (input_max*(input_max+1))/2;
-
-  cout << "input_max: " << input_max << ", perm: " << count << endl;
-
-  return count == input_max;
-}
-
-TEST(AlgoFindPerm, 0625_02)
-{
-  EXPECT_THAT(find_perm_0625_03({4, 1, 3, 2, 1}), 0);
-  EXPECT_THAT(find_perm_0625_03({1, 4, 1}), 0);
-  EXPECT_THAT(find_perm_0625_03({9, 5, 7, 3, 2, 7, 3, 1, 10, 8}), 0);
-}
-
-// nov 2014. both are O(n)
-// 1. To get N, find the max value in the input and the sum of input in a single loop
-// 2. If the sum is different from sum[1,N] then return false.
-// 3. If N is different from input size then return false.
-
-// 80% pass
-int find_perm_old_01(vector<int> &A)
-{
-  int max = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    if (max < A[i])
-      max = A[i];
-  }
-
-  return max == (int)A.size();
-}
-
-// <key> The problem is to understand question which is confusing. The question
-// is that N is the size of array and also is the N for permutation. That is
-// there shall be [1,N] elements in the input. If not, not a permutation. This
-// becomes bit set problem to see if all elements are seen.
-
-int find_perm_old_02(vector<int> &A)
-{
-  if (!A.size())
-    return 0;
-
-  // default is false
-  vector<bool> flag(A.size());
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    // note: -1 since permutation starts from 1 but index starts from 0
-    // note: 'unsigned' to handle possible negative input which will be caught
-    // below if statement.
-
-    unsigned int value = A[i] - 1;
-
-    // note: this covers values which are not in [1, N]
-    if (value < A.size())
-      flag[value] = true;
-    else
-      return 0;
-  }
-
-  // note: if it is permutation then there is no flase in flag set
-  return count(flag.cbegin(), flag.cend(), false) == 0;
-}
-
-// The count() in the return which is a loop can be removed as below since can
-// return 0 as soon as duplucates.
-
-// 100% pass
-// Detected time complexity: O(N * log(N)) or O(N)
-
-int find_perm_old_03(vector<int> &A)
-{
-  if (!A.size())
-    return 0;
-
-  // default is false
-  vector<bool> flag(A.size());
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    // note: -1 since permutation starts from 1 but index starts from 0
-    // note: 'unsigned' to handle possible negative input which will be caught
-    // below if statement.
-
-    unsigned int value = A[i] - 1;
-
-    // note: this covers values which are not in [1, N]
-    if (value < A.size() && !flag[value])
-      flag[value] = true;
-    else
-      return 0;
-  }
-
-  return 1;
-}
-
-// ={=========================================================================
-// algo-frog-river
-
-// 2018.06.26
-int find_frog_river_0626(int X, const vector<int> &A)
-{
-  // input check
-  if (A.empty())
-    return -1;
-
-  vector<bool> lookup(A.size());
-  int target_sum = (X * (X + 1)) / 2;
-  int input_sum{};
-
-  for (size_t i = 0; i < A.size(); ++i)
-  {
-    if (lookup[A[i]] == false)
-    {
-      lookup[A[i]] = true;
-      input_sum += A[i];
-
-      if (target_sum == input_sum)
-        return i;
-    }
-  }
-
-  return -1;
-}
-
-TEST(AlgoFrogRiver, 0626_01)
-{
-  EXPECT_THAT(find_frog_river_0626(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
-  // fails
-  // EXPECT_THAT(find_frog_river_0626(1, {2,3,4,5,1,3,5,4}), 4);
-}
-
-int find_frog_river_0626_02(int X, const vector<int> &A)
-{
-  // input check
-  if (A.empty())
-    return -1;
-
-  vector<bool> lookup(A.size());
-  int target_sum = (X * (X + 1)) / 2;
-  int input_sum{};
-
-  for (size_t i = 0; i < A.size(); ++i)
-  {
-    if (A[i] <= X && lookup[A[i]] == false)
-    {
-      lookup[A[i]] = true;
-      input_sum += A[i];
-
-      if (target_sum == input_sum)
-        return i;
-    }
-  }
-
-  return -1;
-}
-
-// although this version passed, it's wrong in size of lookup table.
-TEST(AlgoFrogRiver, 0626_02)
-{
-  EXPECT_THAT(find_frog_river_0626_02(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
-  EXPECT_THAT(find_frog_river_0626_02(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
-  EXPECT_THAT(find_frog_river_0626_02(5, {}), -1);
-
-  // fails
-  // /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container
-  //     with out-of-bounds index 1, but container only holds 1 elements.
-
-  // Objects involved in the operation:
-  // sequence "this" @ 0x0x7fff25cb8fd0 {
-  //   type = NSt7__debug6vectorIbSaIbEEE;
-  // }
-  // Aborted
+  // 2018.06.27
+  // 1. do not say about return value for errors
+  // 2. Allocate lookup table for 2,147,xxx,xxx x 2? No and not meet O(n) space as
+  // well.
   //
-  // EXPECT_THAT(find_frog_river_0626_02(5, {1}), -1);
-}
+  // Since it's about `positive` minimal integer, inputs are 1..2,147,xxx,xxx.
+  // Since N size array could have the max input value which is N.
+  //
+  // So can reduce input value range to 1...N
+  //
+  // What if input is not sequential such as "{100, 200, 300, 340}"? Not a valid
+  // input since we are looking for `missing`, `not occurring` element. If
+  // that's valid input then what are the missing element? So many and not a
+  // valid input.
+  //
+  //
+  // 2018.08.07
+  // These assumptions seems wrong:
+  //
+  // Since it's about `positive` minimal integer, inputs are 1..2,147,xxx,xxx.
+  // Since N size array could have the max input value which is N.
+  //
+  // So can reduce input value range to 1...N
+  //
+  // And what if input is {-2, -1, 0, 2, 3}?
+  //
+  // So not a good problem?
+  //
+  //
+  // 2020.07
+  // "So can reduce input value range to 1...N" is wrong. since think about
+  // input {300,301,303}
 
-int find_frog_river_0626_03(int X, const vector<int> &A)
-{
-  // input check
-  if (A.empty())
-    return -1;
-
-  vector<bool> lookup(A.size() + 1);
-  int target_sum = (X * (X + 1)) / 2;
-  int input_sum{};
-
-  for (size_t i = 0; i < A.size(); ++i)
+  // this is based on 2018.06
+  int find_missing_integer_1(const std::vector<int> &A)
   {
-    if (A[i] <= X && lookup[A[i]] == false)
-    {
-      lookup[A[i]] = true;
-      input_sum += A[i];
+    // input check
+    if (A.empty())
+      return -1;
 
-      if (target_sum == input_sum)
+    // size is high and performance is high
+    bool table[A.size()]{false};
+
+    // set table on input
+    for (auto e : A)
+    {
+      table[e] = true;
+    }
+
+    // assumes element values >= 1 so starts from 1
+    for (size_t i = 1; i < A.size(); ++i)
+    {
+      if (table[i] == false)
         return i;
     }
+
+    // when no missing integer found
+    return -1;
   }
 
-  return -1;
-}
-
-TEST(AlgoFrogRiver, 0626_03)
-{
-  EXPECT_THAT(find_frog_river_0626_03(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
-  EXPECT_THAT(find_frog_river_0626_03(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
-  EXPECT_THAT(find_frog_river_0626_03(5, {}), -1);
-  EXPECT_THAT(find_frog_river_0626_03(5, {1}), -1);
-  EXPECT_THAT(find_frog_river_0626_03(1, {2}), -1);
-  EXPECT_THAT(find_frog_river_0626_03(1, {1}), 0);
-}
-
-int find_frog_river_old_01(int X, std::vector<int> &A)
-{
-  if (A.empty() || X == 1)
-    return -1;
-
-  bool *pbitset = new bool(X);
-
-  int idx;
-  int count = 0;
-
-  // bitset{0, X-1}
-  for (idx = 0; idx < X; idx++)
-    pbitset[idx] = false;
-
-  for (idx = 0; idx < (int)A.size(); idx++) // signed and unsigned warning.
+  // old. does it mean it actually passes? don't understand now.
+  // O(N), 100%
+  //
+  // Use bool vector approach? The input element can be negative so ignore
+  // negegative inputs.  However, the problem is input value can be too big to
+  // have bool vector. how to solve?
+  //
+  // The key is whatever the input value is the aim to find the minimum positive
+  // value which is missed. So have bool vector(N) and only consider inputs in 0 <
+  // x <= N. Since even if there is no input in the specificed range then it
+  // simply means that it misses the whole value of the range and need to get the
+  // first false in the bool vector.
+  //
+  // If bool vector has all set then return N+1. ????
+  int find_missing_integer_2(const vector<int> &A)
   {
-    // wasn't set before?
-    if (pbitset[A[idx] - 1] == false)
-    {
-      // set it and increase count
-      pbitset[A[idx] - 1] = true;
-      count++;
+    // input check
+    if (A.empty())
+      return -1;
 
-      // are all position set?
-      if (count == X) // signed and unsigned warning.
-      {
-        delete pbitset;
-        return idx;
-      }
+    vector<bool> flags(A.size());
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+      int value = A[i];
+
+      if (value > 0 && value <= (int)A.size())
+        flags[value - 1] = true;
+    }
+
+    for (unsigned int i = 0; i < flags.size(); i++)
+      if (flags[i] == false)
+        return i + 1;
+
+    return A.size() + 1;
+  }
+
+  // what if input has {-1, 0, 1, 3}?
+
+} // namespace algo_find_missing_integer
+
+TEST(AlgoFindMissingInteger, check_find_missing_integer)
+{
+  using namespace algo_find_missing_integer;
+
+  {
+    auto imps = {find_missing_integer_1, find_missing_integer_2};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f({1, 3, 6, 4, 1, 2}), 5);
+      EXPECT_THAT(f({}), -1);
     }
   }
 
-  delete pbitset;
-  return -1;
+  // wrong
+  {
+    auto f = find_missing_integer_2;
+    EXPECT_THAT(f({300, 301, 303}), 1);
+  }
 }
 
-// Failed on 25%:
-//
-// small_random1 3 random permutation, X = 50     0.020 s.     RUNTIME ERROR
-// tested program terminated unexpectedly
-//
-// 1. signed and unsigned that complier warns mismatch between signed and
-// unsigned.  No such error when run with GCC 4.6.3.
-//
-// 2. this is wrong since it allocate a single bool but not array. Failed on
-// other many test cases with the same error. But why no such error on GCC
-// 4.6.3. This sites uses C++98 so may be new initialize way in C++11?
+/*
+={=========================================================================
+algo-find-perm
 
-// Still failed with the same error.
-int find_frog_river_old_02(int X, std::vector<int> &A)
+PermCheck https://codility.com/programmers/lessons/2
+
+A non-empty zero-indexed array A consisting of N integers is given.
+
+A permutation is a sequence containing 'each' element from 1 to N once, and
+only once.
+
+For example, array A such that:
+
+    A[0] = 4
+    A[1] = 1
+    A[2] = 3
+    A[3] = 2
+
+is a permutation, but array A such that:
+
+    A[0] = 4
+    A[1] = 1
+    A[2] = 3
+
+is not a permutation.
+
+The goal is to check whether array A is a permutation.
+
+Write a function:
+
+    int solution(int A[], int N); 
+
+that, given a zero-indexed array A, returns 1 if array A is a permutation and
+0 if it is not.
+
+For example, given array A such that:
+
+    A[0] = 4
+    A[1] = 1
+    A[2] = 3
+    A[3] = 2
+
+the function should return 1.
+
+Given array A such that:
+
+    A[0] = 4
+    A[1] = 1
+    A[2] = 3
+
+the function should return 0.
+
+Assume that:
+
+N is an integer within the range [1..100,000]; each element of array A is an
+integer within the range [1..1,000,000,000].
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(N), beyond input storage (not
+counting the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+note: there is no "duplicates" on the input so duplicates can happen.
+
+*/
+
+namespace algo_check_perm
 {
-  if (A.empty() || X == 1)
-    return -1;
+  // similar to algo-find-missing
+  //
+  // actually it is:
+  // bool check_perm_1(const std::vector<int> &A);
 
-  bool *pbitset = new bool(X);
-
-  int idx;
-  int count = 0;
-
-  for (idx = 0; idx < X; idx++)
-    pbitset[idx] = false;
-
-  for (idx = 0; idx < (int)A.size(); idx++)
+  // 2018.06.25
+  //
+  // fail since there are duplicates
+  // EXPECT_THAT(f({4, 1, 3, 2, 1}), 0);
+  // EXPECT_THAT(f({1, 4, 1}), 0);
+  // fails
+  // EXPECT_THAT(f({9,5,7,3,2,7,3,1,10,8}),0);
+  int check_perm_1(const std::vector<int> &A)
   {
-    if (pbitset[A[idx] - 1] == false)
+    //  int N = A.size();
+    int total_sum{};
+    int input_max{};
+
+    for (auto e : A)
     {
-      pbitset[A[idx] - 1] = true;
-      count++;
+      if (e > input_max)
+        input_max = e;
+
+      total_sum += e;
+    }
+
+    int perm_sum = (input_max * (input_max + 1)) / 2;
+
+    // cout << "total: " << total_sum << ", perm: " << perm_sum << endl;
+
+    return total_sum == perm_sum;
+  }
+
+  // based on old tries. N's permutation and it downs to algo-unique in the end
+  // so if don't need to be defensive about input value, can return false as
+  // soon as see duplicates.
+  //
+  // fails on:
+  // extreme_min_max
+  // single element with minimal/maximal value
+  // large_range
+  // sequence 1, 2, ..., N, N = ~100,000
+  //
+  // so input value should be in [1, A.size()]
+
+  int check_perm_2(const vector<int> &A)
+  {
+    int count{};
+    int input_max{};
+
+    vector<bool> lookup(A.size() + 1);
+
+    for (auto e : A)
+    {
+      if (e > input_max)
+        input_max = e;
+
+      if (lookup[e] == true)
+        return false;
+      else
+      {
+        lookup[e] = true;
+        ++count;
+      }
+    }
+
+    // cout << "input_max: " << input_max << ", perm: " << count << endl;
+
+    return count == input_max;
+  }
+
+  // The count() in the return which is a loop can be removed as below since can
+  // return 0 as soon as duplucates.
+  //
+  // 100% pass
+  // Detected time complexity: O(N * log(N)) or O(N)
+
+  int check_perm_3(const vector<int> &A)
+  {
+    if (!A.size())
+      return 0;
+
+    // default is false
+    vector<bool> flag(A.size());
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+      // note: -1 since permutation starts from 1 but index starts from 0
+      // note: 'unsigned' to handle possible negative input which will be caught
+      // below if statement.
+
+      unsigned int value = A[i] - 1;
+
+      // note: this covers values which are not in [1, N]
+      if (value < A.size() && !flag[value])
+        flag[value] = true;
+      else
+        return 0;
+    }
+
+    return 1;
+  }
+
+  // no duplicate
+  // N, input max is A.size()
+  // all values <= N, input max
+  //
+  // 100% pass
+  // Detected time complexity: O(N * log(N)) or O(N)
+
+  int check_perm_4(const vector<int> &A)
+  {
+    int count{};
+    int input_max = A.size();
+
+    vector<bool> lookup(input_max + 1);
+
+    for (auto e : A)
+    {
+      if (e > input_max || lookup[e] == true)
+        return false;
+      else
+      {
+        lookup[e] = true;
+        ++count;
+      }
+    }
+
+    return count == input_max;
+  }
+} // namespace algo_check_perm
+
+TEST(AlgoCheckPerm, check_permutation)
+{
+  using namespace algo_check_perm;
+
+  {
+    auto imps = {check_perm_4};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f({4, 1, 3, 2, 1}), 0);
+      EXPECT_THAT(f({1, 4, 1}), 0);
+      EXPECT_THAT(f({9, 5, 7, 3, 2, 7, 3, 1, 10, 8}), 0);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-frog-river
+
+FrogRiverOne 
+
+A small frog wants to get to the other side of a river. The frog is currently
+located at position 0, and wants to get to position X. Leaves fall from a tree
+onto the surface of the river.
+
+You are given a non-empty zero-indexed array A consisting of N integers
+representing the falling leaves. A[K] represents the position where one leaf
+falls at time K, measured in minutes.
+
+The goal is to find the earliest time when the frog can jump to the other side
+of the river. The frog can cross only when leaves appear at every position
+across the river from 1 to X.
+
+For example, you are given integer X = 5 and array A such that:
+
+  A[0] = 1
+  A[1] = 3
+  A[2] = 1
+  A[3] = 4
+  A[4] = 2
+  A[5] = 3
+  A[6] = 5
+  A[7] = 4
+
+In minute 6, a leaf falls into position 5. This is the earliest time when
+leaves appear in every position across the river.
+
+Write a function:
+
+    int solution(int X, int A[], int N); 
+
+that, given a non-empty zero-indexed array A consisting of N integers and
+  integer X, returns the earliest time when the frog can jump to the other
+  side of the river.
+
+If the frog is never able to jump to the other side of the river, the function
+should return -1.
+
+For example, given X = 5 and array A such that:
+
+  A[0] = 1
+  A[1] = 3
+  A[2] = 1
+  A[3] = 4
+  A[4] = 2
+  A[5] = 3
+  A[6] = 5
+  A[7] = 4
+
+the function should return 6, as explained above. Assume that:
+
+N and X are integers within the range [1..100,000];
+each element of array A is an integer within the range [1..X].
+
+note: suggest that all input are < N
+
+Complexity:
+
+expected worst-case time complexity is O(N);
+expected worst-case space complexity is O(X), beyond input storage (not
+    counting the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+*/
+
+namespace algo_frog_river
+{
+  // old
+  // good on using sum on X and input. can use single loop
+  // but space O(A+1) but not O(X)
+  int check_frog_river_1(int X, const std::vector<int> &A)
+  {
+    // input check
+    if (A.empty())
+      return -1;
+
+    std::vector<bool> lookup(A.size() + 1);
+
+    int target_sum = (X * (X + 1)) / 2;
+    int input_sum{};
+
+    for (size_t i = 0; i < A.size(); ++i)
+    {
+      // see if check
+      if (A[i] <= X && lookup[A[i]] == false)
+      {
+        lookup[A[i]] = true;
+        input_sum += A[i];
+
+        if (target_sum == input_sum)
+          return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // NOTE: BEST
+  // make space O(X+1) due to "if check" and can make O(X)
+  int check_frog_river_2(int X, const std::vector<int> &A)
+  {
+    // input check
+    if (A.empty())
+      return -1;
+
+    std::vector<bool> lookup(X + 1);
+
+    int target_sum = (X * (X + 1)) / 2;
+    int input_sum{};
+
+    for (size_t i = 0; i < A.size(); ++i)
+    {
+      if (A[i] <= X && lookup[A[i]] == false)
+      {
+        lookup[A[i]] = true;
+        input_sum += A[i];
+
+        if (target_sum == input_sum)
+          return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // NOTE: BEST
+  // Detected time complexity: O(N)
+  // The key idea is that it is to use counting and to use counter to check if
+  // receives all inputs, stones, to jump
+  int check_frog_river_3(int X, const std::vector<int> &A)
+  {
+    // write your code in C++11
+    if (A.empty() || !X)
+      return -1;
+
+    std::vector<bool> flags(X);
+    int count = 0;
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+      int value = A[i] - 1;
+
+      if (value < X && flags[value] == false)
+      {
+        flags[value] = true;
+        count++;
+      }
 
       if (count == X)
-      {
-        delete[] pbitset;
-        return idx; // diff
-      }
+        return i;
     }
+
+    return -1;
   }
 
-  delete[] pbitset;
-  return -1; // diff
-}
+  // 2020.07
+  //
+  // each element of array A is an integer within the range [1..X].
+  //
+  // to pass: EXPECT_THAT(f(1, {1}), 0);
+  // xidx = 0 is valid so have xidx with init value -1.
+  //
+  // space O(X+1) and can make O(X)
 
-int find_frog_river_old_03(int X, std::vector<int> &A)
-{
-  if (A.empty() || X == 1)
-    return -1;
-
-  bool *pbitset = new bool[X]; // diff
-
-  int idx;
-  int count = 0;
-
-  for (idx = 0; idx < X; idx++)
-    pbitset[idx] = false;
-
-  for (idx = 0; idx < (int)A.size(); idx++)
+  int check_frog_river_4(int X, const std::vector<int> &A)
   {
-    if (pbitset[A[idx] - 1] == false)
+    // when input is empty
+    if (!A.size())
+      return -1;
+
+    int xidx{-1};
+    bool table[X + 1]{false};
+
+    // get the index of X and set up the lookup table
+    for (size_t i = 0; i < A.size(); ++i)
     {
-      pbitset[A[idx] - 1] = true;
-      count++;
+      if (A[i] == X)
+        xidx = i;
 
-      if (count == X)
-      {
-        delete[] pbitset;
-        return idx;
-      }
+      table[A[i]] = true;
     }
+
+    // not found so not able to jump
+    if (xidx == -1)
+      return -1;
+
+    // check if there are missing up to xidx; index of X
+    for (size_t i = 1; i <= X; ++i)
+      if (table[i] = false)
+        return -1;
+
+    return xidx;
   }
+} // namespace algo_frog_river
 
-  delete[] pbitset;
-  return -1;
-}
-
-// 90 out of 100 points. Detected time complexity: O(N). Failed on:
-//
-// single single element     0.020 s.     WRONG ANSWER got -1 expected 0
-//
-// note: think about when single element has big value(position)
-
-int find_frog_river_old_04(int X, std::vector<int> &A)
+TEST(AlgoFrogRiver, check_frog_river)
 {
-  if (A.empty() || X == 0) // diff
-    return -1;
+  using namespace algo_frog_river;
 
-  bool *pbitset = new bool[X];
-
-  int idx;
-  int count = 0;
-
-  // bitset{0, X-1}
-  for (idx = 0; idx < X; idx++)
-    pbitset[idx] = false;
-
-  for (idx = 0; idx < (int)A.size(); idx++)
   {
-    // wasn't set before?
-    if ((A[idx] - 1 < X) && pbitset[A[idx] - 1] == false) // diff
+    auto imps = {check_frog_river_1,
+                 check_frog_river_2,
+                 check_frog_river_3,
+                 check_frog_river_4};
+
+    for (const auto &f : imps)
     {
-      // set it and increase count
-      pbitset[A[idx] - 1] = true;
-      count++;
-
-      // are all position set?
-      if (count == X)
-      {
-        delete[] pbitset;
-        return idx;
-      }
+      EXPECT_THAT(f(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
+      EXPECT_THAT(f(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
+      EXPECT_THAT(f(5, {}), -1);
+      EXPECT_THAT(f(5, {1}), -1);
+      EXPECT_THAT(f(1, {2}), -1);
+      EXPECT_THAT(f(1, {1}), 0);
     }
   }
-
-  delete[] pbitset;
-  return -1;
-}
-
-// 100 out of 100 points. Detected time complexity: O(N)
-
-int find_frog_river_old_05(int X, std::vector<int> &A)
-{
-  if (A.empty() || X == 0) // diff
-    return -1;
-
-  bool *pbitset = new bool[X];
-
-  int idx;
-  int count = 0;
-
-  // bitset{0, X-1}
-  for (idx = 0; idx < X; idx++)
-    pbitset[idx] = false;
-
-  for (idx = 0; idx < (int)A.size(); idx++)
-  {
-    int value = A[idx] - 1;
-
-    // wasn't set before?
-    if ((value < X) && pbitset[value] == false) // diff
-    {
-      // set it and increase count
-      pbitset[value] = true;
-      count++;
-
-      // are all position set?
-      if (count == X)
-      {
-        delete[] pbitset;
-        return idx;
-      }
-    }
-  }
-
-  delete[] pbitset;
-  return -1;
-}
-
-// The key idea is that it is about counting and to use counter to check if
-// receives all inputs rather than using loops or function call like bitset.
-
-int find_frog_river_old_06(int X, const vector<int> &A)
-{
-  // write your code in C++11
-  if (A.empty() || !X)
-    return -1;
-
-  vector<bool> flags(X);
-  int count = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    int value = A[i] - 1;
-
-    if (value < X && flags[value] == false)
-    {
-      flags[value] = true;
-      count++;
-    }
-
-    if (count == X)
-      return i;
-  }
-
-  return -1;
-}
-
-// Detected time complexity: O(N)
-
-TEST(AlgoFrogRiver, OldAttempts)
-{
-  EXPECT_THAT(find_frog_river_old_06(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
-  EXPECT_THAT(find_frog_river_old_06(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
-  EXPECT_THAT(find_frog_river_old_06(5, {}), -1);
-  EXPECT_THAT(find_frog_river_old_06(5, {1}), -1);
-  EXPECT_THAT(find_frog_river_old_06(1, {2}), -1);
-  EXPECT_THAT(find_frog_river_old_06(1, {1}), 0);
-}
-
-// ={=========================================================================
-// algo-find-missing-integer
-
-// 2018.06.27
-// 1. do not say about return value for errors
-//
-// 2. Allocate lookup table for 2,147,xxx,xxx x 2? No and not meet O(n) space as
-// well.
-//
-// Since it's about `positive` minimal integer, inputs are 1..2,147,xxx,xxx.
-// Since N size array could have the max input value which is N.
-//
-// So can reduce input value range to 1...N
-//
-// What if input is not sequential such as "{100, 200, 300, 340}"? Not a valid
-// input since we are looking for `missing`, `not occurring` element. If that's
-// valid input then what are the missing element? So many and not a valid input.
-
-int find_missing_integer(const vector<int> &A)
-{
-  // input check
-  if (A.empty())
-    return -1;
-
-  vector<bool> lookup(A.size());
-
-  for (size_t i = 0; i < A.size(); ++i)
-  {
-    if (A[i] > 0 && lookup[A[i] - 1] == false)
-      lookup[A[i] - 1] = true;
-  }
-
-  for (size_t i = 0; i < lookup.size(); ++i)
-    if (lookup[i] == false)
-      return i + 1;
-
-  return -1;
-}
-
-TEST(AlgoFindMissingInteger, 0627_01)
-{
-  EXPECT_THAT(find_missing_integer({1, 3, 6, 4, 1, 2}), 5);
-}
-
-// O(N), 100%
-//
-// Use bool vector approach? The input element can be negative so ignore
-// negegative inputs.  However, the problem is input value can be too big to
-// have bool vector. how to solve?
-//
-// The key is whatever the input value is the aim to find the minimum positive
-// value which is missed. So have bool vector(N) and only consider inputs in 0 <
-// x <= N. Since even if there is no input in the specificed range then it
-// simply means that it misses the whole value of the range and need to get the
-// first false in the bool vector.
-//
-// If bool vector has all set then return N+1. ????
-
-int find_missing_integer_old(const vector<int> &A)
-{
-  vector<bool> flags(A.size());
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    int value = A[i];
-
-    if (value > 0 && value <= (int)A.size())
-      flags[value - 1] = true;
-  }
-
-  for (unsigned int i = 0; i < flags.size(); i++)
-    if (flags[i] == false)
-      return i + 1;
-
-  return A.size() + 1;
-}
-
-TEST(AlgoFindMissingInteger, OldTries)
-{
-  EXPECT_THAT(find_missing_integer_old({1, 3, 6, 4, 1, 2}), 5);
 }
 
 // ={=========================================================================

@@ -19,169 +19,131 @@ using namespace testing;
 
 namespace algopad
 {
-  struct my_less_1
+  // old
+  // good on using sum on X and input. can use single loop
+  // but space O(A+1) but not O(X)
+  int check_frog_river_1(int X, const std::vector<int> &A)
   {
-    template <typename _Iterator1, typename _Iterator2>
-    bool operator()(_Iterator1 it1, _Iterator2 it2)
-    {
-      // see *cxx-pair-comparison*
-      return *it1 < *it2;
-    }
-  };
+    // input check
+    if (A.empty())
+      return -1;
 
-  // use single iterator type
-  struct my_less_2
+    std::vector<bool> lookup(A.size() + 1);
+
+    int target_sum = (X * (X + 1)) / 2;
+    int input_sum{};
+
+    for (size_t i = 0; i < A.size(); ++i)
+    {
+      // see if check
+      if (A[i] <= X && lookup[A[i]] == false)
+      {
+        lookup[A[i]] = true;
+        input_sum += A[i];
+
+        if (target_sum == input_sum)
+          return i;
+      }
+    }
+
+    return -1;
+  }
+
+  // NOTE: BEST
+  // make space O(X+1) due to "if check" and can make O(X)
+  int check_frog_river_2(int X, const std::vector<int> &A)
   {
-    template <typename _Iterator1>
-    bool operator()(_Iterator1 it1, _Iterator1 it2)
+    // input check
+    if (A.empty())
+      return -1;
+
+    std::vector<bool> lookup(X + 1);
+
+    int target_sum = (X * (X + 1)) / 2;
+    int input_sum{};
+
+    for (size_t i = 0; i < A.size(); ++i)
     {
-      // see *cxx-pair-comparison*
-      return *it1 < *it2;
+      if (A[i] <= X && lookup[A[i]] == false)
+      {
+        lookup[A[i]] = true;
+        input_sum += A[i];
+
+        if (target_sum == input_sum)
+          return i;
+      }
     }
-  };
 
-  // should make it template structure and if not, see:
-  // error: ‘algopad::my_less_2’ is not a template
-  //  template <typename _Iterator, typename _Compare = my_less_2<_Iterator>>
+    return -1;
+  }
 
-  template <typename _Iterator1>
-  struct my_less_3
+  // NOTE: BEST
+  // Detected time complexity: O(N)
+  // The key idea is that it is to use counting and to use counter to check if
+  // receives all inputs, stones, to jump
+  int check_frog_river_3(int X, const std::vector<int> &A)
   {
-    bool operator()(_Iterator1 it1, _Iterator1 it2)
-    {
-      // see *cxx-pair-comparison*
-      return *it1 < *it2;
-    }
-  };
+    // write your code in C++11
+    if (A.empty() || !X)
+      return -1;
 
-  // implement own min/max_element()
-  // max_element(coll.begin(), coll.end();
+    std::vector<bool> flags(X);
+    int count = 0;
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+      int value = A[i] - 1;
+
+      if (value < X && flags[value] == false)
+      {
+        flags[value] = true;
+        count++;
+      }
+
+      if (count == X)
+        return i;
+    }
+
+    return -1;
+  }
+
+  // 2020.07
   //
-  // 1. how to define value_type of _Iterator? no need to define var for current
-  // max value and comp function. All we need are iterators
-  // 2. see comp is a copy
-
-  template <typename _Iterator, typename _Compare>
-  _Iterator my_max_element_1(_Iterator it1, _Iterator it2, _Compare comp)
-  {
-    // need to handle when there is only one element. otherwise, would access
-    // to end which is error.
-    if (it1 == it2)
-      return it1;
-
-    _Iterator result = it1;
-
-    for (++it1; it1 != it2; ++it1)
-    {
-      // if "current < *it", that is get new max
-      if (comp(result, it1))
-        result = it1;
-    }
-
-    return result;
-  }
-
-  // "first and last" var naming seems better.
-  template <typename _Iterator, typename _Compare>
-  _Iterator
-  my_max_element_2(_Iterator __first, _Iterator __last, _Compare __comp)
-  {
-    // if thre is only one
-    if (__first == __last)
-      return __first;
-
-    _Iterator __result = __first;
-
-    // if *__result < *__first
-    while (++__first != __last)
-      if (__comp(__result, __first))
-        __result = __first;
-
-    return __result;
-  }
-
-  // "first and last" var naming seems better. default comp
-  template <typename _Iterator, typename _Compare = my_less_3<_Iterator>>
-  _Iterator my_max_element_3(_Iterator __first,
-                             _Iterator __last,
-                             _Compare __comp = _Compare())
-  {
-    // if thre is only one
-    if (__first == __last)
-      return __first;
-
-    _Iterator __result = __first;
-
-    // if *__result < *__first
-    while (++__first != __last)
-      if (__comp(__result, __first))
-        __result = __first;
-
-    return __result;
-  }
-
-  template <typename _Iterator, typename _Compare>
-  _Iterator
-  my_min_element_2(_Iterator __first, _Iterator __last, _Compare __comp)
-  {
-    if (__first == __last)
-      return __first;
-
-    _Iterator __result = __first;
-
-    while (++__first != __last)
-      if (!__comp(__result, __first))
-        __result = __first;
-
-    return __result;
-  }
-
-  // same but "if (__comp(__first, __result))" which seems better
-  template <typename _Iterator, typename _Compare>
-  _Iterator
-  my_min_element_3(_Iterator __first, _Iterator __last, _Compare __comp)
-  {
-    if (__first == __last)
-      return __first;
-
-    _Iterator __result = __first;
-
-    while (++__first != __last)
-      if (__comp(__first, __result))
-        __result = __first;
-
-    return __result;
-  }
-
-  // std-minmax
-  // If more than one minimum or maximum element exists, min_element() and
-  // max_element() return `the first` found;
+  // each element of array A is an integer within the range [1..X].
   //
-  // minmax_element() returns the first minimum but the last maximum element, so
-  // max_element() and minmax_element() don’t yield the same maximum element.
+  // to pass: EXPECT_THAT(f(1, {1}), 0);
+  // xidx = 0 is valid so have xidx with init value -1.
+  //
+  // space O(X+1) and can make O(X)
 
-  template <typename _Iterator>
-  std::pair<_Iterator, _Iterator> my_minmax_element_1(_Iterator __first,
-                                                      _Iterator __last)
+  int check_frog_river_4(int X, const std::vector<int> &A)
   {
-    if (__first == __last)
-      return std::make_pair(__first, __last);
+    // when input is empty
+    if (!A.size())
+      return -1;
 
-    _Iterator __max = __first;
-    _Iterator __min = __first;
+    int xidx{-1};
+    bool table[X + 1]{false};
 
-    while (++__first != __last)
+    // get the index of X and set up the lookup table
+    for (size_t i = 0; i < A.size(); ++i)
     {
-      // get max. add "=" to get the last max as std version
-      if (*__max <= *__first)
-        __max = __first;
+      if (A[i] == X)
+        xidx = i;
 
-      // get min
-      if (*__first < *__min)
-        __min = __first;
+      table[A[i]] = true;
     }
 
-    return std::make_pair(__min, __max);
+    // not found so not able to jump
+    if (xidx == -1)
+      return -1;
+
+    // check if there are missing up to xidx; index of X
+    for (size_t i = 1; i <= X; ++i)
+      if (table[i] = false)
+        return -1;
+
+    return xidx;
   }
 } // namespace algopad
 
@@ -189,123 +151,21 @@ TEST(Pad, xx)
 {
   using namespace algopad;
 
-  // on std-map
   {
-    // sorted by key
-    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
+    auto imps = {check_frog_river_1,
+                 check_frog_river_2,
+                 check_frog_river_3,
+                 check_frog_river_4};
 
-    auto e = std::max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, std::make_pair(13, 1));
-
-    // ForwardIterator
-    // max_element (ForwardIterator beg, ForwardIterator end, CompFunc op)
-    // op is used to compare two elements:
-    // op(elem1,elem2)
-    // It should return true when the first element is less than the second
-    // element.
-
-    auto maxelem = std::max_element(
-      std::begin(counts),
-      std::end(counts),
-      [](pair<int, size_t> const &e1, pair<int, size_t> const &e2) {
-        return e1.second < e2.second;
-      });
-
-    EXPECT_THAT(*maxelem, std::make_pair(5, 3));
-  }
-
-  // multimap
-  {
-    // sorted by key and the order in the equal range are the order of input
-    std::multimap<int, size_t> counts{{1, 2},
-                                      {3, 9},
-                                      {3, 8},
-                                      {5, 3},
-                                      {8, 3},
-                                      {13, 2},
-                                      {13, 4},
-                                      {13, 12},
-                                      {13, 1}};
-
-    // for (auto &e : counts)
-    //   cout << e.first << ", " << e.second << endl;
-
-    // Q: how max_element() finds the max on the second?
-    // see *cxx-pair-comparison*
-
-    auto e = std::max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, std::make_pair(13, 12));
-  }
-
-  // max_element
-  {
-    // sorted by key
-    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
-
+    for (const auto &f : imps)
     {
-      auto pos = my_max_element_1(counts.begin(), counts.end(), my_less_1());
-      EXPECT_THAT(*pos, std::make_pair(13, 1));
+      EXPECT_THAT(f(5, {1, 3, 1, 4, 2, 3, 5, 4}), 6);
+      EXPECT_THAT(f(1, {2, 3, 4, 5, 1, 3, 5, 4}), 4);
+      EXPECT_THAT(f(5, {}), -1);
+      EXPECT_THAT(f(5, {1}), -1);
+      EXPECT_THAT(f(1, {2}), -1);
+      EXPECT_THAT(f(1, {1}), 0);
     }
-
-    {
-      auto pos = my_max_element_2(counts.begin(), counts.end(), my_less_1());
-      EXPECT_THAT(*pos, std::make_pair(13, 1));
-    }
-  }
-
-  // max_element with default comp
-  {
-    // sorted by key
-    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
-
-    {
-      auto pos = my_max_element_3(counts.begin(), counts.end());
-      EXPECT_THAT(*pos, std::make_pair(13, 1));
-    }
-  }
-
-  // min_element
-  {
-    // sorted by key
-    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
-
-    {
-      auto pos = my_min_element_2(counts.begin(), counts.end(), my_less_1());
-      EXPECT_THAT(*pos, std::make_pair(1, 2));
-    }
-
-    {
-      auto pos = my_min_element_3(counts.begin(), counts.end(), my_less_1());
-      EXPECT_THAT(*pos, std::make_pair(1, 2));
-    }
-  }
-
-  // min_element and my_less_2
-  {
-    // sorted by key
-    std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
-
-    {
-      auto pos = my_min_element_2(counts.begin(), counts.end(), my_less_2());
-      EXPECT_THAT(*pos, std::make_pair(1, 2));
-    }
-
-    {
-      auto pos = my_min_element_3(counts.begin(), counts.end(), my_less_2());
-      EXPECT_THAT(*pos, std::make_pair(1, 2));
-    }
-  }
-
-  {
-    std::vector<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
-
-    // return iterator pair
-    // Note also that minmax_element() yields `the last maximum`, so the distance
-    // 9.
-    auto minmax = my_minmax_element_1(coll.begin(), coll.end());
-    EXPECT_THAT(*(minmax.first), -3);
-    EXPECT_THAT(*(minmax.second), 6);
-    EXPECT_THAT(std::distance(minmax.first, minmax.second), 9);
   }
 }
 

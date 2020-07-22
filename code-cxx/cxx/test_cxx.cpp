@@ -1588,23 +1588,23 @@ TEST(CxxExpression, check_if_chain)
   }
 }
 
-// "else if(0 == (e % 2))" means effectively 
+// "else if(0 == (e % 2))" means effectively
 // "else if((e >= 3) && (0 == (e % 2))) so has "implicit" condition.
 TEST(CxxExpression, check_if_else)
 {
-  std::vector<int> coll{1,2,3,4,5,6,7};
+  std::vector<int> coll{1, 2, 3, 4, 5, 6, 7};
   std::vector<int> result1{};
   std::vector<int> result2{};
 
-  for (auto e: coll)
+  for (auto e : coll)
   {
     if (e < 3)
       result1.push_back(e);
-    else if(0 == (e % 2))
+    else if (0 == (e % 2))
       result2.push_back(e);
   }
 
-  EXPECT_THAT(result2, ElementsAre(4,6));
+  EXPECT_THAT(result2, ElementsAre(4, 6));
 }
 
 TEST(CxxExpression, show_loop)
@@ -2525,7 +2525,7 @@ namespace cxx_init_list
   Foo returnFoo() { return {"one", "two", "three"}; }
 } // namespace cxx_init_list
 
-TEST(CxxCtor, check_init_list)
+TEST(CxxCtor, check_init_list_1)
 {
   using namespace cxx_init_list;
 
@@ -2578,6 +2578,110 @@ TEST(CxxCtor, check_init_list)
   {
     auto foo1 = returnFoo();
     EXPECT_THAT(foo1.return_mesg(), "one, two, three, ");
+  }
+}
+
+namespace cxx_init_list
+{
+  int equi_index_1(const int A[], int n) { return 3; }
+
+  int equi_index_2(const std::vector<int> &A) { return 3; }
+} // namespace cxx_init_list
+
+TEST(CxxCtor, check_init_list_2)
+{
+  using namespace cxx_init_list;
+
+  // OK
+  {
+    const std::vector<std::pair<int, std::string>> table = {
+      std::make_pair(1000, "M"),
+      std::make_pair(900, "CM"),
+      std::make_pair(500, "D")};
+  }
+
+  // OK
+  {
+    const auto table = {std::make_pair(1000, "M"),
+                        std::make_pair(900, "CM"),
+                        std::make_pair(500, "D")};
+  }
+
+  // error: direct-list-initialization of ‘auto’ requires
+  // exactly one element [-fpermissive]
+  // {
+  //   const auto table{
+  //     std::make_pair(1000, "M"),
+  //     std::make_pair(900, "CM"),
+  //     std::make_pair(500, "D")
+  //   };
+  // }
+
+  // error: unable to deduce ‘const std::initializer_list<const auto>’
+  // from ‘{{1000, "M"},
+  // {
+  //   const auto table{
+  //     {1000, "M"},
+  //     {900, "CM"},
+  //     {500, "D"}
+  //   };
+  // }
+
+  // OK
+  {
+    const std::initializer_list<std::pair<unsigned int, std::string>> table = {
+      std::make_pair(1001, "M"),
+      std::make_pair(900, "CM"),
+      std::make_pair(500, "D")};
+  }
+
+  // OK
+  {
+    const std::initializer_list<std::pair<unsigned int, std::string>> table{
+      std::make_pair(1001, "M"),
+      std::make_pair(900, "CM"),
+      std::make_pair(500, "D")};
+  }
+
+  // when use function
+  // error: on define function<> when has array argument
+  // std::vector<std::function<int(const int[], int)>> imps{equi_index_1};
+  //
+  // HOW?
+  {
+    auto imps = {equi_index_1};
+
+    const int coll[]{-7, 1, 5, 2, -4, 3, 0};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll, 7), 3);
+    }
+  }
+
+  // OK
+  {
+    auto imps = {equi_index_2};
+
+    const std::vector<int> coll{-7, 1, 5, 2, -4, 3, 0};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 3);
+    }
+  }
+
+  // OK, same
+  {
+    std::initializer_list<std::function<int(const std::vector<int> &)>> imps = {
+      equi_index_2};
+
+    const std::vector<int> coll{-7, 1, 5, 2, -4, 3, 0};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(coll), 3);
+    }
   }
 }
 
@@ -10977,7 +11081,7 @@ TEST(CxxRegex, MatchResult)
 }
 
 // ={=========================================================================
-// cxx-bit cxx-numeric-limit
+// cxx-bit cxx-bitset cxx-numeric-limit
 //
 // The addition operation in the CPU is agnostic to whether the integer is
 // signed or unsigned. The bit representation is the same.
@@ -11028,25 +11132,19 @@ TEST(CxxBit, check_bitset)
   }
 
   {
-    std::bitset<32> bitvec(1U);
-    EXPECT_EQ(bitvec.to_string(), "00000000000000000000000000000001");
+    std::bitset<32> coll(1U);
+    EXPECT_EQ(coll.to_string(), "00000000000000000000000000000001");
 
-    EXPECT_EQ(bitvec.any(), true);
-    EXPECT_EQ(bitvec.none(), false);
-    EXPECT_EQ(bitvec.all(), false);
-    EXPECT_EQ(bitvec.count(), 1);
-    EXPECT_EQ(bitvec.size(), 32);
+    EXPECT_EQ(coll.any(), true);
+    EXPECT_EQ(coll.none(), false);
+    EXPECT_EQ(coll.all(), false);
+    EXPECT_EQ(coll.count(), 1);
+    EXPECT_EQ(coll.size(), 32);
 
-    bitvec.flip();
-    EXPECT_EQ(bitvec.count(), 31);
-    bitvec.reset();
-    EXPECT_EQ(bitvec.count(), 0);
-    // 1) Sets all bits to true.
-    bitvec.set();
-    EXPECT_EQ(bitvec.count(), 32);
-
-    bitset<16> bitvec2("01011001011");
-    EXPECT_EQ(bitvec2.to_string(), "0000001011001011");
+    coll.flip();
+    EXPECT_EQ(coll.count(), 31);
+    coll.reset();
+    EXPECT_EQ(coll.count(), 0);
   }
 
   {
@@ -11072,53 +11170,281 @@ TEST(CxxBit, check_bitset)
 
   {
     unsigned short short11 = 1024;
-    bitset<16> bitset11{short11};
+    std::bitset<16> bitset11{short11};
     EXPECT_EQ(bitset11.to_string(), "0000010000000000");
 
     unsigned short short12 = short11 >> 1; // 512
-    bitset<16> bitset12{short12};
+    std::bitset<16> bitset12{short12};
     EXPECT_EQ(bitset12.to_string(), "0000001000000000");
 
     unsigned short short13 = short11 >> 10; // 1
-    bitset<16> bitset13{short13};
+    std::bitset<16> bitset13{short13};
     EXPECT_EQ(bitset13.to_string(), "0000000000000001");
 
     unsigned short short14 = short11 >> 11; // 0
-    bitset<16> bitset14{short14};
+    std::bitset<16> bitset14{short14};
     EXPECT_EQ(bitset14.to_string(), "0000000000000000");
   }
 }
 
-// bool vector < bitset and bit array < bool array
+// bitset::set()
+// 1) Sets all bits to true.
+// 2) Sets the bit at position pos to the value value.
 
-TEST(CxxBit, bit_SizeConsideration)
+TEST(CxxBit, check_bitset_set)
+{
+  std::bitset<16> coll{};
+
+  // no bits are set
+  EXPECT_EQ(coll.count(), 0);
+
+  // 1) Sets all bits to true.
+  coll.set();
+  EXPECT_EQ(coll.count(), 16);
+
+  coll.reset();
+  EXPECT_EQ(coll.count(), 0);
+
+  coll.set(3);
+  EXPECT_EQ(coll.to_string(), "0000000000001000");
+}
+
+// size:
+// vector bool size: 40
+// bitset      size: 128
+// array bit size  : 128
+// array bool size : 1000
+//
+// performance:
+// [ RUN      ] CxxBit.check_performace_on_vector_bool
+// [       OK ] CxxBit.check_performace_on_vector_bool (277 ms)
+// [ RUN      ] CxxBit.check_performace_on_bitset
+// [       OK ] CxxBit.check_performace_on_bitset (255 ms)
+// [ RUN      ] CxxBit.check_performace_on_array_bit
+// [       OK ] CxxBit.check_performace_on_array_bit (50 ms)
+// [ RUN      ] CxxBit.check_performace_on_array_bool
+// [       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
+
+TEST(CxxBit, check_size_on_different_types)
 {
   const int size{1000};
 
-  vector<bool> coll_bool_vector(size, 1);
-  bitset<size> coll_bitset(1U);
-  int coll_bit_array[size / 32 + 1];
-  bool coll_bool_array[size];
+  std::vector<bool> coll_vector_bool(size);
+  std::bitset<size> coll_bitset{1};
+  int coll_array_bit[size / 32 + 1];
+  bool coll_array_bool[size];
 
-  EXPECT_THAT(coll_bool_vector.size(), size);
+  {
+    EXPECT_THAT(coll_vector_bool.size(), size);
 
 #if __GNUC__ && __x86_64__
-  EXPECT_THAT(sizeof(coll_bool_vector), 72); // 64 bits
-#else
-  EXPECT_THAT(sizeof(coll_bool_vector), 1); // 32 bits, need to update
-#endif
+    // EXPECT_THAT(sizeof(coll_vector_bool), 72); // 64 bits
 
-  EXPECT_THAT(coll_bitset.size(), size);
+    // gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
+    std::cout << "vector bool size: " << sizeof(coll_vector_bool) << "\n";
+#else
+    EXPECT_THAT(sizeof(coll_vector_bool), 1); // 32 bits, need to update
+#endif
+  }
+
+  {
+    EXPECT_THAT(coll_bitset.size(), size);
+
+// 64 bits
 #if __GNUC__ && __x86_64__
-  EXPECT_THAT(sizeof(coll_bitset), 128); // 64 bits
+    std::cout << "bitset      size: " << sizeof(coll_bitset) << "\n";
 #else
-  EXPECT_THAT(sizeof(coll_bitset), 1);      // 32 bits
+    EXPECT_THAT(sizeof(coll_bitset), 1);      // 32 bits
 #endif
+  }
 
-  // 1000/32 = 31, 31+1 = 32, 32*4 = 128
-  EXPECT_THAT(sizeof(coll_bit_array), 128);
+  {
+    // 1000/32 = 31, 31+1 = 32, 32*4 = 128
+    // EXPECT_THAT(sizeof(coll_array_bit), 128);
+    std::cout << "array bit size  : " << sizeof(coll_array_bit) << "\n";
+  }
 
-  EXPECT_THAT(sizeof(coll_bool_array), size);
+  {
+    // EXPECT_THAT(sizeof(coll_array_bool), size);
+    std::cout << "array bool size : " << sizeof(coll_array_bool) << "\n";
+  }
+}
+
+// Programming Pearl, Column 01, Q 02
+// How would you implement bit vectors using bitwise logical operations?
+//
+// C and old C++ programs usually use type long for arrays of bits and
+// manipulate them with the bit operators, such as &, |, and ~.
+
+namespace cxx_bit_array
+{
+  const unsigned int BITSPERWORD = 32;
+  const unsigned int SHIFT       = 5;
+  const unsigned int MASK        = 0x1F;
+  const unsigned int SIZE        = 60;
+
+  // bit array represents a array of bits. Why +1? Since
+  //
+  // ...  32-63      0-31
+  // ...  array[1]   array[0]
+  //
+  // SIZE is num of bits to represent and BITSPERWORD is num of bits of a
+  // word(int). So there should be one array at least for 0-31 bits.
+
+  int a[1 + SIZE / BITSPERWORD];
+
+  void set_bit(int pos)
+  {
+    // MASK
+    // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0]
+    // bits valid and not others and effectively pos - 31 for values
+    // which are > 32. that is:
+    //
+    // 32 -> 0
+    // 33 -> 1
+    // ..
+    //
+    // [pos >> SHIFT]
+    // pos is int and right shift on int may cause problem? Not in [] since it
+    // is unsigned.
+    //
+    // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
+    // find array index that pos falls on and this matches up 1 << (pos & MASK)
+
+    a[pos >> SHIFT] |= (1 << (pos & MASK));
+  }
+
+  void clear_bit(int pos) { a[pos >> SHIFT] &= ~(1 << (pos & MASK)); }
+
+  bool test_bit(int pos)
+  {
+    return (a[pos >> SHIFT] & (1 << (pos & MASK))) ? true : false;
+  }
+} // namespace cxx_bit_array
+
+TEST(CxxBit, check_bit_array)
+{
+  using namespace cxx_bit_array;
+
+  auto array_size = sizeof(a) / sizeof(a[0]);
+
+  EXPECT_THAT(array_size, 2);
+
+  set_bit(35);
+  set_bit(45);
+  EXPECT_EQ(test_bit(45), true);
+
+  // 45        35     31
+  // 10000000001000 | 0.....
+  // 0x2008         | 0x0
+  //
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
+
+  clear_bit(45);
+  EXPECT_EQ(test_bit(35), true);
+  EXPECT_EQ(test_bit(45), false);
+
+  // 35     31
+  // 1000 | 0...
+
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
+}
+
+// same as uamespace cxx_bit_array
+namespace cxx_bit_performace
+{
+  const unsigned int BITSPERWORD = 32;
+  const unsigned int SHIFT       = 5;
+  const unsigned int MASK        = 0x1F;
+  const unsigned int SIZE        = 1000;
+  const unsigned int LOOP        = 10000;
+
+  int coll_array_bit[1 + SIZE / BITSPERWORD];
+
+  void coll_array_set(int pos)
+  {
+    coll_array_bit[pos >> SHIFT] |= (1 << (pos & MASK));
+  }
+
+  void coll_array_clear(int pos)
+  {
+    coll_array_bit[pos >> SHIFT] &= ~(1 << (pos & MASK));
+  }
+
+  bool coll_array_test(int pos)
+  {
+    return (coll_array_bit[pos >> SHIFT] & (1 << (pos & MASK))) ? true : false;
+  }
+} // namespace cxx_bit_performace
+
+TEST(CxxBit, check_performace_on_vector_bool)
+{
+  using namespace cxx_bit_performace;
+
+  std::vector<bool> coll(SIZE);
+
+  for (size_t loop = 0; loop < LOOP; ++loop)
+  {
+    for (size_t i = 0; i < SIZE; ++i)
+      coll[i] = true;
+
+    for (size_t i = 0; i < SIZE; ++i)
+      coll[i] = false;
+  }
+}
+
+TEST(CxxBit, check_performace_on_bitset)
+{
+  using namespace cxx_bit_performace;
+
+  std::bitset<SIZE> coll{};
+
+  for (size_t loop = 0; loop < LOOP; ++loop)
+  {
+    for (size_t i = 0; i < SIZE; ++i)
+      coll.set(i);
+
+    for (size_t i = 0; i < SIZE; ++i)
+      coll.reset(i);
+  }
+}
+
+TEST(CxxBit, check_performace_on_array_bit)
+{
+  using namespace cxx_bit_performace;
+
+  for (size_t loop = 0; loop < LOOP; ++loop)
+  {
+    for (size_t i = 0; i < SIZE; ++i)
+      coll_array_set(i);
+
+    for (size_t i = 0; i < SIZE; ++i)
+      coll_array_clear(i);
+  }
+}
+
+TEST(CxxBit, check_performace_on_array_bool)
+{
+  using namespace cxx_bit_performace;
+
+  bool coll[SIZE];
+
+  for (size_t loop = 0; loop < LOOP; ++loop)
+  {
+    for (size_t i = 0; i < SIZE; ++i)
+      coll[i] = true;
+
+    for (size_t i = 0; i < SIZE; ++i)
+      coll[i] = false;
+  }
 }
 
 TEST(CxxBit, bit_RightShift)
@@ -11253,90 +11579,6 @@ TEST(CxxBit, bit_MaxNegagiveIsSpecial)
   int negate_min = -int_min;
   bitset<32> bitset_negate_min(negate_min);
   EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
-}
-
-// Programming Pearl, Column 01, Q 02
-// How would you implement bit vectors using bitwise logical operations?
-//
-// C and old C++ programs usually use type long for arrays of bits and
-// manipulate them with the bit operators, such as &, |, and ~.
-
-namespace bit_set_array
-{
-  const unsigned int BITSPERWORD = 32;
-  const unsigned int SHIFT       = 5;
-  const unsigned int MASK        = 0x1F;
-  const unsigned int SIZE        = 60;
-
-  // bit vector to represent a array of bits. Why +1? Since 0-31 bits falls to
-  // array[0] and 32-63 falls to array[1], and so on. SIZE is num of bits to
-  // represent and BITSPERWORD is num of bits of a word(int). So there should be
-  // one array at least for 0-31 bits.
-
-  int a[1 + SIZE / BITSPERWORD];
-
-  void set_bit(int pos)
-  {
-    // MASK
-    // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0]
-    // bits valid and not others and effectively pos - 31 for values
-    // which are > 32. that is:
-    //
-    // 32 -> 0
-    // 33 -> 1
-    // ..
-    //
-    // [pos >> SHIFT]
-    // pos is int and right shift on int may cause problem? Not in [] since it
-    // is unsigned.
-    //
-    // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
-    // find array index that pos falls on and this matches up 1 << (pos & MASK)
-
-    a[pos >> SHIFT] |= (1 << (pos & MASK));
-  }
-
-  void clear_bit(int pos) { a[pos >> SHIFT] &= ~(1 << (pos & MASK)); }
-
-  bool test_bit(int pos)
-  {
-    return (a[pos >> SHIFT] & (1 << (pos & MASK))) ? true : false;
-  }
-} // namespace bit_set_array
-
-TEST(CxxBit, bit_BitVectors)
-{
-  using namespace bit_set_array;
-
-  auto array_size = sizeof(a) / sizeof(a[0]);
-
-  EXPECT_THAT(array_size, 2);
-
-  set_bit(35);
-  set_bit(45);
-  EXPECT_EQ(test_bit(45), true);
-
-  // 45        35
-  // 10000000001000 | 0
-  //
-  // for (int i = 0; i < (int)array_size; ++i)
-  // {
-  //   cout << ":" << hex << (a[i]);
-  // }
-  // cout << endl;
-
-  clear_bit(45);
-  EXPECT_EQ(test_bit(35), true);
-  EXPECT_EQ(test_bit(45), false);
-
-  // 35
-  // 1000 | 0
-
-  // for (int i = 0; i < (int)array_size; ++i)
-  // {
-  //   cout << ":" << hex << (a[i]);
-  // }
-  // cout << endl;
 }
 
 // Why '%' produce negative value?

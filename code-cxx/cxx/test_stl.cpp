@@ -2181,8 +2181,8 @@ TEST(CxxMap, check_compare)
     std::map<int, int>
       coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
 
-    auto it1 = coll.begin();      // {1, 7}
-    auto it2 = ++coll.begin();    // {2, 4}
+    auto it1 = coll.begin();   // {1, 7}
+    auto it2 = ++coll.begin(); // {2, 4}
 
     // this is std::pair comparison and see *cxx-pair-comparison*
     EXPECT_THAT(*it1 < *it2, true);
