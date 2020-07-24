@@ -1200,6 +1200,108 @@ TEST(CxxJSON, jsoncpp_ex6_1)
   std::cout << response << std::endl;
 }
 
+// std::string and std::string.c_str() differs? NO
+//
+// service1["dvbtriplet"] = "318.4.8583";
+// service1["dvbtriplet"] = dvb;
+// service1["dvbtriplet"] = dvb.c_str();
+
+TEST(CxxJSON, jsoncpp_ex6_2)
+{
+  {
+    Json::Value service1;
+    service1["dvbtriplet"] = "318.4.8583"; 
+
+    service1["servicetypes"] = Json::Value(Json::arrayValue);
+    service1["servicetypes"].append("DTT");
+    service1["servicetypes"].append("OTT");
+
+    // use
+    std::string response;
+    std::ostringstream oss;
+    oss << service1;
+    response.assign(oss.str());
+
+    std::cout << response << std::endl;
+  }
+
+  {
+    std::string dvb{"318.4.8583"}; 
+
+    Json::Value service1;
+    service1["dvbtriplet"] = dvb;
+
+    service1["servicetypes"] = Json::Value(Json::arrayValue);
+    service1["servicetypes"].append("DTT");
+    service1["servicetypes"].append("OTT");
+
+    // use
+    std::string response;
+    std::ostringstream oss;
+    oss << service1;
+    response.assign(oss.str());
+
+    std::cout << response << std::endl;
+  }
+
+  {
+    std::string dvb{"318.4.8583"}; 
+
+    Json::Value service1;
+    service1["dvbtriplet"] = dvb.c_str();
+
+    service1["servicetypes"] = Json::Value(Json::arrayValue);
+    service1["servicetypes"].append("DTT");
+    service1["servicetypes"].append("OTT");
+
+    // use
+    std::string response;
+    std::ostringstream oss;
+    oss << service1;
+    response.assign(oss.str());
+
+    std::cout << response << std::endl;
+  }
+}
+
+// string vs number
+//
+// {
+//         "dvbtriplet" : "318"
+// }
+// {
+//         "dvbtriplet" : 318
+// }
+
+TEST(CxxJSON, jsoncpp_ex6_3)
+{
+  {
+    Json::Value service1;
+    service1["dvbtriplet"] = "318"; 
+
+    // use
+    std::string response;
+    std::ostringstream oss;
+    oss << service1;
+    response.assign(oss.str());
+
+    std::cout << response << std::endl;
+  }
+
+  {
+    Json::Value service1;
+    service1["dvbtriplet"] = 318;
+
+    // use
+    std::string response;
+    std::ostringstream oss;
+    oss << service1;
+    response.assign(oss.str());
+
+    std::cout << response << std::endl;
+  }
+}
+
 // append() on array
 //
 // "/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/include/json/value.h" 3 4

@@ -1054,7 +1054,7 @@ http://10.184.136.124:9001/r/1013/diff/
 rbt post -r 1066
 rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
 
-rbt post --tracking-branch=origin/NGDEV-161284_DTT_playback -r 1104
+rbt post --tracking-branch=origin/develop -r 1104
 
 
 
@@ -1264,6 +1264,8 @@ cat /opt/persistent/sky/diag.cfg
 GET /as/diag/fallback/enabeAll
 GET /as/diag/AAMP_PLAYER/enableAll
 GET /as/diag/AS_PLAYER/enableAll
+
+curl -v -X GET http://192.168.0.9:9005/as/diag/AS_PLAYER/enableAll
 
 
 ={============================================================================
@@ -11326,6 +11328,9 @@ https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_skyxione-de/111/
 
 
 *rdk-xi1-flash*
+
+38:a6:ce:ff:dd:c1
+
 https://www.stb.bskyb.com/confluence/display/SI/XiOne+-+Software+upgrade+instructions+-+CAD+2
 
 Upgrade from Factory Image
@@ -11381,13 +11386,17 @@ Connect the USB to the box.
 Power up the box. Wait until "root@skyxione:" CLI prompt is seen. Execute the
 below commands to upgrade:
 
-root@skyxione: mount /dev/sda1 /mnt/usb/
-root@skyxione: cd /mnt/usb/
-root@skyxione:: FlashApp ./<image-name>.bin
-
-FlashApp ./SKXI11ADS_000130.5.7d0_EXP_VBN_sdy_UK_REF.bin 
+root@skyxione: 
+mount /dev/sda1 /mnt/usb/
+cd /mnt/usb/
+FlashApp ./<image-name>.bin
 
 FlashApp ./SKXI11ADS_000130.4.21d0_EXP_VBN_sdy_UK_REF.bin
+
+FlashApp ./SKXI11ADS_000130.5.7d0_EXP_VBN_sdy_UK_REF.bin 
+FlashApp ./SKXI11ADS_000130.5.7d0_EXP_PROD_sdy_UK_REF.bin (no serial?)
+
+FlashApp ./SKXI11ADS_000130.5.6d0_EXP_VBN_sdy_UK_PRO.bin
 
 
 root@skyxione:/mnt/usb# FlashApp ./SKXI11ADS_000120.10.6d0_EXP_VBN_sdy_UK_PRO.bin
@@ -11455,7 +11464,7 @@ iptables -P FORWARD ACCEPT
 iptables -P OUTPUT ACCEPT
 iptables -F
 
-ssh -p 10022 root@192.168.1.108
+ssh -p 10022 root@192.168.0.9
 
 
 // to move where it's writable
@@ -11472,7 +11481,7 @@ mount-copybind ./asproxy /usr/sbin/asproxy
 journalctl -fu sky-asproxy
 
 umount /usr/sbin/asproxy
-scp -r -P 10022 ./asproxy root@192.168.1.101:/opt
+scp -r -P 10022 ./asproxy root@192.168.0.9:/opt
 
 
 // as-player
@@ -11484,7 +11493,7 @@ systemctl stop sky-asplayer
 mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
 umount /usr/sbin/asrdkplayer
 
-scp -r -P 10022 ./asrdkplayer root@192.168.1.108:/opt
+scp -r -P 10022 ./asrdkplayer root@192.168.0.9:/opt
 scp -r -P 10022 ./aout root@192.168.1.108:/opt
 
 journalctl -fu sky-asplayer --since today
@@ -11499,13 +11508,21 @@ ssh -p 10022 root@192.168.1.108 "journalctl -u sky-asplayer --since today" > pla
 scp -P 10022 root@192.168.1.108:/opt/dbus.log .
 
 
-*as-epg*
+*as-epg-logging*
+
+systemctl status sky-epg.service
+systemctl stop sky-epg.service
+systemctl start sky-epg.service
+
 cat /lib/systemd/system/sky-epg.service
 journalctl -fu sky-epg
 
 root@arrisxi6-morty:~# cat /tmp/data/sky/packages/com.bskyb.epgui/console.log
 epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open shared object file: No such file or directory
 pid 6 has terminated (return code 127)
+
+
+/opt/logs/sky-messages.log
 
 
 ={============================================================================
@@ -12491,7 +12508,7 @@ int ASServicePrivate::request(sd_bus_message *msg, void *userData,
 }
 
 
-*as-dbus*
+*as-watchstream*
 dbus-monitor --system --profile "interface=com.sky.as.Service1"
 
 mc      1584356869.382300       125     :1.127  com.sky.as.player       /com/sky/as/service     com.sky.as.Service1     Request
@@ -13473,6 +13490,7 @@ MediaRite base. So review both at the same time.
 
 git push -n origin ready-NGDEV-161284_DTT_playback:NGDEV-161284_DTT_playback
 git push origin ready-NGDEV-161284_DTT_playback:NGDEV-161284_DTT_playback
+git push origin ready-NGDEV-161284_DTT_playback_propose:NGDEV-161284_DTT_playback
 
 
 *as-dtt-play-status*
@@ -13658,8 +13676,26 @@ dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Conten
 "Accept-Encoding","gzip, deflate",\
 "Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
 dict:string:string:\
-"sid","100" \
+"sid","1" \
 string:''
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/1/action/watchlive" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:\
+"sid","29" \
+string:''
+
+
+*as-stop*
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \

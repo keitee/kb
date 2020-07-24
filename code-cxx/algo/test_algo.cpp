@@ -8673,268 +8673,293 @@ TEST(AlgoFrogRiver, check_frog_river)
   }
 }
 
-// ={=========================================================================
-// algo-max-counters
+/*
+={=========================================================================
+algo-max-counters
 
-// 2018.06.27
-//
-// A[M] array, N counters
-// A[k], 1 =< A[k] =< N+1,
-//  if A[k] =< N, increase(A[k]). if A[k] == N+1, max_counter
-// 1 =< N, M =< 100,000
+Calculate the values of counters after applying all alternating operations:
+increase counter by 1; set value of all counters to current maximum.
 
-vector<int> find_max_counters_0627(int N, vector<int> A)
+You are given N counters, initially set to 0, and you have two possible
+operations on them:
+
+increase(X) − counter X is increased by 1,
+max_counter − all counters are set to the maximum value of any counter.
+
+A non-empty zero-indexed array A of M integers is given. This array represents
+consecutive operations:
+
+if A[K] = X, such that 1 ≤ X ≤ N, then operation K is increase(X),
+if A[K] = N + 1 then operation K is max_counter.
+
+For example, given integer N = 5 and array A such that:
+
+    A[0] = 3
+    A[1] = 4
+    A[2] = 4
+    A[3] = 6
+    A[4] = 1
+    A[5] = 4
+    A[6] = 4
+
+the values of the counters after each consecutive operation will be:
+     1  2  3  4  5    counter #, X.
+    (0, 0, 1, 0, 0)
+    (0, 0, 1, 1, 0)
+    (0, 0, 1, 2, 0)
+    (2, 2, 2, 2, 2)
+    (3, 2, 2, 2, 2)
+    (3, 2, 2, 3, 2)
+    (3, 2, 2, 4, 2)
+
+The goal is to calculate the value of every counter after all operations.
+
+Assume that the following declarations are given:
+
+    struct Results {
+      int * C;
+      int L;
+    }; 
+
+Write a function:
+
+struct Results solution(int N, int A[], int M); 
+
+that, given an integer N and a non-empty zero-indexed array A consisting of M
+  integers, returns a sequence of integers representing the values of the
+  counters.
+
+The sequence should be returned as:
+
+a structure Results (in C), or
+a vector of integers (in C++), or
+a record Results (in Pascal), or
+an array of integers (in any other programming language).
+
+For example, given:
+
+    A[0] = 3
+    A[1] = 4
+    A[2] = 4
+    A[3] = 6
+    A[4] = 1
+    A[5] = 4
+    A[6] = 4
+
+the function should return [3, 2, 2, 4, 2], as explained above.
+
+Assume that:
+
+N and M are integers within the range [1..100,000];
+each element of array A is an integer within the range [1..N + 1].
+
+Complexity:
+
+expected worst-case time complexity is O(N+M);
+expected worst-case space complexity is O(N), beyond input storage (not counting
+the storage required for input arguments).
+
+Elements of input arrays can be modified.
+
+*/
+
+namespace algo_find_max_counters
 {
-  vector<int> result(N, 0);
-  int max{};
 
-  for (size_t i = 0; i < A.size(); ++i)
+  // The result is that 100% correctness and 40% performance.
+  //
+  // Therefore, can see that the problem is the max-all operation and as a worst
+  // case, when there are N max-all operations this will be O(N*M) but target is
+  // O(M+N). So the key is to find a way to have max-all effect without doing a
+  // loop. How?
+  std::vector<int> find_max_counters_1(int N, std::vector<int> A)
   {
-    if (A[i] == N + 1)
+    vector<int> counters(N, 0);
+
+    int current_max = 0;
+
+    for (size_t i = 0; i < A.size(); i++)
     {
-      // fill_n(result, N, max);
-      for (auto &e : result)
-        e = max;
-    }
-    else if (A[i] >= 1 && A[i] <= N)
-    {
-      if (++result[A[i] - 1] > max)
-        max = result[A[i] - 1];
-    }
-  }
+      // set current max to all
+      if (A[i] >= N + 1)
+      {
+        // find the max
+        for (size_t j = 0; j < counters.size(); j++)
+          if (counters[j] > current_max)
+            current_max = counters[j];
 
-  return result;
-}
-
-TEST(AlgoMaxCounters, 0627_01)
-{
-  EXPECT_THAT(find_max_counters_0627(5, {3, 4, 4, 6, 1, 4, 4}),
-              ElementsAre(3, 2, 2, 4, 2));
-}
-
-// when simply follows descriptions:
-//
-// The result is that 100% correctness and 40% performance.
-//
-// Therefore, can see that the problem is the max-all operation and as a worst
-// case, when there are N max-all operations this will be O(N*M) but target is
-// O(M+N). So the key is to find a way to have max-all effect without doing a
-// loop. How?
-
-vector<int> find_max_counters_old_01(int N, const vector<int> &A)
-{
-  vector<int> counters(N, 0);
-
-  int current_max = 0;
-
-  for (size_t i = 0; i < A.size(); i++)
-  {
-    // set current max to all
-    if (A[i] >= N + 1)
-    {
-      for (size_t j = 0; j < counters.size(); j++)
-        if (counters[j] > current_max)
-          current_max = counters[j];
-
-      for (size_t j = 0; j < counters.size(); j++)
-        counters[j] = current_max;
-    }
-    // increment a counter
-    else
-      counters[A[i] - 1] += 1;
-  }
-
-  return counters;
-}
-
-TEST(AlgoMaxCounters, OldTries)
-{
-  EXPECT_THAT(find_max_counters_old_01(5, {3, 4, 4, 6, 1, 4, 4}),
-              ElementsAre(3, 2, 2, 4, 2));
-}
-
-// The above has time O(N*M) for worst cases such as when input has all 6, max
-// operations. So key is not to loop on N counter array for a max operation.
-//
-// The observation shows that max-all op is performance bottleneck.
-//
-// How to solve?
-//
-// {3,4,4,6,1,4,4}
-//
-// 0   0 0 0 0
-// 0   0 1 0 0
-// 0   0 1 1 0
-// 0   0 1 2 0
-// -   - - - - take a snapshot of current max rather than run max op
-// 2+1 0 1 2 0
-// 3   0 1 3 0
-// 3   0 1 4 0
-// then do lopp and update elements that are less than snapshot value so that
-// avoid run loop every max op.
-
-vector<int> find_max_counters_0627_02(int N, vector<int> A)
-{
-  vector<int> result(N, 0);
-  int current_max{}, operation_max{};
-
-  for (size_t i = 0; i < A.size(); ++i)
-  {
-    if (A[i] == N + 1)
-    {
-      operation_max = current_max;
-    }
-    else if (A[i] >= 1 && A[i] <= N)
-    {
-      if (result[A[i] - 1] < operation_max)
-        result[A[i] - 1] = operation_max + 1;
+        // do max-all
+        for (size_t j = 0; j < counters.size(); j++)
+          counters[j] = current_max;
+      }
+      // increment a counter
       else
-        result[A[i] - 1] += 1;
-
-      if (result[A[i] - 1] > current_max)
-        current_max = result[A[i] - 1];
+        counters[A[i] - 1] += 1;
     }
+
+    return counters;
   }
 
-  for (auto &e : result)
+  // 2018.06.27. little better
+  std::vector<int> find_max_counters_2(int N, vector<int> A)
   {
-    if (e < operation_max)
-      e = operation_max;
-  }
+    vector<int> result(N, 0);
+    int max{};
 
-  return result;
-}
-
-TEST(AlgoMaxCounters, 0627_02)
-{
-  EXPECT_THAT(find_max_counters_0627_02(5, {3, 4, 4, 6, 1, 4, 4}),
-              ElementsAre(3, 2, 2, 4, 2));
-  EXPECT_THAT(find_max_counters_0627_02(5, {3, 4, 4, 6, 1, 4, 6}),
-              ElementsAre(3, 3, 3, 3, 3));
-  EXPECT_THAT(find_max_counters_0627_02(5, {3, 6, 6, 6, 6, 6, 6}),
-              ElementsAre(1, 1, 1, 1, 1));
-}
-
-// solution from online.
-// http://codility-lessons.blogspot.co.uk/2014/07/lesson-2maxcounters.html
-//
-//     (0, 0, 1, 0, 0)        (0, 0, 1, 0, 0)
-//     (0, 0, 1, 1, 0)        (0, 0, 1, 1, 0)
-//     (0, 0, 1, 2, 0)        (0, 0, 1, 2, 0)
-//     (2, 2, 2, 2, 2)        (-, -, -, -, -)   max=2, maxLastMaxOp = 2
-//     (3, 2, 2, 2, 2)        (3, 0, 1, 2, 0)
-//     (3, 2, 2, 3, 2)        (3, 0, 1, 3, 0)
-//     (3, 2, 2, 4, 2)        (3, 0, 1, 4, 0)
-//                            (3, 2, 2, 4, 2)   set maxLastMaxOp to all which are not increased since
-//                            last max-all operation.
-//
-// This approach use flags to know which is increased since the last max-all
-// operation and set maxLastMaxOp to all which are not increased since the last
-// max-all.
-//
-// The key 'observation' is that max-all sets the 'base' for following increase
-// operations.
-//
-// This approach still however didn't meet performance goal. 88%. WHY? since do
-// memset on every max op.
-
-// comment out due to compile erros on Result struct
-// struct Results find_max_counters_old_02(int N, int A[], int M)
-// {
-//   struct Results result;
-//   result.C = calloc(sizeof(int), N);
-//   result.L = N;
-//
-//   int* flg = alloca(sizeof(int) * N);
-//   memset(flg, 0x00, sizeof(int) * N);
-//
-//   int max = 0;
-//   int maxAtTheLastMaxCntOp = 0;
-//
-//   int i;
-//   for (i = 0; i < M; i++){
-//     int op = A[i];
-//     //if the op is max counter.
-//     if (op == N + 1){
-//       maxAtTheLastMaxCntOp = max;
-//       memset(flg, 0x00, sizeof(int) * N);
-//     }
-//     //if the op is increase(x)
-//     else {
-//       //op is beweetn 1 to N, but the index for the array C
-//       //is between 0 and (N-1). Decrease op to adjust it.
-//       op--;
-//       if (flg[op] == 1){
-//         result.C[op]++;
-//       }
-//       else {
-//         result.C[op] = maxAtTheLastMaxCntOp + 1;
-//         flg[op] = 1;
-//       }
-//
-//       if (result.C[op] > max){
-//         max = result.C[op];
-//       }
-//     }
-//   }
-//
-//   //apply the 'max counter' operation
-//   //to the slot(s) where it should be applied.
-//   int j;
-//   for (j = 0; j < N; j++){
-//     if (flg[j] == 0){
-//       result.C[j] = maxAtTheLastMaxCntOp;
-//     }
-//   }
-//   return result;
-// }
-
-// the final solution from online.
-//
-// This approach removes the use of flags. As with the above observation,
-// max-all set the base that means any following increase should be based on
-// 'hidden' base. So if result[op] < maxLastMaxOp then result[op] =
-// maxLastMaxOp+1. Once done a loop, handle all which are not increased since
-// the last max-all by checking less than maxLastMaxOp.
-//
-// Verified 100% peformance mark.
-
-vector<int> find_max_counters_old_03(int N, vector<int> &A)
-{
-  // write your code in C++11
-  vector<int> result(N, 0);
-
-  int maxLast = 0, maxCurrent = 0;
-
-  for (unsigned int i = 0; i < A.size(); i++)
-  {
-    int op = A[i];
-
-    if (op == N + 1) // max-all op
-      maxLast = maxCurrent;
-    else // inc op
+    for (size_t i = 0; i < A.size(); ++i)
     {
-      op--;
-
-      if (result[op] < maxLast)
-        result[op] = maxLast + 1;
-      else
-        result[op]++;
-
-      if (result[op] > maxCurrent)
-        maxCurrent = result[op];
+      if (A[i] == N + 1)
+      {
+        // fill_n(result, N, max);
+        for (auto &e : result)
+          e = max;
+      }
+      else if (A[i] >= 1 && A[i] <= N)
+      {
+        if (++result[A[i] - 1] > max)
+          max = result[A[i] - 1];
+      }
     }
+
+    return result;
   }
 
-  for (int i = 0; i < N; i++)
-    if (result[i] < maxLast)
-      result[i] = maxLast;
+  // To remove "max-all", use max-all value than actually updating of array.
+  //
+  // {3,4,4,6,1,4,4}
+  //
+  // 0   0 0 0 0
+  // 0   0 1 0 0
+  // 0   0 1 1 0
+  // 0   0 1 2 0
+  // -   - - - - take a snapshot of current max-all value
+  // 2+1 0 1 2 0
+  // 3   0 1 3 0
+  // 3   0 1 4 0
+  // then do lopp and update elements that are less than snapshot value so that
+  // avoid run loop every max op.
+  //
+  // same as solution from online.
+  // http://codility-lessons.blogspot.co.uk/2014/07/lesson-2maxcounters.html
+  //
+  //     (0, 0, 1, 0, 0)        (0, 0, 1, 0, 0)
+  //     (0, 0, 1, 1, 0)        (0, 0, 1, 1, 0)
+  //     (0, 0, 1, 2, 0)        (0, 0, 1, 2, 0)
+  //     (2, 2, 2, 2, 2)        (-, -, -, -, -)   max=2, maxLastMaxOp = 2
+  //     (3, 2, 2, 2, 2)        (3, 0, 1, 2, 0)
+  //     (3, 2, 2, 3, 2)        (3, 0, 1, 3, 0)
+  //     (3, 2, 2, 4, 2)        (3, 0, 1, 4, 0)
+  //                            (3, 2, 2, 4, 2)   set maxLastMaxOp to all which are not increased since
+  //                            last max-all operation.
+  //
+  // This approach use flags to know which is increased since the last max-all
+  // operation and set maxLastMaxOp to all which are not increased since the
+  // last max-all.
+  //
+  // The key 'observation' is that max-all sets the 'base' for following
+  // increase operations.
 
-  return result;
+  vector<int> find_max_counters_3(int N, vector<int> A)
+  {
+    vector<int> result(N, 0);
+    int current_max{}, operation_max{};
+
+    for (size_t i = 0; i < A.size(); ++i)
+    {
+      if (A[i] == N + 1)
+      {
+        operation_max = current_max;
+      }
+      else if (A[i] >= 1 && A[i] <= N)
+      {
+        if (result[A[i] - 1] < operation_max)
+          result[A[i] - 1] = operation_max + 1;
+        else
+          result[A[i] - 1] += 1;
+
+        if (result[A[i] - 1] > current_max)
+          current_max = result[A[i] - 1];
+      }
+    }
+
+    for (auto &e : result)
+    {
+      if (e < operation_max)
+        e = operation_max;
+    }
+
+    return result;
+  }
+
+  // This approach removes the use of flags. As with the above observation,
+  // max-all set the base that means any following increase should be based on
+  // 'hidden' base. So if result[op] < maxLastMaxOp then result[op] =
+  // maxLastMaxOp+1. Once done a loop, handle all which are not increased since
+  // the last max-all by checking less than maxLastMaxOp.
+  //
+  // Verified 100% peformance mark.
+
+  vector<int> find_max_counters_4(int N, vector<int> A)
+  {
+    // write your code in C++11
+    vector<int> result(N, 0);
+
+    int maxLast = 0, maxCurrent = 0;
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+      int op = A[i];
+
+      if (op == N + 1) // max-all op
+        maxLast = maxCurrent;
+      else // inc op
+      {
+        op--;
+
+        if (result[op] < maxLast)
+          result[op] = maxLast + 1;
+        else
+          result[op]++;
+
+        if (result[op] > maxCurrent)
+          maxCurrent = result[op];
+      }
+    }
+
+    for (int i = 0; i < N; i++)
+      if (result[i] < maxLast)
+        result[i] = maxLast;
+
+    return result;
+  }
+
+  // NOTE: _3 and _4 are the same and
+
+} // namespace algo_find_max_counters
+
+TEST(AlgoMaxCounters, check_find_max_counters)
+{
+  using namespace algo_find_max_counters;
+
+  {
+    auto imps = {find_max_counters_1,
+                 find_max_counters_2,
+                 find_max_counters_3,
+                 find_max_counters_4};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(5, {3, 4, 4, 6, 1, 4, 4}), ElementsAre(3, 2, 2, 4, 2));
+      EXPECT_THAT(f(5, {3, 4, 4, 6, 1, 4, 6}), ElementsAre(3, 3, 3, 3, 3));
+      EXPECT_THAT(f(5, {3, 6, 6, 6, 6, 6, 6}), ElementsAre(1, 1, 1, 1, 1));
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-perfix-sum
+/*
+={=========================================================================
+algo-perfix-sum
+*/
 
 // counting prefix sums, O(n)
 vector<int> make_prefix_sums(const vector<int> &A)
@@ -10916,25 +10941,30 @@ TEST(AlgoStack, ContiguousSimple)
   EXPECT_THAT(coll.snap(), expected);
 }
 
-// ={=========================================================================
-// algo-sort-insert
-// [sorted][unsorted]
+/*
+={=========================================================================
+algo-sort-insert
 
-// reference code, ascending sort
-// o the unsorted < the last sorted to start scanning.
-// o the unsorted > the current to to stop scanning.
+[sorted][unsorted]
 
-// vs. bubble sort
-// template <typename Cont>
-// void bubble_sort(Cont& cont) {
-//   for (int i = 0; i < cont.size(); i++) {
-//     for (int j = i + 1; j < cont.size(); j++) {
-//       if (cont[i] > cont[j]) {
-//         cont.swap(i, j);
-//       }
-//     }
-//   }
-// }
+reference code, ascending sort
+o the unsorted < the last sorted to start scanning.
+o the unsorted > the current to to stop scanning.
+
+vs. bubble sort
+
+template <typename Cont>
+void bubble_sort(Cont& cont) {
+  for (int i = 0; i < cont.size(); i++) {
+    for (int j = i + 1; j < cont.size(); j++) {
+      if (cont[i] > cont[j]) {
+        cont.swap(i, j);
+      }
+    }
+  }
+}
+ 
+*/
 
 void sort_insertion_01(std::vector<int> &coll)
 {
