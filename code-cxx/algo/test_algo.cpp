@@ -1443,7 +1443,7 @@ namespace algooccurance
       auto value = std::to_string(e);
 
       for (auto c : value)
-        ++lookup[c];
+        ++lookup[(int)c];
     }
 
     return lookup[key + '0'];
@@ -1937,7 +1937,8 @@ namespace algooccurance
 {
   MATCHER_P(NotEqPair, expected, "")
   {
-    return arg.first != expected.first || arg.second != expected.second;
+    return arg.first != expected.first ||
+           (int)arg.second != (int)expected.second;
   }
 
   // if can do without meeting O(n), O(1) then can use occurnace map in a single
@@ -2149,10 +2150,10 @@ namespace algounique
 
     for (; *input; ++input)
     {
-      if (table[*input])
+      if (table[(int)*input])
         return false;
 
-      table[*input] = true;
+      table[(int)*input] = true;
     }
 
     return true;
@@ -2617,7 +2618,7 @@ namespace algoreverse
     char *start{&input[0]};
     char *end{&input[strlen(input) - 1]};
 
-    for (start, end; start < end; ++start, --end)
+    for (; start < end; ++start, --end)
       std::swap(*start, *end);
   }
 
@@ -2915,7 +2916,7 @@ namespace algopalindrome
     size_t start{0};
     size_t end{coll.size() - 1};
 
-    for (start, end; start < end; ++start, --end)
+    for (; start < end; ++start, --end)
       if (coll[start] != coll[end])
         return false;
 
@@ -3052,7 +3053,7 @@ namespace algo_palindrome
     // this causes the wrong result.
     // for (start, end; start < end; ++start, --end)
 
-    for (start, end; start < end;)
+    for (; start < end;)
     {
       // not isspace() since should ignore others.
       if (!std::isalnum(input[start]))
@@ -6506,7 +6507,8 @@ namespace algo_bit
 
     for (size_t i = 0; i < 32; ++i)
     {
-      result = (result <<= 1) | (n & 0x1);
+      // warning: operation on ‘result’ may be undefined [-Wsequence-point]
+      result = ((result <<= 1) | (n & 0x1));
       n >>= 1;
     }
 
@@ -6920,13 +6922,13 @@ namespace algo_equi_tape
     int current_min{std::numeric_limits<int>::max()};
 
     // gets the rsum
-    for (int i = 0; i < A.size(); ++i)
+    for (int i = 0; i < (int)A.size(); ++i)
       rsum += A[i];
 
     // NOTE: [0, N-2] since no need to process the last element
     // for (int i = 0; i < A.size(); ++i)
 
-    for (int i = 0; i < A.size() - 1; ++i)
+    for (int i = 0; i < (int)A.size() - 1; ++i)
     {
       lsum += A[i];
       rsum -= A[i];
@@ -8643,8 +8645,8 @@ namespace algo_frog_river
       return -1;
 
     // check if there are missing up to xidx; index of X
-    for (size_t i = 1; i <= X; ++i)
-      if (table[i] = false)
+    for (int i = 1; i <= X; ++i)
+      if (table[i] == false)
         return -1;
 
     return xidx;
@@ -11193,9 +11195,9 @@ namespace algo_sort_insertion
   {
     PRINT_ELEMENTS(cont);
 
-    for (int i = 0; i < cont.size(); i++)
+    for (int i = 0; i < (int)cont.size(); i++)
     {
-      for (int j = i + 1; j < cont.size(); j++)
+      for (int j = i + 1; j < (int)cont.size(); j++)
       {
         if (cont[i] > cont[j])
         {
@@ -11670,7 +11672,7 @@ namespace algo_remove
 
   // same as std::partition
   // use std::swap and do not use "begin++ or run++"; do not use side-effect
-  _Iterator my_remove_1(_Iterator begin, _Iterator end, unsigned int value)
+  _Iterator my_remove_1(_Iterator begin, _Iterator end, int value)
   {
     if (begin == end)
       return end;
@@ -11690,11 +11692,12 @@ namespace algo_remove
         ++begin;
       }
     }
+
     return begin;
   }
 
   // use "="
-  _Iterator my_remove_2(_Iterator begin, _Iterator end, unsigned int value)
+  _Iterator my_remove_2(_Iterator begin, _Iterator end, int value)
   {
     if (begin == end)
       return end;
@@ -11714,6 +11717,7 @@ namespace algo_remove
         ++begin;
       }
     }
+
     return begin;
   }
 
@@ -12238,17 +12242,16 @@ It doesn't matter what values are set beyond the returned length.
 
 */
 
-namespace leetcode_easy_009
+namespace algo_remove_leetcode_easy_009
 {
-  // o Unlike RemoveDuplicates_02, end is not index but index+1
-
+  // old
   // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
   // Element.
   //
   // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
   // Element.
 
-  int RemoveIf_01(vector<int> &nums, int val)
+  int my_remove_1(std::vector<int> &nums, int val)
   {
     if (nums.empty())
       return 0;
@@ -12269,77 +12272,140 @@ namespace leetcode_easy_009
     return end;
   }
 
-} // namespace leetcode_easy_009
+  int my_remove_2(std::vector<int> &nums, int val)
+  {
+    size_t start{};
+    size_t end{nums.size()};
 
-TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
+    // find pos where the matched is found and which is pos to start "remove"
+    while (nums[start] != val)
+      ++start;
+
+    for (size_t scan = start + 1; scan < end; ++scan)
+    {
+      // found the unmatched
+      if (nums[scan] != val)
+      {
+        nums[start] = nums[scan];
+        ++start;
+      }
+    }
+
+    return start;
+  }
+
+  int my_remove_3(std::vector<int> &nums, int val)
+  {
+    size_t start{};
+    size_t end{nums.size()};
+
+    // find pos where the matched is found and which is pos to start "remove"
+    // note: if all elements of nums are "unmatched", there should way to stop
+    // loop as my_remove_1 of iterator version
+    while (nums[start] != val)
+      if (++start == end)
+        return start;
+
+    for (size_t scan = start + 1; scan < end; ++scan)
+    {
+      // found the unmatched
+      if (nums[scan] != val)
+      {
+        nums[start] = nums[scan];
+        ++start;
+      }
+    }
+
+    return start;
+  }
+} // namespace algo_remove_leetcode_easy_009
+
+TEST(AlgoRemove, check_remove_leetcode_009)
 {
-  using namespace leetcode_easy_009;
+  using namespace algo_remove_leetcode_easy_009;
 
   {
-    const auto func = RemoveIf_01;
+    auto imps = {my_remove_1, my_remove_2, my_remove_3};
 
-    vector<int> coll{3, 2, 2, 3};
-    auto len = func(coll, 3);
+    for (auto f : imps)
+    {
+      std::vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
 
-    EXPECT_THAT(len, 2);
+      auto len = f(coll, 2);
 
-    vector<int> result{};
+      EXPECT_THAT(len, 5);
 
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
+      std::vector<int> result{};
 
-    EXPECT_THAT(result, ElementsAre(2, 2));
+      for (int i = 0; i < len; ++i)
+        result.push_back(coll[i]);
+
+      EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
+    }
   }
 
   {
-    const auto func = RemoveIf_01;
+    auto imps = {my_remove_1, my_remove_2, my_remove_3};
 
-    vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
-    auto len = func(coll, 2);
+    for (const auto &f : imps)
+    {
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-    EXPECT_THAT(len, 5);
+      auto size = f(coll, 2);
 
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
+      EXPECT_THAT(size, 8);
+      // EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
+    }
   }
 }
 
-// ={=========================================================================
-// algo-rotate, algo-slide, algo-reverse
+/*
+={=========================================================================
+algo-rotate, algo-slide, algo-reverse
 
-TEST(AlgoRotate, Rotate)
+*/
+
+TEST(AlgoRotate, check_rotate)
 {
-  vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
-  // rotate one to the left
-  // before *cxx-11* void rotate() so comment out
-  // auto pos = rotate(
+    // rotate one to the left
+    // before *cxx-11* void rotate() so comment out if that's the case
 
-  rotate(coll.begin(),     // begin
-         coll.begin() + 1, // new begin
-         coll.end()        // end
-  );
-  EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
+    auto pos = std::rotate(coll.begin(),     // begin
+                           coll.begin() + 1, // new begin
+                           coll.end()        // end
+    );
 
-  // return the new position of the (pervious) first element.
-  // EXPECT_THAT(*pos, 1);
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-  // pos = rotate(
+    // return the new position of the (pervious) first element.
+    EXPECT_THAT(*pos, 1);
+  }
 
-  rotate(coll.begin(), coll.end() - 2, coll.end());
-  EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
-  // EXPECT_THAT(*pos, 2);
+  {
+    std::vector<int> coll{2, 3, 4, 5, 6, 7, 8, 1};
 
-  // rotate so that 4 is the beginning
-  // pos = rotate(
+    auto pos = std::rotate(coll.begin(), coll.end() - 2, coll.end());
 
-  rotate(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
-  EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
-  // EXPECT_THAT(*pos, 8);
+    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
+
+    EXPECT_THAT(*pos, 2);
+  }
+
+  {
+    std::vector<int> coll{8, 1, 2, 3, 4, 5, 6, 7};
+
+    // rotate so that 4 is the beginning
+    // pos = rotate(
+
+    auto pos = std::rotate(coll.begin(),
+                           std::find(coll.begin(), coll.end(), 4),
+                           coll.end());
+    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
+    EXPECT_THAT(*pos, 8);
+  }
 }
 
 // 1. do not use additional space
@@ -13775,7 +13841,6 @@ namespace algo_binary_search
   _T binary_search_5(_Iterator begin, _Iterator end, _T const key)
   {
     _Iterator saved_begin = begin;
-    _Iterator saved_end   = end;
 
     while (begin <= end)
     {

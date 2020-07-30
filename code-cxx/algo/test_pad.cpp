@@ -34,6 +34,80 @@ void PRINT_ELEMENTS(T &coll, const string optstr = "")
 
 namespace algopad
 {
+  // old
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
+  // Element.
+  //
+  // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
+  // Element.
+
+  int my_remove_1(std::vector<int> &nums, int val)
+  {
+    if (nums.empty())
+      return 0;
+
+    size_t end{};
+
+    for (size_t i = 0; i < nums.size(); ++i)
+    {
+      if (nums[i] != val)
+      {
+        if (end != i)
+          swap(nums[end], nums[i]);
+
+        ++end;
+      }
+    }
+
+    return end;
+  }
+
+  int my_remove_2(std::vector<int> &nums, int val)
+  {
+    size_t start{};
+    size_t end{nums.size()};
+
+    // find pos where the matched is found and which is pos to start "remove"
+    while (nums[start] != val)
+      ++start;
+
+    for (size_t scan = start + 1; scan < end; ++scan)
+    {
+      // found the unmatched
+      if (nums[scan] != val)
+      {
+        nums[start] = nums[scan];
+        ++start;
+      }
+    }
+
+    return start;
+  }
+
+  int my_remove_3(std::vector<int> &nums, int val)
+  {
+    size_t start{};
+    size_t end{nums.size()};
+
+    // find pos where the matched is found and which is pos to start "remove"
+    // note: if all elements of nums are "unmatched", there should way to stop
+    // loop as my_remove_1 of iterator version
+    while (nums[start] != val)
+      if (++start == end)
+        return start;
+
+    for (size_t scan = start + 1; scan < end; ++scan)
+    {
+      // found the unmatched
+      if (nums[scan] != val)
+      {
+        nums[start] = nums[scan];
+        ++start;
+      }
+    }
+
+    return start;
+  }
 } // namespace algopad
 
 TEST(Pad, xx)
@@ -41,38 +115,36 @@ TEST(Pad, xx)
   using namespace algopad;
 
   {
-    std::vector<int> coll{3,2,2,3};
-    auto pos = std::remove_if(coll.begin(), coll.end(),
-  }
-
-  {
-    auto imps = {unique_1, unique_2};
+    auto imps = {my_remove_1, my_remove_2, my_remove_3};
 
     for (auto f : imps)
     {
-      {
-        std::vector<int> coll{1, 4, 4, 6};
-        auto ret = f(coll);
-        EXPECT_THAT(ret, 3);
-      }
+      std::vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
 
-      {
-        std::vector<int> coll{1, 4, 4, 4, 6};
-        auto ret = f(coll);
-        EXPECT_THAT(ret, 3);
-      }
+      auto len = f(coll, 2);
 
-      {
-        std::vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
-        auto ret = f(coll);
-        EXPECT_THAT(ret, 5);
-      }
+      EXPECT_THAT(len, 5);
 
-      {
-        std::vector<int> coll{1, 1, 1, 2, 2, 3, 4, 4, 4, 4, 5, 5, 6, 6, 6, 6, 7};
-        auto ret = f(coll);
-        EXPECT_THAT(ret, 7);
-      }
+      std::vector<int> result{};
+
+      for (int i = 0; i < len; ++i)
+        result.push_back(coll[i]);
+
+      EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
+    }
+  }
+
+  {
+    auto imps = {my_remove_1, my_remove_2, my_remove_3};
+
+    for (const auto &f : imps)
+    {
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+
+      auto size = f(coll, 2);
+
+      EXPECT_THAT(size, 8);
+      // EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
     }
   }
 }
