@@ -95,11 +95,6 @@ using namespace testing;
 5994:TEST(CxxBool, LogicalNot)
 6015:TEST(Bool, CheckBoolDefault)
 6070:TEST(Bool, CheckUsage)
-6101:TEST(Stdio, Input)
-6171:TEST(Stdio, GetLine)
-6245:TEST(Stdio, SpecialTypes)
-6309:TEST(Stdio, Manipulators)
-6343:TEST(Stdio, ManipulatorsFloat)
 6435:TEST(Override, Condition_1)
 6497:TEST(Override, Condition_2)
 6550:TEST(Override, Condition_3)
@@ -415,10 +410,13 @@ TEST(CxxType, check_null)
 }
 
 // ={=========================================================================
-// cxx-cast cxx-conversion
+// cxx-cast cxx-conversion cxx-printf
 
-TEST(CxxType, type_cast)
+TEST(CxxType, check_types)
 {
+  // converts int to float
+  // values {55.000000, 140.000000, 436.000000, 246.000000}
+  // values {55.000000, 140.000000, 0.227083, 0.227778}
   {
     int x{55};
     int y{140};
@@ -445,11 +443,66 @@ TEST(CxxType, type_cast)
     int value0{1920};
     float value1{1920.0f};
 
+    // convert int to float
     float value2 = float(value0);
 
     EXPECT_TRUE((value2 / value1) == 1.0);
     EXPECT_TRUE((value2 / value1) == 1);
   }
+}
+
+// f, F   
+// The `double  argument` is rounded and converted to decimal notation in
+// the style [-]ddd.ddd, where the number of digits after the
+// decimal-point character is equal to the precision specification.  If
+// the  precision  is missing,  it  is  taken as 6; if the precision is
+// explicitly zero, no decimal-point character appears.  If a decimal
+// point appears, at least one digit appears before it.
+
+TEST(CxxType, check_types_double)
+{
+  // cxx-double
+  // double max: 1.79769e+308
+  // double min: 2.22507e-308
+  // values {368720064, 0} NOTE: "368720064" keeps changing whenever runs.
+  // values 1.08917e+09
+  // values {1089165312.000000, 1089165312.000000}
+  {
+    std::cout << "double max: " << std::numeric_limits<double>::max()
+      << std::endl;
+    std::cout << "double min: " << std::numeric_limits<double>::min()
+      << std::endl;
+
+    double value{1089165312};
+
+    printf("values {%d, %ld}\n", value, value);
+    std::cout << "values " << value << std::endl;
+    printf("values {%f, %lf}\n", value, value);
+  }
+
+  // `time_t, which is a signed integer`, can represent
+  // values {1089165312.000000, 1089165}
+  {
+    double value{1089165312};
+    time_t time = static_cast<time_t>(value / 1000.0f);
+
+    printf("values {%f, %ld}\n", value, time);
+  }
+
+  // double value: 0
+  // double value is not < or > 0
+  {
+    double value{0};
+    printf("double value: %g\n", value);
+
+    if (value < 0)
+      printf("double value is < 0\n");
+    else if (value > 0)
+      printf("double value is > 0\n");
+    else
+      printf("double value is not < or > 0\n");
+  }
+
 }
 
 // ={=========================================================================
@@ -7642,11 +7695,11 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
-TEST(CxxSmartPointer, sp_Deleter)
+TEST(CxxSmartPointer, check_deleter)
 {
   using namespace cxx_sp_delete;
 
-  // unique shares pointers uses type of deleter
+  // unique_ptr uses type of deleter and creates deleter object internally
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"));
@@ -7654,7 +7707,7 @@ TEST(CxxSmartPointer, sp_Deleter)
     EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
-  // same as the above and another unique_ptr ctor
+  // another unique_ptr ctor which explicitly creates deleter object.
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"),
@@ -7703,9 +7756,9 @@ TEST(CxxSmartPointer, sp_Deleter)
 
   // shared pointer takes object as argument
   {
-    std::shared_ptr<string> sp1(new std::string("nico on function"),
+    std::shared_ptr<std::string> sp1(new std::string("nico on function"),
                                 function_delete);
-    std::shared_ptr<string> sp2(new std::string("jutta on function"),
+    std::shared_ptr<std::string> sp2(new std::string("jutta on function"),
                                 function_delete);
   }
 
@@ -12108,9 +12161,33 @@ namespace cxx_template_default
   // `This shows how function-object is useful` *cxx-functor*
   // default template argument, the 'type' of callable
   // default function argument, F()
+  //
+  // like cxx-unique-ptr, should create F() internally.
 
   template <typename T, typename F = less<T>>
-  int compare(const T &a, const T &b, F f = F())
+  int compare_1(const T &a, const T &b, F f = F())
+  {
+    if (f(a, b))
+      return -1;
+    if (f(b, a))
+      return 1;
+    return 0;
+  }
+
+  // this is wrong.
+  template <typename T, typename F = less<T>>
+  int compare_2(const T &a, const T &b, F f)
+  {
+    if (f(a, b))
+      return -1;
+    if (f(b, a))
+      return 1;
+    return 0;
+  }
+
+  // so if don't use default F then this is the same
+  template <typename T, typename F>
+  int compare_3(const T &a, const T &b, F f)
   {
     if (f(a, b))
       return -1;
@@ -12129,52 +12206,6 @@ namespace cxx_template_default
     T value_;
   };
 
-} // namespace cxx_template_default
-
-TEST(CxxTemplate, check_default_type_argument)
-{
-  using namespace cxx_template_default;
-
-  {
-    // 1 < 2
-    EXPECT_THAT(compare(1, 2), -1);
-    // 2 > 1
-    EXPECT_THAT(compare(2, 1), 1);
-    // 2 == 2
-    EXPECT_THAT(compare(2, 2), 0);
-  }
-
-  {
-    // 1 < 2
-    EXPECT_THAT(compare(1, 2, greater<int>()), 1);
-    // 2 > 1
-    EXPECT_THAT(compare(2, 1, greater<int>()), -1);
-    // 2 == 2
-    EXPECT_THAT(compare(2, 2, greater<int>()), 0);
-  }
-
-  {
-    vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
-    EXPECT_THAT(compare(coll1, coll2), -1);
-    EXPECT_THAT(compare(coll2, coll1), 1);
-  }
-
-  {
-    Numbers<> o1(10);
-    Numbers<int> o2(10);
-    EXPECT_THAT(o1.value_, o2.value_);
-  }
-
-  // compile error
-  // {
-  //   Numbers<> o1(10);
-  //   Numbers<std::string> o2("value");
-  //   EXPECT_THAT(o1.value_, o2.value_);
-  // }
-}
-
-namespace cxx_template_member
-{
   class DebugDelete
   {
   public:
@@ -12193,17 +12224,84 @@ namespace cxx_template_member
     // *cxx-reference-member
     ostream &os_;
   };
+} // namespace cxx_template_default
 
-} // namespace cxx_template_member
-
-TEST(CxxTemplate, check_memeber_function_template)
+TEST(CxxTemplate, check_default_type_argument)
 {
-  using namespace cxx_template_member;
+  using namespace cxx_template_default;
 
-  // output:
+  // use default F.
+  {
+    // 1 < 2
+    EXPECT_THAT(compare_1(1, 2), -1);
+    // 2 > 1
+    EXPECT_THAT(compare_1(2, 1), 1);
+    // 2 == 2
+    EXPECT_THAT(compare_1(2, 2), 0);
+  }
+
+  // override default F.
+  {
+    // 1 < 2
+    EXPECT_THAT(compare_1(1, 2, std::greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare_1(2, 1, std::greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare_1(2, 2, std::greater<int>()), 0);
+  }
+
+  // compile error
+  // // use default F.
+  // {
+  //   // 1 < 2
+  //   EXPECT_THAT(compare_2(1, 2), -1);
+  //   // 2 > 1
+  //   EXPECT_THAT(compare_2(2, 1), 1);
+  //   // 2 == 2
+  //   EXPECT_THAT(compare_2(2, 2), 0);
+  // }
+
+  // override default F.
+  {
+    // 1 < 2
+    EXPECT_THAT(compare_2(1, 2, std::greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare_2(2, 1, std::greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare_2(2, 2, std::greater<int>()), 0);
+  }
+
+  // do not use default.
+  {
+    // 1 < 2
+    EXPECT_THAT(compare_3(1, 2, std::greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare_3(2, 1, std::greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare_3(2, 2, std::greater<int>()), 0);
+  }
+
+  {
+    vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+    EXPECT_THAT(compare_1(coll1, coll2), -1);
+    EXPECT_THAT(compare_1(coll2, coll1), 1);
+  }
+
+  {
+    Numbers<> o1(10);
+    Numbers<int> o2(10);
+    EXPECT_THAT(o1.value_, o2.value_);
+  }
+
+  // compile error
+  // {
+  //   Numbers<> o1(10);
+  //   Numbers<std::string> o2("value");
+  //   EXPECT_THAT(o1.value_, o2.value_);
+  // }
+
   // deleting Pd, p = 0x9be7008
   // deleting Pi, p = 0x9be7018
-
   {
     double *pd = new double();
     int *pi    = new int();
@@ -12212,10 +12310,10 @@ TEST(CxxTemplate, check_memeber_function_template)
     d(pi);
   }
 
-  // output:
+  // see TEST(CxxSmartPointer, check_deleter);
+  //
   // deleting PSs, p = 0x1d5e830
   // deleting Pi, p = 0x1d5e850
-
   {
     unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
     unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
@@ -13567,26 +13665,6 @@ TEST(Exception, Noexcept)
     }
 
     EXPECT_THAT(value, 1);
-  }
-}
-
-// ={=========================================================================
-// cxx-type-conversion
-
-TEST(TypeConversion, Double)
-{
-  // double value: 0
-  // double value is not < or > 0
-  {
-    double value{0};
-    printf("double value: %g\n", value);
-
-    if (value < 0)
-      printf("double value is < 0\n");
-    else if (value > 0)
-      printf("double value is > 0\n");
-    else
-      printf("double value is not < or > 0\n");
   }
 }
 

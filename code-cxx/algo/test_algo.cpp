@@ -28,11 +28,11 @@ void PRINT_ELEMENTS(T &coll, const string optstr = "")
 
   for (const auto &elem : coll)
   {
-    cout << elem << " ";
+    std::cout << std::setw(2) << elem << " ";
     ++count;
   }
 
-  cout << "(" << count << ")" << endl;
+  std::cout << "(" << count << ")" << std::endl;
 }
 
 template <typename T>
@@ -2206,7 +2206,7 @@ namespace algounique
   }
 } // namespace algounique
 
-TEST(AlgoUnique, check_unique)
+TEST(AlgoUnique, check_unique_lookup)
 {
   using namespace algounique;
 
@@ -10943,7 +10943,7 @@ TEST(AlgoStack, ContiguousSimple)
 
 /*
 ={=========================================================================
-algo-sort-insert
+algo-sort-insertion
 
 [sorted][unsorted]
 
@@ -10953,11 +10953,17 @@ o the unsorted > the current to to stop scanning.
 
 vs. bubble sort
 
+move bigger to the right, so ascending order. the bubble sort find a final
+position of an element and insertion sort do not.
+
 template <typename Cont>
 void bubble_sort(Cont& cont) {
-  for (int i = 0; i < cont.size(); i++) {
-    for (int j = i + 1; j < cont.size(); j++) {
-      if (cont[i] > cont[j]) {
+  for (int i = 0; i < cont.size(); i++) 
+  {
+    for (int j = i + 1; j < cont.size(); j++) 
+    {
+      if (cont[i] > cont[j]) 
+      {
         cont.swap(i, j);
       }
     }
@@ -10966,207 +10972,268 @@ void bubble_sort(Cont& cont) {
  
 */
 
-void sort_insertion_01(std::vector<int> &coll)
+namespace algo_sort_insertion
 {
-  // start from 1 since one entry is always sorted.
-  int size = (int)coll.size();
-
-  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
+  // old
+  void sort_insertion_1(std::vector<int> &coll)
   {
-    int sorted_index = unsorted_index - 1;
+    // start from 1 since one entry is always sorted.
+    int size = (int)coll.size();
 
-    // pick the first from `unsorted`. if it is less than the last of the
-    // sorted, then have to place it in the sorted area.
-
-    // if (coll[unsorted_index] < coll[sorted_index])
-    if (coll[sorted_index] > coll[unsorted_index])
+    for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     {
-      int unsorted_entry = coll[unsorted_index];
-      int current_index  = sorted_index;
+      int sorted_index = unsorted_index - 1;
 
-      // find the place of picked unsorted in the sorted until see that
-      // sorted[current-1] < the entry in question by:
-      //
-      // move the last sorted down one which makes a space, and check the one
-      // before the current, current-1 since already checked the current.
-      //
-      // must have "index == 0" check since have a check on current-1 to see
-      // whether or not contine searching.
+      // pick the first from `unsorted`. if it is less than the last of the
+      // sorted, then have to place it in the sorted area.
 
-      for (; 0 <= current_index; --current_index)
+      // if (coll[unsorted_index] < coll[sorted_index])
+      if (coll[sorted_index] > coll[unsorted_index])
       {
-        // move one entry down
-        coll[current_index + 1] = coll[current_index];
+        int unsorted_entry = coll[unsorted_index];
+        int current_index  = sorted_index;
 
-        if (current_index == 0 || coll[current_index - 1] < unsorted_entry)
-          break;
+        // find the place of picked unsorted in the sorted until see that
+        // sorted[current-1] < the entry in question by:
+        //
+        // move the last sorted down one which makes a space, and check the one
+        // before the current, current-1 since already checked the current.
+        //
+        // must have "index == 0" check since have a check on current-1 to see
+        // whether or not contine searching.
+
+        for (; 0 <= current_index; --current_index)
+        {
+          // move one entry down
+          coll[current_index + 1] = coll[current_index];
+
+          if (current_index == 0 || coll[current_index - 1] < unsorted_entry)
+            break;
+        }
+
+        coll[current_index] = unsorted_entry;
       }
-
-      coll[current_index] = unsorted_entry;
     }
   }
-}
 
-// Unlike 01:
-// o removes to check `current-1` from the current in searching the place in the
-// sorted and then no need to check on -1 index.
-//
-// o the difference is this. 01 compare the sorted and the unsorted to start
-// scanning the place of the unsorted and use "current-1", one ahead, to check.
-// 02 instead, scanning from current regardless.
+  // Unlike 1:
+  // o removes to check `current-1` from the current in searching the place in the
+  // sorted and then no need to check on -1 index.
+  //
+  // o the difference is this. 01 compare the sorted and the unsorted to start
+  // scanning the place of the unsorted and use "current-1", one ahead, to check.
+  // 02 instead, scanning from current regardless.
 
-void sort_insertion_02(std::vector<int> &coll)
-{
-  int size = (int)coll.size();
-
-  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
+  void sort_insertion_2(std::vector<int> &coll)
   {
-    int sorted_index = unsorted_index - 1;
+    int size = (int)coll.size();
 
-    if (coll[unsorted_index] < coll[sorted_index])
+    for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     {
-      int unsorted_entry = coll[unsorted_index];
-      int current_index  = sorted_index;
+      int sorted_index = unsorted_index - 1;
 
-      // diffs from 01
-      for (; 0 <= current_index; --current_index)
+      if (coll[unsorted_index] < coll[sorted_index])
       {
-        if (coll[current_index] < unsorted_entry)
-          break;
+        int unsorted_entry = coll[unsorted_index];
+        int current_index  = sorted_index;
 
-        coll[current_index + 1] = coll[current_index];
+        // diffs from 01
+        for (; 0 <= current_index; --current_index)
+        {
+          if (coll[current_index] < unsorted_entry)
+            break;
+
+          coll[current_index + 1] = coll[current_index];
+        }
+
+        coll[current_index + 1] = unsorted_entry;
       }
-
-      coll[current_index + 1] = unsorted_entry;
     }
   }
-}
 
-// "current index" starts from the unsorted and uses swap
-void sort_insertion_03(std::vector<int> &coll)
-{
-  int size = (int)coll.size();
-
-  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
-    for (int current_index = unsorted_index;
-         0 < current_index && coll[current_index] < coll[current_index - 1];
-         --current_index)
-    {
-      // swap current and current-1
-      std::swap(coll[current_index], coll[current_index - 1]);
-    }
-}
-
-// https://www.codeproject.com/Articles/854127/Top-Beautiful-Cplusplus-std-Algorithms-Examples
-void sort_insertion_04(vector<int> &coll)
-{
-  auto first = coll.begin();
-
-  for (auto run = first; run != coll.end(); ++run)
-    rotate(upper_bound(first, run, *run), run, next(run));
-}
-
-// From Programming Pearl 11.1
-//
-// for i = [1, n)
-//  // invariant: x[0..i-1] is sorted
-//  // shift x[i] down to its proper place in x[0..i]
-//
-// From the swap version which do two operations, move down elements and put the
-// saved back when loop ends as 01/02 version. So one update rather than doing
-// it every time which runs faster.
-
-void sort_insertion_05(vector<int> &coll)
-{
-  int size = (int)coll.size();
-
-  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
+  // 2020.07. similar approach
+  void sort_insertion_3(std::vector<int> &coll)
   {
-    int unsorted      = coll[unsorted_index];
-    int current_index = unsorted_index;
-
-    for (; 0 < current_index && unsorted < coll[current_index - 1];
-         --current_index)
+    // note: "-1" since the loop "+1" look ahead and if don't this, result has
+    // one item shited to right in the result.
+    // also use "sorted" index
+    for (size_t sorted = 0; sorted < coll.size() - 1; ++sorted)
     {
-      // swap current and current-1
-      // swap(coll[current_index], coll[current_index-1]);
-      coll[current_index] = coll[current_index - 1];
+      // if (coll[sorted] <= coll[sorted+1]) then already sorted, so no need to
+      // swap. if not, swap it until it found a place
+      if (coll[sorted] > coll[sorted + 1])
+      {
+        std::swap(coll[sorted], coll[sorted + 1]);
+
+        // note: no need to keep searching to [0]. break if not.
+        for (size_t search = sorted; search > 0; --search)
+        {
+          if (coll[search - 1] > coll[search])
+            std::swap(coll[search - 1], coll[search]);
+          else
+            break;
+        }
+      }
     }
-
-    coll[current_index] = unsorted;
-
-#ifdef SORT_INSERT_DEBUG
-    cout << "coll(" << unsorted_index << ", " << current_index << "): ";
-
-    for (int i = 0; i < size; ++i)
-      cout << coll[i] << ", ";
-
-    cout << endl;
-#endif // SORT_INSERT_DEBUG
   }
-}
 
-// 2018.12.06
-void sort_insertion_06(vector<int> &coll)
-{
-  size_t sorted{0}, unsorted{0};
-  int target{0}, source{0};
-
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
+  // old. use "unsorted" index, two for loop, and swap
+  void sort_insertion_4(std::vector<int> &coll)
   {
-    for (target = sorted, source = unsorted; target >= 0; --target, --source)
+    auto size = coll.size();
+
+    for (size_t unsorted = 1; unsorted < size; ++unsorted)
+    {
+      for (size_t search = unsorted;
+           search && (coll[search - 1] > coll[search]);
+           --search)
+      {
+        std::swap(coll[search - 1], coll[search]);
+      }
+    }
+  }
+
+  void sort_insertion_5(vector<int> &coll)
+  {
+    size_t sorted{0}, unsorted{0};
+    int target{0}, source{0};
+
+    for (unsorted = 1; unsorted < coll.size();
+         ++unsorted, sorted = unsorted - 1)
     {
       // ascending order
-      if (coll[target] > coll[source])
+      for (target = sorted, source = unsorted;
+           target >= 0 && coll[target] > coll[source];
+           --target, --source)
+      {
         std::swap(coll[target], coll[source]);
-      else
-        break;
+      }
     }
   }
-}
 
-// when move comparison in for loop, can remove `else` as sort_insertion_03
-
-void sort_insertion_07(vector<int> &coll)
-{
-  size_t sorted{0}, unsorted{0};
-  int target{0}, source{0};
-
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
+  // *cxx-template-default-arguemnts*
+  // cxx-greater
+  // std::greater(x,y) { return __x > __y; }
+  template <typename T, typename F = std::greater<T>>
+  void sort_insertion_6(vector<T> &coll, F f = F())
   {
-    // ascending order
-    for (target = sorted, source = unsorted;
-         target >= 0 && coll[target] > coll[source];
-         --target, --source)
+    size_t sorted{0}, unsorted{0};
+    int target{0}, source{0};
+
+    for (unsorted = 1; unsorted < coll.size();
+         ++unsorted, sorted = unsorted - 1)
     {
-      std::swap(coll[target], coll[source]);
+      // ascending order
+      for (target = sorted, source = unsorted;
+           target >= 0 && f(coll[target], coll[source]);
+           --target, --source)
+      {
+        std::swap(coll[target], coll[source]);
+      }
     }
   }
-}
 
-template <typename T, typename F = std::greater<T>>
-void sort_insertion_08(vector<T> &coll, F f)
-{
-  size_t sorted{0}, unsorted{0};
-  int target{0}, source{0};
+  // From Programming Pearl 11.1
+  //
+  // for i = [1, n)
+  //  // invariant: x[0..i-1] is sorted
+  //  // shift x[i] down to its proper place in x[0..i]
+  //
+  // From the swap version which do two operations, move down elements and put the
+  // saved back when loop ends as 01/02 version. So one update rather than doing
+  // it every time when use swap(). so runs faster?
+  //
+  // Still "move down" so not sure how faster it will be. need to measure
 
-  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted - 1)
+  void sort_insertion_7(vector<int> &coll)
   {
-    // ascending order
-    for (target = sorted, source = unsorted;
-         target >= 0 && f(coll[target], coll[source]);
-         --target, --source)
+    int size = (int)coll.size();
+
+    for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     {
-      std::swap(coll[target], coll[source]);
+      int unsorted      = coll[unsorted_index];
+      int current_index = unsorted_index;
+
+      for (; 0 < current_index && unsorted < coll[current_index - 1];
+           --current_index)
+      {
+        // swap current and current-1
+        // swap(coll[current_index], coll[current_index-1]);
+        coll[current_index] = coll[current_index - 1];
+      }
+
+      coll[current_index] = unsorted;
     }
   }
-}
+
+  // https://www.codeproject.com/Articles/854127/Top-Beautiful-Cplusplus-std-Algorithms-Examples
+  // cxx-algo-rotate
+  void sort_insertion_8(vector<int> &coll)
+  {
+    auto first = coll.begin();
+
+    for (auto run = first; run != coll.end(); ++run)
+      std::rotate(std::upper_bound(first, run, *run), run, next(run));
+  }
+
+  // 33  2 31 34  1  4 (6)
+  //  1 33 31 34  2  4 (6)
+  //  1  2 33 34 31  4 (6)
+  //  1  2  4 34 33 31 (6)
+  //  1  2  4 31 34 33 (6)
+  //  1  2  4 31 33 34 (6)
+  //  1  2  4 31 33 34 (6)
+  //
+  // "i" is sorted index and [sorted] gets bigger over iteration.
+  //
+  // coll[i] keeps changing then storing it to compare. that each iteration
+  // finds the sorted element. not able to stop/break in "swap loop"
+
+  void bubble_sort(vector<int> &cont)
+  {
+    PRINT_ELEMENTS(cont);
+
+    for (int i = 0; i < cont.size(); i++)
+    {
+      for (int j = i + 1; j < cont.size(); j++)
+      {
+        if (cont[i] > cont[j])
+        {
+          std::swap(cont[i], cont[j]);
+        }
+      }
+
+      PRINT_ELEMENTS(cont);
+    }
+  }
+} // namespace algo_sort_insertion
 
 TEST(AlgoSort, check_insertion)
 {
+  using namespace algo_sort_insertion;
+
+  {
+    auto imps = {sort_insertion_1,
+                 sort_insertion_2,
+                 sort_insertion_3,
+                 sort_insertion_4,
+                 sort_insertion_5,
+                 // sort_insertion_6,
+                 sort_insertion_7};
+
+    for (const auto &f : imps)
+    {
+      std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+      f(coll);
+      EXPECT_THAT(
+        coll,
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+    }
+  }
+
   {
     std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_01(coll);
+    sort_insertion_6(coll);
     EXPECT_THAT(
       coll,
       ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
@@ -11174,79 +11241,43 @@ TEST(AlgoSort, check_insertion)
 
   {
     std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_02(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-
-  {
-    std::vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_03(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-
-  {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_04(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-  {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_05(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-  {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_06(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-  {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_07(coll);
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
-  }
-  {
-    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
-    sort_insertion_08(coll, std::less<int>());
+    sort_insertion_6(coll, std::less<int>());
     EXPECT_THAT(
       coll,
       ElementsAreArray({33, 31, 30, 29, 17, 15, 13, 12, 10, 6, 5, 3, 2}));
   }
+
+  {
+    std::vector<int> coll{33, 2, 31, 34, 1, 4};
+    bubble_sort(coll);
+    EXPECT_THAT(coll, ElementsAreArray({1, 2, 4, 31, 33, 34}));
+  }
 }
 
-// ={=========================================================================
-// algo-partition algo-sort-insert a
+/*
+={=========================================================================
+algo-partition algo-sort-insert
 
-// algo-partition which uses the same grouping trick as algo-sort-insert
+algo-partition which uses the same grouping trick as algo-sort-insert
+
+Re-arrange the portfolio between (begin, end)  in such a way that all the stocks
+with quantity <= maxQuantity precede all those with quantity > maxQuantity
+
+Return the iterator to the first element with quantity > maxQuantity
+
+[ <= max ][ > max]
+
+*/
 
 namespace algo_partition
 {
-  // Re-arrange the portfolio between (begin, end)  in such a way that all the
-  // stocks with quantity <= maxQuantity precede all those with quantity >
-  // maxQuantity Return the iterator to the first element with quantity >
-  // maxQuantity
+  using PortfolioIterator = std::vector<unsigned int>::iterator;
 
-  using PortfolioIterator = vector<unsigned int>::iterator;
-
-  // replace Stock to simple int
-  // std::vector<Stock> PortfolioGreater, PortfolioLesser;
-
+  // maintain the order of input elements when grouping.
   // 2N space and 2N time(2 pass)
-
-  PortfolioIterator rearrangeByQuantity_1(PortfolioIterator begin,
-                                          PortfolioIterator end,
-                                          unsigned int maxQuantity)
+  PortfolioIterator my_partition_1(PortfolioIterator begin,
+                                   PortfolioIterator end,
+                                   unsigned int maxQuantity)
   {
     // implement me
     std::vector<unsigned int> PortfolioGreater, PortfolioLesser;
@@ -11277,11 +11308,10 @@ namespace algo_partition
     return begin;
   }
 
-  // less space but still 2 pass
-
-  PortfolioIterator rearrangeByQuantity_2(PortfolioIterator begin,
-                                          PortfolioIterator end,
-                                          unsigned int max_quanity)
+  // NOT working. less space but still 2 pass
+  PortfolioIterator my_partition_2(PortfolioIterator begin,
+                                   PortfolioIterator end,
+                                   unsigned int max_quanity)
   {
     // how to get T of coll such as algo-remove? here, assumes that we know T
     vector<unsigned int> coll;
@@ -11389,39 +11419,27 @@ namespace algo_partition
     }
   } // namespace algo_code
 
-  // same as algo-partition in /usr/include/c++/4.9.2/bits/stl_algo.h
-  //
-  // o is to find the first unmatched
-
+  // same as std::partition
   template <typename _Iterator, typename _Compare>
-  _Iterator partition_1(_Iterator begin, _Iterator end, _Compare comp)
+  _Iterator my_partition_3(_Iterator begin, _Iterator end, _Compare comp)
   {
     if (begin == end)
-      return begin;
+      return end;
 
-    // skip matched elements and begin becomes the first unmatched item.
-    // begin is "start of the unmatched"
-    // note that begin is increased in "if"
-
+    // skip elements that are already matched and return an iterator of the
+    // first unmatched. return end if all are matched.
     while (comp(*begin))
       if (++begin == end)
         return begin;
 
-    // do the same
-    // _Iterator first = begin;
-    // for (; first != end; ++first)
-    //   if (!comp(*first))
-    //     break;
-
+    // okay, found the unmatched from the loop above.
     _Iterator run = begin;
 
-    // increase first since knows *run is already unmatched.
     while (++run != end)
     {
-      // see matched and move it to matched group
       if (comp(*run))
       {
-        // cannot use "=" since it's not algo-remove
+        // note: not use "=" since it's not *cxx-algo-remove*
         std::iter_swap(run, begin);
         ++begin;
       }
@@ -11430,136 +11448,108 @@ namespace algo_partition
     return begin;
   }
 
+  // since it do swap for elements that are already matched and are not needed
+  // to swap, std::partition seems better.
+  PortfolioIterator my_partition_x(PortfolioIterator begin,
+                                   PortfolioIterator end,
+                                   unsigned int max)
+  {
+    PortfolioIterator eog{begin};  // end of the group
+    PortfolioIterator scan{begin}; // scan
+
+    for (; scan != end; ++scan)
+    {
+      // found an item whicn is <= max. swap and incr eog.
+      if (*scan <= max)
+        std::iter_swap(eog++, scan);
+    }
+
+    return eog;
+  }
 } // namespace algo_partition
 
-TEST(AlgoPartition, Stl)
+TEST(AlgoPartition, check_partition)
 {
   using namespace algo_partition;
 
-  // | matched | unmatched |
-  //
-  // algo-partition returns an iterator to the first element where the
-  // predicate is not true, or the end of the range if all elements satisfy
-  // the predicate. so first odd element:
-
+  // [ groups where f() returns true][ groups where f() returns false]
   {
-    vector<int> coll1;
-    vector<int> coll2;
-
-    // INSERT_ELEMENTS(coll1, 1, 9);
-    coll1 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    auto pos1 = partition(coll1.begin(),
-                          coll1.end(), // range
-                          [](int elem) { return elem % 2 == 0; });
-
-    EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
-
-    EXPECT_EQ(*pos1, 5);
-
-    // INSERT_ELEMENTS(coll2, 1, 9);
-    coll2 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    auto pos2 = stable_partition(coll2.begin(), coll2.end(), [](int elem) {
-      return elem % 2 == 0;
-    });
-    EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
-
-    // first odd element:
-    EXPECT_EQ(*pos2, 1);
-  }
-
-  // works like algo-partition-stable_partition
-  {
-    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
-                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
-
-    const auto func = rearrangeByQuantity_1;
-
-    auto it = func(coll.begin(), coll.end(), 25);
-
-    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-    //                                ^^
-
-    EXPECT_THAT(coll,
-                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
-                                  23, 43, 42, 29, 34, 37, 48, 26, 41, 30}));
-
-    EXPECT_THAT(*it, 43);
-  }
-
-  {
-    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
-                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
-
-    const auto func = rearrangeByQuantity_2;
-
-    auto it = func(coll.begin(), coll.end(), 25);
-
-    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-    //                                ^^
-
-    EXPECT_THAT(coll,
-                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
-                                  23, 43, 42, 29, 34, 37, 48, 26, 41, 30}));
-
-    // this now fails since `current` is iterator of internal coll but not input
-    // coll. Have to work out one.
-    // EXPECT_THAT(*it, 43);
-  }
-
-  {
-    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
-                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
-
-    // this prevents cxx-template-deduction
-    // const auto func = partition_1;
-
-    auto it = partition_1(coll.begin(), coll.end(), [](unsigned int value) {
-      return value <= 25;
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto pos1 = std::partition(coll.begin(), coll.end(), [](int e) {
+      return e % 2 == 0;
     });
 
-    EXPECT_THAT(coll,
-                ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
-                                  23, 43, 42, 29, 34, 26, 41, 30, 37, 48}));
-    EXPECT_THAT(distance(coll.begin(), it), 11);
-    EXPECT_THAT(*it, 43);
+    EXPECT_THAT(coll, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
+
+    // there are four even numbers
+    EXPECT_THAT(std::distance(coll.begin(), pos1), 4);
   }
 
-  // Q: why partiton_xxx() make different order from partition() when use the
-  // same logic? but distance is the same.
-
+  // if use stable version, it keeps the original order
   {
-    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
-                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
-
-    auto it = partition(coll.begin(), coll.end(), [](unsigned int value) {
-      return value <= 25;
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto pos1 = std::stable_partition(coll.begin(), coll.end(), [](int e) {
+      return e % 2 == 0;
     });
+
+    EXPECT_THAT(coll, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
+
+    // there are four even numbers
+    EXPECT_THAT(std::distance(coll.begin(), pos1), 4);
+  }
+
+  // use std::partition and the order do not kept.
+  {
+    std::vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                                   48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
+
+    auto pos1 =
+      std::partition(coll.begin(), coll.end(), [](int e) { return e < 25; });
 
     // EXPECT_THAT(coll,
-    //     ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    //     ElementsAreArray({6,  11, 23, 21, 19, 24, 15, 20, 13, 6,
+    //       23, 43, 42, 29, 34, 37, 48, 26, 41, 30}));
 
-    EXPECT_THAT(coll,
-                ElementsAreArray({23, 6,  11, 6,  13, 23, 21, 19, 20, 15,
-                                  24, 48, 37, 34, 29, 26, 41, 30, 42, 43}));
+    EXPECT_THAT(std::distance(coll.begin(), pos1), 11);
+  }
 
-    EXPECT_THAT(distance(coll.begin(), it), 11);
+  // the order of the unmatched group is different but the distance should be
+  // the same. so use std::distance().
+  {
+    auto imps = {my_partition_x};
 
-    // EXPECT_THAT(*it, 43);
-    EXPECT_THAT(*it, 48);
+    for (const auto &f : imps)
+    {
+      vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                                48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
+
+      auto ret = f(coll.begin(), coll.end(), 25);
+
+      EXPECT_THAT(std::distance(coll.begin(), ret), 11);
+    }
+  }
+
+  {
+    std::vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                                   48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
+
+    auto ret = my_partition_3(coll.begin(), coll.end(), [](unsigned int value) {
+      return value <= 25;
+    });
+
+    EXPECT_THAT(std::distance(coll.begin(), ret), 11);
   }
 }
 
-// ={=========================================================================
-// algo-remove algo-sort-insert
+/*
+={=========================================================================
+algo-partition algo-remove
+*/
 
 namespace algo_remove
 {
+  // same as std::partition() but [unmatched][matched]
+
   namespace algo_code
   {
     // /usr/include/c++/4.9/bits/predefined_ops.h
@@ -11676,37 +11666,54 @@ namespace algo_remove
     }
   } // namespace algo_code
 
-  // same as partition_1() but | unmatched | matched |
+  using _Iterator = std::vector<int>::iterator;
 
-  template <typename _Iterator, typename _T>
-  _Iterator remove_1(_Iterator begin, _Iterator end, _T value)
+  // same as std::partition
+  // use std::swap and do not use "begin++ or run++"; do not use side-effect
+  _Iterator my_remove_1(_Iterator begin, _Iterator end, unsigned int value)
   {
     if (begin == end)
-      return begin;
+      return end;
 
-    // skip *not* matched elements and begin becomes the first unmatched item.
-    // begin is "start of the unmatched"
-    // note that begin is increased in "if"
+    // skip elements which are not matched.
+    while (*begin != value) // !comp
+      if (++begin == end)
+        return begin;
 
+    _Iterator run = begin;
+
+    while (++run != end)
+    {
+      if (*run != value) // !comp
+      {
+        std::iter_swap(run, begin);
+        ++begin;
+      }
+    }
+    return begin;
+  }
+
+  // use "="
+  _Iterator my_remove_2(_Iterator begin, _Iterator end, unsigned int value)
+  {
+    if (begin == end)
+      return end;
+
+    // skip elements which are not matched.
     while (*begin != value)
       if (++begin == end)
         return begin;
 
     _Iterator run = begin;
 
-    // increase first since knows *run is already unmatched.
     while (++run != end)
     {
-      // see matched and move it to matched group
       if (*run != value)
       {
-        // cannot use "=" since it's not algo-remove
-        // std::iter_swap(run, begin);
         *begin = *run;
         ++begin;
       }
     }
-
     return begin;
   }
 
@@ -11714,7 +11721,7 @@ namespace algo_remove
   // 2. therefore, do not care about the order of unmatched group.
 
   template <typename _Iterator, typename _T>
-  _Iterator remove_2(_Iterator __begin, _Iterator __end, _T __value)
+  _Iterator my_remove_3(_Iterator __begin, _Iterator __end, _T __value)
   {
     _Iterator run             = __end - 1;
     _Iterator start_of_remove = __end;
@@ -11732,97 +11739,102 @@ namespace algo_remove
 
     return start_of_remove;
   }
-
 } // namespace algo_remove
 
-TEST(AlgoRemove, Stl)
+TEST(AlgoRemove, check_remove)
 {
   using namespace algo_remove;
 
-  // algo-remove which is opposite from algo-partition
-  // | unmatched | matched |
-
-  // coll.erase() delete elements but algo-remove do not.
   {
-    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    auto imps = {my_remove_1};
 
-    for (auto it = coll.begin(); it != coll.end(); ++it)
+    for (const auto &f : imps)
     {
-      if (*it == 2)
-        it = coll.erase(it);
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+
+      auto end = f(coll.begin(), coll.end(), 2);
+
+      EXPECT_THAT(std::distance(end, coll.end()), 4);
+
+      // use std::swap so different order
+      EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 2, 2, 2}));
+
+      coll.erase(end, coll.end());
+      EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
     }
-
-    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 
   {
-    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    auto imps = {my_remove_2};
 
-    auto end = remove(coll.begin(), coll.end(), 2);
+    for (const auto &f : imps)
+    {
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-    EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
+      auto end = f(coll.begin(), coll.end(), 2);
 
-    coll.erase(end, coll.end());
-    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
+      EXPECT_THAT(std::distance(end, coll.end()), 4);
+
+      // use "="
+      EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
+
+      coll.erase(end, coll.end());
+      EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
+    }
   }
 
-  // show that algo-remove() do not remove elements
   {
-    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    {
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-    remove(coll.begin(), coll.end(), 2);
+      auto end = my_remove_3(coll.begin(), coll.end(), 2);
 
-    // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
-    //                                       ^^^^^^^
+      EXPECT_THAT(std::distance(end, coll.end()), 4);
 
-    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
-  }
-
-  // show that remove_if() returns end if not found
-  {
-    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
-
-    auto it = remove_if(coll.begin(), coll.end(), [](int value) {
-      return value == 10;
-    });
-
-    EXPECT_THAT(it, coll.end());
-  }
-
-  // own remove
-  {
-    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
-
-    auto end = remove_1(coll.begin(), coll.end(), 2);
-
-    EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
-
-    coll.erase(end, coll.end());
-    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
+      coll.erase(end, coll.end());
+      EXPECT_THAT(coll, ElementsAreArray({1, 9, 3, 4, 5, 6, 8, 7}));
+    }
   }
 }
 
-// ={=========================================================================
-// algo-unique
-//
-// | matched(unique)  | unmatched |
-//                  ^dest
-//
-// use the dest which is the end of the matched group
+/*
+={=========================================================================
+algo-partition algo-unique
+
+[matched(unique)][unmatched]
+                  ^dest
+
+use the dest which is the end of the matched group
+
+
+1. std::unique() is not perferct
+
+The first form removes from the range [beg,end) all elements that are equal
+to `the previous elements.`
+
+Thus, only when the elements in the sequence are sorted, or at least when
+all elements of the same value are adjacent, it remove all duplicates.
+
+Both forms collapse *consecutive* equal elements by removing the following
+duplicates.
+
+2. sorted input is not assumed
+
+*/
 
 namespace algo_unique
 {
-  using ITERATOR = vector<int>::iterator;
-
   // when see two consequtive equal items, return a iterator to the first.
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  // 1. reutrn last when empty or when there is one item.
+  // 1. change its name. otherwise ambiguous with one from <algorithm>
+  template <typename _Iterator>
+  _Iterator my_adjacent_find(_Iterator first, _Iterator last)
   {
     if (first == last)
       return last;
 
-    ITERATOR next = first;
+    _Iterator next = first;
+
     while (++next != last)
     {
       if (*first == *next)
@@ -11834,15 +11846,18 @@ namespace algo_unique
   }
 
   // /usr/include/c++/4.9/bits/stl_algo.h
-
-  ITERATOR unique_1(ITERATOR first, ITERATOR last)
+  template <typename _Iterator>
+  _Iterator my_unique_1(_Iterator first, _Iterator last)
   {
-    first = adjacent_find(first, last);
+    first = my_adjacent_find(first, last);
     if (first == last)
       return last;
 
-    ITERATOR dest = first;
+    _Iterator dest = first;
+
+    // since already checked "*first" from my_adjacent_find() so increase it.
     ++first;
+
     while (++first != last)
     {
       // not equal and assign(overwrite). so if equals, keep increase first.
@@ -11855,60 +11870,72 @@ namespace algo_unique
   }
 
   template <typename _Iterator>
-  _Iterator unique_2(_Iterator first, _Iterator last)
+  _Iterator my_unique_2(_Iterator begin, _Iterator end)
   {
-    // first = adjacent_find(first, last);
-    // if (first == last)
-    //   return last;
+    // when size is 1
+    if (std::next(begin) == end)
+      return end;
 
-    _Iterator dest = first;
-    // ++first;
-    while (++first != last)
+    _Iterator unique_end_ = begin;
+
+    while (++begin != end)
     {
       // not equal and assign(overwrite). so if equals, keep increase first.
-      if (*dest != *first)
-        *++dest = *first;
+      if (*unique_end_ != *begin)
+        *++unique_end_ = *begin;
     }
 
-    // one after from the last unique
-    return ++dest;
+    return ++unique_end_;
+  }
+
+  // 2020.07
+  // these iterator artimetic only works for random access coll so error for
+  // std::list.
+  //
+  // _Iterator run_{begin+1};
+  // return unique_end_+1;
+
+  template <typename _Iterator>
+  _Iterator my_unique_x(_Iterator begin, _Iterator end)
+  {
+    // when size is 1
+    if (std::next(begin) == end)
+      return end;
+
+    _Iterator unique_end_{begin};
+    _Iterator run_{std::next(begin)};
+
+    for (; run_ != end; ++run_)
+    {
+      if (*unique_end_ != *run_)
+        *(++unique_end_) = *run_;
+    }
+
+    return std::next(unique_end_);
   }
 } // namespace algo_unique
 
-TEST(AlgoUnique, Unique)
+TEST(AlgoUnique, check_unique)
 {
   using namespace algo_unique;
 
-  // o Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
+  //
   {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
+    std::vector<int> coll{1, 4, 4, 6};
+
+    auto pos = my_unique_x(coll.begin(), coll.end());
+
+    EXPECT_THAT(std::distance(pos, coll.end()), 1);
+
     coll.erase(pos, coll.end());
     EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
   }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // o algo-unique() is not perferct
-  // The first form removes from the range [beg,end) all elements that are equal
-  // to `the previous elements.` Thus, only when
-  //
-  // the elements in the sequence are sorted, or at least when all elements of
-  // the same value are adjacent,
-  //
-  // does it remove all duplicates.
-  //
-  // o sorted input is not assumed
 
   {
-    list<int> coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
+    std::list<int>
+      coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
 
-    auto pos = unique(coll.begin(), coll.end());
+    auto pos = std::unique(coll.begin(), coll.end());
     EXPECT_THAT(coll,
                 ElementsAreArray(
                   {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
@@ -11919,9 +11946,62 @@ TEST(AlgoUnique, Unique)
   }
 
   {
-    list<int> coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
+    std::list<int>
+      coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
 
-    auto pos = unique_2(coll.begin(), coll.end());
+    auto pos = my_unique_x(coll.begin(), coll.end());
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll,
+                ElementsAreArray({1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4}));
+  }
+
+  //
+  {
+    std::vector<int> coll{1, 4, 4, 6};
+
+    auto pos = my_unique_1(coll.begin(), coll.end());
+
+    EXPECT_THAT(std::distance(pos, coll.end()), 1);
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+
+  {
+    std::list<int>
+      coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
+
+    auto pos = my_unique_1(coll.begin(), coll.end());
+    EXPECT_THAT(coll,
+                ElementsAreArray(
+                  {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll,
+                ElementsAreArray({1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4}));
+  }
+
+  //
+  {
+    std::vector<int> coll{1, 4, 4, 6};
+
+    auto pos = my_unique_2(coll.begin(), coll.end());
+
+    EXPECT_THAT(std::distance(pos, coll.end()), 1);
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+
+  {
+    std::list<int>
+      coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
+
+    auto pos = my_unique_2(coll.begin(), coll.end());
     EXPECT_THAT(coll,
                 ElementsAreArray(
                   {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
@@ -11941,20 +12021,21 @@ TEST(AlgoUnique, Unique)
   // so all these elements are removed. In other words, the predicate is not
   // used to compare an element with its predecessor; the element is compared
   // with the previous element that was not removed
-  {
-    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
 
-    auto pos = unique(coll.begin(), coll.end(), greater<int>());
+  {
+    std::list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = std::unique(coll.begin(), coll.end(), std::greater<int>());
     coll.erase(pos, coll.end());
     EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
   }
 
   {
-    string input{"1   2  3            4           "};
+    std::string input{"1   2  3            4           "};
     EXPECT_THAT(input, "1   2  3            4           ");
 
     auto new_end =
-      unique(input.begin(), input.end(), [](const char &x, const char &y) {
+      std::unique(input.begin(), input.end(), [](const char &x, const char &y) {
         return x == y and x == ' ';
       });
 
@@ -11962,26 +12043,11 @@ TEST(AlgoUnique, Unique)
     EXPECT_THAT(input, "1 2 3 4 ");
   }
 
-  // o Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique_1(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique_1(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // o sorted input is not assumed
+  // o sorted input is not assumed. ???
   {
     vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
 
-    auto pos = unique_1(coll.begin(), coll.end());
+    auto pos = std::unique(coll.begin(), coll.end());
     EXPECT_THAT(
       coll,
       ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
@@ -11991,9 +12057,10 @@ TEST(AlgoUnique, Unique)
   }
 }
 
-// ={=========================================================================
-// algo-remove algo-leetcode-8
 /*
+={=========================================================================
+algo-partition algo-unique algo-leetcode-8
+
 26. Remove Duplicates from Sorted Array, Easy
 
 Given a sorted array nums, remove the duplicates in-place such that each element
@@ -12020,13 +12087,6 @@ being modified to 0, 1, 2, 3, and 4 respectively.
 
 It doesn't matter what values are set beyond the returned length.
 
-Clarification:
-
-Confused why the returned value is an integer but your answer is an array?
-
-Note that the input array is passed in by reference, which means modification to
-the input array will be known to the caller as well.
-
 Internally you can think of this:
 
 // nums is passed in by reference. (i.e., without making a copy)
@@ -12039,73 +12099,29 @@ for (int i = 0; i < len; i++) {
     print(nums[i]);
 }
 
+1. key point is "sorted input"
+ 
 */
 
 namespace leetcode_easy_008
 {
-  // input num is sorted (ascending)
-  // the idea is to move the duplicates to the end of right using swap
-  // don't need to check if run see smaller value since it's sorted input
-
-  int RemoveDuplicates_01(vector<int> &nums)
-  {
-    if (nums.empty())
-      return 0;
-
-    int value = nums[0];
-    size_t i{};
-
-    for (i = 1; i < nums.size(); ++i)
-    {
-      int run = nums[i];
-
-      // cout << "for i: " << i << ", run: " << run
-      //   << ", value: " << value << endl;
-
-      // update current max when current value is bigger
-      if (run > value)
-        value = run;
-      // ends when see smaller and means reaches the the new end
-      else if (run < value)
-      {
-        // cout << "break i: " << i << endl;
-        break;
-      }
-      // when run == value, swap it to tne end.
-      else
-      {
-        for (size_t s = i; s < nums.size() - 1; ++s)
-          swap(nums[s], nums[s + 1]);
-
-        // since nums[i] is swapped, it may be bigger
-
-        if (nums[i] > value)
-          value = nums[i];
-      }
-    }
-
-    // cout << "return i: " << i << endl;
-
-    return i;
-  }
-
-  // o the key idea is to swap to the left
-  // o no repeated swap until see the new end. single swap is enough
-  // o swap() should be done after updating current_max
-  //
   // o end is index but shold return len so +1 -> revised. As algo-partition,
   // end represet start of not-interested, that is end of interested group + 1.
   // so no need to +1. have to think about swap on the same index
   //
   // | ... |end ...|
-
+  //
   // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
   // Duplicates from Sorted Array.
   //
   // Memory Usage: 11 MB, less than 24.81% of C++ online submissions for Remove
   // Duplicates from Sorted Array.
+  //
+  // 1. since the input is sorted, where see bigger element is when see
+  // different element.
+  // 1. use swap instead assign.
 
-  int RemoveDuplicates_02(vector<int> &nums)
+  int unique_1(vector<int> &nums)
   {
     if (nums.empty())
       return 0;
@@ -12130,212 +12146,65 @@ namespace leetcode_easy_008
     return end;
   }
 
-  using ITERATOR = vector<int>::iterator;
-
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  // same as my_unique
+  int unique_2(std::vector<int> &coll)
   {
-    if (first == last)
-      return last;
+    // when size 1
+    if (coll.size() == 1)
+      return 1;
 
-    auto next = first;
-    while (++next != last)
-    {
-      // found two consecutive items
-      if (*first == *next)
-        return first;
-
-      first = next;
-    }
-
-    // no two consecutive items found.
-    return last;
-  }
-
-  // algo-unique, same as unique_1(), works on not-sorted input.
-  // `end` fro adjacent_find() is end of the interested group
-  // | ... end| ...|
-
-  int RemoveDuplicates_03(vector<int> &nums)
-  {
-    auto first = nums.begin();
-    auto last  = nums.end();
-
-    auto end = adjacent_find(first, last);
-
-    // means empty or no duplicates
-    if (end == last)
-      return 0;
-
-    auto run = end;
+    auto unique_end = coll.begin();
+    auto run        = coll.begin();
+    auto last       = coll.end();
 
     while (++run != last)
     {
-      // see different item
-      if (*end != *run)
-        *++end = *run;
+      if (*unique_end != *run)
+        *++unique_end = *run;
     }
 
-    return distance(first, end) + 1;
+    return std::distance(coll.begin(), ++unique_end);
   }
-
-  int RemoveDuplicates_04(vector<int> &nums)
-  {
-    if (nums.empty())
-      return 0;
-
-    size_t unique_end{0};
-    size_t current{1};
-    size_t size = nums.size() - 1;
-
-    while (current <= size)
-    {
-      if (nums[unique_end] == nums[current])
-      {
-        ++current;
-      }
-      else
-      {
-        ++unique_end;
-
-        // to avoid assign on the same index
-        if (unique_end != current)
-          nums[unique_end] = nums[current];
-
-        ++current;
-      }
-    }
-
-    // +1 since unique_end is index but return length
-    return unique_end + 1;
-  }
-
 } // namespace leetcode_easy_008
 
-TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
+TEST(AlgoUnique, check_unique_leetcode_008)
 {
   using namespace leetcode_easy_008;
 
-  // okay
+  auto imps = {unique_1, unique_2};
+
+  for (auto f : imps)
   {
-    const auto func = RemoveDuplicates_01;
+    {
+      std::vector<int> coll{1, 4, 4, 6};
+      auto ret = f(coll);
+      EXPECT_THAT(ret, 3);
+    }
 
-    vector<int> coll{1, 1, 2};
-    auto len = func(coll);
+    {
+      std::vector<int> coll{1, 4, 4, 4, 6};
+      auto ret = f(coll);
+      EXPECT_THAT(ret, 3);
+    }
 
-    EXPECT_THAT(len, 2);
+    {
+      std::vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
+      auto ret = f(coll);
+      EXPECT_THAT(ret, 5);
+    }
 
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 2));
-  }
-
-  // fails
-  {
-    const auto func = RemoveDuplicates_01;
-
-    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, Not(5));
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, Not(ElementsAre(0, 1, 2, 3, 4)));
-  }
-
-  {
-    const auto func = RemoveDuplicates_02;
-
-    vector<int> coll{1, 1, 2};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 2);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 2));
-  }
-
-  {
-    const auto func = RemoveDuplicates_02;
-
-    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 5);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(0, 1, 2, 3, 4));
-  }
-
-  // same ex as AlgoUnique
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 6};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 3);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 4, 6));
-  }
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 3);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 4, 6));
-  }
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto len = func(coll);
-
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-    EXPECT_THAT(len, 12);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
+    {
+      std::vector<int> coll{1, 1, 1, 2, 2, 3, 4, 4, 4, 4, 5, 5, 6, 6, 6, 6, 7};
+      auto ret = f(coll);
+      EXPECT_THAT(ret, 7);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-remove algo-leetcode-9
 /*
+={=========================================================================
+algo-partition algo-unique algo-leetcode-9
+
 27. Remove Element, Easy
 
 Given an array nums and a value val, remove all instances of that value in-place
@@ -12366,24 +12235,6 @@ containing 0, 1, 3, 0, and 4.
 Note that the order of those five elements can be arbitrary.
 
 It doesn't matter what values are set beyond the returned length.
-
-Clarification:
-
-Confused why the returned value is an integer but your answer is an array?
-
-Note that the input array is passed in by reference, which means modification to
-the input array will be known to the caller as well.
-
-Internally you can think of this:
-
-// nums is passed in by reference. (i.e., without making a copy)
-int len = removeElement(nums, val);
-
-// any modification to nums in your function would be known by the caller.
-// using the length returned by your function, it prints the first len elements.
-for (int i = 0; i < len; i++) {
-    print(nums[i]);
-}
 
 */
 

@@ -17,11 +17,23 @@
 using namespace std;
 using namespace testing;
 
+template <typename T>
+void PRINT_ELEMENTS(T &coll, const string optstr = "")
+{
+  size_t count{};
+  cout << optstr;
+
+  for (const auto &elem : coll)
+  {
+    std::cout << std::setw(2) << elem << " ";
+    ++count;
+  }
+
+  std::cout << "(" << count << ")" << std::endl;
+}
+
 namespace algopad
 {
-  void sort_insertion_1(std::vector<int> &coll)
-  {
-  }
 } // namespace algopad
 
 TEST(Pad, xx)
@@ -29,16 +41,38 @@ TEST(Pad, xx)
   using namespace algopad;
 
   {
-    auto imps = {find_max_counters_1,
-                 find_max_counters_2,
-                 find_max_counters_3,
-                 find_max_counters_4};
+    std::vector<int> coll{3,2,2,3};
+    auto pos = std::remove_if(coll.begin(), coll.end(),
+  }
 
-    for (const auto &f : imps)
+  {
+    auto imps = {unique_1, unique_2};
+
+    for (auto f : imps)
     {
-      EXPECT_THAT(f(5, {3, 4, 4, 6, 1, 4, 4}), ElementsAre(3, 2, 2, 4, 2));
-      EXPECT_THAT(f(5, {3, 4, 4, 6, 1, 4, 6}), ElementsAre(3, 3, 3, 3, 3));
-      EXPECT_THAT(f(5, {3, 6, 6, 6, 6, 6, 6}), ElementsAre(1, 1, 1, 1, 1));
+      {
+        std::vector<int> coll{1, 4, 4, 6};
+        auto ret = f(coll);
+        EXPECT_THAT(ret, 3);
+      }
+
+      {
+        std::vector<int> coll{1, 4, 4, 4, 6};
+        auto ret = f(coll);
+        EXPECT_THAT(ret, 3);
+      }
+
+      {
+        std::vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
+        auto ret = f(coll);
+        EXPECT_THAT(ret, 5);
+      }
+
+      {
+        std::vector<int> coll{1, 1, 1, 2, 2, 3, 4, 4, 4, 4, 5, 5, 6, 6, 6, 6, 7};
+        auto ret = f(coll);
+        EXPECT_THAT(ret, 7);
+      }
     }
   }
 }

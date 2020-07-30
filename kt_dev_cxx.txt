@@ -31476,7 +31476,7 @@ TEST(PatternTemplate, GeneratingSecurityNumber)
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-pattern-pimpl cxx-pimpl
+*kt_dev_cxx_0000* cxx-pattern-pimpl cxx-pimpl cxx-pattern-bridge
 
 *cxx-encapsulation*
 
@@ -45028,6 +45028,8 @@ namespace cxx_code
         typedef _Compare                                      key_compare;
         typedef _Alloc                                        allocator_type;
 
+	     `_Compare comp;`
+
         // *cxx-map-insert*
         /**
          *  @brief Attempts to insert a std::pair into the %map.
@@ -57926,7 +57928,7 @@ return one from a function. How about `unique_ptr`? solved.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-sp-delete
+*kt_dev_cxx_0000* cxx-sp-deleter
   
 CXXSLR 5.2.5 Class unique_ptr
 
@@ -57957,11 +57959,10 @@ void f()
 }
 
 
-NOTE: 
-
 o the passed deleter is not allowed to throw exceptions.
 
-o unique_ptr uses template and typename. shared_ptr uses object for deleter and
+o the key difference:
+  unique_ptr uses template and typename. shared_ptr uses object for deleter and
   template function.
 
 namespace cxx_code *cxx-sp-code*
@@ -58102,11 +58103,11 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
-TEST(CxxSmartPointer, sp_Deleter)
+TEST(CxxSmartPointer, check_deleter)
 {
   using namespace cxx_sp_delete;
 
-  // unique pointers
+  // unique_ptr uses type of deleter and creates deleter object internally
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"));
@@ -58114,7 +58115,7 @@ TEST(CxxSmartPointer, sp_Deleter)
     EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
-  // same as the above and another unique_ptr ctor
+  // another unique_ptr ctor which explicitly creates deleter object.
   {
     std::unique_ptr<ClassA, DebugDeleteClassA> up(
       new ClassA("unique with deleter"),
@@ -58132,15 +58133,40 @@ TEST(CxxSmartPointer, sp_Deleter)
 
   // *cxx-error*
   // {
-  //   unique_ptr<string, decltype(function_debug_delete)> up(new
-  //   string("unique"), function_debug_delete);
+  //   std::unique_ptr<std::string, decltype(function_delete)> up(new
+  //   string("unique"), function_delete);
   // }
 
-  // shared pointers
+  // see that the way of using function pointer
   {
-    std::shared_ptr<string> sp1(new std::string("nico on function"),
+    std::unique_ptr<std::string, void (*)(std::string *)> up(
+      new std::string("unique with function deleter1"),
+      function_delete);
+  }
+
+  {
+    using unique_ptr_with_function =
+      std::unique_ptr<std::string, void (*)(std::string *)>;
+
+    unique_ptr_with_function up(
+      new std::string("unique with function deleter2"),
+      function_delete);
+  }
+
+  // okay when nullptr is used? Yes since unique_ptr do have checks before
+  // calling deleter
+  {
+    using unique_ptr_with_function =
+      std::unique_ptr<std::string, void (*)(std::string *)>;
+
+    unique_ptr_with_function up(nullptr, function_delete);
+  }
+
+  // shared pointer takes object as argument
+  {
+    std::shared_ptr<std::string> sp1(new std::string("nico on function"),
                                 function_delete);
-    std::shared_ptr<string> sp2(new std::string("jutta on function"),
+    std::shared_ptr<std::string> sp2(new std::string("jutta on function"),
                                 function_delete);
   }
 
