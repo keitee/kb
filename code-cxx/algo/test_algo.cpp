@@ -6508,7 +6508,9 @@ namespace algo_bit
     for (size_t i = 0; i < 32; ++i)
     {
       // warning: operation on ‘result’ may be undefined [-Wsequence-point]
-      result = ((result <<= 1) | (n & 0x1));
+      // result = ((result <<= 1) | (n & 0x1));
+      uint32_t temp = result <<= 1;
+      result        = (temp | (n & 0x1));
       n >>= 1;
     }
 
@@ -12363,6 +12365,39 @@ TEST(AlgoRemove, check_remove_leetcode_009)
 ={=========================================================================
 algo-rotate, algo-slide, algo-reverse
 
+1. do not use additional space. HOW?
+
+note:
+Hint is std::swap()
+
+/usr/include/c++/4.9.2/bits/stl_algo.h
+
+/// This is a helper function for the rotate algorithm.
+template<typename _ForwardIterator>
+  _ForwardIterator
+  __rotate(_ForwardIterator __first,
+     _ForwardIterator __middle,
+     _ForwardIterator __last,
+     forward_iterator_tag)
+{}
+
+        ne           e
+1  2  3 [4  5  6  7]     #1 move
+      4  3
+         5  3
+            6  3
+      ne       7  3
+   ne[4  5  6  7] 3      #2 move
+  [4  5  6  7] 2  3      #3 move
+4  5  6  7] 1  2  3
+
+
+use reverse:
+
+1  2  3 [4  5  6  7]
+3  2  1 [7  6  5  4]
+4  5  6  7  1  2  3
+
 */
 
 TEST(AlgoRotate, check_rotate)
@@ -12408,41 +12443,10 @@ TEST(AlgoRotate, check_rotate)
   }
 }
 
-// 1. do not use additional space
-// 2. slide down sub group, [ne, e}
-// 3. use of for loop count
-//
-// /usr/include/c++/4.9.2/bits/stl_algo.h
-//
-// /// This is a helper function for the rotate algorithm.
-// template<typename _ForwardIterator>
-//   _ForwardIterator
-//   __rotate(_ForwardIterator __first,
-//      _ForwardIterator __middle,
-//      _ForwardIterator __last,
-//      forward_iterator_tag)
-// {}
-
-//         ne           e
-// 1  2  3 [4  5  6  7]     #1 move
-//       4  3
-//          5  3
-//             6  3
-//       ne       7  3
-//    ne[4  5  6  7] 3      #2 move
-//   [4  5  6  7] 2  3      #3 move
-// 4  5  6  7] 1  2  3
-//
-// use reverse:
-//
-// 1  2  3 [4  5  6  7]
-// 3  2  1 [7  6  5  4]
-// 4  5  6  7  1  2  3
-
 namespace algo_rotate
 {
   template <typename _Iterator>
-  void rotate_1(_Iterator __begin, _Iterator __new_begin, _Iterator __end)
+  void my_rotate_1(_Iterator __begin, _Iterator __new_begin, _Iterator __end)
   {
     if ((__begin == __new_begin) || (__end == __new_begin))
       return;
@@ -12461,12 +12465,27 @@ namespace algo_rotate
     }
   }
 
-  // algo-rotate that use algo-reverse()
-  // void
-  // reverse (BidirectionalIterator beg, BidirectionalIterator end)
+  template <typename _Iterator>
+  _Iterator my_rotate_2(_Iterator begin, _Iterator new_begin, _Iterator end)
+  {
+    // size of the block to move which will be used as loop count
+    auto size = std::distance(new_begin, end);
+
+    while (begin != new_begin)
+    {
+      for (auto run = new_begin, i = 0; i < size; ++i, run = std::next(run))
+      {
+        std::iter_swap(std::prev(run), run);
+      }
+
+      new_begin = std::prev(new_begin);
+    }
+
+    return std::next(begin, size);
+  }
 
   template <typename _Iterator>
-  void rotate_2(_Iterator begin, _Iterator new_begin, _Iterator end)
+  void my_rotate_3(_Iterator begin, _Iterator new_begin, _Iterator end)
   {
     std::reverse(begin, new_begin);
     std::reverse(new_begin, end);
@@ -12474,51 +12493,68 @@ namespace algo_rotate
   }
 } // namespace algo_rotate
 
-TEST(AlgoRotate, Rotate_1)
+TEST(AlgoRotate, check_my_rotate)
 {
   using namespace algo_rotate;
 
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
     // cannot use this since it's template
     // auto func = rotate_1;
 
     // rotate one to the left
-    rotate_1(coll.begin(),     // begin
-             coll.begin() + 1, // new begin
-             coll.end()        // end
+    my_rotate_1(coll.begin(),     // begin
+                coll.begin() + 1, // new begin
+                coll.end()        // end
     );
+
     EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-    rotate_1(coll.begin(), coll.end() - 2, coll.end());
+    my_rotate_1(coll.begin(), coll.end() - 2, coll.end());
     EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
-    rotate_1(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+    my_rotate_1(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
     EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   }
 
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
-    // auto func = rotate_2;
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
-    // rotate one to the left
-    rotate_2(coll.begin(),     // begin
-             coll.begin() + 1, // new begin
-             coll.end()        // end
+    my_rotate_2(coll.begin(),     // begin
+                coll.begin() + 1, // new begin
+                coll.end()        // end
     );
+
     EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-    rotate_2(coll.begin(), coll.end() - 2, coll.end());
+    my_rotate_2(coll.begin(), coll.end() - 2, coll.end());
     EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
-    rotate_2(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+    my_rotate_2(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
+    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
+  }
+
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+
+    my_rotate_3(coll.begin(),     // begin
+                coll.begin() + 1, // new begin
+                coll.end()        // end
+    );
+
+    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
+
+    my_rotate_3(coll.begin(), coll.end() - 2, coll.end());
+    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
+
+    my_rotate_3(coll.begin(), find(coll.begin(), coll.end(), 4), coll.end());
     EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
   }
 }
 
-// algo-leetcode-189
-/* 189. Rotate Array, Easy
+/* 
+algo-leetcode-189, Rotate Array, Easy
 
 Given an array, rotate the array to the right by k steps, where k is
 non-negative.
@@ -12552,7 +12588,7 @@ namespace leetcode_easy_189
 {
   // k poins to new end which is size()-k in pos
 
-  void rotate(vector<int> &nums, int k)
+  void my_rotate_1(vector<int> &nums, int k)
   {
     int new_begin = nums.size() - k;
 
@@ -12575,10 +12611,11 @@ namespace leetcode_easy_189
   //
   // However, it's too slow
 
-  void rotate_1(vector<int> &nums, int k)
+  void my_rotate_2(vector<int> &nums, int k)
   {
+    // note
     // as with condition check in algo-rotate, no need to when it rotates to
-    // itself.
+    // itself since it's same as before.
 
     int count = k % nums.size();
 
@@ -12597,13 +12634,17 @@ namespace leetcode_easy_189
 
   // why faster? less swap() operations.
   //
+  // 1  2  3 [4  5  6  7]
+  //
+  // 12 swaps for moving. 6 swaps for reversing.
+  //
   // Runtime: 16 ms, faster than 100.00% of C++ online submissions for Rotate
   // Array.
   //
   // Memory Usage: 9.6 MB, less than 35.88% of C++ online submissions for Rotate
   // Array.
 
-  void rotate_2(vector<int> &nums, int k)
+  void my_rotate_3(vector<int> &nums, int k)
   {
     // as with condition check in algo-rotate, no need to when it rotates to
     // itself.
@@ -12619,76 +12660,102 @@ namespace leetcode_easy_189
     std::reverse(nums.begin() + new_begin, nums.end());
     std::reverse(nums.begin(), nums.end());
   }
+
+  // algo-code algo-reverse
+  // stl_algo.h
+  //
+  // /**
+  //  *  This is an uglified reverse(_BidirectionalIterator,
+  //  *                              _BidirectionalIterator)
+  //  *  overloaded for bidirectional iterators.
+  // */
+  // template <typename _BidirectionalIterator>
+  // void __reverse(_BidirectionalIterator __first,
+  //                _BidirectionalIterator __last,
+  //                bidirectional_iterator_tag)
+  // {
+  //   while (true)
+  //     if (__first == __last || __first == --__last)
+  //       return;
+  //     else
+  //     {
+  //       std::iter_swap(__first, __last);
+  //       ++__first;
+  //     }
+  // }
+
+  template <typename _Iterator>
+  void my_reverse_1(_Iterator begin, _Iterator end)
+  {
+    while (true)
+    {
+      // since assumes "BidirectionalIterator". decrease end.
+      if (begin == end || begin == --end)
+        return;
+      else
+      {
+        std::iter_swap(begin, end);
+        ++begin; // increase begin
+      }
+    }
+  }
 } // namespace leetcode_easy_189
 
-TEST(AlgoRotate, LeetCode_Easy_189)
+TEST(AlgoRotate, check_rotate_leetcode_189)
 {
   using namespace leetcode_easy_189;
 
+  auto imps = {my_rotate_1, my_rotate_2, my_rotate_3};
+
+  for (auto f : imps)
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    {
+      std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
 
-    // cannot use this since it's template
-    // auto func = rotate_1;
+      f(coll, 7);
+      EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
 
-    // rotate one to the left
-    // rotate(
-    //     coll.begin(),     // begin
-    //     coll.begin()+1,   // new begin
-    //     coll.end()        // end
-    //     );
-    rotate(coll, 7);
-    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
+      f(coll, 2);
+      EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
 
-    // rotate(
-    //     coll.begin(),
-    //     coll.end()-2,
-    //     coll.end()
-    //     );
-    rotate(coll, 2);
-    EXPECT_THAT(coll, ElementsAre(8, 1, 2, 3, 4, 5, 6, 7));
+      f(coll, 4);
+      EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
+    }
 
-    // rotate(
-    //     coll.begin(),
-    //     find(coll.begin(), coll.end(), 4),
-    //     coll.end()
-    //     );
-    rotate(coll, 4);
-    EXPECT_THAT(coll, ElementsAre(4, 5, 6, 7, 8, 1, 2, 3));
+    {
+      vector<int> coll{1, 2, 3, 4, 5, 6, 7};
+      f(coll, 3);
+      EXPECT_THAT(coll, ElementsAre(5, 6, 7, 1, 2, 3, 4));
+    }
+
+    {
+      vector<int> coll{-1, -100, 3, 99};
+      f(coll, 2);
+      EXPECT_THAT(coll, ElementsAre(3, 99, -1, -100));
+    }
   }
 
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7};
-    rotate(coll, 3);
-    EXPECT_THAT(coll, ElementsAre(5, 6, 7, 1, 2, 3, 4));
-  }
-  {
-    vector<int> coll{-1, -100, 3, 99};
-    rotate(coll, 2);
-    EXPECT_THAT(coll, ElementsAre(3, 99, -1, -100));
-  }
+    // no
+    {
+      std::vector<int> coll{1, 2};
+      my_rotate_1(coll, 3);
+      EXPECT_THAT(coll, Not(ElementsAre(2, 1)));
+    }
 
-  // fails since assumes new begin is within [begin, end)
-  {
-    vector<int> coll{1, 2};
-    rotate(coll, 3);
-    EXPECT_THAT(coll, Not(ElementsAre(2, 1)));
-  }
-  {
-    vector<int> coll{1, 2};
-    rotate_1(coll, 3);
-    EXPECT_THAT(coll, ElementsAre(2, 1));
-  }
-  {
-    vector<int> coll{1, 2};
-    rotate_1(coll, 99);
-    EXPECT_THAT(coll, ElementsAre(2, 1));
-  }
+    // ok
+    {
+      std::vector<int> coll{1, 2};
+      my_rotate_2(coll, 3);
+      EXPECT_THAT(coll, ElementsAre(2, 1));
+    }
 
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
-    rotate_2(coll, 7);
-    EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 8, 1));
+    // ok
+    {
+      std::vector<int> coll{1, 2};
+      my_rotate_3(coll, 3);
+      EXPECT_THAT(coll, ElementsAre(2, 1));
+    }
   }
 }
 

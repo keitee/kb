@@ -34,79 +34,136 @@ void PRINT_ELEMENTS(T &coll, const string optstr = "")
 
 namespace algopad
 {
-  // old
-  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
-  // Element.
+  // old and fails. not get the idea now.
   //
-  // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
-  // Element.
+  // should be "aa"
+  // EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "");
+  //
+  // should be ""
+  // EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "aa");
 
-  int my_remove_1(std::vector<int> &nums, int val)
+  std::string longest_common_prefix_1(const std::vector<std::string> &input)
   {
-    if (nums.empty())
-      return 0;
+    // since all are lower cases
+    std::vector<unsigned int> table{26, 0};
 
-    size_t end{};
+    auto num_input = input.size();
+    unsigned int num_common{};
 
-    for (size_t i = 0; i < nums.size(); ++i)
+    if (num_input == 0)
+      return "";
+
+    // build occurance table from inputs. scan all input strings
+    for (const auto &s : input)
     {
-      if (nums[i] != val)
-      {
-        if (end != i)
-          swap(nums[end], nums[i]);
-
-        ++end;
-      }
+      for (const auto &c : s)
+        table[c - 'a'] += 1;
     }
 
-    return end;
+    // take one input. WHY ANY input?
+    for (const auto &c : input[0])
+    {
+      if (table[c - 'a'] != num_input)
+        break;
+
+      ++num_common;
+    }
+
+    return input[0].substr(0, num_common);
   }
 
-  int my_remove_2(std::vector<int> &nums, int val)
+  // 2020.08
+  // 1. gets the size of smallest string since that's minimum to compare
+  // 2. while doing loop on this size, each chars fron all input string should
+  // be the smae. if not, stop the loop.
+  std::string longest_common_prefix_2(const std::vector<std::string> &input)
   {
-    size_t start{};
-    size_t end{nums.size()};
+    size_t min_size{std::numeric_limits<size_t>::max()};
+    std::string lcp{};
 
-    // find pos where the matched is found and which is pos to start "remove"
-    while (nums[start] != val)
-      ++start;
-
-    for (size_t scan = start + 1; scan < end; ++scan)
+    for (const auto &s : input)
     {
-      // found the unmatched
-      if (nums[scan] != val)
+      if (s.size() < min_size)
+        min_size = s.size();
+    }
+
+    // num of chars to compare
+    for (size_t i = 0; i < min_size; ++i)
+    {
+      // num of strings
+      for (size_t run = 0; run < input.size(); ++run)
       {
-        nums[start] = nums[scan];
-        ++start;
+        // compare [i] char of each string to see all are same.
+        //
+        // use xor?
+        // cxx-xor
+        // X XOR  X  = 0
+        // X XOR  0  = X
+        // X XOR  1  = ~X    // X XOR (~0) = ~X
+        // X XOR ~X  = 1
       }
     }
 
-    return start;
+    return lcp;
   }
 
-  int my_remove_3(std::vector<int> &nums, int val)
+  // Approach 1: Horizontal scanning
+  //
+  // For a start we will describe a simple way of finding the longest common
+  // prefix shared by a set of strings LCP(S1 ... Sn)
+  //
+  // We will use the *observation* that :
+  //
+  // LCP(S1 ... Sn) = LCP(LCP(LCP(S1, S2),S3), ... Sn)
+  //
+  // Algorithm
+  //
+  // To employ this idea, the algorithm iterates through the strings [S1 ...
+  // Sn], finding at each iteration i the longest common prefix of strings
+  // LCP(S1 ...  Si)
+  //
+  // When LCP(S1 ... Si) is an empty string, the algorithm ends. Otherwise after
+  // nn iterations, the algorithm returns LCP(S1 ... Sn)
+  //
+  // Complexity Analysis
+  //
+  // Time complexity : O(S), where S is the sum of all characters in all strings.
+  //
+  // In the *worst case* all n strings are the same. The algorithm compares the
+  // string S1 with the other strings [S2 ... Sn]. There are S character
+  // comparisons, where S is the sum of all characters in the input array.
+  //
+  // Space complexity : O(1) We only used constant extra space.
+
+  std::string longest_common_prefix_3(const std::vector<std::string> &input)
   {
-    size_t start{};
-    size_t end{nums.size()};
+    auto num_input = input.size();
 
-    // find pos where the matched is found and which is pos to start "remove"
-    // note: if all elements of nums are "unmatched", there should way to stop
-    // loop as my_remove_1 of iterator version
-    while (nums[start] != val)
-      if (++start == end)
-        return start;
+    // check on input
+    if (!num_input)
+      return "";
 
-    for (size_t scan = start + 1; scan < end; ++scan)
+    // set the first string as lcp
+    std::string lcp{input[0]};
+
+    for (size_t i = 1; i < num_input; ++i)
     {
-      // found the unmatched
-      if (nums[scan] != val)
+      // get min size to loop
+      size_t min_size = std::min(lcp.size(), input[i].size());
+      size_t run{};
+
+      for (run = 0; run < min_size; ++run)
       {
-        nums[start] = nums[scan];
-        ++start;
+        if (lcp[run] != input[i][run])
+          break;
       }
+
+      // update lcp
+      // note that substr(start, length)
+      lcp = lcp.substr(0, run);
     }
 
-    return start;
+    return lcp;
   }
 } // namespace algopad
 
@@ -115,36 +172,16 @@ TEST(Pad, xx)
   using namespace algopad;
 
   {
-    auto imps = {my_remove_1, my_remove_2, my_remove_3};
+    auto imps = {longest_common_prefix_3};
 
     for (auto f : imps)
     {
-      std::vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
+      EXPECT_THAT(f(std::vector<std::string>{"flower", "flow", "flight"}),
+                  "fl");
+      EXPECT_THAT(f(std::vector<std::string>{"dog", "racecar", "car"}), "");
 
-      auto len = f(coll, 2);
-
-      EXPECT_THAT(len, 5);
-
-      std::vector<int> result{};
-
-      for (int i = 0; i < len; ++i)
-        result.push_back(coll[i]);
-
-      EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
-    }
-  }
-
-  {
-    auto imps = {my_remove_1, my_remove_2, my_remove_3};
-
-    for (const auto &f : imps)
-    {
-      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
-
-      auto size = f(coll, 2);
-
-      EXPECT_THAT(size, 8);
-      // EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
+      EXPECT_THAT(f(std::vector<std::string>{"aa", "aa"}), "aa");
+      EXPECT_THAT(f(std::vector<std::string>{"aa", "bb"}), "");
     }
   }
 }

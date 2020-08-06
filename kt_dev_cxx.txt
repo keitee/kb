@@ -21,7 +21,8 @@ KT KB. CPP
 |kt_dev_gcc_000| gcc-compile-script
 |kt_dev_gcc_001| gcc-error: two or more data types in declaration specifiers <bool> 
 |kt_dev_gcc_002| gcc-error: ISO C++ forbids declaration of 'UseStatic' with no type [-fpermissive]
-|kt_dev_gcc_003| error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
+*kt_dev_cxx_0000* cxx-error-invalid conversion
+*kt_dev_cxx_0000* cxx-error-Wsequence-point
 |kt_dev_gcc_004| error: variable-sized object 'out' may not be initialised
 |kt_dev_gcc_005| error: expected '}' at end of input
 |kt_dev_gcc_006| error: expected specifier-qualifier-list before 'X' or error: 'X' does not name a type 
@@ -95,7 +96,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-pass-by-reference cxx-reference
 *kt_dev_cxx_0000* cxx-vexing-parse
 *kt_dev_cxx_0000* cxx-copy-dyn-resource cxx-ex-hasptr-exmaple
-*kt_dev_cpp_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
+*kt_dev_cxx_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
 *kt_dev_cxx_0000* cxx-copy-control cxx-ex-message-example
 *kt_dev_cxx_0000* cxx-move cxx-ex-strvec-example
 *kt_dev_cxx_0000* cxx-move
@@ -216,7 +217,7 @@ KT KB. CPP
 
 *kt_dev_cxx_0000* cxx-coll-associative
 *kt_dev_cxx_0000* cxx-coll-cxx-set cxx-multiset
-*kt_dev_cpp_0000* cxx-coll-cxx-map cxx-multimap cxx-size-t
+*kt_dev_cxx_0000* cxx-coll-cxx-map cxx-multimap cxx-size-t
 *kt_dev_cxx_0000* cxx-coll-unordered
 *kt_dev_cxx_0000* cxx-container-print-elements
 
@@ -261,7 +262,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-sp-read exception safety
 *kt_dev_cxx_0000* cxx-sp-read internal
 *kt_dev_cxx_0000* cxx-sp-code
-*kt_dev_cpp_0000* cxx-sp-thread-safety
+*kt_dev_cxx_0000* cxx-sp-thread-safety
 *kt_dev_cxx_0000* cxx-sp-case-examples
 
 *kt_dev_cxx_0000* cxx-chrono cxx-time
@@ -513,8 +514,10 @@ usestack.cpp:8:13: error: expected ';' before 'double'
 Does it mean that it gives more reason not to use using-directive?
 
 
-==============================================================================
-*kt_dev_gcc_003*	error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
+={============================================================================
+*kt_dev_cxx_0000* cxx-error-invalid conversion
+
+error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
 
 This is an error when tried convert from base to derived.
 
@@ -560,8 +563,107 @@ MySingleton* MySingleton::Instance()
 	return m_pins; // error
 }
 
-usestatic.cpp: In member function 'virtual MySingleton* MySingleton::Instance()':
-usestatic.cpp:106:9: error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
+.cpp: In member function 'virtual MySingleton* MySingleton::Instance()':
+.cpp:106:9: error: invalid conversion from 'Singleton*' to 'MySingleton*' [-fpermissive]
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-error-Wsequence-point
+
+{
+  // revise reverse_bits_1()
+  // Runtime: 4 ms, faster than 69.13% of C++ online submissions for Reverse Bits.
+  // Memory Usage: 5.9 MB, less than 91.90% of C++ online submissions for Reverse Bits.
+  uint32_t reverse_bits_3(uint32_t n)
+  {
+    uint32_t result{};
+
+    for (size_t i = 0; i < 32; ++i)
+    {
+      // warning: operation on ‘result’ may be undefined [-Wsequence-point]
+      result = ((result <<= 1) | (n & 0x1));
+      n >>= 1;
+    }
+
+    return result;
+  }
+
+  // no warning
+  uint32_t reverse_bits_3(uint32_t n)
+  {
+    uint32_t result{};
+
+    for (size_t i = 0; i < 32; ++i)
+    {
+      uint32_t temp = result <<= 1;
+      result = (temp | (n & 0x1));
+      n >>= 1;
+    }
+
+    return result;
+  }
+}
+
+note
+This seems to be "false positive" since the order do not matter here:
+
+      result = ((result <<= 1) | (n & 0x1));
+
+
+https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+
+
+https://www.ibm.com/support/knowledgecenter/SSB23S_1.1.0.2020/common/m1rhoseq.html
+Problem: I received the following warning: operation on ‘vq’ may be undefined
+[-Wsequence-point]
+
+Solution: The GNU Compiler Collection (GCC) 4.6.3 issues a warning when the
+sequence order of operations is ambiguous.
+
+In the following example, the vq pointer variable is both set and compared on
+the same statement. It might not be immediately clear whether the vq pointer
+variable is updated first and then used in the comparison, or used in the
+comparison and then updated. Because of the precedence and associativity of
+operators, == has a higher order of precedence than =, so the compiler does the
+comparison first and then updates the vq pointer variable. This might or might
+not be what was intended. The undefined operation [-Wsequence-point] warning is
+enabled by specifying the -Wall compiler option for C/C++ language.
+
+ if ((vq = *vp->v_hashchain) == vq->v_specnext)
+ {
+    ... 
+ }       
+
+Rewriting the code eliminates the compiler warning. In the following example,
+rewriting the code also has the advantage of removing the ambiguity.
+
+ vq = *vp->v_hashchain;                           
+ if (vq == vq->v_specnext)                        
+ {     
+    ...
+ }                                    
+   
+Note
+The -Wsequence-point warning can be valuable; therefore, do not suppress the
+warning by using the -Wno-sequence-point compiler option unless you are sure
+that your code is correct.
+
+
+https://stackoverflow.com/questions/40677318/wsequence-point-warning-what-does-it-mean-and-does-it-violate-ansi-c-standard
+
+tab[i] = tab[i+1] - tab[i] + (tab[i+1] = tab[i]);
+
+Your code relies on behaviour that is not covered by the standard. So your code
+may behave differently on different compilers, different versions of the same
+compiler and even behave differently depending on the surrounding code.
+
+The problem is that you evaluate and assign to tab[i+1] without a separating
+sequence point. It may seem obvious to you that your program will perform the
+calculation from left to right, but the C standard does not require this. A
+compiler could compile your code as:
+
+tab[i+1] = tab[i];
+tab[i] = tab[i+1] - tab[i] + tab[i+1];
 
 
 ==============================================================================
@@ -2777,7 +2879,7 @@ It would be cleaner not to have to give each command name twice, once in the
 
 #{ cxx issues 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-issue-string
+*kt_dev_cxx_0000* cxx-issue-string
 
 {cxx-issue-strncpy} cxx-strncpy
 
@@ -2946,7 +3048,7 @@ null character.
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-type cxx-twos-complement
+*kt_dev_cxx_0000* cxx-type cxx-twos-complement
 
 The int type type on MIPS: size int: 4
 
@@ -3198,7 +3300,7 @@ note-3: What if use abs(XXX_MIN) here? No effect.
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-builtin-type
+*kt_dev_cxx_0000* cxx-builtin-type
 
 {data-type} From ansic:
 
@@ -3427,7 +3529,7 @@ ULLONG_MAX:                                          18446744073709551615
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-bits cxx-limits
+*kt_dev_cxx_0000* cxx-bits cxx-limits
 
 namespace cxx_code
 {
@@ -5794,7 +5896,7 @@ total_len = (uint32_t)messageLen + (uint32_t)DIAG_CMN_ALIGN(client_name_len) + (
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-cast cpp-pointer-handle
+*kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 
 Use a pointer variable to hold handle.
 
@@ -5819,7 +5921,7 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-issue-incremental-build
+*kt_dev_cxx_0000* cxx-issue-incremental-build
 
 2014.08.
 
@@ -5849,7 +5951,7 @@ compiled without this def and this old code compiled with this def. Therefore,
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-volatile
+*kt_dev_cxx_0000* cxx-volatile
 
 This is non-portable feature. For values that is controlled by processes
 outside the direct control of the program and might be changed in ways outside
@@ -14690,7 +14792,7 @@ TEST(CxxSpTest, UseHasPtrUseFunction) {
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
+*kt_dev_cxx_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
 
 The typical swap involves "one copy and two assignments"
 
@@ -60120,7 +60222,7 @@ TEST(SharedPointerOwn, Shared)
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-sp-thread-safety
+*kt_dev_cxx_0000* cxx-sp-thread-safety
 
 https://gcc.gnu.org/onlinedocs/libstdc++/manual/memory.html#shared_ptr.thread
 

@@ -48,9 +48,10 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
   cout << "(" << count << ")" << endl;
 }
 
-// ={=========================================================================
-// algo-leetcode-1
 /*
+={=========================================================================
+algo-leetcode-1
+
 1. two sum, easy
 
 given an array of integers, return *indices* of the two numbers such that they
@@ -66,32 +67,14 @@ given nums = [2, 7, 11, 15], target = 9,
 because nums[0] + nums[1] = 2 + 7 = 9,
 return [0, 1].
 
+Q: what if there are duplicates in the input? will be fine since the first seen
+will be used.
+
 */
 
 namespace leetcode_easy_001
 {
-  vector<int> two_sum_failed(vector<int> &nums, int target)
-  {
-    size_t size = nums.size();
-
-    for (int first = 0; first < (int)size; ++first)
-    {
-      if ((abs(nums[first]) < abs(target)) || (nums[first] == 0))
-      {
-        // search second
-        for (int second = first + 1; second < (int)size; ++second)
-        {
-          if (abs(nums[second]) == abs(target - nums[first]))
-            return vector<int>{first, second};
-        }
-      }
-    }
-
-    // not necessary since assumes that there is always a solution
-    return vector<int>{-1, -1};
-  }
-
-  vector<int> two_sum_okay(vector<int> &nums, int target)
+  std::vector<int> two_sum_1(std::vector<int> &nums, int target)
   {
     size_t size = nums.size();
 
@@ -113,7 +96,7 @@ namespace leetcode_easy_001
   // input. in the above, handling of equal to 0 and abs() are due to
   // "nums[first] < target" and which is not necessary.
 
-  vector<int> two_sum(vector<int> &nums, int target)
+  vector<int> two_sum_2(vector<int> &nums, int target)
   {
     size_t size = nums.size();
 
@@ -127,27 +110,24 @@ namespace leetcode_easy_001
       }
     }
 
-    // not necessary since assumes that there is always a solution. as some
-    // solution showes, can use exception.
-
+    // not necessary since assumes that there is always a solution but need to
+    // avoid warning.
     return vector<int>{-1, -1};
   }
 
   // All aboves are O(n^2)
-  //
+
   // Approach 2: Two-pass Hash Table
   // To improve our run time complexity, we need a more efficient way to check
   // if the complement exists in the array. If the complement exists, we need to
   // look up its index. What is the best way to maintain a mapping of each
   // element in the array to its index? A hash table.
   //
-  // one pass to build table and one pass to find a match
-  //
-  // Q: what if there are duplicates in the input?
+  // one pass to build table, map<value, index>, and one pass to find a match
 
   // Approach 3: One-pass Hash Table
   // turns out we can do it in one-pass. While we iterate and inserting
-  // elements into the table, we also look back to check if current element's
+  // elements into the table, we also *look back* to check if current element's
   // complement already exists in the table. If it exists, we have found a
   // solution and return immediately.
   //
@@ -156,8 +136,10 @@ namespace leetcode_easy_001
   // Memory Usage: 10.4 MB, less than 30.73% of C++ online submissions for Two
   // Sum.
 
-  vector<int> two_sum_single_pass_map(vector<int> &nums, int target)
+  // old
+  vector<int> two_sum_3(vector<int> &nums, int target)
   {
+    // map<value, index>
     std::map<int, int> table{};
 
     size_t size = nums.size();
@@ -182,11 +164,38 @@ namespace leetcode_easy_001
       table[nums[first]] = first;
     }
 
-    // not necessary since assumes that there is always a solution. as some
-    // solution showes, can use exception.
+    return vector<int>{-1, -1};
+  }
+
+  // 2020.08.
+  // this is not a solution since we introduce a table to remove double loop.
+  std::vector<int> two_sum_4(std::vector<int> &nums, int target)
+  {
+    std::map<int, int> table{};
+
+    auto size = nums.size();
+
+    for (int first = 0; first < (int)size; ++first)
+    {
+      for (int second = first + 1; second < (int)size; ++second)
+      {
+        // insert it to table
+        if (first == 0)
+          table[nums[second]] = second;
+
+        // found
+        auto it = table.find(target - nums[first]);
+        if (it != table.end())
+        {
+          return std::vector<int>{first, it->second};
+        }
+      }
+    }
 
     return vector<int>{-1, -1};
   }
+
+  // old but see use less memory than map version.
 
   // py code
   //
@@ -203,9 +212,9 @@ namespace leetcode_easy_001
   //
   // Memory Usage: 10.2 MB, less than 49.95% of C++ online submissions for Two
   // Sum.
-
-  vector<int> two_sum_single_pass_unordered_map(vector<int> &nums, int target)
+  vector<int> two_sum_5(vector<int> &nums, int target)
   {
+    // map<value, index>
     std::unordered_map<int, int> table{};
 
     size_t size = nums.size();
@@ -225,194 +234,69 @@ namespace leetcode_easy_001
   }
 } // namespace leetcode_easy_001
 
-TEST(LeetCode, Easy_001_TwoSum_01)
+TEST(AlgoLeetCode, check_two_sum)
 {
   using namespace leetcode_easy_001;
 
   {
-    vector<int> nums{2, 7, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
+    auto imps = {two_sum_1, two_sum_2, two_sum_3, two_sum_4, two_sum_5};
 
-  {
-    vector<int> nums{7, 2, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
+    for (auto f : imps)
+    {
+      {
+        vector<int> nums{2, 7, 11, 15};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(0, 1));
+      }
 
-  {
-    vector<int> nums{11, 15, 2, 7};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 7, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 6, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4, 5));
-  }
+      {
+        vector<int> nums{7, 2, 11, 15};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(0, 1));
+      }
 
-  // failed and by leetcode
-  // not the same element but same value. it's special case so add "equal to 0"
-  // case.
+      {
+        vector<int> nums{11, 15, 2, 7};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(2, 3));
+      }
+      {
+        vector<int> nums{11, 15, 2, 7, 1, 8};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(2, 3));
+      }
 
-  {
-    vector<int> nums{0, 4, 3, 0};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 3));
-  }
+      {
+        vector<int> nums{11, 15, 2, 6, 1, 8};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(4, 5));
+      }
 
-  // failed and by leetcode
-  // Err, minus? there's no mention of input range but element type is int so
-  // add abs() on values.
+      {
+        vector<int> nums{0, 4, 3, 0};
+        auto coll = f(nums, 0);
+        EXPECT_THAT(coll, ElementsAre(0, 3));
+      }
 
-  {
-    vector<int> nums{-1, -2, -3, -4, -5};
-    auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2, 4));
-  }
+      {
+        vector<int> nums{-1, -2, -3, -4, -5};
+        auto coll = f(nums, -8);
+        EXPECT_THAT(coll, ElementsAre(2, 4));
+      }
 
-  // failed and by leetcode
-
-  {
-    vector<int> nums{-3, 4, 3, 90};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 2));
+      {
+        vector<int> nums{-3, 4, 3, 90};
+        auto coll = f(nums, 0);
+        EXPECT_THAT(coll, ElementsAre(0, 2));
+      }
+    }
   }
 }
 
-TEST(LeetCode, Easy_001_TwoSum_02)
-{
-  using namespace leetcode_easy_001;
-  const auto two_sum = two_sum_single_pass_map;
-
-  {
-    vector<int> nums{2, 7, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
-
-  {
-    vector<int> nums{7, 2, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
-
-  {
-    vector<int> nums{11, 15, 2, 7};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 7, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 6, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4, 5));
-  }
-
-  // failed and by leetcode
-  // not the same element but same value. it's special case so add "equal to 0"
-  // case.
-
-  {
-    vector<int> nums{0, 4, 3, 0};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 3));
-  }
-
-  // failed and by leetcode
-  // Err, minus? there's no mention of input range but element type is int so
-  // add abs() on values.
-
-  {
-    vector<int> nums{-1, -2, -3, -4, -5};
-    auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2, 4));
-  }
-
-  // failed and by leetcode
-
-  {
-    vector<int> nums{-3, 4, 3, 90};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 2));
-  }
-}
-
-TEST(LeetCode, Easy_001_TwoSum_03)
-{
-  using namespace leetcode_easy_001;
-  const auto two_sum = two_sum_single_pass_unordered_map;
-
-  {
-    vector<int> nums{2, 7, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
-
-  {
-    vector<int> nums{7, 2, 11, 15};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(0, 1));
-  }
-
-  {
-    vector<int> nums{11, 15, 2, 7};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 7, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(2, 3));
-  }
-  {
-    vector<int> nums{11, 15, 2, 6, 1, 8};
-    auto coll = two_sum(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(4, 5));
-  }
-
-  // failed and by leetcode
-  // not the same element but same value. it's special case so add "equal to 0"
-  // case.
-
-  {
-    vector<int> nums{0, 4, 3, 0};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 3));
-  }
-
-  // failed and by leetcode
-  // Err, minus? there's no mention of input range but element type is int so
-  // add abs() on values.
-
-  {
-    vector<int> nums{-1, -2, -3, -4, -5};
-    auto coll = two_sum(nums, -8);
-    EXPECT_THAT(coll, ElementsAre(2, 4));
-  }
-
-  // failed and by leetcode
-
-  {
-    vector<int> nums{-3, 4, 3, 90};
-    auto coll = two_sum(nums, 0);
-    EXPECT_THAT(coll, ElementsAre(0, 2));
-  }
-}
-
-// ={=========================================================================
-// algo-leetcode-167
 /*
+={=========================================================================
+algo-leetcode-167
+
 167. Two Sum II - Input array is sorted, Easy
 
 Given an array of integers that is already sorted in ascending order, find two
@@ -432,6 +316,10 @@ Input: numbers = [2,7,11,15], target = 9
 Output: [1,2]
 Explanation: The sum of 2 and 7 is 9. Therefore index1 = 1, index2 = 2.
  
+
+SO how "sorted" makes difference than "Two Sum I"?
+
+
 From discussion:
 
 C++ solution simple and sweet, bloomer
@@ -443,10 +331,10 @@ since input is sorted, a[0], a[1], ... a[n-1] can be on axis
  |<-------- b -------->|
  |<------------- a + b --------->|
 
-a[0] + a[n-1] is max distance in this input so target is less then sum. 
+a[0] + a[n-1] is max distance (from value 0) in this pair and
 
-if sum > target, reduce right
-if sum < target, increase left
+if sum > target, reduce right since need to reduce sum
+if sum < target, increase left since need to increase sum
 
 since there must be a solution in the input, there is sum == target case during
 moving.
@@ -457,12 +345,13 @@ this works regardless of sign of input
 
 namespace leetcode_easy_167
 {
-  vector<int> two_sum(vector<int> &nums, int target)
+  std::vector<int> two_sum_1(std::vector<int> &nums, int target)
   {
-    int right = nums.size() - 1;
-    int left  = 0;
+    int right{(int)nums.size() - 1};
+    int left{0};
     int sum{};
 
+    // since there should always be a pair to make sum
     while (left < right)
     {
       sum = nums[left] + nums[right];
@@ -470,35 +359,44 @@ namespace leetcode_easy_167
       if (sum == target)
       {
         // *cxx-return*
-        // return vector<int>{left+1, right+1};
-        return {left + 1, right + 1};
+        // return {left + 1, right + 1}; is okay but use `explicit` form.
+        //
+        // warning: narrowing conversion of ‘(left + 1)’ from ‘size_t {aka long unsigned int}’ to ‘int’ inside { } [-Wnarrowing]
+        return std::vector<int>{left + 1, right + 1};
       }
       else if (sum > target)
-        right--;
-      else // (sum < target)
-        left++;
+        --right;
+      else
+        ++left;
     }
 
-    // return vector<int>{0, 0};
-    return {0, 0};
+    // to avoid warning
+    return std::vector<int>{0, 0};
   }
 } // namespace leetcode_easy_167
 
-TEST(LeetCode, Easy_167_TwoSum)
+TEST(AlgoLeetCode, check_two_sum_sorted)
 {
   using namespace leetcode_easy_167;
-  const auto func = two_sum;
 
   {
-    vector<int> nums{2, 7, 11, 15};
-    auto coll = func(nums, 9);
-    EXPECT_THAT(coll, ElementsAre(1, 2));
+    auto imps = {two_sum_1};
+
+    for (auto f : imps)
+    {
+      {
+        std::vector<int> nums{2, 7, 11, 15};
+        auto coll = f(nums, 9);
+        EXPECT_THAT(coll, ElementsAre(1, 2));
+      }
+    }
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-2
 /*
+={=========================================================================
+algo-leetcode-2
+
 7. Reverse Integer, Easy
 
 Given a 32-bit signed integer, reverse digits of an integer.
@@ -525,43 +423,63 @@ overflows.
 
 namespace leetcode_easy_002
 {
-  //  void simple_itoa(int value)
-  //  {
-  //    while (value)
-  //    {
-  //      remains = value % 10;
-  //      result += '0' + remains;
-  //      value /= 10;
-  //    }
-  //
-  //    // reverse result string
-  //  }
-  //
-  //  void simple_atoi(std::string input)
-  //  {
-  //    int result{};
-  //
-  //    for (int i = 0; i < input.size(); ++i)
-  //    {
-  //      result = input[i] - '0' + 10*result;
-  //    }
-  //  }
+  /*
+   void simple_itoa(int value) 
+   {
+     while (value)
+     {
+       remains = value % 10;
+       result += '0' + remains;
+       value /= 10;
+     }
+  
+     // reverse result string
+   }
+  
+   void simple_atoi(std::string input)
+   {
+     int result{};
+  
+     for (int i = 0; i < input.size(); ++i)
+     {
+       result = input[i] - '0' + 10*result;
+     }
+   }
 
-  // Unlike atoi(), there is no need to handle:
-  //
-  // 1. isspace() on every single char of input
-  // 2. check and remove sign char, '-', of input
-  //
-  // However, gets some wrong answers and see test cases below. The final result
-  // is:
-  //
-  // Runtime: 16 ms, faster than 96.53% of C++ online submissions for Reverse
-  // Integer.
-  //
-  // Memory Usage: 13.9 MB, less than 85.02% of C++ online submissions for
-  // Reverse Integer.
+  Unlike atoi(), there is no need to handle:
+  
+  1. isspace() on every single char of input
+  2. check and remove sign char, '-', of input
+  
+  However, gets some wrong answers and see test cases below. The final result
+  is:
+  
+  Runtime: 16 ms, faster than 96.53% of C++ online submissions for Reverse
+  Integer.
+  
+  Memory Usage: 13.9 MB, less than 85.02% of C++ online submissions for
+  Reverse Integer.
 
-  int reverse_integer(int value)
+
+  signed int and unsigned int
+  
+   // okay
+   {
+     // >>> 2**31-1
+     // 2,147,483,647
+  
+     EXPECT_EQ(2147483647, numeric_limits<int>::max());
+  
+     // >>> 2**32-1
+     // 4,294,967,295    UNIT_MAX
+  
+     EXPECT_EQ(4294967295, numeric_limits<unsigned int>::max());
+   }
+
+  */
+
+  // old.
+  int reverse_integer_1(int value)
   {
     long long result{};
     // int result{};
@@ -592,63 +510,79 @@ namespace leetcode_easy_002
              ? 0
              : result;
   }
+
+  // assumes base 10. see the check on overflow
+  int reverse_integer_2(int value)
+  {
+    int input{std::abs(value)};
+
+    // NOTE:int result{};
+    long long result{};
+
+    int sign{1};
+
+    if (value < 0)
+      sign = -1;
+
+    while (input)
+    {
+      result = result * 10 + input % 10;
+      input  = input / 10;
+    }
+
+    // return sign * result;
+
+    // to check overflows
+    // EXPECT_THAT(f(1534236469), 0);
+    return (result > std::numeric_limits<int>::max() ||
+            result < std::numeric_limits<int>::min())
+             ? 0
+             : sign * result;
+  }
 } // namespace leetcode_easy_002
 
-// signed int and unsigned int
-//
-//  // okay
-//  {
-//    // >>> 2**31-1
-//    // 2,147,483,647
-//
-//    EXPECT_EQ(2147483647, numeric_limits<int>::max());
-//
-//    // >>> 2**32-1
-//    // 4,294,967,295    UNIT_MAX
-//
-//    EXPECT_EQ(4294967295, numeric_limits<unsigned int>::max());
-//  }
-
-TEST(LeetCode, Easy_002_ReverseInteger)
+TEST(AlgoLeetCode, check_reverse_integer)
 {
   using namespace leetcode_easy_002;
 
-  EXPECT_THAT(reverse_integer(123), 321);
-  EXPECT_THAT(reverse_integer(-123), -321);
-  EXPECT_THAT(reverse_integer(120), 21);
+  {
+    auto imps = {reverse_integer_1, reverse_integer_2};
 
-  // runtime error: signed integer overflow: 964632435 * 10 cannot be represented in type 'int' (solution.cpp)
-  // causes overflow while reversing.
+    for (auto f : imps)
+    {
+      EXPECT_THAT(f(123), 321);
+      EXPECT_THAT(f(-123), -321);
+      EXPECT_THAT(f(120), 21);
+      EXPECT_THAT(f(534236469), 964632435);
 
-  EXPECT_THAT(reverse_integer(534236469), 964632435);
+      // wrong answer when input is 1534236469. should be 0
+      EXPECT_THAT(f(1534236469), 0);
 
-  // wrong answer when input is 1534236469. should be 0
-  EXPECT_THAT(reverse_integer(1534236469), 0);
-
-  // as can see, mod(%) and div(/) do not impact on sign of integer.
-  //
-  // wrong answer, 126087180, but should be 0
-  //
-  // value: -214748364, result: -8, remains: -8
-  // value: -21474836, result: -84, remains: -4
-  // value: -2147483, result: -846, remains: -6
-  // value: -214748, result: -8463, remains: -3
-  // value: -21474, result: -84638, remains: -8
-  // value: -2147, result: -846384, remains: -4
-  // value: -214, result: -8463847, remains: -7
-  // value: -21, result: -84638474, remains: -4
-  // value: -2, result: -846384741, remains: -1
-  // value: 0, result: -8463847412, remains: -2
-  //
-  // Actual: 126087180 (of type int)
-
-  EXPECT_THAT(reverse_integer(-2147483648), 0);
+      // NOTE mod(%) and div(/) do not impact on sign of integer.
+      //
+      // wrong answer, 126087180, but should be 0
+      //
+      // value: -214748364, result: -8, remains: -8
+      // value: -21474836, result: -84, remains: -4
+      // value: -2147483, result: -846, remains: -6
+      // value: -214748, result: -8463, remains: -3
+      // value: -21474, result: -84638, remains: -8
+      // value: -2147, result: -846384, remains: -4
+      // value: -214, result: -8463847, remains: -7
+      // value: -21, result: -84638474, remains: -4
+      // value: -2, result: -846384741, remains: -1
+      // value: 0, result: -8463847412, remains: -2
+      //
+      // Actual: 126087180 (of type int)
+      EXPECT_THAT(f(-2147483648), 0);
+    }
+  }
 }
 
-// ={=========================================================================
-// ={=========================================================================
-// algo-leetcode-5
 /*
+={=========================================================================
+algo-leetcode-5
+
 14. Longest Common Prefix, Easy
 
 Write a function to find the longest common prefix string amongst an array of
@@ -660,6 +594,7 @@ Example 1:
 
 Input: ["flower","flow","flight"]
 Output: "fl"
+
 Example 2:
 
 Input: ["dog","racecar","car"]
@@ -673,51 +608,85 @@ All given inputs are in lowercase letters a-z.
 
 namespace leetcode_easy_005
 {
-  // own approach which fails on:
+  // old and fails. not get the idea now.
   //
-  // fail 0:
-  // input []
+  // should be "aa"
+  // EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "");
   //
-  // fail 1:
-  // input ["aa","aa"]
-  // input ["aa","bb"]
+  // should be ""
+  // EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "aa");
 
-  string longestCommonPrefix_01(const vector<string> &strs)
+  std::string longest_common_prefix_1(const std::vector<std::string> &input)
   {
-    vector<unsigned int> table(26, 0);
+    // since all are lower cases
+    std::vector<unsigned int> table{26, 0};
 
-    auto num_of_input = strs.size();
-    unsigned int common{};
+    auto num_input = input.size();
+    unsigned int num_common{};
 
-    // to handle fail 0
-    if (!num_of_input)
+    if (num_input == 0)
       return "";
 
-    // build table from input strings
-    for (const auto &e : strs)
+    // build occurance table from inputs. scan all input strings
+    for (const auto &s : input)
     {
-      for (const auto &c : e)
+      for (const auto &c : s)
         table[c - 'a'] += 1;
     }
 
-    // take one input
-    for (const auto &c : strs[0])
+    // take one input. WHY ANY input?
+    for (const auto &c : input[0])
     {
-      if (table[c - 'a'] != num_of_input)
+      if (table[c - 'a'] != num_input)
         break;
 
-      ++common;
+      ++num_common;
     }
 
-    return strs[0].substr(0, common);
+    return input[0].substr(0, num_common);
+  }
+
+  // 2020.08
+  // 1. gets the size of smallest string since that's minimum to compare
+  // 2. while doing loop on this size, each chars fron all input string should
+  // be the smae. if not, stop the loop.
+  std::string longest_common_prefix_2(const std::vector<std::string> &input)
+  {
+    size_t min_size{std::numeric_limits<size_t>::max()};
+    std::string lcp{};
+
+    for (const auto &s : input)
+    {
+      if (s.size() < min_size)
+        min_size = s.size();
+    }
+
+    // num of chars to compare
+    for (size_t i = 0; i < min_size; ++i)
+    {
+      // num of strings
+      for (size_t run = 0; run < input.size(); ++run)
+      {
+        // compare [i] char of each string to see all are same.
+        //
+        // use xor?
+        // cxx-xor
+        // X XOR  X  = 0
+        // X XOR  0  = X
+        // X XOR  1  = ~X    // X XOR (~0) = ~X
+        // X XOR ~X  = 1
+      }
+    }
+
+    return lcp;
   }
 
   // Approach 1: Horizontal scanning
   //
-  // For a start we will describe a simple way of finding the longest prefix
-  // shared by a set of strings LCP(S1 ... Sn)
+  // For a start we will describe a simple way of finding the longest common
+  // prefix shared by a set of strings LCP(S1 ... Sn)
   //
-  // We will use the observation that :
+  // We will use the *observation* that :
   //
   // LCP(S1 ... Sn) = LCP(LCP(LCP(S1, S2),S3), ... Sn)
   //
@@ -738,77 +707,63 @@ namespace leetcode_easy_005
   // string S1 with the other strings [S2 ... Sn]. There are S character
   // comparisons, where S is the sum of all characters in the input array.
   //
-  // Space complexity : O(1)O(1). We only used constant extra space.
+  // Space complexity : O(1) We only used constant extra space.
 
-  string longestCommonPrefix_02(const vector<string> &strs)
+  std::string longest_common_prefix_3(const std::vector<std::string> &input)
   {
-    auto num_of_input = strs.size();
+    auto num_input = input.size();
 
-    if (!num_of_input)
+    // check on input
+    if (!num_input)
       return "";
 
-    std::string lcp = strs[0];
+    // set the first string as lcp
+    std::string lcp{input[0]};
 
-    for (size_t i = 1; i < num_of_input; ++i)
+    for (size_t i = 1; i < num_input; ++i)
     {
-      int idx{};
-      int len = min(lcp.size(), strs[i].size());
+      // get min size to loop
+      size_t min_size = std::min(lcp.size(), input[i].size());
+      size_t run{};
 
-      for (idx = 0; idx < len; ++idx)
+      for (run = 0; run < min_size; ++run)
       {
-        // cout << "idx: " << idx << ", lcp[idx]:" << lcp[idx]
-        //   << ", strs[i][idx]:" << strs[i][idx] << endl;
-
-        // ok, found uncommon char between two
-        // however, do not call substr on this if and if do, will not cover when
-        // all chars matches.
-        //
-        // so this loop is to get idx but not do substr.
-
-        if (lcp[idx] != strs[i][idx])
+        if (lcp[run] != input[i][run])
           break;
       }
 
-      lcp = lcp.substr(0, idx);
+      // update lcp
+      // note that substr(start, length)
+      lcp = lcp.substr(0, run);
     }
 
     return lcp;
   }
 } // namespace leetcode_easy_005
 
-TEST(LeetCode, Easy_005_LongestCommonPrefix)
+TEST(AlgoLeetCode, check_longest_common_prefix)
 {
   using namespace leetcode_easy_005;
 
   {
-    const auto func = longestCommonPrefix_01;
+    auto imps = {longest_common_prefix_3};
 
-    EXPECT_THAT(func(std::vector<std::string>{"flower", "flow", "flight"}),
-                "fl");
-    EXPECT_THAT(func(std::vector<std::string>{"dog", "racecar", "car"}), "");
+    for (auto f : imps)
+    {
+      EXPECT_THAT(f(std::vector<std::string>{"flower", "flow", "flight"}),
+                  "fl");
+      EXPECT_THAT(f(std::vector<std::string>{"dog", "racecar", "car"}), "");
 
-    // should be "aa"
-    EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "");
-
-    // should be ""
-    EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "aa");
-  }
-
-  {
-    const auto func = longestCommonPrefix_02;
-
-    EXPECT_THAT(func(std::vector<std::string>{"flower", "flow", "flight"}),
-                "fl");
-    EXPECT_THAT(func(std::vector<std::string>{"dog", "racecar", "car"}), "");
-
-    EXPECT_THAT(func(std::vector<std::string>{"aa", "aa"}), "aa");
-    EXPECT_THAT(func(std::vector<std::string>{"aa", "bb"}), "");
+      EXPECT_THAT(f(std::vector<std::string>{"aa", "aa"}), "aa");
+      EXPECT_THAT(f(std::vector<std::string>{"aa", "bb"}), "");
+    }
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-6
 /*
+={=========================================================================
+algo-leetcode-6
+
 20. Valid Parentheses, Easy
 
 Given a string containing just the characters '(', ')', '{', '}', '[' and ']',
@@ -839,6 +794,7 @@ Output: false
 Example 5:
 Input: "{[]}"
 Output: true
+
 */
 
 namespace leetcode_easy_006
