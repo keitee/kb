@@ -799,7 +799,8 @@ Output: true
 
 namespace leetcode_easy_006
 {
-  bool ValidParentheses_01(string input)
+  // old.
+  bool validate_parentheses_1(const std::string &input)
   {
     std::stack<char> coll;
 
@@ -871,7 +872,7 @@ namespace leetcode_easy_006
   // Memory Usage: 8.9 MB, less than 81.58% of C++ online submissions for Valid
   // Parentheses.
 
-  bool ValidParentheses_02(string input)
+  bool validate_parentheses_2(const std::string &input)
   {
     std::stack<char> coll;
 
@@ -907,47 +908,81 @@ namespace leetcode_easy_006
     // should be empty if all matches up
     return coll.empty() ? true : false;
   }
+
+  // 2020.08
+  // no check on input chars. as above, need to have checks on empty before
+  // doing pop/back() since
+  // "Calling pop_back on an empty container results in undefined behavior."
+  // actually, causes "Segmentation fault (core dumped)"
+  bool validate_parentheses_3(const std::string &input)
+  {
+    std::vector<char> coll;
+
+    auto return_match = [](const char c) {
+      if (c == ')')
+        return '(';
+      if (c == '}')
+        return '{';
+      if (c == ']')
+        return '[';
+
+      return '0';
+    };
+
+    for (const auto e : input)
+    {
+      if (e == '(' || e == '{' || e == '[')
+        coll.push_back(e);
+      else if (e == ')' || e == '}' || e == ']')
+      {
+        // added from the above solution.
+        if (coll.empty())
+          return false;
+
+        auto poped = coll.back();
+        coll.pop_back();
+
+        if (poped != return_match(e))
+          return false;
+      }
+    }
+
+    return coll.size() == 0 ? true : false;
+  }
 } // namespace leetcode_easy_006
 
-TEST(LeetCode, Easy_006_ValidParentheses)
+TEST(AlgoLeetCode, check_valid_parentheses)
 {
   using namespace leetcode_easy_006;
 
   {
-    const auto func = ValidParentheses_01;
+    auto imps = {validate_parentheses_1,
+                 validate_parentheses_2,
+                 validate_parentheses_3};
 
-    EXPECT_THAT(func("()"), true);
-    EXPECT_THAT(func("()[]{}"), true);
-    EXPECT_THAT(func("(]"), false);
-    EXPECT_THAT(func("([)]"), false);
-    EXPECT_THAT(func("{[]}"), true);
-    EXPECT_THAT(func(""), true);
-    EXPECT_THAT(func("([{}"), false);
+    for (auto f : imps)
+    {
+      EXPECT_THAT(f("()"), true);
+      EXPECT_THAT(f("()[]{}"), true);
+      EXPECT_THAT(f("(]"), false);
+      EXPECT_THAT(f("([)]"), false);
+      EXPECT_THAT(f("{[]}"), true);
+      EXPECT_THAT(f(""), true);
+      EXPECT_THAT(f("([{}"), false);
+      EXPECT_THAT(f("abc(defg{hijk}lmn)opq"), true);
+      EXPECT_THAT(f("{a = (1 + v(b[3 + c[4]]))"), false);
+      EXPECT_THAT(f("{ a = (b[0) + 1]; }"), false);
 
-    EXPECT_THAT(func("abc(defg{hijk}lmn)opq"), true);
-  }
-
-  {
-    const auto func = ValidParentheses_02;
-
-    EXPECT_THAT(func("()"), true);
-    EXPECT_THAT(func("()[]{}"), true);
-    EXPECT_THAT(func("(]"), false);
-    EXPECT_THAT(func("([)]"), false);
-    EXPECT_THAT(func("{[]}"), true);
-    EXPECT_THAT(func(""), true);
-    EXPECT_THAT(func("([{}"), false);
-
-    EXPECT_THAT(func("abc(defg{hijk}lmn)opq"), true);
-
-    EXPECT_THAT(func("{a = (1 + v(b[3 + c[4]]))"), false);
-    EXPECT_THAT(func("{ a = (b[0) + 1]; }"), false);
+      // to see if it cause "undefined"
+      EXPECT_THAT(f(")}]"), false);
+    }
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-7
 /*
+={=========================================================================
+algo-leetcode-7
+
 21. Merge Two Sorted Lists, Easy
 
 Merge two sorted linked lists and return it as a new list. The new list should
@@ -976,17 +1011,33 @@ public:
 
 namespace leetcode_easy_007
 {
-  struct ListNode
+  struct node
   {
-    int val;
-    ListNode *next;
-    ListNode(int x)
-        : val(x)
-        , next(NULL)
+    int value_;
+    node *next_;
+
+    node(int value)
+        : value_(value)
+        , next_(nullptr)
     {}
   };
 
-  ListNode *mergeTwoLists(ListNode *l1, ListNode *l2)
+  std::vector<int> print_list(node *head)
+  {
+    std::vector<int> coll{};
+
+    while (head)
+    {
+      // std::cout << "value: " << head->value_ << std::endl;
+      coll.emplace_back(head->value_);
+      head = head->next_;
+    }
+
+    return coll;
+  }
+
+  // old
+  node *merge_list_1(node *l1, node *l2)
   {
     if (l1 == nullptr && l2 != nullptr)
       return l1;
@@ -998,23 +1049,23 @@ namespace leetcode_easy_007
     auto first  = l1;
     auto second = l2;
 
-    ListNode *result_head{};
-    ListNode *result_end{};
+    node *result_head{};
+    node *result_end{};
 
     for (; first != nullptr && (second != nullptr);)
     {
       // ascending order
-      if (first->val <= second->val)
+      if (first->value_ <= second->value_)
       {
         if (!result_head)
         {
           result_head = result_end = first;
         }
 
-        result_end->next = first;
+        result_end->next_ = first;
         result_end       = first;
 
-        first = first->next;
+        first = first->next_;
       }
       else
       {
@@ -1023,19 +1074,19 @@ namespace leetcode_easy_007
           result_head = result_end = second;
         }
 
-        result_end->next = second;
+        result_end->next_ = second;
         result_end       = second;
 
-        second = second->next;
+        second = second->next_;
       }
     }
 
     // second has some left
     if (first == nullptr && second != nullptr)
-      result_end->next = second;
+      result_end->next_ = second;
     // first has some left
     else if (first != nullptr && second == nullptr)
-      result_end->next = first;
+      result_end->next_ = first;
     else
     {
       // no left from the both
@@ -1044,515 +1095,91 @@ namespace leetcode_easy_007
     return result_head;
   }
 
-  void print_list(ListNode *l1)
+  // 2020.08
+  node *merge_list_2(node *first, node *second)
   {
-    ListNode *run = l1;
+    node *head{nullptr};
+    node *run{nullptr};
 
-    for (; run; run = run->next)
+    if (!first)
+      return second;
+
+    if (!second)
+      return first;
+
+    while (first && second)
     {
-      cout << "val : " << run->val << endl;
-    }
-  }
-} // namespace leetcode_easy_007
+      if (first->value_ <= second->value_)
+      {
+        // to distinguish when it's first and is the next
+        if (!run)
+          run = first;
+        else
+          run->next_ = first;
 
-// Input: 1->2->4, 1->3->4
-// Output: 1->1->2->3->4->4
-TEST(LeetCode, Easy_007_MergeSortedList)
+        run   = first;
+        first = first->next_;
+      }
+      else
+      {
+        if (!run)
+          run = second;
+        else
+          run->next_ = second;
+
+        run    = second;
+        second = second->next_;
+      }
+
+      // to set head
+      if (!head)
+        head = run;
+    }
+
+    // now one of first or second is end; that is null
+
+    if (!first)
+      run->next_ = second;
+    else if (!second)
+      run->next_ = first;
+
+    return head;
+  }
+} // namespace algopad
+
+TEST(AlgoLeetCode, check_merge_list)
 {
   using namespace leetcode_easy_007;
 
-  ListNode e1(1);
-  ListNode e2(2);
-  ListNode e3(4);
+  {
+    node n1(1);
+    node n2(2);
+    node n3(4);
 
-  e1.next = &e2;
-  e2.next = &e3;
+    n1.next_ = &n2;
+    n2.next_ = &n3;
 
-  print_list(&e1);
+    EXPECT_THAT(print_list(&n1), ElementsAre(1, 2, 4));
 
-  ListNode s1(1);
-  ListNode s2(3);
-  ListNode s3(4);
+    node s1(1);
+    node s2(3);
+    node s3(4);
 
-  s1.next = &s2;
-  s2.next = &s3;
+    s1.next_ = &s2;
+    s2.next_ = &s3;
 
-  print_list(&s1);
+    EXPECT_THAT(print_list(&s1), ElementsAre(1, 3, 4));
 
-  cout << "====" << endl;
-  auto x = mergeTwoLists(&e1, &s1);
-  print_list(x);
+    auto x = merge_list_2(&n1, &s1);
+
+    EXPECT_THAT(print_list(x), ElementsAre(1, 1, 2, 3, 4, 4));
+  }
 }
 
-// ={=========================================================================
-// algo-leetcode-8
 /*
-26. Remove Duplicates from Sorted Array, Easy
+={=========================================================================
+algo-leetcode-10
 
-Given a sorted array nums, remove the duplicates in-place such that each element
-appear only once and return *the new length.*
-
-Do not allocate extra space for another array, you must do this by modifying the
-input array in-place with O(1) extra memory.
-
-Example 1:
-
-Given nums = [1,1,2],
-
-Your function should return length = 2, with the first two elements of nums
-being 1 and 2 respectively.
-
-It doesn't matter what you leave beyond the returned length.
-
-Example 2:
-
-Given nums = [0,0,1,1,1,2,2,3,3,4],
-
-Your function should return length = 5, with the first five elements of nums
-being modified to 0, 1, 2, 3, and 4 respectively.
-
-It doesn't matter what values are set beyond the returned length.
-
-Clarification:
-
-Confused why the returned value is an integer but your answer is an array?
-
-Note that the input array is passed in by reference, which means modification to
-the input array will be known to the caller as well.
-
-Internally you can think of this:
-
-// nums is passed in by reference. (i.e., without making a copy)
-int len = removeDuplicates(nums);
-
-// any modification to nums in your function would be known by the caller.
-// using the length returned by your function, it prints the first len elements.
-
-for (int i = 0; i < len; i++) {
-    print(nums[i]);
-}
-
-*/
-
-namespace leetcode_easy_008
-{
-  // input num is sorted (ascending)
-  // the idea is to move the duplicates to the end of right using swap
-  // don't need to check if run see smaller value since it's sorted input
-
-  int RemoveDuplicates_01(vector<int> &nums)
-  {
-    if (nums.empty())
-      return 0;
-
-    int value = nums[0];
-    size_t i{};
-
-    for (i = 1; i < nums.size(); ++i)
-    {
-      int run = nums[i];
-
-      // cout << "for i: " << i << ", run: " << run
-      //   << ", value: " << value << endl;
-
-      // update current max when current value is bigger
-      if (run > value)
-        value = run;
-      // ends when see smaller and means reaches the the new end
-      else if (run < value)
-      {
-        // cout << "break i: " << i << endl;
-        break;
-      }
-      // when run == value, swap it to tne end.
-      else
-      {
-        for (size_t s = i; s < nums.size() - 1; ++s)
-          swap(nums[s], nums[s + 1]);
-
-        // since nums[i] is swapped, it may be bigger
-
-        if (nums[i] > value)
-          value = nums[i];
-      }
-    }
-
-    // cout << "return i: " << i << endl;
-
-    return i;
-  }
-
-  // o the key idea is to swap to the left
-  // o no repeated swap until see the new end. single swap is enough
-  // o swap() should be done after updating current_max
-  //
-  // o end is index but shold return len so +1 -> revised. As algo-partition,
-  // end represet start of not-interested, that is end of interested group + 1.
-  // so no need to +1. have to think about swap on the same index
-  //
-  // | ... |end ...|
-
-  // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
-  // Duplicates from Sorted Array.
-  //
-  // Memory Usage: 11 MB, less than 24.81% of C++ online submissions for Remove
-  // Duplicates from Sorted Array.
-
-  int RemoveDuplicates_02(vector<int> &nums)
-  {
-    if (nums.empty())
-      return 0;
-
-    int current_max = nums[0];
-    size_t end{1};
-
-    for (size_t i = 1; i < nums.size(); ++i)
-    {
-      if (nums[i] > current_max)
-      {
-        current_max = nums[i];
-
-        // to avoid swap on the same index
-        if (end != i)
-          swap(nums[end], nums[i]);
-
-        ++end;
-      }
-    }
-
-    return end;
-  }
-
-  using ITERATOR = vector<int>::iterator;
-
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
-  {
-    if (first == last)
-      return last;
-
-    auto next = first;
-    while (++next != last)
-    {
-      // found two consecutive items
-      if (*first == *next)
-        return first;
-
-      first = next;
-    }
-
-    // no two consecutive items found.
-    return last;
-  }
-
-  // algo-unique, same as unique_1(), works on not-sorted input.
-  // `end` fro adjacent_find() is end of the interested group
-  // | ... end| ...|
-
-  int RemoveDuplicates_03(vector<int> &nums)
-  {
-    auto first = nums.begin();
-    auto last  = nums.end();
-
-    auto end = adjacent_find(first, last);
-
-    // means empty or no duplicates
-    if (end == last)
-      return 0;
-
-    auto run = end;
-
-    while (++run != last)
-    {
-      // see different item
-      if (*end != *run)
-        *++end = *run;
-    }
-
-    return distance(first, end) + 1;
-  }
-
-  int RemoveDuplicates_04(vector<int> &nums)
-  {
-    if (nums.empty())
-      return 0;
-
-    size_t unique_end{0};
-    size_t current{1};
-    size_t size = nums.size() - 1;
-
-    while (current <= size)
-    {
-      if (nums[unique_end] == nums[current])
-      {
-        ++current;
-      }
-      else
-      {
-        ++unique_end;
-
-        // to avoid assign on the same index
-        if (unique_end != current)
-          nums[unique_end] = nums[current];
-
-        ++current;
-      }
-    }
-
-    // +1 since unique_end is index but return length
-    return unique_end + 1;
-  }
-
-} // namespace leetcode_easy_008
-
-TEST(LeetCode, Easy_008_RemoveDuplicates)
-{
-  using namespace leetcode_easy_008;
-
-  // okay
-  {
-    const auto func = RemoveDuplicates_01;
-
-    vector<int> coll{1, 1, 2};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 2);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 2));
-  }
-
-  // fails
-  {
-    const auto func = RemoveDuplicates_01;
-
-    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, Not(5));
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, Not(ElementsAre(0, 1, 2, 3, 4)));
-  }
-
-  {
-    const auto func = RemoveDuplicates_02;
-
-    vector<int> coll{1, 1, 2};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 2);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 2));
-  }
-
-  {
-    const auto func = RemoveDuplicates_02;
-
-    vector<int> coll{0, 0, 1, 1, 1, 2, 2, 3, 3, 4};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 5);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(0, 1, 2, 3, 4));
-  }
-
-  // same ex as AlgoUnique
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 6};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 3);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 4, 6));
-  }
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto len = func(coll);
-
-    EXPECT_THAT(len, 3);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(1, 4, 6));
-  }
-  {
-    const auto func = RemoveDuplicates_03;
-
-    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto len = func(coll);
-
-    EXPECT_THAT(
-      coll,
-      ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-    EXPECT_THAT(len, 12);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-  }
-}
-
-// ={=========================================================================
-// algo-leetcode-9
-/*
-27. Remove Element, Easy
-
-Given an array nums and a value val, remove all instances of that value in-place
-and return the new length.
-
-Do not allocate extra space for another array, you must do this by modifying the
-input array in-place with O(1) extra memory.
-
-The order of elements can be changed. It doesn't matter what you leave beyond
-the new length.
-
-Example 1:
-
-Given nums = [3,2,2,3], val = 3,
-
-Your function should return length = 2, with the first two elements of nums
-being 2.
-
-It doesn't matter what you leave beyond the returned length.
-
-Example 2:
-
-Given nums = [0,1,2,2,3,0,4,2], val = 2,
-
-Your function should return length = 5, with the first five elements of nums
-containing 0, 1, 3, 0, and 4.
-
-Note that the order of those five elements can be arbitrary.
-
-It doesn't matter what values are set beyond the returned length.
-
-Clarification:
-
-Confused why the returned value is an integer but your answer is an array?
-
-Note that the input array is passed in by reference, which means modification to
-the input array will be known to the caller as well.
-
-Internally you can think of this:
-
-// nums is passed in by reference. (i.e., without making a copy)
-int len = removeElement(nums, val);
-
-// any modification to nums in your function would be known by the caller.
-// using the length returned by your function, it prints the first len elements.
-for (int i = 0; i < len; i++) {
-    print(nums[i]);
-}
-
-*/
-
-namespace leetcode_easy_009
-{
-  // o Unlike RemoveDuplicates_02, end is not index but index+1
-
-  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
-  // Element.
-  //
-  // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
-  // Element.
-
-  int RemoveIf_01(vector<int> &nums, int val)
-  {
-    if (nums.empty())
-      return 0;
-
-    size_t end{};
-
-    for (size_t i = 0; i < nums.size(); ++i)
-    {
-      if (nums[i] != val)
-      {
-        if (end != i)
-          swap(nums[end], nums[i]);
-
-        ++end;
-      }
-    }
-
-    return end;
-  }
-
-} // namespace leetcode_easy_009
-
-TEST(LeetCode, Easy_009_RemoveIf)
-{
-  using namespace leetcode_easy_009;
-
-  {
-    const auto func = RemoveIf_01;
-
-    vector<int> coll{3, 2, 2, 3};
-    auto len = func(coll, 3);
-
-    EXPECT_THAT(len, 2);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(2, 2));
-  }
-
-  {
-    const auto func = RemoveIf_01;
-
-    vector<int> coll{0, 1, 2, 2, 3, 0, 4, 2};
-    auto len = func(coll, 2);
-
-    EXPECT_THAT(len, 5);
-
-    vector<int> result{};
-
-    for (int i = 0; i < len; ++i)
-      result.push_back(coll[i]);
-
-    EXPECT_THAT(result, ElementsAre(0, 1, 3, 0, 4));
-  }
-}
-
-// ={=========================================================================
-// algo-leetcode-10
-/*
 28. Implement strStr(), Easy
 
 Implement strStr().

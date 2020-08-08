@@ -79,6 +79,7 @@ TEST(StringCtor, check_various_form)
   }
 }
 
+// ={=========================================================================
 TEST(StringCtor, check_const)
 {
   {
@@ -211,6 +212,7 @@ WOW.
 
 #endif
 
+// ={=========================================================================
 TEST(StringCtor, check_crash)
 {
   std::string s = 0;
@@ -238,6 +240,7 @@ TEST(StringOperation, check_back)
   EXPECT_EQ(string(1, s1.back()), "o");
 }
 
+// ={=========================================================================
 // string-maxsize
 
 TEST(StringOperation, check_max_size)
@@ -252,6 +255,7 @@ TEST(StringOperation, check_max_size)
 #endif
 }
 
+// ={=========================================================================
 TEST(StringOperation, check_resize)
 {
   string s{};
@@ -262,13 +266,13 @@ TEST(StringOperation, check_resize)
 }
 
 /*
-// ={=========================================================================
-// string-substring string-find string-substr
-// cxx-srring-find
-// http://www.cplusplus.com/reference/string/string/find/
-//
-// size_t find (const string& str, size_t pos = 0) const noexcept;
-// size_t find (const char* s, size_t pos, size_type n) const;
+={=========================================================================
+string-substring string-find string-substr
+cxx-srring-find
+http://www.cplusplus.com/reference/string/string/find/
+
+size_t find (const string& str, size_t pos = 0) const noexcept;
+size_t find (const char* s, size_t pos, size_type n) const;
 
 {
   /usr/include/c++/7/bits/basic_string.h
@@ -398,16 +402,17 @@ TEST(StringOperation, check_find_char)
     EXPECT_THAT(pos, 14);
   }
 
+  // strchr, strrchr, strchrnul - locate character in string
+  // DESCRIPTION
+  // The strchr() function returns a pointer to the first occurrence of the
+  // character c in the string s.
   {
-    // DESCRIPTION
-    // The strchr() function returns a pointer to the first occurrence of the
-    // character c in the string s.
-
-    auto pointer = strchr(coll.c_str(), 'n');
-    EXPECT_THAT(pointer - coll.c_str(), 14);
+    auto ptr = strchr(coll.c_str(), 'n');
+    EXPECT_THAT(ptr - coll.c_str(), 14);
   }
 }
 
+// ={=========================================================================
 TEST(StringOperation, check_find_substring_1)
 {
   // try to match "V" from "IV" only for one char so expects no match. However,
@@ -427,6 +432,28 @@ TEST(StringOperation, check_find_substring_1)
     EXPECT_THAT(coll1.find(coll2.c_str(), 0, coll2.size() - 1), 0);
 
     EXPECT_THAT(coll1.compare(0, 1, coll2.c_str()), Ne(0));
+  }
+
+  // strstr, strcasestr - locate a substring
+  //
+  // #include <string.h>
+  // char *strstr(const char *haystack, const char *needle);
+  // char *strcasestr(const char *haystack, const char *needle);
+  //
+  // DESCRIPTION
+  // The strstr() function finds the first occurrence of the substring needle in
+  // the string haystack.  The terminating null bytes ('\0') are not compared.
+  //
+  // The strcasestr() function is like strstr(), but ignores the case of both
+  // arguments.
+  {
+    std::string coll1{"There are two needles in this haystack with needles."};
+    std::string coll2{"needle"};
+
+    // first match
+    auto found = std::strstr(coll1.c_str(), coll2.c_str());
+
+    EXPECT_THAT((found - coll1.c_str()), 14);
   }
 
   {
@@ -486,6 +513,7 @@ TEST(StringOperation, check_find_substring_1)
   }
 }
 
+// ={=========================================================================
 // (gdb) b CxxStringOperation_find_substring2_Test::TestBody()
 // cxx-string-rfind
 TEST(CxxStringOperation, find_substring_2)
@@ -724,6 +752,7 @@ namespace
   }
 } // namespace
 
+// ={=========================================================================
 TEST(CxxStringOperation, find_substring_3)
 {
   {
@@ -765,6 +794,7 @@ TEST(CxxStringOperation, find_substring_3)
   }
 }
 
+// ={=========================================================================
 // cxx-string-substr
 // is to extract substring and use index
 TEST(StringOperation, check_substr)

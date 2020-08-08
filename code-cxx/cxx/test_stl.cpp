@@ -805,6 +805,7 @@ private:
   vector<int> icoll;
 };
 
+// ={=========================================================================
 TEST(CxxVector, check_ctor)
 {
   {
@@ -903,6 +904,7 @@ void GetVectorArg(const vector<int> &coll)
   ASSERT_THAT(coll_.size(), 6);
 }
 
+// ={=========================================================================
 TEST(CxxVector, check_assign)
 {
   // assign
@@ -954,8 +956,29 @@ TEST(CxxVector, check_assign)
   }
 }
 
-// cxx-array
+// ={=========================================================================
+TEST(CxxVector, check_push_and_pop)
+{
+  std::vector<int> coll;
 
+  coll.push_back(1);
+  coll.push_back(2);
+  coll.push_back(3);
+
+  EXPECT_THAT(coll, ElementsAre(1,2,3));
+
+  // void pop_back();
+  EXPECT_THAT(coll.back(), 3);
+  coll.pop_back();
+
+  EXPECT_THAT(coll.back(), 2);
+  coll.pop_back();
+
+  EXPECT_THAT(coll, ElementsAre(1));
+}
+
+// ={=========================================================================
+// cxx-array
 TEST(CxxVector, check_as_array)
 {
   {
@@ -1005,6 +1028,7 @@ TEST(CxxVector, check_as_array)
   }
 }
 
+// ={=========================================================================
 TEST(CxxVector, check_move)
 {
   // move
@@ -1070,8 +1094,7 @@ TEST(CxxVector, check_move)
 //     }
 // Aborted
 
-// ={=
-// TEST(DISABLED_Vector, EraseRuntimeError)
+// ={=========================================================================
 TEST(CxxVector, DISABLED_EraseRuntimeError)
 {
   vector<int> coll1;
@@ -1109,7 +1132,7 @@ TEST(CxxVector, DISABLED_EraseRuntimeError)
   EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
 }
 
-// ={=
+// ={=========================================================================
 TEST(CxxVector, check_erase)
 {
   {
@@ -1273,7 +1296,7 @@ namespace cxx_vector
 
 }; // namespace cxx_vector
 
-// ={=
+// ={=========================================================================
 TEST(CxxVector, seeRelocation)
 {
   using namespace cxx_vector;
@@ -1327,7 +1350,7 @@ TEST(CxxVector, seeRelocation)
 // VectorEraseCallsDtor::dtor: name 3
 // VectorEraseCallsDtor::dtor: name 4
 
-// ={=
+// ={=========================================================================
 TEST(CxxVector, seeRelocationAndReserve)
 {
   using namespace cxx_vector;
@@ -1377,7 +1400,7 @@ TEST(CxxVector, seeRelocationAndReserve)
 // VectorEraseCallsDtor::dtor: vector
 // VectorEraseCallsDtor::dtor: vector
 
-// ={=
+// ={=========================================================================
 TEST(CxxVector, seeRelocationAndPreAllocation)
 {
   using namespace cxx_vector;
@@ -1400,7 +1423,7 @@ namespace cxx_vector
   const int NUMBER_ALLOCATION{100000};
 };
 
-// ={=
+// ={=========================================================================
 // to see time difference between reserve() and pre-allocation
 TEST(CxxVector, seeRelocationAndReserveTime)
 {
@@ -1416,6 +1439,7 @@ TEST(CxxVector, seeRelocationAndReserveTime)
   }
 }
 
+// ={=========================================================================
 TEST(CxxVector, seeRelocationAndPreAllocationTime)
 {
   using namespace cxx_vector;
@@ -1423,6 +1447,7 @@ TEST(CxxVector, seeRelocationAndPreAllocationTime)
   vector<VectorRelocation> ovec(NUMBER_ALLOCATION);
 }
 
+// ={=========================================================================
 // cxx-seg-fault
 //
 // can benefit from -D_GLIBCXX_DEBUG
@@ -1451,6 +1476,7 @@ TEST(DISABLED_Vector, AccessInvalidIndex)
   cout << "name: " << ovec[8].getName() << endl;
 }
 
+// ={=========================================================================
 // cxx-undefined
 //
 // can benefit from -D_GLIBCXX_DEBUG
@@ -1480,6 +1506,7 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
   cout << "name: " << ovec[8].getName() << endl;
 }
 
+// ={=========================================================================
 TEST(CxxVector, check_vector_bool)
 {
   std::vector<bool> coll{};

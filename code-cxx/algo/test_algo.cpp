@@ -11836,6 +11836,7 @@ namespace algo_unique
   template <typename _Iterator>
   _Iterator my_adjacent_find(_Iterator first, _Iterator last)
   {
+    // when empty
     if (first == last)
       return last;
 
@@ -11855,6 +11856,9 @@ namespace algo_unique
   template <typename _Iterator>
   _Iterator my_unique_1(_Iterator first, _Iterator last)
   {
+    // to find the first of a pair which has the same value. so can skip
+    // elements which are already unique. if not use this like "_2" then do
+    // assign for unique elements. 
     first = my_adjacent_find(first, last);
     if (first == last)
       return last;
@@ -12065,7 +12069,7 @@ TEST(AlgoUnique, check_unique)
 
 /*
 ={=========================================================================
-algo-partition algo-unique algo-leetcode-8
+algo-partition algo-unique algo-leetcode-8 algo-remove-duplicates
 
 26. Remove Duplicates from Sorted Array, Easy
 
@@ -12264,6 +12268,7 @@ namespace algo_remove_leetcode_easy_009
     {
       if (nums[i] != val)
       {
+        // to avoid doing on the same.
         if (end != i)
           swap(nums[end], nums[i]);
 
@@ -12274,6 +12279,7 @@ namespace algo_remove_leetcode_easy_009
     return end;
   }
 
+  // use "assign"
   int my_remove_2(std::vector<int> &nums, int val)
   {
     size_t start{};
@@ -12303,7 +12309,7 @@ namespace algo_remove_leetcode_easy_009
 
     // find pos where the matched is found and which is pos to start "remove"
     // note: if all elements of nums are "unmatched", there should way to stop
-    // loop as my_remove_1 of iterator version
+    // loop as my_remove_1 of iterator version from algo-partition algo-remove
     while (nums[start] != val)
       if (++start == end)
         return start;
