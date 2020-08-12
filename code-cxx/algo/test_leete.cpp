@@ -646,7 +646,7 @@ namespace leetcode_easy_005
     return input[0].substr(0, num_common);
   }
 
-  // 2020.08
+  // 2020.08. not implemented
   // 1. gets the size of smallest string since that's minimum to compare
   // 2. while doing loop on this size, each chars fron all input string should
   // be the smae. if not, stop the loop.
@@ -1063,7 +1063,7 @@ namespace leetcode_easy_007
         }
 
         result_end->next_ = first;
-        result_end       = first;
+        result_end        = first;
 
         first = first->next_;
       }
@@ -1075,7 +1075,7 @@ namespace leetcode_easy_007
         }
 
         result_end->next_ = second;
-        result_end       = second;
+        result_end        = second;
 
         second = second->next_;
       }
@@ -1145,7 +1145,7 @@ namespace leetcode_easy_007
 
     return head;
   }
-} // namespace algopad
+} // namespace leetcode_easy_007
 
 TEST(AlgoLeetCode, check_merge_list)
 {
@@ -1218,6 +1218,10 @@ DESCRIPTION
        The strcasestr() function is like strstr(), but ignores the case of both
        arguments.
 
+RETURN VALUE
+       These functions return a pointer to the beginning of the located
+       substring, or NULL if the substring is not found.
+
 */
 
 namespace leetcode_easy_010
@@ -1228,7 +1232,7 @@ namespace leetcode_easy_010
   // Memory Usage: 9.3 MB, less than 96.70% of C++ online submissions for
   // Implement strStr().
 
-  int strStr_1(string haystack, string needle)
+  int my_strstr_1(string haystack, string needle)
   {
     int result{-1};
     size_t count{};
@@ -1265,47 +1269,118 @@ namespace leetcode_easy_010
     return result;
   }
 
-  // int strStr_2(string haystack, string needle)
-  // {
-  //   hay_size = haystack.size();
-  //   needle_size = needle.size();
-  //   size_t pos{};
+  // 2020.08
+  int my_strstr_2(std::string haystack, std::string needle)
+  {
+    int ret{-1};
+    size_t size{haystack.size()};
+    size_t run{}, start{};
 
-  //   if (needle_size <= hay_size)
-  //   {
-  //     for (; pos <= hay_size - needle_size; ++pos)
+    // error condition from the old although that's not the same as strstr().
 
-  //   }
-  // }
+    if (haystack == needle || needle.empty())
+      return 0;
+
+    if (haystack.size() < needle.size())
+      return ret;
+
+    for (; run < size;)
+    {
+      // find where the first char matches
+      for (; run < size; ++run)
+        if (haystack[run] == needle[0])
+        {
+          start = run;
+          break;
+        }
+
+      // only when the first is found.
+      if (run < size)
+      {
+        ++run;
+        size_t match = 1;
+
+        for (; run < size; ++run)
+          if (haystack[run] != needle[match])
+            break;
+
+        if (match == needle.size() - 1)
+          return start;
+      }
+    }
+
+    // when not found
+    return ret;
+  }
+
+  // from string_find::
+  // std::string::size_type my_find(const std::string &str,
+  //    const std::string &sub,
+  //    std::string::size_type pos = std::string::npos);
+
+  int my_strstr_3(std::string haystack, std::string needle)
+  {
+    const auto _size_hay = haystack.size();
+    const auto _size_sub = needle.size();
+
+    if (_size_sub <= _size_hay)
+    {
+      const char *_hay = haystack.c_str();
+      const char *_sub = needle.c_str();
+
+      auto _limit = _size_hay - _size_sub;
+      std::string::size_type _pos{};
+
+      do
+      {
+        if (std::memcmp(_hay + _pos, _sub, _size_sub) == 0)
+          return _pos;
+      } while (_pos++ < _limit);
+    }
+
+    // when not found
+    return std::string::npos;
+  }
+
+  // NOTE:
+  // as my_strstr_2(), can reduce comparisons but my_strstr_3() is simple and if
+  // perforamce is not critical, perfer simpler way.
 
 } // namespace leetcode_easy_010
 
-TEST(LeetCode, Easy_010_StrStr)
+TEST(AlgoLeetCode, check_strstr)
 {
   using namespace leetcode_easy_010;
 
-  EXPECT_THAT(strStr_1("hello", "ll"), 2);
-  EXPECT_THAT(strStr_1("aaaaa", "bba"), -1);
+  {
+    EXPECT_THAT(std::string("hello").find("ll"), 2);
+    EXPECT_THAT(std::string("aaaaa").find("bba"), std::string::npos);
+    EXPECT_THAT(std::string("aaaaa").find("bba"), -1);
+  }
 
-  // as to problem description
-  EXPECT_THAT(strStr_1("", ""), 0);
+  {
+    auto imps = {my_strstr_1, my_strstr_2, my_strstr_3};
 
-  EXPECT_THAT(strStr_1("", "a"), -1);
+    for (auto f : imps)
+    {
+      EXPECT_THAT(f("hello", "ll"), 2);
+      EXPECT_THAT(f("aaaaa", "bba"), -1);
+      // error conditions
+      EXPECT_THAT(f("", ""), 0);
+      EXPECT_THAT(f("", "a"), -1);
 
-  // mississippi"
-  //  issipi"
-  //     issipi"
-
-  EXPECT_THAT(strStr_1("mississippi", "issipi"), -1);
-
-  EXPECT_THAT(string("hello").find("ll"), 2);
-  EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
-  EXPECT_THAT(string("aaaaa").find("bba"), -1);
+      // mississippi"
+      //  issipi"
+      //     issipi"
+      EXPECT_THAT(f("mississippi", "issipi"), -1);
+    }
+  }
 }
 
-// ={=========================================================================
-// algo-leetcode-11
 /*
+={=========================================================================
+algo-leetcode-11
+
 35. Search Insert Position, Easy
 
 Given a sorted array and a target value, return the index if the target is
@@ -1329,13 +1404,14 @@ Example 4:
 Input: [1,3,5,6], 0
 Output: 0
 
+see algo-search-binary-search
+
 */
 
-// see algo-binary-search
-
-// ={=========================================================================
-// algo-leetcode-53
 /*
+={=========================================================================
+algo-leetcode-53
+
 53. Maximum Subarray, Easy, algo-max-sub-array
 
 Given an integer array nums, find the contiguous subarray (containing at least

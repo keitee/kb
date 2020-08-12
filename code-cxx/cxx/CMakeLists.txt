@@ -160,25 +160,25 @@ include_directories(${Boost_INCLUDE_DIRS})
 # cmake -DCXX_CPP_VALUE=GCC ..
 # to use on #if/ifdef test
 
-add_definitions(-DGCC=1 -DCLANG=2)
+# add_definitions(-DGCC=1 -DCLANG=2)
 
-if (CXX_CPP_VALUE STREQUAL "GCC")
-  add_definitions(-DCXX_CPP_VALUE=GCC)
-elseif(CXX_CPP_VALUE STREQUAL "GLANG")
-  add_definitions(-DCXX_CPP_VALUE=CLANG)
-else()
-  message(WARNING "CXX_CPP_VALUE is not provided." )
-endif()
+# if (CXX_CPP_VALUE STREQUAL "GCC")
+#   add_definitions(-DCXX_CPP_VALUE=GCC)
+# elseif(CXX_CPP_VALUE STREQUAL "GLANG")
+#   add_definitions(-DCXX_CPP_VALUE=CLANG)
+# else()
+#   message(WARNING "CXX_CPP_VALUE is not provided." )
+# endif()
 
-add_definitions(-DARM=3 -DMIPS=4)
+# add_definitions(-DARM=3 -DMIPS=4)
 
-if (CXX_CPP_VALUE2 STREQUAL "ARM")
-  add_definitions(-DCXX_CPP_VALUE2=ARM)
-elseif(CXX_CPP_VALUE2 STREQUAL "MIPS")
-  add_definitions(-DCXX_CPP_VALUE2=MIPS)
-else()
-  message(WARNING "CXX_CPP_VALUE2 is not provided." )
-endif()
+# if (CXX_CPP_VALUE2 STREQUAL "ARM")
+#   add_definitions(-DCXX_CPP_VALUE2=ARM)
+# elseif(CXX_CPP_VALUE2 STREQUAL "MIPS")
+#   add_definitions(-DCXX_CPP_VALUE2=MIPS)
+# else()
+#   message(WARNING "CXX_CPP_VALUE2 is not provided." )
+# endif()
 
 
 # cxx.cpp
@@ -190,10 +190,9 @@ add_executable(${PROJECT_NAME} "test_cxx.cpp")
 # target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 target_link_libraries(${PROJECT_NAME} gmock_main)
 
-# _ex.cpp
-add_executable(${PROJECT_NAME}_ex "test_cxx_ex.cpp")
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME}_ex gmock_main)
+# _pad.cpp
+add_executable(${PROJECT_NAME}_pad "test_cxx_pad.cpp")
+target_link_libraries(${PROJECT_NAME}_pad gmock_main)
 
 # _pattern.cpp
 add_executable(${PROJECT_NAME}_pattern "test_cxx_pattern.cpp")

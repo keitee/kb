@@ -451,7 +451,7 @@ TEST(CxxType, check_types)
   }
 }
 
-// f, F   
+// f, F
 // The `double  argument` is rounded and converted to decimal notation in
 // the style [-]ddd.ddd, where the number of digits after the
 // decimal-point character is equal to the precision specification.  If
@@ -469,9 +469,9 @@ TEST(CxxType, check_types_double)
   // values {1089165312.000000, 1089165312.000000}
   {
     std::cout << "double max: " << std::numeric_limits<double>::max()
-      << std::endl;
+              << std::endl;
     std::cout << "double min: " << std::numeric_limits<double>::min()
-      << std::endl;
+              << std::endl;
 
     double value{1089165312};
 
@@ -502,16 +502,15 @@ TEST(CxxType, check_types_double)
     else
       printf("double value is not < or > 0\n");
   }
-
 }
 
-// ={=========================================================================
-// cxx-variant
+/*
+={=========================================================================
+cxx-variant
 
-namespace cxxvariant
+*/
+namespace cxx_variant
 {
-  // custom variant type. use union and member to set its type.
-
   struct Argument
   {
     enum class Type
@@ -521,165 +520,163 @@ namespace cxxvariant
       UInt,
       Double,
       String
-    } m_type;
+    } _type;
 
-    // NOTE: cannot use in-class init for union
-
+    // NOTE:
+    // 1. cannot use in-class init for union
+    // 2.
+    // cxx-error: initializations for multiple members of
+    // since it's cxx-union
+    // explicit Base(bool b)
+    //     : bool_(b)
+    //     , i_(0)
+    //     , ui_(0)
+    //     , real_(0.0f)
+    // {}
     union Base
     {
-      bool bool_;
-      int i_;
-      unsigned ui_;
-      double real_;
-
-      // cxx-error: initializations for multiple members of
-      // since it's cxx-union
-      // explicit Base(bool b)
-      //     : bool_(b)
-      //     , i_(0)
-      //     , ui_(0)
-      //     , real_(0.0f)
-      // {}
+      bool _b;
+      int _i;
+      unsigned int _ui;
+      double _d;
 
       // default ctor is necessary since `string` type needs it and otherwise
       // it's error
-      Base()
-          : real_(0.0f)
+      explicit Base()
+          : _d(0.0f)
       {}
-
       explicit Base(bool b)
-          : bool_(b)
+          : _b(b)
       {}
-
       explicit Base(int i)
-          : i_(i)
+          : _i(i)
       {}
-
-      explicit Base(unsigned ui)
-          : ui_(ui)
+      explicit Base(unsigned int ui)
+          : _ui(ui)
       {}
-
-      explicit Base(double real)
-          : real_(real)
+      explicit Base(double d)
+          : _d(d)
       {}
-    } m_base;
+    } _base;
 
-    std::string m_string;
+    std::string _string;
 
     explicit Argument(bool value)
-        : m_type(Type::Bool)
-        , m_base(value)
+        : _type(Type::Bool)
+        , _base(value)
     {}
 
     explicit Argument(int value)
-        : m_type(Type::Int)
-        , m_base(value)
+        : _type(Type::Int)
+        , _base(value)
     {}
 
-    explicit Argument(unsigned value)
-        : m_type(Type::UInt)
-        , m_base(value)
+    explicit Argument(unsigned int value)
+        : _type(Type::UInt)
+        , _base(value)
     {}
 
     explicit Argument(double value)
-        : m_type(Type::Double)
-        , m_base(value)
+        : _type(Type::Double)
+        , _base(value)
     {}
 
-    explicit Argument(std::string value)
-        : m_type(Type::String)
-        , m_string(value)
+    explicit Argument(const std::string &value)
+        : _type(Type::String)
+        , _string(value)
     {}
 
-    // getters
-    explicit operator bool() const
+    // getters *cxx-conversion-op* cxx-operator-conversion
+    operator bool() const
     {
-      if (m_type != Type::Bool)
+      if (_type != Type::Bool)
       {
-        std::cout << "type is not bool" << std::endl;
+        // std::cout << "the type saved is not bool\n";
         return false;
       }
 
-      return m_base.bool_;
+      return _base._b;
     }
 
-    explicit operator int() const
+    operator int() const
     {
-      if (m_type != Type::Int)
+      if (_type != Type::Int)
       {
-        std::cout << "type is not int" << std::endl;
-        return INT32_MAX;
+        // std::cout << "the type saved is not int\n";
+        return std::numeric_limits<int>::max();
       }
 
-      return m_base.i_;
+      return _base._i;
     }
 
-    explicit operator unsigned() const
+    operator unsigned int() const
     {
-      if (m_type != Type::UInt)
+      if (_type != Type::UInt)
       {
-        std::cout << "type is not unsigned int" << std::endl;
-        return UINT32_MAX;
+        // std::cout << "the type saved is not unsigned int\n";
+        return std::numeric_limits<unsigned int>::max();
       }
 
-      return m_base.ui_;
+      return _base._ui;
     }
 
-    explicit operator double() const
+    operator double() const
     {
-      if (m_type != Type::Double)
+      if (_type != Type::Double)
       {
-        std::cout << "type is not double" << std::endl;
+        // std::cout << "the type saved is not double int\n";
         return std::nan("");
       }
 
-      return m_base.real_;
+      return _base._d;
     }
 
-    explicit operator std::string() const
+    operator std::string() const
     {
-      if (m_type != Type::String)
+      if (_type != Type::String)
       {
-        std::cout << "type is not string" << std::endl;
-        return std::string("");
+        // std::cout << "the type saved is not string\n";
+        return "";
       }
 
-      return m_string;
+      return _string;
     }
-  };
-} // namespace cxxvariant
+  }; // struct
+} // namespace cxx_variant
 
 TEST(CxxTypeVariant, check_custom_variant)
 {
-  using namespace cxxvariant;
+  using namespace cxx_variant;
 
   // error since it do not have default ctor
-  // Argument arg1;
-
   {
-    Argument arg1(true);
-    EXPECT_THAT((bool)arg1, true);
+    // Argument arg1;
   }
 
   {
-    Argument arg1(false);
-    EXPECT_THAT((bool)arg1, false);
+    Argument arg(true);
+    EXPECT_THAT((bool)arg, true);
   }
 
   {
-    Argument arg1(3301);
-    EXPECT_THAT((int)arg1, 3301);
+    Argument arg(3301);
+    EXPECT_THAT((bool)arg, false);
   }
 
   {
-    Argument arg1(3301.0);
-    EXPECT_THAT((double)arg1, 3301.0);
+    Argument arg(3301);
+    EXPECT_THAT((int)arg, 3301);
+  }
+
+  {
+    Argument arg(3301.0);
+    EXPECT_THAT((double)arg, 3301.0);
   }
 
   {
     // since ctor is explicit
-    Argument arg1(std::string("string variant"));
-    EXPECT_THAT((std::string)arg1, std::string("string variant"));
+    Argument arg(std::string("string variant"));
+    EXPECT_THAT((std::string)arg, std::string("string variant"));
   }
 }
 
@@ -7757,9 +7754,9 @@ TEST(CxxSmartPointer, check_deleter)
   // shared pointer takes object as argument
   {
     std::shared_ptr<std::string> sp1(new std::string("nico on function"),
-                                function_delete);
+                                     function_delete);
     std::shared_ptr<std::string> sp2(new std::string("jutta on function"),
-                                function_delete);
+                                     function_delete);
   }
 
   {

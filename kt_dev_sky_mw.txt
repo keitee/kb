@@ -246,7 +246,7 @@ mount -o tcp,nolock,vers=2 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /f
 setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.5:titan/zImage"
 
 // ok
-setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.9:/titan/zImage ‘remotedir=192.168.0.9:/home/keitee/mw/exports/titan/flash0'"
+setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.8:/titan/zImage ‘remotedir=192.168.0.8:/home/keitee/mw/exports/titan/flash0'"
 
 
 // error since copied from wodocument and found that dash(-) causes the
@@ -1022,9 +1022,15 @@ rbt post --tracking-branch=origin/NGDEV-155524_AS_DRM_for_RDK_on_New --repositor
 
 rbt post --tracking-branch=origin/develop --repository=asplayer --username=kyoupark --password=tegI3301
 
-rbt post --repository=asplayer --username=kyoupark --password=tegI3301
+
+--branch<branch>
+The branch the change will be committed on or affects. This is a free-form
+field and does not control any behavior.
+
+The default can be set in BRANCH in .reviewboardrc.
 
 rbt post --tracking-branch=origin/develop --repository=ethan-as-source --username=kyoupark --password=tegI3301
+rbt post --tracking-branch=origin/develop --repository=ethan-as-source --username=kyoupark --password=tegI3301 --branch=NGDEV-167550_AS_DTH_unit_test_compile_failure
 
 
 Posting Committed Code
@@ -1065,7 +1071,7 @@ http://10.184.136.124:9001/r/1013/diff/
 rbt post -r 1066
 rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
 
-rbt post --tracking-branch=origin/develop -r 1127
+rbt post --tracking-branch=origin/develop -r 1133
 
 
 
@@ -11520,8 +11526,7 @@ systemctl stop sky-asplayer
 mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
 umount /usr/sbin/asrdkplayer
 
-scp -r -P 10022 ./asrdkplayer root@192.168.0.13:/opt
-scp -r -P 10022 ./aout root@192.168.1.108:/opt
+scp -r -P 10022 ./asrdkplayer root@192.168.0.12:/opt
 
 journalctl -fu sky-asplayer --since today
 journalctl -fu sky-asplayer
@@ -11553,6 +11558,24 @@ GET /as/diag/AS_PLAYER/enableAll
 
 curl -v -X GET http://192.168.0.9:9005/as/diag/AS_PLAYER/enableAll
 curl -v -X GET http://192.168.0.9:9005/as/diag/AAMP_PLAYER/enableAll
+
+
+*xi1-tool-logging*
+Manual Upload to USB (XiOne)
+
+This dumps the contents of /opt/logs to a USB drive.
+
+/lib/rdk/backupLogsToUSB.sh
+
+root@skyxione:~# /lib/rdk/backupLogsToUSB.sh
+Mounting USB disk (/dev/sda1)
+Creating tarball of logs on USB stick '/mnt/usb/38A6CEFFDDC1_Logs_20200812-091534.tgz'
+tar: removing leading '/' from member names
+Waiting to finish writing files
+Umounting the USB stick
+You can now remove the USB stick
+
+sky-messages.log.1
 
 
 *as-epg-logging*
@@ -13125,6 +13148,20 @@ currently:
       ...
 }
 
+DTT services:
+
+sid = M217c-385-3f-1836                         // ok
+sk = 1234 (if found in enrich file)
+c = "5001" (range: 5001 - 5849, 5850 - 5999)    // ok
+t = "Rai Uno"                                   // ok
+sf = sd | hd | au                               // fixed to "sd"
+xsg = 8                                         // ok
+dvbtriplet = 8572.901.63                        // ok
+[startover = true]
+servicetypes = [DTT]                            // ok
+[schedule = true]
+[schedulesid = "<sk>"] (if schedule == true)
+
 
 *as-dtt-mediarite*
 
@@ -13604,18 +13641,23 @@ DTT [FS:DTT]:
 
 vwid = "1"
 media = LIVE
-
-//
 eid = "7d2-f517"
-
-// from request
-sid = <sid>
-
-// ??
+sid = <sid>       // from request
 lcn = ""
-
-
+vtrack = 0xFFFFFFFF
+atrack = 0xFFFFFFFF
+subtitleid = "1"
 ps = IDLE | PENDING | PLAYING | BLOCKED
+[psr = PIN1 | PIN2 | PIN3 | PIN BLOCK | CARD NO RIGHTS | CARD NOT ACTIVE | NOT BROADCASTING | TECHNICAL FAULT | NO SIGNAL | PLAYER SESSION FAILURE | UNKNOWN CA | CA USAGE RULES VIOLATION | SERVICE NOT SCANNED]
+speed = 1.0
+startposutc = <spos>
+postutc = <pos>
+posutcms = <posutcms>
+endposutc = <epos>
+nownextversion = 1
+audioenabled = true
+[applywatermark = true ]
+
 
 // FutarquePlayerInfo.h
 
@@ -13674,6 +13716,9 @@ enum CoreStatus {
 
 
 *as-watchlive-dtt-play*
+
+Aug 10 15:46:09 skyxione com.sky.as.player[28941]: requested url /as/players/1/action/watchlive
+Aug 10 15:46:09 skyxione com.sky.as.player[28941]: Request /as/players/1/action/watchlive is not supported at the moment
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
@@ -15594,6 +15639,8 @@ std::string DrmController::getCurrentState() const
 
 2. Request
 
+https://www.jsonrpc.org/specification
+
 {
 "jsonrpc": "2.0",
 "id": 1234567890,
@@ -17443,7 +17490,7 @@ python -m framework system.information.information.system_information_TEST_001_J
 
 AMS_TEST_SUITE='--host 10.109.199.189 --port 9005 --xml-output test_results --all --platform xi1-de --disable-drm-check  --disable-preboot-check ' python -m framework suite.xi6.player
 
-AMS_TEST_SUITE='--host 192.168.1.108 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' python -m framework system.information.information.system_information_TEST_001_JsonValidate
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' python -m framework system.information.information.system_information_TEST_001_JsonValidate
 
 // to see DTH results
 
@@ -17470,13 +17517,17 @@ Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp: sending metadata 
 Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp_Seek(542.000000) and seekToLive(0)
 Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]AAMPGstPlayer::Flush:3045 Pipeline is in PAUSED state position 0.000000
 
+
+http://10.184.136.138:8081/view/X%20Test%20results/
+
 // add "/*view*"
 http://10.184.136.138:8081/job/AS_TEST_XIONE/38/artifact/output/TEST-analytics_submit_TEST_005_validate_post.xml/*view*
 
-///////////////////////////////////////////////////////////////////////////////
-// expects to get "blocked" state within 20 secs after the last seek
-// <testcase classname="horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM"
-// horizontalPlayback/horizontalPlaybackScenarios.py
+
+*horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM*
+expects to get "blocked" state within 20 secs after the last seek
+<testcase classname="horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM"
+horizontalPlayback/horizontalPlaybackScenarios.py
 
 AMS_TEST_SUITE='--host 192.168.1.108 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
 python -m framework horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM
@@ -17528,19 +17579,22 @@ aamp/aampplayer_p.cpp: mapping between aamp state and as state
             break;
 
 
-///////////////////////////////////////////////////////////////////////////////
-// expect to start play from pos=20 which is given from watchstream param.
-// <testcase classname="horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM"
-// horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_009_HlsVODPlayback_Pos
-// horizontalPlayback/horizontalPlaybackScenarios.py
+*horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM*
+expect to start play from pos=20 which is given from watchstream param.
+<testcase classname="horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_004_SeekHlsVODPlayback_to_EOM"
+horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_009_HlsVODPlayback_Pos
+horizontalPlayback/horizontalPlaybackScenarios.py
+
+
+*horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_009_HlsVODPlayback_Pos*
+
+<testcase classname="horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_009_HlsVODPlayback_Pos"
+file="horizontalPlayback/horizontalPlaybackScenarios.py"
 
 AMS_TEST_SUITE='--host 192.168.1.108 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
 python -m framework horizontalPlayback.horizontalPlaybackScenarios.horizontalPlayback_TEST_009_HlsVODPlayback_Pos
 
 http://10.184.136.138:8081/job/AS_TEST_XIONE/39/artifact/output/TEST-horizontalPlayback_TEST_009_HlsVODPlayback_Pos.xml/*view*
-
-
-///////////////////////////////////////////////////////////////////////////////
 
 400 == 200,
 
@@ -17636,6 +17690,35 @@ Steps
 #. Wait for the state to become IDLE
 
 Q: after stop, there will be status report?
+
+
+*players.vwid1.action.setspeed.setspeed.players_1_action_setspeed_TEST_030_Not_playing*
+<testcase classname="players.vwid1.action.setspeed.setspeed.players_1_action_setspeed_TEST_030_Not_playing"
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
+python -m framework players.vwid1.action.setspeed.players_1_action_setspeed_TEST_030_Not_playing
+
+
+*players.vwid1.action.watchstream.watchstream.players_1_action_watchstream_TEST_010_DASHPlayback*
+file="players/vwid1/action/watchstream/watchstream.py" line="317" name="test_WatchStream"
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
+python -m framework players.vwid1.action.watchstream.players_1_action_watchstream_TEST_010_DASHPlayback
+
+
+*players.setting.setting.players_setting_TEST_01_supported*
+file="players/setting/setting.py
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
+python -m framework players.setting.setting.players_setting_TEST_01_supported
+
+
+*playerTracks.playerTracks.players_tracks_TEST_005_change_setaudio*
+file="playerTracks/playerTracks.py"
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
+python -m framework playerTracks.playerTracks.players_tracks_TEST_005_change_setaudio
+
 
 
 #{============================================================================

@@ -3785,6 +3785,276 @@ namespace
 } // namespace
 */
 
+/*
+={=========================================================================
+cxx_pattern_visitor
+*/
+
+namespace cxx_variant
+{
+  class VariantMap
+  {
+  private:
+    struct Variant
+    {
+      enum Type
+      {
+        Boolean,
+        Integer,
+        Double,
+        String
+      } m_type;
+
+      union Basic
+      {
+        bool boolean;
+        int integer;
+        double real;
+
+        Basic() = default;
+
+        explicit Basic(bool b)
+            : boolean(b)
+        {}
+        explicit Basic(int i)
+            : integer(i)
+        {}
+        explicit Basic(double d)
+            : real(d)
+        {}
+      } m_basic;
+
+      std::string m_string;
+
+      explicit Variant(bool b)
+          : m_type(Boolean)
+          , m_basic(b)
+      {}
+      explicit Variant(int i)
+          : m_type(Integer)
+          , m_basic(i)
+      {}
+      explicit Variant(double d)
+          : m_type(Double)
+          , m_basic(d)
+      {}
+      explicit Variant(const std::string &str)
+          : m_type(String)
+          , m_string(str)
+      {}
+      explicit Variant(std::string &&str)
+          : m_type(String)
+          , m_string(std::move(str))
+      {}
+      explicit Variant(const char *str)
+          : m_type(String)
+          , m_string(str)
+      {}
+    }; // struct Variant
+
+    std::map<std::string, Variant> m_map;
+
+  public:
+    VariantMap()                   = default;
+    VariantMap(const VariantMap &) = default;
+    VariantMap(VariantMap &&)      = default;
+
+    // insert for bool values
+    void insert(const std::string &key, bool value)
+    {
+      m_map.emplace(key, value);
+    }
+
+    void insert(std::string &&key, bool value)
+    {
+      m_map.emplace(std::move(key), value);
+    }
+
+    // insert for int values
+    void insert(const std::string &key, int value)
+    {
+      m_map.emplace(key, value);
+    }
+
+    void insert(std::string &&key, int value)
+    {
+      m_map.emplace(std::move(key), value);
+    }
+
+    // insert for string values
+    void insert(const std::string &key, const std::string &value)
+    {
+      m_map.emplace(key, value);
+    }
+
+    void insert(std::string &&key, std::string &&value)
+    {
+      m_map.emplace(std::move(key), std::move(value));
+    }
+
+    void clear() { m_map.clear(); }
+
+    bool empty() const { return m_map.empty(); }
+
+  public:
+    struct Visitor
+    {
+      virtual void operator()(const std::string &, bool) {}
+      virtual void operator()(const std::string &, int) {}
+      virtual void operator()(const std::string &, double) {}
+      virtual void operator()(const std::string &, const std::string &) {}
+    };
+
+    // void visit(Visitor &&visitor) const
+    // this is original code and which means it uses a temporary like:
+    //
+    // apply the visitor to all entries in the map, this will populate the
+    // dictionary in the reply message
+    // variantMap.visit(VariantVisitor(msg));
+    //
+    // instead, use msg and populate variant map contents into it. visitor
+    // struct can have a pointer to real object and populate maps into it.
+    //
+    // struct VariantVisitor : ASVariantMap::Visitor
+    // {
+    //  sd_bus_message * const reply;
+    //  ...
+    // }
+
+    void visit(Visitor &visitor) const
+    {
+      // NOTE: traverse
+      for (const auto &e : m_map)
+      {
+        const std::string &key = e.first;
+        const Variant &value   = e.second;
+
+        switch (value.m_type)
+        {
+          case Variant::Boolean:
+            // works both since it's call op
+            // visitor.operator()(key, value.m_basic.boolean);
+            visitor(key, value.m_basic.boolean);
+            break;
+          case Variant::Integer:
+            visitor.operator()(key, value.m_basic.integer);
+            break;
+          case Variant::Double:
+            visitor.operator()(key, value.m_basic.real);
+            break;
+          case Variant::String:
+            visitor.operator()(key, value.m_string);
+            break;
+        }
+      }
+    }
+  }; // class VariantMap
+} // namespace cxx_variant
+
+// from TEST(CxxTypeVariant, check_custom_variant_map)
+TEST(PatternVisitor, check_visitor)
+{
+  using namespace cxx_variant;
+
+  // NOTE: Intent
+  // Visitor let you define a new operation without changing the classes of the
+  // elements on which it operates.
+
+  // override "Visitor"
+  struct CustomVisitor : VariantMap::Visitor
+  {
+    std::vector<std::string> coll;
+
+    CustomVisitor() = default;
+
+    virtual void operator()(const std::string &key, bool value) override
+    {
+      coll.emplace_back("{" + key + ":b}");
+    }
+
+    virtual void operator()(const std::string &key, int value) override
+    {
+      coll.emplace_back("{" + key + ":i}");
+    }
+
+    virtual void operator()(const std::string &key, double value) override
+    {
+      coll.emplace_back("{" + key + ":d}");
+    }
+
+    virtual void operator()(const std::string &key,
+                            const std::string &value) override
+    {
+      coll.emplace_back("{" + key + ":" + value + "}");
+    }
+  };
+
+  // override "Visitor"
+  struct PrintVisitor : VariantMap::Visitor
+  {
+    std::ostringstream ss{};
+
+    PrintVisitor() = default;
+
+    virtual void operator()(const std::string &key, bool value) override
+    {
+      ss << "{" << key << ":b}\n";
+    }
+
+    virtual void operator()(const std::string &key, int value) override
+    {
+      ss << "{" << key << ":i}\n";
+    }
+
+    virtual void operator()(const std::string &key, double value) override
+    {
+      ss << "{" << key << ":d}\n";
+    }
+
+    virtual void operator()(const std::string &key,
+                            const std::string &value) override
+    {
+      ss << "{" << key << ":" << value << "}\n";
+    }
+  };
+
+  // construct elements
+  VariantMap coll;
+
+  coll.insert("key1", true);
+  coll.insert("key2", false);
+
+  coll.insert("key3", 3);
+  coll.insert("key4", 4);
+
+  // see cxx-string
+  // vmap.insert("key5", "variant1");
+  // vmap.insert("key6", "variant2");
+  //
+  // will have:
+  //
+  // {key5:b}
+  // {key6:b}
+
+  coll.insert("key5", std::string("variant1"));
+  coll.insert("key6", std::string("variant2"));
+
+  {
+    CustomVisitor v;
+    coll.visit(v);
+    EXPECT_THAT(v.coll.size(), 6);
+  }
+
+  {
+    std::string expected{"{key1:b}\n{key2:b}\n"
+                         "{key3:i}\n{key4:i}\n"
+                         "{key5:variant1}\n{key6:variant2}\n"};
+
+    PrintVisitor pv;
+    coll.visit(pv);
+    EXPECT_THAT(pv.ss.str(), expected);
+  }
+}
 // ={=========================================================================
 int main(int argc, char **argv)
 {

@@ -965,7 +965,7 @@ TEST(CxxVector, check_push_and_pop)
   coll.push_back(2);
   coll.push_back(3);
 
-  EXPECT_THAT(coll, ElementsAre(1,2,3));
+  EXPECT_THAT(coll, ElementsAre(1, 2, 3));
 
   // void pop_back();
   EXPECT_THAT(coll.back(), 3);

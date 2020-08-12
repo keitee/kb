@@ -335,7 +335,7 @@ size_t find (const char* s, size_t pos, size_type n) const;
 
 */
 
-namespace
+namespace string_find
 {
   std::string::size_type my_find(const std::string &str,
                                  const std::string &sub,
@@ -487,6 +487,8 @@ TEST(StringOperation, check_find_substring_1)
   }
 
   {
+    using namespace string_find;
+
     std::string coll1{"There are two needles in this haystack with needles."};
     std::string coll2{"needle"};
 
