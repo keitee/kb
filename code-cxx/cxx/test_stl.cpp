@@ -808,8 +808,18 @@ private:
 // ={=========================================================================
 TEST(CxxVector, check_ctor)
 {
+  // /**
+  //  *  @brief  Creates a %vector with default constructed elements.
+  //  *  @param  __n  The number of elements to initially create.
+  //  *  @param  __a  An allocator.
+  //  *
+  //  *  This constructor fills the %vector with @a __n default
+  //  *  constructed elements.
+  //  */
+  // explicit
+  // vector(size_type __n, const allocator_type& __a = allocator_type())
   {
-    std::vector<int> coll(5);
+    std::vector<int> coll{5};
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }

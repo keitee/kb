@@ -1071,7 +1071,7 @@ http://10.184.136.124:9001/r/1013/diff/
 rbt post -r 1066
 rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
 
-rbt post --tracking-branch=origin/develop -r 1133
+rbt post --tracking-branch=origin/develop --branch=NGDEV-167550_AS_DTH_unit_test_compile_failure -r 1133
 
 
 
@@ -1113,8 +1113,12 @@ curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.
 
 // from curl
 curl -v -X POST http://192.168.0.103:9005/as/peripherals/btremotes/action/startsearching?timeout=30
+
 // from asda
 peripherals/btremotes/action/startsearching?timeout=30
+
+curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
+curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data '{"system.bouquet":"4101,1"}'
 
 curl -v -X POST http://192.168.0.9:9005/as/system/setting --data '{"system.bouquet":"4101,1"}'
 curl 192.168.0.102:9005/as/test/preferences -X POST --data '{"enableirinput":"false"}'
@@ -11442,6 +11446,9 @@ FlashApp ./SKXI11ADS_VBN_2006_sprint_20200727122819sdy_UK_PRO.bin
 FlashApp ./SKXI11AIS_000140.1.14d0_EXP_VBN_sdy_DE_PRO.bin 
 
 FlashApp ./SKXI11ADS_000140.1.14d0_EXP_VBN_sdy_UK_PRO.bin
+FlashApp ./SKXI11AIS_VBN_2006_sprint_20200813092013sdy.bin 
+
+FlashApp ./SKXI11AIS_000140.2.12d0_EXP_VBN_sdy_DE_PRO.bin
 
 root@skyxione:/mnt/usb# FlashApp ./SKXI11ADS_000120.10.6d0_EXP_VBN_sdy_UK_PRO.bin
 Opening /dev/mmcblk0 Device
@@ -11537,7 +11544,8 @@ journalctl -u sky-asrdkplayer --since today > /opt/player.log
 
 ssh -p 10022 root@192.168.1.108 "journalctl -u sky-asproxy --since today" > proxy.log
 ssh -p 10022 root@192.168.1.108 "journalctl -u sky-asplayer --since today" > player.log
-scp -P 10022 root@192.168.1.108:/opt/dbus.log .
+
+scp -P 10022 root@192.168.0.12:/opt/dbus.log .
 
 
 *as-diag-as-logging*
@@ -11928,9 +11936,11 @@ ProtectSystem=full
 
 int main(int argc, char *argv[])
 {
-  // NOTE: ProxyUrlMap
-  // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-  
+  // create the URL map - initially empty services are dynamically registered
+  // on the map when they come up
+  std::shared_ptr<AS_MAIN::`ProxyUrlMap`> urlMap =
+    AS_MAIN::CreateUrlMap();
+
   // create the service manager
   std::shared_ptr<IServicesController> servicesController =
     IServicesController::create(urlMap, security);
@@ -11953,13 +11963,6 @@ void AS_MAIN::StartAS(const std::shared_ptr<ProxyUrlMap> &urlMap)
 
 
 *rdk-as-proxy-service-manager*
-
-M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
-M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
-M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/startlistening'
-M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/stoplistening'
-M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.player'
-
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/include/IServicesController.h
 
@@ -11991,7 +11994,7 @@ std::shared_ptr<IServicesController>
 IServicesController::create(const std::shared_ptr<AS_MAIN::ProxyUrlMap> &urlMap,
   const std::shared_ptr<ISecurityContext> &securityCtx)
 {
-  return std::make_shared<RdkServicesController>(urlMap, securityCtx);
+  return std::make_shared<`RdkServicesController`>(urlMap, securityCtx);
 }
 
 NOTE: ServiceManager that registers url
@@ -12004,7 +12007,7 @@ RdkServicesController::RdkServicesController()
   mManager = std::make_shared<ServicesManager>(urlMap, security);
 
   // start the thread
-  mThread = std::thread(&RdkServicesController::threadLoop, this);
+  mThread = std::thread(`&RdkServicesController::threadLoop`, this);
 }
 
 
@@ -12040,9 +12043,11 @@ void RdkServicesController::threadLoop()
 
 
 // Called when we've detected that a dbus service has been registered and it's
-// name starts with 'com.sky.as'.  Here we send a request to get the JSON
-// config of the service and if a valid reply is received we create an object
-// to wrap the dbus service and register it in the url map.
+// name starts with 'com.sky.as'. 
+//
+// Here we `send a request to get the JSON config of the service added` and if
+// a valid reply is received we create an object to wrap the dbus service and
+// register it in the url map.
 
 void RdkServicesController::onServiceRegistered(const std::string &name)
 {
@@ -12057,7 +12062,7 @@ void RdkServicesController::onServiceRegistered(const std::string &name)
 
   // register the service (the manager will handle setting up processing the
   // service and setting up all the executors)
-  mManager->registerService( config, service, domainName, registeredDbusMethods );
+  `mManager->registerService`( config, service, domainName, registeredDbusMethods );
 }
 
 
@@ -12131,16 +12136,36 @@ ASResponse ASServiceSDBus::request(int flags,
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/`ServicesManager.cpp`
-
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+
+
+const std::string PlaybackService::mConfigJson = R"JSON(
+{
+  "uris": [
+    {
+      "path": "/as/drm/status",
+      "method": "ws",
+      "thread": "AS_WS_DRM"
+    },
+    {
+      "path": "/as/drm/action/activate",
+      "method": "post",
+      "expectsBody": false
+    },
+
 
 class ProxyUrlMap : public AS_WORKER::UrlMap
 
 const std::shared_ptr<AS_MAIN::`ProxyUrlMap`> mUrlMap;
 
-bool ServicesManager::registerService(const std::string &configJson)
+bool `ServicesManager::registerService`(const std::string &configJson)
 {
+  // parse json to config
+
+  ServiceConfig config;
+  mParser->parse(configJson, &config);
+
   void bindMethods( AS_WORKER::UrlMap *map )
   {
     map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",
@@ -12149,10 +12174,21 @@ bool ServicesManager::registerService(const std::string &configJson)
     map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/start",
         serviceScanStartExecutor,        new ServicesScanActionStartParamValidator() );
 
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",                  serviceScanAbortExecutor );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",                 serviceScanCommitExecutor );
-    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",                        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",
+        serviceScanAbortExecutor );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",
+        serviceScanCommitExecutor );
+
+    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",
+        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
   }
+
+  // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
+  // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
+  // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/startlistening'
+  // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/stoplistening'
+  // M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.player'
 
   // register uri to factory which has the relevant service.
   `bindServiceMethods`(const std::vector<ServiceUrl> &urls,
@@ -12191,9 +12227,12 @@ bool ServicesManager::registerService(const std::string &configJson)
       // AS_WORKER::UrlMap::RegisterUrl add url to m_registeredUrlMap once
       // checking on COUNTRY* and PLATFOTM* (which is only flag from #defines)
 
+      // if found in overrideUriParamValidator then use it and if not,
+      // paramValidator is null
+
       `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator, threadParams);
 
-      M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+      // M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
     }
   }
 }
@@ -12231,15 +12270,19 @@ MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as
 // Components/AS/Worker/include/ExpectedParams_rdk.dat
 
 // Components/AS/Worker/include/ExpectedParams_rdk.dat
-static std::map<std::string, TExpectedParams> `expectedParamsList` = {
+
+static std::map<std::string, `TExpectedParams`> `expectedParamsList` = {
 
 #elif defined(RDK)
 // The dat file deals with RDK specific param support
 #include "ExpectedParams_rdk.dat"
 };
 
-typedef std::map<std::string, ParamAttributes> TParamAttributes;              ///< The collection of the parameters and its attributes
-typedef std::map<ParamTypes_t, TParamAttributes> TExpectedParams;             ///< The collection of expected parameters for all sources
+typedef std::map<ParamTypes_t, TParamAttributes> TExpectedParams;
+///< The collection of expected parameters for all sources
+
+typedef std::map<std::string, ParamAttributes> TParamAttributes;
+///< The collection of the parameters and its attributes
 
 struct ParamAttributes
 {
@@ -12272,6 +12315,7 @@ struct ParamAttributes
 "/as/services", {
                  {AS_WORKER::QUERY_PARAM,
                   {
+                   // {std::string, ParamAttributes}
                    {"filter", {false, 
                                 "Filter", 
                                 "Filter type of services, OTT is online services only",
@@ -12288,6 +12332,28 @@ struct ParamAttributes
                  }
                 }
 },
+
+{
+  "/as/players/setting/<setting>", {
+    {AS_WORKER::POST_BODY_PARAM,
+      {
+        {"viewingRestriction", {false, "ViewingRestriction", "Set ViewingRestriction", AS_WORKER::ParamDataTypeJsonObject, {"cert"}}},
+        {"cert", {false, "CardRating", "Parental rating", AS_WORKER::ParamDataTypeString, {"U", "PG", "12", "15", "18", "NONE", "PT", "BA", "14", "PA", "0", "6", "16"}}},
+        {"audioDescription", {false, "AudioDescription", "Enable/disable AudioDescription", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},                                                                                                                    
+        {"beepOnAudioDescription", {false, "BeepOnAudioDescription", "Enable/disable BeepOnAudioDescription", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},                                                                                                              
+        {"subtitles", {false, "Subtitles", "Enable/disable Subtitles", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},                                                                                                                           
+        {"subtitlesLanguage", {false, "SubtitlesLanguage", "Set SubtitlesLanguage", AS_WORKER::ParamDataTypeString}},  /*Big list, this is dealt with by the executor*/                                                                                                                  
+        {"audioLanguage", {false, "AudioLanguage", "Set AudioLanguage", AS_WORKER::ParamDataTypeString}},  /*Big list, this is dealt with by the executor*/                                                                                                                         
+        {"pinOnPreWatershedPlayback", {false, "PinOnPreWatershedPlayback", "Enable/disable PinOnPreWatershedPlayback", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},
+        {"pinOnPreWatershedLive", {false, "PinOnPreWatershedLive", "Enable/disable PinOnPreWatershedLive", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},
+        {"viewingRestrictionWindow", {false, "ViewingRestrictionWindow", "Configure ViewingRestrictionWindow", AS_WORKER::ParamDataTypeEnum, {"ALWAYS", "06-20"}}},
+        {"hardOfHearingSubtitles", {false, "HardOfHearingSubtitles", "Enable/disable HardOfHearingSubtitles", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},
+        {"auto60fpsMode", 
+          {false, "Auto60fpsMode", "Enable/disable Auto60fpsMode", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}}
+      }
+    }
+  },
+
 ...
 
 
@@ -12304,9 +12370,19 @@ class SystemSettingParamValidator : public AS_WORKER::ParamValidator
       const std::function<int( Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function = {} );
 };
 
-void UrlMap::RegisterUrl( REQ_METHOD method, char *url,
+
+void `UrlMap::RegisterUrl`( REQ_METHOD method, char *url,
                           AS_WORKER::ParamValidator *paramValidator)
 {
+
+  // if found in overrideUriParamValidator then use it and if not,
+  // paramValidator is null. so use default validator
+
+  if ( paramValidator == NULL )
+  {
+    paramValidator = new AS_WORKER::ParamValidator();
+  }
+
   // get TExpectedParams from expectedParamsList and save it to `m_expectedParams`
   // if found.
   paramValidator->SetExpectedParamsForUrl( method, url );
@@ -12549,6 +12625,8 @@ mc      1584356871.978857       127     :1.127  com.sky.as.network      /com/sky
 dbus-monitor --system "interface=com.sky.as.Service1"
 
 // from epg
+// enum Method { InvalidMethod, HttpPost, HttpGet };
+
 method call time=1592405388.344629 sender=:1.2 -> destination=com.sky.as.player serial=3685 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
    string "/as/players/1/action/watchstream"
@@ -14027,6 +14105,119 @@ public:
 	 */
 	void Stop(bool sendStateChangeEvent = true);
 };
+
+
+*as-player-setting*
+
+curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
+curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
+
+method call time=1597328569.868368 sender=:1.2 -> destination=com.sky.as.player serial=404 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
+   uint32 2
+   string "/as/players/setting/audioLanguage"
+   array [
+      dict entry(
+         string "Accept-Encoding"
+         string "identity"
+      )
+      dict entry(
+         string "Content-Length"
+         string "34"
+      )
+      dict entry(
+         string "Host"
+         string "192.168.0.12:9005"
+      )
+      dict entry(
+         string "Content-Type"
+         string "application/json"
+      )
+      dict entry(
+         string "Connection"
+         string "close"
+      )
+      dict entry(
+         string "User-Agent"
+         string "SKY AmsTestSuite"
+      )
+   ]
+   array [
+   ]
+   string "{"audioLanguage": "INVALID_VALUE"}"
+
+
+*as-player-setting-get*
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:1 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:""
+
+
+method return time=1597330744.722706 sender=:1.86 -> destination=:1.178 serial=93 reply_serial=2
+   struct {
+      uint32 200
+      array [
+      ]
+      string "{
+   "audioLanguage" : "Deutsch"
+}
+"
+   }
+
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:1 \
+string:"/as/players/setting/Auto60fpsMode" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:""
+
+
+*as-player-setting-post*
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:'{"audioLanguage" : "Deutsch"}'
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:'{"audioLanguage" : "INVALID_VALUE"}'
 
 
 ={============================================================================
@@ -17719,6 +17910,33 @@ file="playerTracks/playerTracks.py"
 AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1 --disable-drm-check  --disable-preboot-check' \
 python -m framework playerTracks.playerTracks.players_tracks_TEST_005_change_setaudio
 
+
+*setmenu_api.unsupported.unsupported_api_TEST_001_Validate*
+file="setmenu_api/unsupported.py"
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-uk --disable-drm-check  --disable-preboot-check' \
+python -m framework setmenu_api.unsupported.unsupported_api_TEST_001_Validate
+
+
+players.vwid1.status.status.players_1_status_TEST_009_ValidateWatchStreamPendingStatus
+file="players/vwid1/status/status.py
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-uk --disable-drm-check  --disable-preboot-check' \
+python -m framework players.vwid1.status.status.players_1_status_TEST_009_ValidateWatchStreamPendingStatus
+
+
+players.vwid1.action.watchstream.watchstream.players_1_action_watchstream_TEST_010_DASHPlayback
+file="players/vwid1/action/watchstream/watchstream.py"
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-uk --disable-drm-check  --disable-preboot-check' \
+python -m framework players.vwid1.action.watchstream.watchstream.players_1_action_watchstream_TEST_010_DASHPlayback
+
+
+*players.setting.setting.players_setting_TEST_03_errorcode*
+file="players/setting/setting.py
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-de --disable-drm-check  --disable-preboot-check' \
+python -m framework players.setting.setting.players_setting_TEST_03_errorcode
 
 
 #{============================================================================
