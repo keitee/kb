@@ -101,6 +101,65 @@ TEST(AlgoPrefixSum, check_sum_slice)
 namespace prefix_sum
 {
   // old
+  // start: 4, moves: 6
+  // loop(0, 5), left:  4, shift:  6, right: 10 -> 10 ->  6, xresult: 13, result: 13
+  // loop(1, 5), left:  3, shift:  4, right:  8 ->  8 ->  6, xresult: 18, result: 18
+  // loop(2, 5), left:  2, shift:  2, right:  6 ->  6 ->  6, xresult: 25, result: 25
+  // loop(3, 5), left:  1, shift:  0, right:  4 ->  4 ->  4, xresult: 16, result: 25
+  // loop(4, 5), left:  0, shift: -2, right:  2 ->  4 ->  4, xresult: 18, result: 25
+  //
+  // when move window to the left
+  //          0    1   2   3   4   5   6   7   8   9   10
+  //          2    3   7   5  [1   3   9   X   X   X   X]
+  //          2    3   7  [5   1   3   9   X   X]  X   X
+  //          2    3  [7   5   1   3   9]  X   X   X   X
+  //          2   [3   7   5   1]  3   9   X   X   X   X
+  //         [2    3   7   5   1]  3   9   X   X   X   X
+  //
+  // when move window to the right
+  // [X   X   2    3   7   5   1]  3   9   X   X   X   X
+  //     [X   2    3   7   5   1   3]  9   X   X   X   X
+  //          2    3  [7   5   1   3   9]  X   X   X   X
+  //
+  // when used a bug
+  // loop(0, 2), right:  4, shift:  6, left: -2 -> -2 ->  0, xresult: 18, result: 25
+  // loop(1, 2), right:  5, shift:  4, left:  0 ->  0 ->  0, xresult: 21, result: 25
+  //
+  // start: 4, moves: 6
+  // loop(0, 3), shift:  6, left: -2 -> -2 ->  0, right:  4, xresult: 18, result: 25
+  // loop(1, 3), shift:  4, left:  0 ->  0 ->  0, right:  5, xresult: 21, result: 25
+  // loop(2, 3), shift:  2, left:  2 ->  2 ->  2, right:  6, xresult: 25, result: 25
+  //
+  // from this observation, when shift to left to the start, right end get reduced
+  // by 2 since uses "move" twice when goes to left and right again.
+  //
+  // After all, get possible max mushroom and moves windows which starts from
+  // start pos and ends with start pos.
+  //
+  // start: 8, moves: 5
+  // loop(0, 6), left:  8, shift:  5, right: 13 -> 13 -> 13, xresult: 21, result: 21
+  // loop(1, 6), left:  7, shift:  3, right: 11 -> 11 -> 11, xresult: 27, result: 27
+  // loop(2, 6), left:  6, shift:  1, right:  9 ->  9 ->  9, xresult: 23, result: 27
+  // loop(3, 6), left:  5, shift: -1, right:  7 ->  8 ->  8, xresult: 26, result: 27
+  // loop(4, 6), left:  4, shift: -3, right:  5 ->  8 ->  8, xresult: 30, result: 30
+  // loop(5, 6), left:  3, shift: -5, right:  3 ->  8 ->  8, xresult: 32, result: 32
+  //
+  //   0   1   2  3  4  5  6   7 *8* 9 10 11 12 13 14
+  //  13  12  11  2  4  6  8  10 [2  3  7  5  1  3] 9     (21)
+  //  13  12  11  2  4  6  8 [10  2  3  7  5] 1  3  9     (27)
+  //  13  12  11  2  4  6 [8  10  2  3] 7  5  1  3  9     (23)
+  //  13  12  11  2  4 [6  8  10  2] 3  7  5  1  3  9     (26)
+  //  13  12  11  2 [4  6  8  10  2] 3  7  5  1  3  9     (30)
+  //  13  12  11 [2  4  6  8  10  2] 3  7  5  1  3  9     (32)
+  //  ...
+  //
+  // start: 8, moves: 5
+  // loop(0, 6), shift:  5, left:  3 ->  3 ->  3, right:  8, xresult: 32, result: 32
+  // loop(1, 6), shift:  3, left:  5 ->  5 ->  5, right:  9, xresult: 29, result: 32
+  // loop(2, 6), shift:  1, left:  7 ->  7 ->  7, right: 10, xresult: 22, result: 32
+  // loop(3, 6), shift: -1, left:  9 ->  8 ->  8, right: 11, xresult: 17, result: 32
+  // loop(4, 6), shift: -3, left: 11 ->  8 ->  8, right: 12, xresult: 18, result: 32
+  // loop(5, 6), shift: -5, left: 13 ->  8 ->  8, right: 13, xresult: 21, result: 32
   int mushroom_picker_1(const vector<int> &A, int start, int moves)
   {
     int max_input_index = A.size() - 1;

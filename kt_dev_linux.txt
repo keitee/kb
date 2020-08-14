@@ -85676,7 +85676,7 @@ files within a shared library no longer maintain distinct identities.
 {shared-vs-static} do-not-use-single-line
 
 $ cat main.c 
-#nclude <stdio.h>
+#include <stdio.h>
 
 extern void foo(void);
 
@@ -85905,7 +85905,7 @@ Segmentation fault (core dumped)
 ={============================================================================
 *kt_linux_core_400* os-lib-soname
 
-In the above example, libfoo is realname. As with a realname, soname is used in
+In the above example, `libfoo is realname.` As with a realname, soname is used in
 linking and is embedded in the executable, and used by the linker at runtime.
 
 Why soname? The purpose of the soname is to provide `a level of indirection`
@@ -85920,6 +85920,8 @@ $ gcc -shared -Wl,-soname,libbar.so -o libfoo.so foo.o
 note: shall no space between -soname
 
 $ gcc -shared -Wl,-soname -Wl,libbar.so -o libfoo.so foo.o  
+
+// run command on so
 
 $ readelf -d libfoo.so | grep SONAME              note: DT_SONAME in ELF
 (standard input):5: 0x000000000000000e (SONAME)   Library soname: [libbar.so]
@@ -85938,10 +85940,11 @@ $ LD_LIBRARY_PATH=. ./one
 ./one: error while loading shared libraries: libbar.so: cannot open shared 
   object file: No such file or directory
 
-note: Why fails this time? So set soname in so file itself and executable
-embeds it instead of real file name. Now ld looks for `libbar` instead but not
+Why fails this time? So set soname in so file itself and executable embeds it
+instead of real file name. Now ld looks for `libbar.so` instead but not
 libfoo.
 
+SO HAVE TO make a sym link libbar.so to libfoo.so
 
 indirection:
 
@@ -85955,6 +85958,33 @@ $ ll
 lrwxrwxrwx 1 kpark kpark    9 Feb  5 11:22 libbar.so -> libfoo.so*
 $ ./one 
 foo: this is foo...
+
+TWO things to use soname:
+
+1. use soname when building so
+2. use symlink
+
+
+# 3
+# not use soname. what if set libbar.so in main and make a symlink? WORKS 
+#
+# ln -s libfoo3.so libbar.so
+#
+# readelf -d libfoo3.so | grep SONAME
+# readelf -d test_soname_3 | grep NEEDED
+#  0x0000000000000001 (NEEDED)             Shared library: [libbar.so]
+#  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
+libfoo3.so : foo.c
+	gcc -g -c -fpic foo.c
+	gcc -g -shared foo.o -o libfoo3.so
+
+# when use, do not specify soname
+test_soname_3 : libfoo3.so main.c
+	gcc -g main.c libbar.so -o $@
+
+
+So soname removes dependency from user.
 
 
 {os-lib-version} soname-case
