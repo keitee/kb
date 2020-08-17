@@ -31,11 +31,6 @@ using namespace testing;
 404:TEST(Pair, PackReference)
 438:TEST(Pair, Initialisation)
 526:TEST(Pair, Comparison)
-701:TEST(CxxCtor, Private)
-744:TEST(CxxCtor, NoDefault)
-786:TEST(CxxCtor, Parameters)
-828:TEST(CxxCtor, CtorCallsCtor)
-876:TEST(CxxCtor, CtorDefaultArgAndInClassInit)
 975:TEST(Ctor, CtorInitForms)
 1055:TEST(Ctor, CtorInitFromMore)
 1101:TEST(Ctor, CtorInitFromExplicit)
@@ -1991,6 +1986,7 @@ TEST(CxxCtor, Private)
   };
 } // namespace cxx_ctor
 
+// ={=========================================================================
 // to see that default ctor is necessary
 TEST(CxxCtor, show_default_ctor_is_necessary)
 {
@@ -2091,6 +2087,7 @@ namespace cxx_ctor
   };
 } // namespace cxx_ctor
 
+// ={=========================================================================
 TEST(CxxCtor, check_delegating_ctor)
 {
   using namespace cxx_ctor;
@@ -2143,6 +2140,7 @@ namespace cxx_ctor
 
 } // namespace cxx_ctor
 
+// ={=========================================================================
 TEST(CxxCtor, CtorDefaultArgAndInClassInit)
 {
   using namespace cxx_ctor;
@@ -2299,6 +2297,7 @@ namespace ctor_init_2
   };
 } // namespace ctor_init_2
 
+// ={=========================================================================
 TEST(CxxCtor, check_init_forms)
 {
   // direct init. conversion from char * to string before calling ctor and which
@@ -2412,6 +2411,7 @@ namespace ctor_init_explicit
   };
 } // namespace ctor_init_explicit
 
+// ={=========================================================================
 TEST(CxxCtor, check_explicit_init)
 {
   using namespace ctor_init_explicit;
@@ -2448,7 +2448,7 @@ TEST(CxxCtor, check_explicit_init)
   // }
 }
 
-namespace ctor_init_x
+namespace ctor_init_parent_and_child
 {
   class Parent;
 
@@ -2481,18 +2481,24 @@ namespace ctor_init_x
       std::cout << "name : " << m_name << std::endl;
     }
   };
-} // namespace ctor_init_x
+} // namespace ctor_init_parent_and_child
 
-TEST(CxxCtor, check_init_x)
+// ={=========================================================================
+// [ RUN      ] CxxCtor.check_parent_and_child
+// name : child
+// name : parent
+// [       OK ] CxxCtor.check_parent_and_child (0 ms)
+TEST(CxxCtor, check_parent_and_child)
 {
-  using namespace ctor_init_x;
+  using namespace ctor_init_parent_and_child;
 
   auto parent = std::make_shared<Parent>();
 }
 
-// ={=========================================================================
-// cxx-init-list
-
+/*
+={=========================================================================
+cxx-init-list
+*/
 namespace cxx_init_list
 {
   class Foo
@@ -2575,20 +2581,33 @@ namespace cxx_init_list
   Foo returnFoo() { return {"one", "two", "three"}; }
 } // namespace cxx_init_list
 
+// ={=========================================================================
 TEST(CxxCtor, check_init_list_1)
 {
   using namespace cxx_init_list;
 
+  // use list init
   {
     std::vector<int> coll{1, 2, 3, 4, 5};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
   }
 
+  // since it is Foo's vector, each of vector is constructed by using converting
+  // and copy ctor
   {
     std::vector<Foo> coll{Foo("one"), Foo("two"), Foo("three")};
     EXPECT_THAT(coll[0].return_mesg(), "one and converting ctor and copy ctor");
   }
 
+  // since only one conversion is allowed
+  {
+    std::vector<Foo> coll{std::string("one"),
+                          std::string("two"),
+                          std::string("three")};
+    EXPECT_THAT(coll[0].return_mesg(), "one and converting ctor and copy ctor");
+  }
+
+  // use functor
   // std::string return_mesg() { return os_.str(); }
   {
     Foo foo("one");
@@ -2596,9 +2615,8 @@ TEST(CxxCtor, check_init_list_1)
     EXPECT_THAT(coll[0](foo), "one and converting ctor");
   }
 
-  // copy, brace init
+  // shows how to use list init in function
   {
-
     // when no Foo(std::initializer_list<std::string> values);
     //
     // cxx.cpp:719:35: error: no matching function for call to
@@ -2638,6 +2656,7 @@ namespace cxx_init_list
   int equi_index_2(const std::vector<int> &A) { return 3; }
 } // namespace cxx_init_list
 
+// ={=========================================================================
 TEST(CxxCtor, check_init_list_2)
 {
   using namespace cxx_init_list;
@@ -2659,6 +2678,7 @@ TEST(CxxCtor, check_init_list_2)
 
   // error: direct-list-initialization of ‘auto’ requires
   // exactly one element [-fpermissive]
+  //
   // {
   //   const auto table{
   //     std::make_pair(1000, "M"),
@@ -2669,6 +2689,7 @@ TEST(CxxCtor, check_init_list_2)
 
   // error: unable to deduce ‘const std::initializer_list<const auto>’
   // from ‘{{1000, "M"},
+  //
   // {
   //   const auto table{
   //     {1000, "M"},
@@ -2732,6 +2753,108 @@ TEST(CxxCtor, check_init_list_2)
     {
       EXPECT_THAT(f(coll), 3);
     }
+  }
+}
+
+/*
+={=========================================================================
+C++ Primer 99
+
+List Initializer or Element Count?
+
+In a few cases, what initialization means depends on whether we use "curly
+braces" or "parenthesies" to pass the initilizer(s).
+
+When use parentheses, are saying that the values we supply are to be used to
+"construct" the object.
+
+When use brace, are saying that, "if possible", we want to "list initialize" the
+object.
+
+If use braces and there is "no way" to use the initializers to "list initialize"
+the object, then those values will be used to "construct" the object.
+
+*/
+
+TEST(CxxCtor, check_init_list_3)
+{
+  // Q: represent vector's size or element value?
+  //
+  // /**
+  //  *  @brief  Creates a %vector with default constructed elements.
+  //  *  @param  __n  The number of elements to initially create.
+  //  *  @param  __a  An allocator.
+  //  *
+  //  *  This constructor fills the %vector with @a __n default
+  //  *  constructed elements.
+  //  */
+  // vector(size_type __n, const allocator_type& __a = allocator_type());
+  {
+    // size
+    std::vector<int> coll1(10);
+    EXPECT_THAT(coll1.size(), 10);
+
+    // value. use list init version
+    std::vector<int> coll2{10};
+    EXPECT_THAT(coll2.size(), 1);
+  }
+
+  // /**
+  //  *  @brief  Creates a %vector with copies of an exemplar element.
+  //  *  @param  __n  The number of elements to initially create.
+  //  *  @param  __value  An element to copy.
+  //  *  @param  __a  An allocator.
+  //  *
+  //  *  This constructor fills the %vector with @a __n copies of @a __value.
+  //  */
+  //
+  // /**
+  //  *  @brief  Builds a %vector from an initializer list.
+  //  *  @param  __l  An initializer_list.
+  //  *  @param  __a  An allocator.
+  //  *
+  //  *  Create a %vector consisting of copies of the elements in the
+  //  *  initializer_list @a __l.
+  //  *
+  //  *  This will call the element type's copy constructor N times
+  //  *  (where N is @a __l.size()) and do no memory reallocation.
+  //  */
+  // vector(initializer_list<value_type> __l,
+  // const allocator_type& __a = allocator_type());
+  {
+    // size, init value
+    std::vector<int> coll1(10, 1);
+    EXPECT_THAT(coll1.size(), 10);
+
+    // value. use list init version
+    std::vector<int> coll2{10, 1};
+    EXPECT_THAT(coll2.size(), 2);
+  }
+
+  {
+    // error: invalid conversion from ‘const char*’ to
+    // ‘std::vector<std::__cxx11::basic_string<char> >::size_type {aka long unsigned int}’
+    //
+    // since among vector ctors, it matches to
+    //
+    // vector(size_type __n, const allocator_type& __a = allocator_type());
+    //
+    // but cannot convert to "size_type"
+    //
+    // std::vector<std::string> coll1("hi");
+
+    std::vector<std::string> coll2{"hi"};
+    EXPECT_THAT(coll2.size(), 1);
+  }
+
+  // uses
+  // vector(size_type __n, const allocator_type& __a = allocator_type());
+  {
+    std::vector<std::string> coll1{10};
+    EXPECT_THAT(coll1.size(), 10);
+
+    std::vector<std::string> coll2{10, "hi"};
+    EXPECT_THAT(coll2.size(), 10);
   }
 }
 
@@ -11668,7 +11791,7 @@ TEST(CxxBit, bit_Overflow)
 }
 
 // ={=========================================================================
-// cxx-min-cxx-max
+// cxx-min-cxx-max cxx-max-element
 
 TEST(CxxMinMax, check_order)
 {

@@ -327,6 +327,132 @@ TEST(AlgoPrefixSum, check_mushroom_picker)
   }
 }
 
+namespace prefix_sum
+{
+  // In discussion, by _LeetCode,  Last Edit: October 24, 2018 8:10 PM
+  // for python
+  //
+  // for i in range(1, len(nums)):
+  // if nums[i-1] > 0:
+  // nums[i] += nums[i-1]
+  // return max(nums)
+  //
+  // The key observation is:
+  //
+  // [i-1]   [i]
+  //
+  // if the previous, [i-1], is positive, then "sum" gets bigger whether or not
+  // the current element is positive or negative.
+  //
+  // if runs the above code, then 6 is max sum
+  //
+  // input:-2  1 -3  4 -1  2  1 -5  4 (9)
+  // coll :-2  1 -2  4  3 [5] 6  1  5 (9)
+  //
+  // [5]? since modify input during scanning and get the previous which is
+  // modified.
+  //
+  // Runtime: 12 ms, faster than 98.45% of C++ online submissions for Maximum
+  // Subarray.
+  //
+  // Memory Usage: 10.5 MB, less than 15.81% of C++ online submissions for
+  // Maximum Subarray.
+
+  int max_sub_array_1(std::vector<int> &input)
+  {
+    // for print purpose since it modifies coll.
+    std::vector<int> coll{input};
+
+    for (size_t i = 1; i < coll.size(); ++i)
+    {
+      if (coll[i -1] > 0)
+      {
+        coll[i] += coll[i-1];
+      }
+    }
+
+    // PRINT_ELEMENTS(input, "input:");
+    // PRINT_ELEMENTS(coll, "coll: ");
+
+    return *std::max_element(coll.begin(), coll.end());
+  }
+
+  // https://www.geeksforgeeks.org/largest-sum-contiguous-subarray/
+  //
+  // Simple idea of the Kadane’s algorithm is to look for all positive
+  // contiguous segments of the array (max_ending_here is used for this). And
+  // keep track of *maximum sum* contiguous segment among all positive segments
+  // (max_so_far is used for this). Each time we get a positive sum compare it
+  // with max_so_far and update max_so_far if it is greater than max_so_far
+  //
+  // if runs the prefix-sum but do not allow negative value , 
+  // then 6 is max sum
+  //  
+  //    -2  1   -3 [4   -1  2   1]  -5  4
+  // 0  -2  1   -2  2    1  3   4   -1  3   prefix sum
+  // 0   0  1    0  4    3  5   6   1   5   prefix sum and do not allow negative
+  //
+  // note that do not use space for prefix sum and do sum while scanning.
+
+  int max_sub_array_2(std::vector<int> &input)
+  {
+    int max_so_far{std::numeric_limits<int>::min()};
+    int max_current{};
+
+    for (auto e : input)
+    {
+      // same
+      // max_current = e + max_current;
+      // if (max_current < 0)
+      //   max_current = 0;
+
+      max_current = e + max_current;
+      max_current = std::max(0, max_current);
+
+      if (max_current > max_so_far)
+        max_so_far = max_current;
+    }
+
+    return max_so_far;
+  }
+
+  // if make the previous value bigger? affect on next sum and will 
+  // be covered
+  // 
+  // -2  100   -3    4    -1     2     1   -5    4
+  //           97  101   100   102   103   98  102 
+  // 
+  // 
+  // This is about "sum" but not "sub array" How about returnning 
+  // "sub array"?
+  // 
+  // -2  1   -3 [4   -1  2   1]  -5  4
+  //         -2      3   5   6   1   5 
+  //         *       *
+  //         *
+  // "*" starts and max_element() is ends.
+}
+
+TEST(AlgoPrefixSum, check_max_sub_array)
+{
+  using namespace prefix_sum;
+
+  auto imps = {max_sub_array_1, max_sub_array_2};
+
+  for (const auto & f: imps)
+  {
+    {
+      std::vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
+      EXPECT_THAT(f(coll), 6);
+    }
+
+    {
+      std:: vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
+      EXPECT_THAT(f(coll), 103);
+    }
+  }
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
