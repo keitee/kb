@@ -277,15 +277,15 @@ namespace prefix_sum
 
   // last is a last index of array.
   std::pair<int, int>
-    get_slice_index(int last, int start, int max_move, int current_move)
-    {
-      auto slice_last = std::min(start + current_move, last);
+  get_slice_index(int last, int start, int max_move, int current_move)
+  {
+    auto slice_last = std::min(start + current_move, last);
 
-      // since moves right and moves left back so current_move uses twice.
-      auto slice_first = std::max(start - (max_move - current_move * 2), 0);
+    // since moves right and moves left back so current_move uses twice.
+    auto slice_first = std::max(start - (max_move - current_move * 2), 0);
 
-      return {slice_first, slice_last};
-    }
+    return {slice_first, slice_last};
+  }
 
   // 2020.08
   int mushroom_picker_3(const std::vector<int> &coll, int start, int moves)
@@ -297,7 +297,7 @@ namespace prefix_sum
     auto sum = build_prefix_sum(coll);
 
     for (int i = start, count = 0; count < moves && i < (int)coll.size();
-        ++i, ++count)
+         ++i, ++count)
     {
       // `start` is fixed
       auto slice = get_slice_index(last, start, moves, count);
@@ -317,9 +317,9 @@ TEST(AlgoPrefixSum, check_mushroom_picker)
 {
   using namespace prefix_sum;
 
-  auto imps = {mushroom_picker_1,mushroom_picker_2,mushroom_picker_3};
+  auto imps = {mushroom_picker_1, mushroom_picker_2, mushroom_picker_3};
 
-  for (const auto &f: imps)
+  for (const auto &f : imps)
   {
     EXPECT_THAT(f({2, 3, 7, 5, 1, 3, 9}, 4, 6), 25);
 
@@ -365,9 +365,9 @@ namespace prefix_sum
 
     for (size_t i = 1; i < coll.size(); ++i)
     {
-      if (coll[i -1] > 0)
+      if (coll[i - 1] > 0)
       {
-        coll[i] += coll[i-1];
+        coll[i] += coll[i - 1];
       }
     }
 
@@ -385,9 +385,9 @@ namespace prefix_sum
   // (max_so_far is used for this). Each time we get a positive sum compare it
   // with max_so_far and update max_so_far if it is greater than max_so_far
   //
-  // if runs the prefix-sum but do not allow negative value , 
+  // if runs the prefix-sum but do not allow negative value ,
   // then 6 is max sum
-  //  
+  //
   //    -2  1   -3 [4   -1  2   1]  -5  4
   // 0  -2  1   -2  2    1  3   4   -1  3   prefix sum
   // 0   0  1    0  4    3  5   6   1   5   prefix sum and do not allow negative
@@ -416,22 +416,22 @@ namespace prefix_sum
     return max_so_far;
   }
 
-  // if make the previous value bigger? affect on next sum and will 
+  // if make the previous value bigger? affect on next sum and will
   // be covered
-  // 
+  //
   // -2  100   -3    4    -1     2     1   -5    4
-  //           97  101   100   102   103   98  102 
-  // 
-  // 
-  // This is about "sum" but not "sub array" How about returnning 
+  //           97  101   100   102   103   98  102
+  //
+  //
+  // This is about "sum" but not "sub array" How about returnning
   // "sub array"?
-  // 
+  //
   // -2  1   -3 [4   -1  2   1]  -5  4
-  //         -2      3   5   6   1   5 
+  //         -2      3   5   6   1   5
   //         *       *
   //         *
   // "*" starts and max_element() is ends.
-}
+} // namespace prefix_sum
 
 TEST(AlgoPrefixSum, check_max_sub_array)
 {
@@ -439,7 +439,7 @@ TEST(AlgoPrefixSum, check_max_sub_array)
 
   auto imps = {max_sub_array_1, max_sub_array_2};
 
-  for (const auto & f: imps)
+  for (const auto &f : imps)
   {
     {
       std::vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
@@ -447,7 +447,7 @@ TEST(AlgoPrefixSum, check_max_sub_array)
     }
 
     {
-      std:: vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
+      std::vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(f(coll), 103);
     }
   }

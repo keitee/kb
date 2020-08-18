@@ -9007,7 +9007,7 @@ namespace prefix_sum
   // p0 = 0  p1 = a0       p2 = a0 + a1    p3 = a0 + a1 + a2 ...   pn = a0 + a1 + ... + an−1
   // p0 = 0  p1 = p0 + a0  p2 = p1 + a1    p3 = p2 + a2      ...   pn = pn-1 + an−1
 
-  std::vector<int> build_prefix_sum(const vector<int> &coll)
+  std::vector<int> build_prefix_sum_1(const vector<int> &coll)
   {
     int size = coll.size() + 1;
 
@@ -9021,6 +9021,21 @@ namespace prefix_sum
     return sum;
   }
 
+  // no +1 and use the same size since p0 is always 0.
+  std::vector<int> build_prefix_sum_2(const vector<int> &coll)
+  {
+    int size = coll.size();
+
+    std::vector<int> sum{coll};
+
+    for (int i = 1; i < size; ++i)
+    {
+      sum[i] += sum[i - 1];
+    }
+
+    return sum;
+  }
+
   // int find_max_sub_array_1(std::vector<int> &nums) {}
 } // namespace prefix_sum
 
@@ -9028,11 +9043,21 @@ TEST(AlgoPrefixSum, check_prefix_sum)
 {
   using namespace prefix_sum;
 
-  EXPECT_THAT(build_prefix_sum({1, 2, 3, 4, 5, 6}),
-              ElementsAre(0, 1, 3, 6, 10, 15, 21));
+  {
+    EXPECT_THAT(build_prefix_sum_1({1, 2, 3, 4, 5, 6}),
+                ElementsAre(0, 1, 3, 6, 10, 15, 21));
 
-  EXPECT_THAT(build_prefix_sum({2, 3, 7, 5, 1, 3, 9}),
-              ElementsAre(0, 2, 5, 12, 17, 18, 21, 30));
+    EXPECT_THAT(build_prefix_sum_1({2, 3, 7, 5, 1, 3, 9}),
+                ElementsAre(0, 2, 5, 12, 17, 18, 21, 30));
+  }
+
+  {
+    EXPECT_THAT(build_prefix_sum_2({1, 2, 3, 4, 5, 6}),
+                ElementsAre(1, 3, 6, 10, 15, 21));
+
+    EXPECT_THAT(build_prefix_sum_2({2, 3, 7, 5, 1, 3, 9}),
+                ElementsAre(2, 5, 12, 17, 18, 21, 30));
+  }
 }
 
 /*
@@ -9085,12 +9110,13 @@ TEST(AlgoPrefixSum, check_sum_slice)
 {
   using namespace prefix_sum;
 
-  EXPECT_THAT(get_slice_sum(build_prefix_sum({1, 2, 3, 4, 5, 6}), 2, 4), 12);
+  EXPECT_THAT(get_slice_sum(build_prefix_sum_1({1, 2, 3, 4, 5, 6}), 2, 4), 12);
 
   // (0,2,5,[12,17,18],21,30)
   // 18-5 = 13
 
-  EXPECT_THAT(get_slice_sum(build_prefix_sum({2, 3, 7, 5, 1, 3, 9}), 2, 4), 13);
+  EXPECT_THAT(get_slice_sum(build_prefix_sum_1({2, 3, 7, 5, 1, 3, 9}), 2, 4),
+              13);
 }
 
 /*
@@ -9124,8 +9150,8 @@ value(index)
 
 This is the maximal number of mushrooms she can collect.
 
-// note:
-// do not count mushroom that's already counted.
+note:
+do not count mushroom that's already counted.
 
 def mushrooms(A, k, m):
 
@@ -9224,7 +9250,7 @@ namespace prefix_sum
   {
     int max_input_index = A.size() - 1;
     int result{};
-    auto prefix_sum = build_prefix_sum(A);
+    auto prefix_sum = build_prefix_sum_1(A);
     int loop_max{};
 
     // cout << "start: " << start << ", moves: " << moves << endl;
@@ -9292,7 +9318,7 @@ namespace prefix_sum
     int num_loop{};
     int result{};
 
-    auto prefix_sum = build_prefix_sum(A);
+    auto prefix_sum = build_prefix_sum_1(A);
 
     // moves a window to the left
     // since `start` is actually index, it's sure to have elements in [0,start] so
@@ -9335,29 +9361,41 @@ namespace prefix_sum
     return result;
   }
 
-  // last is a last index of array.
+  // last is a last index of array. start, last, max_move are fixed.
+  // this is key to get sub array, slice, [] which can get within max move from
+  // start.
   std::pair<int, int>
-    get_slice_index(int last, int start, int max_move, int current_move)
-    {
-      auto slice_last = std::min(start + current_move, last);
+  get_slice_index(int last, int start, int max_move, int current_move)
+  {
+    auto slice_last = std::min(start + current_move, last);
 
-      // since moves right and moves left back so current_move uses twice.
-      auto slice_first = std::max(start - (max_move - current_move * 2), 0);
+    // since moves right and moves left back so current_move uses twice.
+    auto slice_first = std::max(start - (max_move - current_move * 2), 0);
 
-      return {slice_first, slice_last};
-    }
+    return {slice_first, slice_last};
+  }
 
   // 2020.08
+  //
+  // slice {0, 4}
+  // slice {0, 5}
+  // slice {2, 6}
+  // slice {3, 8}
+  // slice {5, 9}
+  // slice {7, 10}
+  // slice {9, 11}
+  // slice {11, 12}
+
   int mushroom_picker_3(const std::vector<int> &coll, int start, int moves)
   {
     int result{std::numeric_limits<int>::min()};
     int last = coll.size() - 1;
 
     // get prefix sum
-    auto sum = build_prefix_sum(coll);
+    auto sum = build_prefix_sum_1(coll);
 
     for (int i = start, count = 0; count < moves && i < (int)coll.size();
-        ++i, ++count)
+         ++i, ++count)
     {
       // `start` is fixed
       auto slice = get_slice_index(last, start, moves, count);
@@ -9365,6 +9403,7 @@ namespace prefix_sum
       // cout << "slice {" << slice.first << ", " << slice.second << "}\n";
 
       auto slice_sum = get_slice_sum(sum, slice.first, slice.second);
+
       if (slice_sum > result)
         result = slice_sum;
     }
@@ -9377,9 +9416,10 @@ TEST(AlgoPrefixSum, check_mushroom_picker)
 {
   using namespace prefix_sum;
 
-  auto imps = {mushroom_picker_1,mushroom_picker_2,mushroom_picker_3};
+  // auto imps = {mushroom_picker_1, mushroom_picker_2, mushroom_picker_3};
+  auto imps = {mushroom_picker_3};
 
-  for (const auto &f: imps)
+  for (const auto &f : imps)
   {
     EXPECT_THAT(f({2, 3, 7, 5, 1, 3, 9}, 4, 6), 25);
 
@@ -9446,9 +9486,9 @@ namespace prefix_sum
 
     for (size_t i = 1; i < coll.size(); ++i)
     {
-      if (coll[i -1] > 0)
+      if (coll[i - 1] > 0)
       {
-        coll[i] += coll[i-1];
+        coll[i] += coll[i - 1];
       }
     }
 
@@ -9466,9 +9506,9 @@ namespace prefix_sum
   // (max_so_far is used for this). Each time we get a positive sum compare it
   // with max_so_far and update max_so_far if it is greater than max_so_far
   //
-  // if runs the prefix-sum but do not allow negative value , 
+  // if runs the prefix-sum but do not allow negative value ,
   // then 6 is max sum
-  //  
+  //
   //    -2  1   -3 [4   -1  2   1]  -5  4
   // 0  -2  1   -2  2    1  3   4   -1  3   prefix sum
   // 0   0  1    0  4    3  5   6   1   5   prefix sum and do not allow negative
@@ -9497,22 +9537,22 @@ namespace prefix_sum
     return max_so_far;
   }
 
-  // if make the previous value bigger? affect on next sum and will 
+  // if make the previous value bigger? affect on next sum and will
   // be covered
-  // 
+  //
   // -2  100   -3    4    -1     2     1   -5    4
-  //           97  101   100   102   103   98  102 
-  // 
-  // 
-  // This is about "sum" but not "sub array" How about returnning 
+  //           97  101   100   102   103   98  102
+  //
+  //
+  // This is about "sum" but not "sub array" How about returnning
   // "sub array"?
-  // 
+  //
   // -2  1   -3 [4   -1  2   1]  -5  4
-  //         -2      3   5   6   1   5 
+  //         -2      3   5   6   1   5
   //         *       *
   //         *
   // "*" starts and max_element() is ends.
-}
+} // namespace prefix_sum
 
 TEST(AlgoPrefixSum, check_max_sub_array)
 {
@@ -9520,7 +9560,7 @@ TEST(AlgoPrefixSum, check_max_sub_array)
 
   auto imps = {max_sub_array_1, max_sub_array_2};
 
-  for (const auto & f: imps)
+  for (const auto &f : imps)
   {
     {
       std::vector<int> coll{-2, 1, -3, 4, -1, 2, 1, -5, 4};
@@ -9528,7 +9568,7 @@ TEST(AlgoPrefixSum, check_max_sub_array)
     }
 
     {
-      std:: vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
+      std::vector<int> coll{-2, 100, -3, 4, -1, 2, 1, -5, 4};
       EXPECT_THAT(f(coll), 103);
     }
   }

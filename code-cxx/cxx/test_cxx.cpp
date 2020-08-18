@@ -7002,9 +7002,13 @@ namespace cxx_smart_pointer
     {
       std::cout << "SmartFoo2::~SmartFoo2: " << m_name << std::endl;
     }
+
+    std::string getName() const
+    { return m_name; }
   };
 } // namespace cxx_smart_pointer
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_ctor)
 {
   using namespace cxx_smart_pointer;
@@ -7033,20 +7037,24 @@ TEST(CxxSmartPointer, check_ctor)
   }
 
   // cxx-error:
-  // ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
-  // SmartFoo foo;
-  //
   // new_allocator.h:120:4:
-  // error: ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
-  // std::shared_ptr<SmartFoo> sp = std::make_shared<SmartFoo>();
+  // error: ‘cxx_smart_pointer::SmartFoo1::SmartFoo1()’ is private within this context
   // {
-  //   std::shared_ptr<SmartFoo1> foo = std::make_shared<SmartFoo1>(); // OK
+  //   std::shared_ptr<SmartFoo1> foo = std::make_shared<SmartFoo1>();
   // }
 
-  // cases that have public ctors
+  // have public ctors and see difference between using make_shared() and
+  // shared_ptr(null)
+  {
+    std::shared_ptr<SmartFoo2> foo = std::shared_ptr<SmartFoo2>(); // OK
+    EXPECT_THAT(foo, nullptr);
+  }
   {
     std::shared_ptr<SmartFoo2> foo = std::make_shared<SmartFoo2>(); // OK
+    EXPECT_THAT(foo, Ne(nullptr));
+    EXPECT_THAT(foo->getName(), "Foo");
   }
+
   {
     std::shared_ptr<SmartFoo2> foo = std::make_shared<SmartFoo2>("foo2"); // OK
   }
