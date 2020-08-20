@@ -1463,6 +1463,17 @@ Explanation: In this case, no transaction is done, i.e. max profit = 0.
 note:
 so this is about multiple transaction.
 
+2020.08
+do not understand solutions and perhaps, the question as well. for example, 
+
+{7, 1, 5, 3, 6, 12};
+    {  }  {  }{ }
+      4     3    6  = 13.   6 used twice. possible?
+
+    {            }          12-1 = 11. how about this?
+
+so not sure about the question.
+ 
 */
 
 namespace leetcode_easy_122
@@ -1473,7 +1484,7 @@ namespace leetcode_easy_122
   // Memory Usage: 9.6 MB, less than 11.03% of C++ online submissions for Best
   // Time to Buy and Sell Stock II.
 
-  int maxProfit_1(vector<int> &prices)
+  int max_profit_1(vector<int> &prices)
   {
     int prev_profit{};
     int current_profit{};
@@ -1497,6 +1508,25 @@ namespace leetcode_easy_122
     }
 
     return accumulated_diff;
+  }
+
+  // 2020.08. changed a bit from the above and do not get the above code
+  int max_profit_1_1(std::vector<int> &coll)
+  {
+    int current_profit{};
+    int accumulated{};
+
+    for (size_t i = 1; i < coll.size(); ++i)
+    {
+      current_profit = (coll[i] - coll[i - 1]);
+
+      // do not allow negative
+      current_profit = std::max(0, current_profit);
+
+      accumulated += current_profit;
+    }
+
+    return accumulated;
   }
 
   // from solution:
@@ -1531,7 +1561,7 @@ namespace leetcode_easy_122
   // note:
   // [3,6] where 3, buy and 6, sell makes profits
 
-  int maxProfit_2(vector<int> &prices)
+  int max_profit_2(vector<int> &prices)
   {
     int i      = 0;
     int valley = prices[0];
@@ -1579,7 +1609,7 @@ namespace leetcode_easy_122
   // difference D corresponding to the difference between the heights of the
   // consecutive peak and valley.
 
-  int maxProfit_3(vector<int> &prices)
+  int max_profit_3(vector<int> &prices)
   {
     int max_profit{};
 
@@ -1596,6 +1626,8 @@ namespace leetcode_easy_122
   //
   // In this case, we simply calculate the profit corresponding to all the
   // possible sets of transactions and find out the maximum profit out of them.
+  //
+  // [7, 1, 5, 3, 6, 4]
   //
   // calculate(0, 6)
   // calculate(start:1, i:2)
@@ -1621,13 +1653,13 @@ namespace leetcode_easy_122
   {
     if (s >= prices.size())
     {
-      cout << "return calculate(" << s << ")" << endl;
+      // cout << "return calculate(" << s << ")" << endl;
       return 0;
     }
 
     int max = 0;
 
-    cout << "calculate(" << s << ", " << prices.size() << ")" << endl;
+    // cout << "calculate(" << s << ", " << prices.size() << ")" << endl;
 
     for (size_t start = s; start < prices.size(); ++start)
     {
@@ -1637,7 +1669,7 @@ namespace leetcode_easy_122
       {
         if (prices[start] < prices[i])
         {
-          cout << "calculate(start:" << start << ", i:" << i << ")" << endl;
+          // cout << "calculate(start:" << start << ", i:" << i << ")" << endl;
 
           int profit = calculate(prices, i + 1) + prices[i] - prices[start];
           if (profit > max_profit)
@@ -1653,70 +1685,43 @@ namespace leetcode_easy_122
     return max;
   }
 
-  int maxProfit_4(vector<int> &prices) { return calculate(prices, 0); }
+  int max_profit_4(vector<int> &prices) { return calculate(prices, 0); }
 
 } // namespace leetcode_easy_122
 
-TEST(LeetCode, Easy_122_MaxProfit_1)
+TEST(AlgoLeetCode, check_max_profit)
 {
   using namespace leetcode_easy_122;
 
+  auto imps = {max_profit_1,
+               max_profit_1_1,
+               max_profit_2,
+               max_profit_3,
+               max_profit_4};
+
+  for (const auto &f : imps)
   {
-    auto func = maxProfit_1;
+    {
+      std::vector<int> coll{7, 1, 5, 3, 6, 4};
+      EXPECT_THAT(f(coll), 7);
+    }
 
     {
-      vector<int> coll{7, 1, 5, 3, 6, 4};
-      EXPECT_THAT(func(coll), 7);
+      std::vector<int> coll{1, 2, 3, 4, 5};
+      EXPECT_THAT(f(coll), 4);
     }
-    {
-      vector<int> coll{1, 2, 3, 4, 5};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-
-  {
-    auto func = maxProfit_2;
 
     {
-      vector<int> coll{7, 1, 5, 3, 6, 4};
-      EXPECT_THAT(func(coll), 7);
+      std::vector<int> coll{7, 1, 5, 3, 6, 12};
+      EXPECT_THAT(f(coll), 13);
     }
-    {
-      vector<int> coll{1, 2, 3, 4, 5};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-
-  {
-    auto func = maxProfit_3;
-
-    {
-      vector<int> coll{7, 1, 5, 3, 6, 4};
-      EXPECT_THAT(func(coll), 7);
-    }
-    {
-      vector<int> coll{1, 2, 3, 4, 5};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-
-  {
-    auto func = maxProfit_4;
-
-    {
-      vector<int> coll{7, 1, 5, 3, 6, 4};
-      EXPECT_THAT(func(coll), 7);
-    }
-    // {
-    //   vector<int> coll{1,2,3,4,5};
-    //   EXPECT_THAT(func(coll), 4);
-    // }
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-14
 /*
+={=========================================================================
+algo-leetcode-14
+
 58. Length of Last Word, Easy
 
 Given a string s consists of upper/lower-case alphabets and empty space
@@ -1735,25 +1740,53 @@ Output: 5
 
 namespace leetcode_easy_014
 {
+  // 2020.08
+  int length_last_word_1(std::string s)
+  {
+    int count{};
+
+    for (auto &e : s)
+    {
+      if (isspace(e))
+      {
+        count = 0;
+      }
+      else
+        ++count;
+    }
+
+    return count;
+  }
+
+  // 2020.08
+  int length_last_word_2(std::string s)
+  {
+    // pos is size_t
+    auto pos = s.find_last_of(' ');
+    return s.size() - 1 - pos;
+  }
+
   // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Length of
   // Last Word.
   //
   // Memory Usage: 8.9 MB, less than 90.45% of C++ online submissions for Length
   // of Last Word.
 
-  int lengthOfLastWord(string s)
+  int length_last_word_0(std::string s)
   {
     int count{};
 
     int i = s.size() - 1;
 
+    // skip spaces from the end
     for (; i >= 0; --i)
       if (!isspace(s[i]))
         break;
 
+    // then counts word
     for (; i >= 0; --i)
     {
-      if (s[i] == ' ')
+      if (isspace(s[i]))
         return count;
 
       ++count;
@@ -1763,17 +1796,41 @@ namespace leetcode_easy_014
   }
 } // namespace leetcode_easy_014
 
-TEST(LeetCode, Easy_014_LengthOfLastWord_1)
+TEST(AlgoLeetCode, check_last_word_length)
 {
   using namespace leetcode_easy_014;
 
-  EXPECT_THAT(lengthOfLastWord("Hello World"), 5);
-  EXPECT_THAT(lengthOfLastWord("HelloWorld"), 10);
-  EXPECT_THAT(lengthOfLastWord(""), 0);
+  // both fails on the last case
+  {
+    auto imps = {length_last_word_1, length_last_word_2};
 
-  // failed case and change code accordingly
-  EXPECT_THAT(lengthOfLastWord("a"), 1);
-  EXPECT_THAT(lengthOfLastWord("a "), 1);
+    for (const auto &f : imps)
+    {
+
+      EXPECT_THAT(f("Hello World"), 5);
+      EXPECT_THAT(f("Hello Wor"), 3);
+      EXPECT_THAT(f("HelloWorld"), 10);
+      EXPECT_THAT(f(""), 0);
+
+      EXPECT_THAT(f("a"), 1);
+
+      // fails. why 1? "a" is last word?
+      // EXPECT_THAT(f("a "), 1);
+    }
+  }
+
+  // both fails on the last case
+  {
+    auto f = length_last_word_0;
+
+    EXPECT_THAT(f("Hello World"), 5);
+    EXPECT_THAT(f("Hello Wor"), 3);
+    EXPECT_THAT(f("HelloWorld"), 10);
+    EXPECT_THAT(f(""), 0);
+
+    EXPECT_THAT(f("a"), 1);
+    EXPECT_THAT(f("a "), 1);
+  }
 }
 
 // ={=========================================================================

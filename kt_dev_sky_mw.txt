@@ -223,7 +223,7 @@ mount -o nolock -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /tmp/d
 mount -o nolock -t nfs 172.18.200.185:/mnt ./
 
 
-<mw-setup-titan-boot>
+*titan-boot-from-nfs*
 
 // copy boot image
 cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/
@@ -260,11 +260,30 @@ ETH0_HWADDR 20:47:ED:FF:E0:D8
 setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.101:/titan/zImage ‘remotedir=192.168.0.101:/home/keitee/mw/exports/titan/flash0'"
 
 
+*titan-boot-from-usb*
 2.5.2         Booting image through USB
 
 This configuration sets Bolt to load zImage from USB and boot it up
 
 setenv -p STARTUP "boot usbdisk0:zImage" 
+
+
+BOLT> printenv
+Variable Name        Value
+-------------------- --------------------------------------------------
+        BOOT_CONSOLE uart0
+              SPLASH DISABLE
+             STARTUP ifconfig eth0 -auto; boot 192.168.0.8:/titan/zImage ‘remotedir=192.168.0.8:/home/keitee/mw/exports/titan/flash0'
+         ETH0_HWADDR 20:47:ED:FF:E0:D8
+             VERSION 1.42
+            BUILDTAG v1.42
+      CHIP_FAMILY_ID 72780011
+           BOARDNAME BCM97278HB_4GB
+            NODENAME BCM97278HB_4GB
+          MEMORYSIZE 4096
+          DT_ADDRESS 50529000
+             DT_SIZE d17e
+*** command status = 0
 
 
 *titan-flash-full*
@@ -1020,6 +1039,7 @@ Config written to /media/keitee/ssd2/as-sky-repo/asplayer/.reviewboardrc
 https://www.reviewboard.org/docs/rbtools/dev/rbt/commands/post/
 rbt post --tracking-branch=origin/develop --repository=asplayer --username=kyoupark --password=tegI3301
 rbt post --tracking-branch=origin/develop --repository=asplayer --username=kyoupark --password=tegI3301 --branch=NGDEV-167570_AS_Playback_service_instance_creation_delayed
+rbt post --tracking-branch=origin/develop --repository=asplayer --username=kyoupark --password=tegI3301 --branch=NGDEV_167998_AS_RDK_Minimise_dependency_in_initialisation
 
 
 --branch<branch>
@@ -1065,13 +1085,14 @@ rbt post --repository=asplayer --username=kyoupark --password=tegI3301 2cc4580 f
 http://10.184.136.124:9001/r/1013/
 http://10.184.136.124:9001/r/1013/diff/
 
+
 // update
 // If you want to update a specific review request by ID, you can use the -r parameter:
-rbt post -r 1066
-rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
 
+rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
 rbt post --tracking-branch=origin/develop --branch=NGDEV-167550_AS_DTH_unit_test_compile_failure -r 1133
 
+rbt post --tracking-branch=origin/develop -r 1147 --branch=NGDEV-166495_AS_RDK_Migrate_DTT_in_AS_player_XiOne
 
 
 Review request #1010 posted.
@@ -1122,6 +1143,8 @@ curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data 
 curl -v -X POST http://192.168.0.9:9005/as/system/setting --data '{"system.bouquet":"4101,1"}'
 curl 192.168.0.102:9005/as/test/preferences -X POST --data '{"enableirinput":"false"}'
 
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.12" -H "Origin: 192.168.0.12" http://192.168.0.12:9005/as/services/scan/status
+
 // 
 {
    "remotes" : [
@@ -1163,7 +1186,7 @@ curl 192.168.0.102:9005/as/test/preferences -X POST --data '{"enableirinput":"fa
 }
 
 
-<as-log>
+<as-logging>
 NDS: ^0000000208.838051 !MIL   -AS           < p:00000e00 t:75390dc0 T:AS_MAIN_TH_9001 M:AS_DMS_Writer.cpp F:LogReceivedRequest L:00258 > 
   @ctx:AS_WEBSERVER AS_WEB_SERVER_RequestResponseLogger.cpp(205) HTTP Request received. 
   httpRequestHandle: 235, httpMethod: 1, Port: 9001, URI: /as/audiostreamer/bluetooth/action/startvisibility?timeout=105
@@ -1176,7 +1199,7 @@ NDS: ^0000000208.840607 !MIL   -AS           < p:00000e00 t:31d0bdc0 T:AS_BTAUDI
 !INFO  -com.bskyb.epgui < M:RestfulRequestHandler.cpp F:void RestfulRequestHandler::onWebSocketConnected() L:00096 > Connected Socket URI: QUrl("ws://127.0.0.1:9001/as/audiostreamer/bluetooth/status")
 
 
-<as-log-on-fusion>
+<as-logging-on-fusion>
 so `level` is managed by fusion diag
 
 #include "AS_Diag.h"
@@ -1391,7 +1414,7 @@ ASMain::ASMain( AS_WEB_SERVER_STARTUP_CALLBACK startupCallback, ASUserTag startu
 }
 
 
-o web server thread
+o web server thread *use-as-map*
 
 // Components/AS/WebServer/source/AS_WEB_SERVER_MainThread.cpp
 
@@ -11146,35 +11169,33 @@ project:rdk/yocto_oe/layers/meta-rdk-sky branch:topic/fr_qtb_upgrade
 
 
 ={============================================================================
-*kt_dev_skymw_0000* mw-rdk-gdb
+*kt_dev_skymw_0000* mw-rdk-gdb rdk-core
 
 Check if there is core file
 
 cat /opt/logs/core_file.txt
 
+To ensure core dump will be saved in /opt/persistent instead of being uploaded
+to rdkcrashportal of a server (which can take hours to find again) This is not
+persisted over reboots or reflashes. By default, a crash will cause
+/lib/rdk/coreDump.sh to be run.
 
 Change core pattern to save on writable area
 
-root@skyxione:~# cat /proc/sys/kernel/core_pattern
+# cat /proc/sys/kernel/core_pattern
 |/lib/rdk/core_shell.sh %e %s %t
 
 echo "/opt/persistent/%e-%s.core.%p" >/proc/sys/kernel/core_pattern
 
 
--rw-------    1 root     root     130957312 Jul  9 10:45 asrdkplayer-6.core.21806
--rw-------    1 root     root     130965504 Jul  9 10:45 asrdkplayer-6.core.21921
--rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.21967
--rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.22015
--rw-------    1 root     root     130863104 Jul  9 10:45 asrdkplayer-6.core.22059
-
-
 Copy them to the host
 
-scp -P 10022 root@192.168.1.108:/opt/persistent/*core* .
+scp -P 10022 root@192.168.0.12:/opt/persistent/*core* .
 
 Run gdb-multiarch
 
-gdb-multiarch ./usr/sbin/DobbyDaemon ~/Documents/rdk_containers/coredumps/DobbyDaemon-11.core.11099
+// no need to set sysroot and use debug binary.
+gdb-multiarch rootfs/usr/sbin/.debug/asrdkplayer core.asrdkplayer.5440.skyxione.1597263199.COR  
 
 
 *rdk-gdb*
@@ -11283,17 +11304,6 @@ patch -p1 < /media/keitee/ssd2/breakpad-from-ben.patch
 patch -p1 < /media/keitee/ssd2/e2fsprogs.patch
 patch -p1 < /media/keitee/ssd2/ucresolve.patch
 
-// *bitbake-clang*
-bitbake -c cleanall qttools
-
-/usr/src/debug/qttools/5.12.3+gitAUTOINC+1f8d498752-r0/git/src/qdoc/clangcodeparser.cpp:1302: error: undefined reference to 'clang_createIndex'
-/usr/src/debug/qttools/5.12.3+gitAUTOINC+1f8d498752-r0/git/src/qdoc/clangcodeparser.cpp:1304: error: undefined reference to 'clang_disposeIndex'
-
-export PATH=/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
-            /home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
-            /media/keitee/ssd2/direct_build_xi1/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1/openembedded-core/bitbake/bin:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
-export PATH=/media/keitee/ssd2/direct_build_xi1/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1/openembedded-core/bitbake/bin:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
-
 
 # 2006_sprint
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
@@ -11358,6 +11368,18 @@ EPG_VARIANT = "PROD"
 VGDRM_TYPE = "PROXY"
 
 source meta-rdk/setup-environment
+
+
+// *bitbake-clang*
+bitbake -c cleanall qttools
+
+/usr/src/debug/qttools/5.12.3+gitAUTOINC+1f8d498752-r0/git/src/qdoc/clangcodeparser.cpp:1302: error: undefined reference to 'clang_createIndex'
+/usr/src/debug/qttools/5.12.3+gitAUTOINC+1f8d498752-r0/git/src/qdoc/clangcodeparser.cpp:1304: error: undefined reference to 'clang_disposeIndex'
+
+export PATH=/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
+            /home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
+            /media/keitee/ssd2/direct_build_xi1/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1/openembedded-core/bitbake/bin:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/Downloads/clang+llvm-9.0.0-x86_64-linux-gnu-ubuntu-18.04/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
+export PATH=/media/keitee/ssd2/direct_build_xi1/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1/openembedded-core/bitbake/bin:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
 
 bitbake comcast-mediaclient-vbn-image
 
@@ -11504,7 +11526,7 @@ iptables -P FORWARD ACCEPT
 iptables -P OUTPUT ACCEPT
 iptables -F
 
-ssh -p 10022 root@192.168.0.9
+ssh -p 10022 root@192.168.0.12
 
 
 // to move where it's writable
@@ -11516,12 +11538,13 @@ cd /opt
 systemctl status sky-asproxy
 systemctl stop sky-asproxy
 systemctl start sky-asproxy
+
 mount-copybind ./asproxy /usr/sbin/asproxy
+umount /usr/sbin/asproxy
 
 journalctl -fu sky-asproxy
 
-umount /usr/sbin/asproxy
-scp -r -P 10022 ./asproxy root@192.168.0.9:/opt
+scp -r -P 10022 ./asproxy root@192.168.0.12:/opt
 
 
 // as-player
@@ -11544,7 +11567,7 @@ journalctl -fu sky-asplayer
 journalctl -u sky-asproxy --since today > /opt/proxy.log
 journalctl -u sky-asrdkplayer --since today > /opt/player.log
 
-ssh -p 10022 root@192.168.1.108 "journalctl -u sky-asproxy --since today" > proxy.log
+ssh -p 10022 root@192.168.0.12 "journalctl -u sky-asproxy --since today" > proxy.log
 ssh -p 10022 root@192.168.1.108 "journalctl -u sky-asplayer --since today" > player.log
 
 scp -P 10022 root@192.168.0.12:/opt/dbus.log .
@@ -11566,8 +11589,9 @@ GET /as/diag/fallback/enabeAll
 GET /as/diag/AAMP_PLAYER/enableAll
 GET /as/diag/AS_PLAYER/enableAll
 
-curl -v -X GET http://192.168.0.9:9005/as/diag/AS_PLAYER/enableAll
+curl -v -X GET http://192.168.0.12:9005/as/diag/AS_PLAYER/enableAll
 curl -v -X GET http://192.168.0.9:9005/as/diag/AAMP_PLAYER/enableAll
+curl -v -X GET http://192.168.0.12:9005/as/diag/AS_PROXY_SERVICES/enableAll
 
 
 *xi1-tool-logging*
@@ -11959,8 +11983,31 @@ int main(int argc, char *argv[])
 void AS_MAIN::StartAS(const std::shared_ptr<ProxyUrlMap> &urlMap)
 {
   // start AS
-  asMain = new AS_MAIN::ProxyMain(urlMap);
+  `asMain = new AS_MAIN::ProxyMain(urlMap);`
   asMain->start();
+}
+
+ProxyMain::ProxyMain(const std::shared_ptr<ProxyUrlMap> &urlMap)
+{
+  AS_DIAG::SwitchBoard::bindMethods(mUrlMap.get());
+}
+
+// Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
+void bindMethods( AS_WORKER::UrlMap *map )
+{
+  map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services",                                    servicelistexecutor );    // TODO: Retain to allow EPG migration
+  map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",                           servicelistexecutor );
+
+  /************************************************  NOT SUPPORTED ON ANY PORT OR PLATFORM  *****************************************************/
+  /****** For URL not supported on any port the factory passed should be NULL and url map will associate it to NotSupportedExecutorFactory ******/
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/drm/action/activate",                          NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/drm/action/deactivate",                        NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/ott/action/signout",                           NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/system/ca/nagra",                              NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/peripherals/btremotes/action/startsearching",  NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/pin/action/retriesleft",                       NULL );
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/pin",                                          NULL );
+  /**********************************************************************************************************************************************/
 }
 
 
@@ -12168,24 +12215,6 @@ bool `ServicesManager::registerService`(const std::string &configJson)
   ServiceConfig config;
   mParser->parse(configJson, &config);
 
-  void bindMethods( AS_WORKER::UrlMap *map )
-  {
-    map->RegisterUrl( REQ_METHOD_HTTP_GET,  (char *) "/as/services/<b>/<sb>",
-        servicelistexecutor );
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/start",
-        serviceScanStartExecutor,        new ServicesScanActionStartParamValidator() );
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/abort",
-        serviceScanAbortExecutor );
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/services/scan/action/commit",
-        serviceScanCommitExecutor );
-
-    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/services/scan/status",
-        serviceScanStatusExecutor,       NULL,                                         "AS_WS_SCAN_STAT" );
-  }
-
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/startlistening'
@@ -12196,45 +12225,58 @@ bool `ServicesManager::registerService`(const std::string &configJson)
   `bindServiceMethods`(const std::vector<ServiceUrl> &urls,
                      const std::shared_ptr<IService> &service)
   {
-    AS_LOG_MIL("adding %s executor for '%s'",
-    (method == REQ_METHOD_WS) ? "ws" : "http", url.path.c_str());
-
-    AS_WORKER::Factory *factory = new ServiceHttpExecutorFactory(mSecurity,
-        allowedLevels,
-        `service`,
-        url.expectsBody);
-
-    // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-    //
-    // void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
-    //     const std::string &url,
-    //     AS_WORKER::Factory *factory,
-    //     const std::string &threadName )
-
-    `mUrlMap->RegisterUrl`(method, url.path, factory);
+    for (const ServiceUrl &url : urls)
     {
-      *as-map-validator*
-      static std::map<std::string, UriParamValidatorType> `overrideUriParamValidator` = 
-      {
-        {"/as/players/<vwid>/action/watchlive", URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
-        ...
-      };
+      AS_LOG_MIL("adding %s executor for '%s'",
+      (method == REQ_METHOD_WS) ? "ws" : "http", url.path.c_str());
 
-      // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
-      // defines all validators
+        if (method == REQ_METHOD_WS)
+        {
+            AS_WORKER::Factory *factory = new `ServiceWsExecutorFactory`(mSecurity,
+                                                                       allowedLevels,
+                                                                       service);
+            mUrlMap->RegisterUrl(method, url.path, factory, url.threadName);
+        }
+        else if ((method == REQ_METHOD_HTTP_GET) || (method == REQ_METHOD_HTTP_POST))
+        {
+          AS_WORKER::Factory *factory = new ServiceHttpExecutorFactory(mSecurity,
+              allowedLevels,
+              `service`,
+              url.expectsBody);
 
-      paramValidator = new `PlayersVwidParamValidator()`;
+          // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+          //
+          // void ProxyUrlMap::RegisterUrl( REQ_METHOD method,
+          //     const std::string &url,
+          //     AS_WORKER::Factory *factory,
+          //     const std::string &threadName )
 
-      // call the original methods to register the url
-      // AS_WORKER::UrlMap::RegisterUrl add url to m_registeredUrlMap once
-      // checking on COUNTRY* and PLATFOTM* (which is only flag from #defines)
+          `mUrlMap->RegisterUrl`(method, url.path, factory);
+          {
+            *as-map-validator*
+            static std::map<std::string, UriParamValidatorType> `overrideUriParamValidator` = 
+            {
+              {"/as/players/<vwid>/action/watchlive", URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
+              ...
+            };
 
-      // if found in overrideUriParamValidator then use it and if not,
-      // paramValidator is null
+            // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
+            // defines all validators
 
-      `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator, threadParams);
+            paramValidator = new `PlayersVwidParamValidator()`;
 
-      // M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+            // call the original methods to register the url
+            // AS_WORKER::UrlMap::RegisterUrl add url to m_registeredUrlMap once
+            // checking on COUNTRY* and PLATFOTM* (which is only flag from #defines)
+
+            // if found in overrideUriParamValidator then use it and if not,
+            // paramValidator is null
+
+            `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator, threadParams);
+
+            // M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+          }
+      }
     }
   }
 }
@@ -12373,9 +12415,61 @@ class SystemSettingParamValidator : public AS_WORKER::ParamValidator
 };
 
 
+*as-map-as-port-attribute*
+
+// ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
+
+std::map<int, PortAttributes>::iterator uriCategoryTableIterator = uriCategoryTable.begin();
+
+enum Platform
+{
+  PLATFORM_AMIDALA = 2000,
+  ...
+  PLATFORM_RDK,
+  PLATFORM_ALL
+};
+
+struct `UriAttributes`
+{
+  // req_method is enum
+  std::vector<REQ_METHOD> methods;
+  std::vector<Platform> `platforms`;
+  std::vector<Country> countries;
+};
+
+struct PortAttributes
+{
+  IpAddressScope ipAddressScope;
+  bool serverMain;
+  bool testPort;
+  bool gatewayOnly;
+  std::multimap<std::string, `UriAttributes`> uris;
+  std::vector<std::string> corsUris;
+};
+
+std::map<int, PortAttributes> uriCategoryTable =
+{
+  {
+    9005, // Debug, e.g. ASDA
+    {
+      IP_ADDR_BIND_LOCALHOST,
+      true,                             // Main server used by EPG
+      false,
+      false,
+      {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
+    }
+  }
+}
+
+
 void `UrlMap::RegisterUrl`( REQ_METHOD method, char *url,
                           AS_WORKER::ParamValidator *paramValidator)
 {
+  // use this table
+  uriCategoryTable;
+
+  1. check `uri`, `platform` and `region` and if matches, add it to map.
+  2. if fails above, then add it with `NotSupportedExecutorFactory`
 
   // if found in overrideUriParamValidator then use it and if not,
   // paramValidator is null. so use default validator
@@ -12455,52 +12549,6 @@ int ServicesManualActionScanParamValidator::Validate( AS_WORKER::Params &params,
   return AS_WORKER::ParamValidator::Validate( params, postBody, jsonResponse, `lambda` );
 }
 
-
-*rdk-as-map*
-
-// ethan-as-source/Components/AS/Main/source/AS_MAIN_URISecurityCatagories.cpp
-
-std::map<int, PortAttributes>::iterator uriCategoryTableIterator = uriCategoryTable.begin();
-
-enum Platform
-{
-  PLATFORM_AMIDALA = 2000,
-  ...
-  PLATFORM_RDK,
-  PLATFORM_ALL
-};
-
-struct `UriAttributes`
-{
-  // req_method is enum
-  std::vector<REQ_METHOD> methods;
-  std::vector<Platform> `platforms`;
-  std::vector<Country> countries;
-};
-
-struct PortAttributes
-{
-  IpAddressScope ipAddressScope;
-  bool serverMain;
-  bool testPort;
-  bool gatewayOnly;
-  std::multimap<std::string, `UriAttributes`> uris;
-  std::vector<std::string> corsUris;
-};
-
-std::map<int, PortAttributes> uriCategoryTable =
-{
-  {
-    9005, // Debug, e.g. ASDA
-    {
-      IP_ADDR_BIND_LOCALHOST,
-      true,                             // Main server used by EPG
-      false,
-      false,
-      {"/as/services/scan/action/start",{{REQ_METHOD_HTTP_POST}, {PLATFORM_ALL}, {COUNTRY_ALL}}}
-    }
-  }
-}
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/`ProxyUrlMap.cpp`
@@ -12687,18 +12735,6 @@ signal time=1592405389.346706 sender=:1.187 -> destination=:1.2 serial=534 path=
 "
 
 
-GET
-http://192.168.1.101:9005/as/services/favourites
-services/favourites
-
-{
- "favourites":
- [
- { "lcn": 1, "sid": "1234"},
- { "lcn": 2, "sid": "2314"}
- ]
-}
-
 
 POST
 http://192.168.1.101:9005/as/drm/status
@@ -12763,7 +12799,43 @@ string:""
 
 *as-favourites*
 
-http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8
+GET
+http://192.168.1.101:9005/as/services/favourites
+
+curl -v -X GET http://192.168.0.12:9005/as/services/favourites
+
+services/favourites
+
+{
+ "favourites":
+ [
+ { "lcn": 1, "sid": "1234"},
+ { "lcn": 2, "sid": "2314"}
+ ]
+}
+
+
+method call time=1597859866.285595 sender=:1.129 -> destination=com.sky.as.player serial=536 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
+   uint32 1
+   string "/as/services/favourites"
+   array [
+      dict entry(
+         string "Host"
+         string "192.168.0.12:9005"
+      )
+      dict entry(
+         string "User-Agent"
+         string "curl/7.58.0"
+      )
+      dict entry(
+         string "Accept"
+         string "*/*"
+      )
+   ]
+   array [
+   ]
+   string ""
+
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
@@ -13014,7 +13086,7 @@ Jul 27 12:14:40 skyxione systemd[1]: Failed to start Sky AS Player Service.
 Jul 27 17:07:36 skyxione asrdkplayer[30536]: [AAMP-PLAYER]PrivateInstanceAAMP::SetLiveOffset(), liveoffset 30
 Jul 27 17:07:36 skyxione com.sky.as.player[30536]: failed to connects to {http://localhost?p=json, Unable to Connect to url}
 
-const std::string MRIPC{"http://127.0.0.1?p=json"};
+const std::string MRIPC{"http://127.0.0.1:40660?p=json"};
 
 const std::string MRIPC{"http://192.168.1.15:40660?p=json"};
 
@@ -13022,8 +13094,74 @@ const std::string MRIPC{"http://192.168.1.15:40660?p=json"};
 Aug 18 17:01:49 skyxione com.sky.as.player[21904]: ==== KT: { Playback Service instance created
 Aug 18 17:01:50 skyxione com.sky.as.player[21904]: ==== KT: } Playback Service instance created
 
+
+// crash when "watchlive" on XiOne
+
+Aug 20 10:20:46 skyxione asrdkplayer[6841]: terminate called after throwing an instance of 'FutarqueRpcException'
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: 1mGET dec->out.def.nBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.nTempBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->nMinOutputUndequeueCount:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:1
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: 2424 decoder_get_parameter: OutputPortDefinition: 1920x1080 fmt:21 org:21
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountMin:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.nTempBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->nMinOutputUndequeueCount:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:1
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: 2424 decoder_get_parameter: OutputPortDefinition: 1920x1080 fmt:21 org:21
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountMin:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.nTempBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->nMinOutputUndequeueCount:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][1919] int_reason:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: decoder_flush_ve1 detect seqInited not finished: 0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][1893]
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][1914]  video input flush done (waitOtherThread 0)
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [realtek] port index free 1 phys_addr 5da5000
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][2118]  video output flush done (waitOtherThread 0)
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [realtek] port index free 1 phys_addr 60a3000
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [realtek] port index free 1 phys_addr 63a1000
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [realtek] port index free 1 phys_addr 669f000
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:1
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: 2424 decoder_get_parameter: OutputPortDefinition: 1920x1080 fmt:21 org:21
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountMin:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.nTempBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->nMinOutputUndequeueCount:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][1919] int_reason:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_flush_ve1][2118]  video output flush done (waitOtherThread 0)
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: In[decoder_get_parameter][2402]  param->nPortIndex:1
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: 2424 decoder_get_parameter: OutputPortDefinition: 1920x1080 fmt:21 org:21
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountMin:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.def.nBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->out.nTempBufferCountActual:4
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: GET dec->nMinOutputUndequeueCount:0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: API: waiting for thread to finish
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: ASYNC: got CMD_EXIT_LOOP
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: ASYNC: Output thread: got CMD_EXIT_LOOP
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: ====== In[decoder_destroy_ve1][2145] CountInfo[0, 0] =======
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: -----vdec----- close fifo((nil)) ----------
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[start] plane = 0
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[start]pVORPC=b6f8194c,
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[VIDEO_RPC_ToAgent_Pause_0]RPC S_OK!
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[VIDEO_RPC_ToAgent_Stop_0]RPC S_OK!
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[VIDEO_RPC_ToAgent_Destroy_0]RPC S_OK!
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:Free pICQRingBuffer
+Aug 20 10:20:47 skyxione asrdkplayer[6841]: [RVSD_VORPC]rvsd_vo_uninit:[end]
+Aug 20 10:21:06 skyxione systemd[1]: sky-asplayer.service: Main process exited, code=killed, status=6/ABRT
+Aug 20 10:21:06 skyxione systemd[1]: sky-asplayer.service: Unit entered failed state.
+Aug 20 10:21:06 skyxione systemd[1]: sky-asplayer.service: Failed with result 'signal'.
+Aug 20 10:21:06 skyxione systemd[1]: sky-asplayer.service: Service hold-off time over, scheduling restart.
+Aug 20 10:21:06 skyxione systemd[1]: Stopped Sky AS Player Service.
+Aug 20 10:21:06 skyxione systemd[1]: Starting Sky AS Player Service...
+
+
 *as-dtt*
-./meta-rdk-oem-sky-realtek/meta-xione/recipes-mediarite/mediarite/mediarite_git.bb
+/meta-rdk-oem-sky-realtek/meta-xione/recipes-mediarite/mediarite/mediarite_git.bb
 
 
 # set (MAPI_API_INCLUDE_DIR "/media/keitee/ssd2/rdk/2.0/sysroots/armv7ahf-neon-rdk-linux-gnueabi/usr/share/mediarite/include/MediaRiteApi")
@@ -13067,6 +13205,8 @@ lrwxrwxrwx 1 keitee keitee   25 Jul 27 13:37 libFutarqueBasic.so -> libFutarqueB
 // from asda
 POST
 http://192.168.1.101:9005/as/services/scan/action/start?scantype=DTT-FULL
+
+curl -v -X POST http://192.168.0.12:9005/as/services/scan/action/start --data '{"scantype": "DTT-FULL"}'
 
 method call time=1585663775.024915 sender=:1.158 -> destination=com.sky.as.player serial=992 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
@@ -13117,6 +13257,7 @@ method call time=1585663775.024915 sender=:1.158 -> destination=com.sky.as.playe
    ]
    string ""
 
+
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
 com.sky.as.Service1.Request \
@@ -13131,6 +13272,7 @@ dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Conten
 dict:string:string:\
 "scantype","DTT-FULL" \
 string:""
+
 
 signal time=1585663775.527438 sender=:1.153 -> destination=:1.158 serial=72 path=/com/sky/as/service; interface=com.sky.as.Service1; member=WebSocketUpdate
    string "/as/services/scan/status"
@@ -13177,24 +13319,14 @@ dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Conten
 dict:string:string: \
 string:""
 
-// medialite error when connectio fails
-
-[22:28:54,660425] MAIN(11665).20 FutarqueSocket.cpp:102(L1)ERROR connecting
-[22:28:54,660547] MAIN(11665).20 FutarqueRpcClient.cpp:190(L1)unable to connect url=http://192.168.1.102:40660?p=json
-[22:28:54,660605] MAIN(11665).20 MediaRiteApiConnectionHandler.cpp:210(L1)RPC SetFromUrl failed (unable to connect to server)
-0000024221.719509 ERR: < M:ServicesScanExecutor.cpp F:ServicesScanExecutor L:26 > failed to connects to http://192.168.1.102:40660?p=json (Unable to Connect to url)
-FUTLOGv1: 9.719215 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/Basic/FutarqueStdLib/src/FutarqueSocket.cpp][102] ['':'':''] ERROR connecting
-FUTLOGv1: 9.719215 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/Basic/FutarqueStdLib/src/FutarqueSocket.cpp][102] ['':'':'']
-FUTLOGv1: 9.719342 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/Basic/FutarqueStdLib/src/FutarqueRpc/FutarqueRpcClient.cpp][190] ['':'':''] unable to connect url=http://192.168.1.102:40660?p=json
-FUTLOGv1: 9.719342 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/Basic/FutarqueStdLib/src/FutarqueRpc/FutarqueRpcClient.cpp][190] ['':'':'']
-FUTLOGv1: 9.719400 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/MediaRiteApi/Rpc/MediaRiteApiConnectionHandler.cpp][210] ['':'':''] RPC SetFromUrl failed (unable to connect to server)
-FUTLOGv1: 9.719400 'MAIN'.20 [//media/keitee/ssd2/as-sky-repo/asplayer/mapiclient/MediaRiteApi/Rpc/MediaRiteApiConnectionHandler.cpp][210] ['':'':'']
-
 
 *as-dtt-scan-servicelist*
 
 GET(1)
 http://192.168.1.101:9005/as/services/0/0
+
+// OK
+curl -v -X GET http://192.168.0.12:9005/as/services/0/0
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
@@ -13637,11 +13769,6 @@ keitee@kit-ubuntu:/media/keitee/ssd2/as-sky-repo/asplayer$ git ll --stat HEAD~1.
    16 files changed, 1469 insertions(+), 29 deletions(-)
 
 
-NGDEV-161284_DTT_playback
-
-NGDEV-161284_DTT_playback
-NGDEV-157407_DTT_initial_scanning 
-
 This commit adds basic DTT scanning and playing using MediaRite client implementation.
 
 Note that this is a review for two JIRA but they were on the review for long time without reviews which cause difficulties to work on play feature since it's relys on the same
@@ -13881,22 +14008,22 @@ dict:string:string:\
 string:''
 
 {
-	"actrack" : 4294967295,
-	"audioenabled" : "true",
-	"eid" : "7d2-f517",
-	"endposutc" : 0,
-	"lcn" : "",
-	"media" : "LIVE",
-	"nownextversion" : 1,
-	"postutc" : 0,
-	"posutcms" : 0,
-	"ps" : "PLAYING",
-	"sid" : 100,
-	"speed" : 1,
-	"startposutc" : 0,
-	"subtitleid" : "1",
-	"vtrack" : 4294967295,
-	"vwid" : 1
+  "actrack" : 4294967295,
+    "audioenabled" : "true",
+    "eid" : "7d2-f517",
+    "endposutc" : 0,
+    "lcn" : "",
+    "media" : "LIVE",
+    "nownextversion" : 1,
+    "postutc" : 0,
+    "posutcms" : 0,
+    "ps" : "PLAYING",
+    "sid" : 100,
+    "speed" : 1,
+    "startposutc" : 0,
+    "subtitleid" : "1",
+    "vtrack" : 4294967295,
+    "vwid" : 1
 }
 
 
@@ -17569,6 +17696,7 @@ void SystemController::UpdateEpgInfoBits( AS::string &epgInfoBits, AS::string &m
     // the reset is same as before.
 }
 
+https://www.stb.bskyb.com/confluence/display/EE/EPG+Info+Bits+-+UK
 
 // epg info
 >>> bin(0xDDE5FFC0)
@@ -17586,14 +17714,6 @@ void SystemController::UpdateEpgInfoBits( AS::string &epgInfoBits, AS::string &m
 '0b1101.1101.1110.0111.1111.1111.1100.0000'   // 0xDDE7FFC0
 '0b   1.1111.1111.1010.1000.0010.0011.1111'
 
-// 14th
-'0b10.0000.0000.0000.0000'
-
->>> hex(0b100000000000000000)
-'0x20000'
-
-
-
 
 0x0000 0001 Monaural sound type
 0x0000 0002 Simple stereo sound type
@@ -17603,7 +17723,107 @@ void SystemController::UpdateEpgInfoBits( AS::string &epgInfoBits, AS::string &m
 0x0000 0020 Subtitled for hard of hearing
 0x0000 0040 Wide screen
 0x0000 0080 HD Content (XSI Shown in letter box format)
-...
+
+// 18th
+'0b10.0000.0000.0000.0000'
+
+>>> hex(0b100000000000000000)
+'0x20000'
+
+0x0002 0000 1 = Archive content / 0 = Catch-Up TV content (response)
+            1 = ROI / 0 = UK (filtering request)
+
+0x0100 0000 4K (UHD) Content
+>>>> bin(0x1000000)
+'0b1.0000.0000.0000.0000.0000.0000'
+>
+
+NDS: ^0000000151.330266 !MIL   -AS           < p:000003da t:18e0bdd0 T:AS_TP_OFRS_0 M:AS_DMS_Writer.cpp F:GetUrl L:00283 
+> @ctx:AS_HEP AS_HEP_HepController.cpp(1001) ed~true&logicOperand=DCE5FFC0~1FFA823F&securityscheme=DRM_SCHEME&auth_server=cmdc-sgw.sky.com
+
+Logic for "logicoperand":         logicOperand = AS::string( "&logicOperand" ) + ("=" + m_epgInfoBits.epgInfoBits + "~" + m_epgInfoBits.mask);
+
+
+Components/AS/Services/Controllers/HepController/source/AS_HEP_HepController.cpp
+
+uint32_t HepController::GetUrl( AS::string nodeId, HepRequestType hepRequestType, AS::string offsetLocator, AS::string campaignId, AS::string promoCode, AS::string &programmeId, AS::string &nodeName, AS::string &jsonBody, AS::string &url )
+{
+  AS::string logicOperand;
+  if ( est3bEnabled )
+  {
+    if ( m_epgInfoBits.epgInfoBits.empty() || m_epgInfoBits.mask.empty() )
+    {
+      m_systemController->GetEpgInfoBits( m_epgInfoBits.epgInfoBits, m_epgInfoBits.mask );
+
+      if ( (m_epgInfoBits.epgInfoBits.size() >= 2) && (m_epgInfoBits.epgInfoBits[0] == '0') && ((m_epgInfoBits.epgInfoBits[1] == 'x') || (m_epgInfoBits.epgInfoBits[1] == 'X')) )
+      {
+        m_epgInfoBits.epgInfoBits.erase( 0, 2 ); // Remove 0x
+      }
+
+      if ( (m_epgInfoBits.mask.size() >= 2) && (m_epgInfoBits.mask[0] == '0') && ((m_epgInfoBits.mask[1] == 'x') || (m_epgInfoBits.mask[1] == 'X')) )
+      {
+        m_epgInfoBits.mask.erase( 0, 2 ); // Remove 0x
+      }
+    }
+
+    logicOperand = AS::string( "&logicOperand" ) + ("=" + m_epgInfoBits.epgInfoBits + "~" + m_epgInfoBits.mask);
+  }
+}
+
+
+>>> bin(0xDCE5FFC0)
+                                 8    4  
+'0b1101.1100.1110.0101.1111.1111.1100.0000'
+'0b   1.1111.1111.1010.1000.0010.0011.1111'     // mask
+           *        *
+
+// NOT OK
+// 0, 2020-08-19_darwin_783e53f46ea8_137262bde6e1e36d7ae633b4e9232795.tgz  
+// ag "KEY_PRESS|onPurchaseOfferUpdate|ATG_API_Set|ATG_API_Get" LOGlastrun_realtime > 
+// NO "logicOperand"
+
+7466:NDS: ^[2020:08:19 09:20:04]0000000137.820435 !MIL    -ATG_API      		< p:0x00000ae3 P:APP t:0x1ead0dd0 T:AS_SYSTEM_CTL M:atg_api.c F:ATG_API_SetIntegerProperty L:3072 > ATG_API_EPG_PROP_CATALOGUE_REGION set to 0x1 
+7481:NDS: ^[2020:08:19 09:20:05]0000000138.690286 !ERROR  -ATG_API      		< p:0x00000ae3 P:APP t:0x1ead0dd0 T:AS_SYSTEM_CTL M:atg_api.c F:ATG_API_SetIntegerProperty L:3085 > prop_id=4, value[0x100000] > ATG_API_EPG_MAX_TRIAL_BIT_VALUE [0xff] 
+7482:NDS: ^[2020:08:19 09:20:05]0000000138.690291 !ERROR  -AS           		< p:0x00000ae3 P:APP t:0x1ead0dd0 T:AS_SYSTEM_CTL M:AS_SYSTEM_Controller.cpp F:??? L:6814 > ATG_API_SetIntegerProperty failed with status, 0x13020002 
+
+// NOT OK
+// 1, 2020-08-19_darwin_783e53f46ea8_4e34970883aae36f50bbcbd8b34b4511.tgz  
+// NO "logicOperand"
+
+7534:NDS: ^[2020:08:19 19:17:15]0000000136.060350 !MIL    -ATG_API      		< p:0x00000abc P:APP t:0x1ecd0dd0 T:AS_SYSTEM_CTL M:atg_api.c F:ATG_API_SetIntegerProperty L:3072 > ATG_API_EPG_PROP_CATALOGUE_REGION set to 0x1 
+7543:NDS: ^[2020:08:19 19:17:15]0000000136.854843 !ERROR  -ATG_API      		< p:0x00000abc P:APP t:0x1ecd0dd0 T:AS_SYSTEM_CTL M:atg_api.c F:ATG_API_SetIntegerProperty L:3085 > prop_id=4, value[0x100000] > ATG_API_EPG_MAX_TRIAL_BIT_VALUE [0xff] 
+7544:NDS: ^[2020:08:19 19:17:15]0000000136.854848 !ERROR  -AS           		< p:0x00000abc P:APP t:0x1ecd0dd0 T:AS_SYSTEM_CTL M:AS_SYSTEM_Controller.cpp F:??? L:6814 > ATG_API_SetIntegerProperty failed with status, 0x13020002 
+
+
+// OK
+// 2, 2020-08-19_darwin_783e53f46ea8_32ebed2d4751f11839a18557fab9abff.tgz 
+NOT SEEN
+
+ATG_API_EPG_PROP_CATALOGUE_TRIAL_BITS Bit
+
+7 (MSB)   369 10000000  128   0x80
+6         368 01000000  64    0x40
+5         367 00100000  32    0x20
+4         366 00010000  16    0x10
+3         365 00001000  8     0x8
+2         364 00000100  4     0x4
+1         489 00000010  2     0x2
+0 (LSB)   488 00000001  1     0x1
+
+!MIL    -ATG_API                      < p:0x00000ac0 P:APP t:0x1ece2dd0 T:AS_SYSTEM_CTL M:atg_api.c 
+F:ATG_API_SetIntegerProperty L:3072 > ATG_API_EPG_PROP_CATALOGUE_REGION set to 0x1
+
+!MIL    -AS                           < p:0x00000ac0 P:APP t:0x1ece2dd0 T:AS_SYSTEM_CTL M:AS_SYSTEM_Controller.cpp 
+F:??? L:6813 > ATG_API_EPG_PROP_CATALOGUE_REGION is set with 0x1
+
+!MIL    -ATG_API                      < p:0x00000ac0 P:APP t:0x1ece2dd0 T:AS_SYSTEM_CTL M:atg_api.c 
+F:ATG_API_SetIntegerProperty L:3092 > ATG_API_EPG_MAX_TRIAL_BIT_VALUE set to 0x2
+
+!MIL    -AS                           < p:0x00000ac0 P:APP t:0x1ece2dd0 T:AS_SYSTEM_CTL M:AS_SYSTEM_Controller.cpp 
+F:??? L:6824 > ATG_API_EPG_PROP_CATALOGUE_TRIAL_BITS is set with 0x2
+
+!MIL    -CMDC                        < p:0x00000ac0 P:APP t:0x35760dd0 T:PLANNER_MAIN M:cmdc_req_perf.c F:CMDC_Request_Perfomer_Request_Perform L:256 > Request handle = b3830004, Request Url: GET http://cmdc.sky.com:5600/cmdc/content/programid%3A%2F%2F4287856417~programid%3A%2F%2F4287856417/offers?count=1&lang=eng&catalogueId=1&clientId=00E0CFB916E052CC~00E0CFB9_0~00E0CFB9&\
+logicOperand=FDF5FFC0~3FFA823F&filter=entitled~true&sort=expiryDateTime&sec
 
 
 ={============================================================================

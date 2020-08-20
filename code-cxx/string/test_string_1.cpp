@@ -389,6 +389,11 @@ TEST(StringOperation, check_find_char)
     EXPECT_THAT(pos, 14);
   }
 
+  {
+    auto pos = coll.find_last_of("n");
+    EXPECT_THAT(pos, 44);
+  }
+
   // "one of the characters"
   {
     auto pos = coll.find_first_of("ne");
