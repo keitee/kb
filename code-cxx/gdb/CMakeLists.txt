@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_gdb VERSION 0.1 LANGUAGES CXX)
+project(test_gdb VERSION 0.1 LANGUAGES C CXX)
 
 enable_testing()
 
@@ -64,7 +64,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # include_directories(SYSTEM ${GTEST_DIR}/include)
 
 
-add_compile_options("-g;-D_GLIBCXX_DEBUG")
+add_compile_options("-Wall;-g;-D_GLIBCXX_DEBUG")
 
 
 # cmake help
@@ -162,14 +162,14 @@ include_directories(${Boost_INCLUDE_DIRS})
 # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
 
 
+# HOWTO repeatedly run a test in GDB, until it fails
 # test_abort.cpp
 add_executable(test_abort "test_abort.cpp")
-
-# cause link errors to Boost::thread
-# target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
-# ok
-# target_link_libraries(test_abort gmock gmock_main Boost::thread)
-
 target_link_libraries(test_abort gmock gmock_main)
 
-# add_test(${PROJECT_NAME} ${PROJECT_NAME})
+
+add_executable(test_trace "test_trace.c")
+target_link_libraries(test_trace gmock gmock_main)
+
+add_executable(test_psax "psax.c")
+target_link_libraries(test_psax curses)
