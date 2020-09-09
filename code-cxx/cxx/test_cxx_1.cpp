@@ -2797,6 +2797,14 @@ TEST(CxxCtor, check_init_list_3)
     // value. use list init version
     std::vector<int> coll2{10};
     EXPECT_THAT(coll2.size(), 1);
+
+    // value. use list init version
+
+    // NOTE: it's now fails on gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
+    // but it is okay before. means that it is now to use list init
+    //
+    // std::vector<int> coll3{10};
+    // EXPECT_THAT(coll2.size(), 10);
   }
 
   // /**
@@ -2850,6 +2858,7 @@ TEST(CxxCtor, check_init_list_3)
   // uses
   // vector(size_type __n, const allocator_type& __a = allocator_type());
   {
+    // why not list init? since T is string?
     std::vector<std::string> coll1{10};
     EXPECT_THAT(coll1.size(), 10);
 
@@ -7003,8 +7012,7 @@ namespace cxx_smart_pointer
       std::cout << "SmartFoo2::~SmartFoo2: " << m_name << std::endl;
     }
 
-    std::string getName() const
-    { return m_name; }
+    std::string getName() const { return m_name; }
   };
 } // namespace cxx_smart_pointer
 
@@ -12140,13 +12148,42 @@ TEST(CxxTemplate, check_function)
 {
   using namespace cxx_template;
 
+  // `template-parameter-type` T is "int"
+  // int compare(const int& v1, const int& v2)
+
   EXPECT_THAT(compare(1, 2), -1);
   EXPECT_THAT(compare(2, 1), 1);
   EXPECT_THAT(compare(2, 2), 0);
 
-  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+  // T is "vector<int>" and  instantiates to
+  // "int compare(const vector<int>&, const vector<int>&)"
+
+  std::vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
   EXPECT_THAT(compare(coll1, coll2), -1);
   EXPECT_THAT(compare(coll2, coll1), 1);
+}
+
+namespace cxx_template
+{
+  template <typename T>
+  class VectorColl
+  {
+  private:
+    std::vector<T> _coll;
+
+  public:
+    VectorColl() { _coll = {1, 2, 3, 4, 5}; }
+
+    std::vector<T> getColl() { return _coll; }
+  };
+} // namespace cxx_template
+
+TEST(CxxTemplate, check_class)
+{
+  using namespace cxx_template;
+
+  VectorColl<int> coll;
+  EXPECT_THAT(coll.getColl(), ElementsAre(1, 2, 3, 4, 5));
 }
 
 namespace cxx_template
@@ -12211,6 +12248,7 @@ namespace cxx_template
 
 } // namespace cxx_template
 
+// ={=========================================================================
 TEST(CxxTemplate, check_specialisation)
 {
   using namespace cxx_template;
@@ -12270,6 +12308,7 @@ namespace cxx_template
   }
 } // namespace cxx_template
 
+// ={=========================================================================
 TEST(CxxTemplate, check_non_type_argument)
 {
   using namespace cxx_template;
@@ -12354,6 +12393,7 @@ namespace cxx_template_default
   };
 } // namespace cxx_template_default
 
+// ={=========================================================================
 TEST(CxxTemplate, check_default_type_argument)
 {
   using namespace cxx_template_default;
@@ -12590,6 +12630,7 @@ namespace cxx_template_return_type
   }
 } // namespace cxx_template_return_type
 
+// ={=========================================================================
 TEST(Template, ReturnType)
 {
   using namespace cxx_template_return_type;
@@ -12661,6 +12702,7 @@ namespace cxx_template_reference
   }
 } // namespace cxx_template_reference
 
+// ={=========================================================================
 TEST(Template, Reference)
 {
   using namespace cxx_template_reference;
@@ -12705,6 +12747,7 @@ namespace cxx_template_overload
   }
 } // namespace cxx_template_overload
 
+// ={=========================================================================
 TEST(Template, Overload)
 {
   using namespace cxx_template_overload;
@@ -12770,6 +12813,7 @@ namespace cxx_template_friend
 
 } // namespace cxx_template_friend
 
+// ={=========================================================================
 TEST(Template, Friend)
 {
   using namespace cxx_template_friend;
@@ -12962,6 +13006,7 @@ namespace templateforward
 // NOTE: not fully understand but it is enough to say that std::forward return
 // rvalue when template T is rvalue.
 
+// ={=========================================================================
 TEST(CxxTemplate, check_forward_2)
 {
   using namespace templateforward;
@@ -13037,6 +13082,7 @@ namespace cxx_template
 
 } // namespace cxx_template
 
+// ={=========================================================================
 TEST(CxxTemplate, check_forward)
 {
   using namespace cxx_template;
@@ -13175,6 +13221,7 @@ namespace cxx_template
 
 } // namespace cxx_template
 
+// ={=========================================================================
 TEST(Template, ForwardEx)
 {
   using namespace cxx_template;
@@ -13674,9 +13721,10 @@ namespace cxx_except
 
   my_exception myex;
 
+  void throw_exception() { throw myex; }
 } // namespace cxx_except
 
-TEST(Exception, OwnException)
+TEST(CxxException, check_own)
 {
   using namespace cxx_except;
 
@@ -13713,6 +13761,24 @@ TEST(Exception, OwnException)
     throw myex;
   } catch (...)
   {}
+}
+
+TEST(CxxException, check_when_do_catch)
+{
+  using namespace cxx_except;
+
+  try
+  {
+    throw_exception();
+  } catch (...)
+  {}
+}
+
+TEST(CxxException, check_when_do_not_catch)
+{
+  using namespace cxx_except;
+
+  throw_exception();
 }
 
 namespace cxx_except

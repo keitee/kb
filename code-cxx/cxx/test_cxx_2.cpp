@@ -808,18 +808,17 @@ private:
 // ={=========================================================================
 TEST(CxxVector, check_ctor)
 {
-  // /**
-  //  *  @brief  Creates a %vector with default constructed elements.
-  //  *  @param  __n  The number of elements to initially create.
-  //  *  @param  __a  An allocator.
-  //  *
-  //  *  This constructor fills the %vector with @a __n default
-  //  *  constructed elements.
-  //  */
-  // explicit
-  // vector(size_type __n, const allocator_type& __a = allocator_type())
+  // see TEST(CxxCtor, check_init_list_3)
+  // for difference between coll{} and coll()
+
   {
     std::vector<int> coll{5};
+    ASSERT_THAT(coll.size(), Eq(1));
+    EXPECT_THAT(coll, ElementsAre(5));
+  }
+
+  {
+    std::vector<int> coll(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }
@@ -905,18 +904,88 @@ TEST(CxxVector, check_ctor)
   }
 }
 
-void GetVectorArg(const vector<int> &coll)
+/*
+={=========================================================================
+
+RUN      ] CxxVector.check_ctor_variable
+i: 1, coll size: 1
+i: 2, coll size: 2
+i: 3, coll size: 3
+i: 4, coll size: 4
+i: 5, coll size: 5
+i: 6, coll size: 6
+i: 7, coll size: 7
+i: 8, coll size: 8
+i: 9, coll size: 9
+
+i: 1, coll size: 1
+i: 2, coll size: 1
+i: 3, coll size: 1
+i: 4, coll size: 1
+i: 5, coll size: 1
+i: 6, coll size: 1
+i: 7, coll size: 1
+i: 8, coll size: 1
+i: 9, coll size: 1
+
+i: 1, coll size: 1
+i: 2, coll size: 1
+i: 3, coll size: 1
+[       OK ] CxxVector.check_ctor_variable (0 ms)
+*/
+
+TEST(CxxVector, check_ctor_variable)
 {
-  std::vector<int> coll_;
+  for (int i = 1; i < 10; i++)
+  {
+    std::vector coll(i, 0);
+    std::cout << "i: " << i << ", coll size: " << coll.size() << std::endl;
+  }
 
-  coll_ = coll;
+  for (int i = 1; i < 10; i++)
+  {
+    std::vector coll{i};
+    std::cout << "i: " << i << ", coll size: " << coll.size() << std::endl;
+  }
 
-  ASSERT_THAT(coll_.size(), 6);
+  // compile error
+  // for (int i = 1; i < 10; i++)
+  // {
+  //   std::vector coll(i);
+  //   std::cout << "i: " << i << ", coll size: " << coll.size() << std::endl;
+  // }
+
+  {
+    std::vector coll{1};
+    std::cout << "i: " << 1 << ", coll size: " << coll.size() << std::endl;
+  }
+  {
+    std::vector coll{2};
+    std::cout << "i: " << 2 << ", coll size: " << coll.size() << std::endl;
+  }
+  {
+    std::vector coll{3};
+    std::cout << "i: " << 3 << ", coll size: " << coll.size() << std::endl;
+  }
+}
+
+namespace cxx_vector
+{
+  void GetVectorArg(const vector<int> &coll)
+  {
+    std::vector<int> coll_;
+
+    coll_ = coll;
+
+    ASSERT_THAT(coll_.size(), 6);
+  }
 }
 
 // ={=========================================================================
 TEST(CxxVector, check_assign)
 {
+  using namespace cxx_vector;
+
   // assign
   {
     std::vector<int> coll1{1, 2, 3, 4, 5, 6};
@@ -963,6 +1032,16 @@ TEST(CxxVector, check_assign)
   {
     std::vector<int> coll1{1, 2, 3, 4, 5, 6};
     GetVectorArg(coll1);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxVector, check_insert)
+{
+  {
+    std::vector<int> coll{2, 3, 4, 5};
+    coll.insert(coll.begin(), 1);
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
   }
 }
 
@@ -1747,7 +1826,7 @@ TEST(CxxDeque, check_ctor)
 // ={=========================================================================
 // cxx-queue-priority *cxx-queue*
 
-TEST(CxxQueue, check_operation)
+TEST(StlQueue, check_operation)
 {
   {
     ostringstream os;
@@ -1877,8 +1956,22 @@ TEST(CxxQueue, check_operation)
 
     EXPECT_THAT(coll, ElementsAre(11, 55, 33));
   }
+}
 
-  // wheh use default less()
+/*
+={=========================================================================
+namespace std {
+  template <typename T,
+           typename Container = vector<T>,
+           typename Compare = less<typename Container::value_type>>
+             class priority_queue;
+}
+
+*/
+
+TEST(StlQueue, check_priority_queue)
+{
+  // when use default less()
   {
     std::priority_queue<int> pq;
 
@@ -1886,7 +1979,7 @@ TEST(CxxQueue, check_operation)
     pq.push(66);
     pq.push(44);
 
-    // not
+    // not the order inserted.
     //         top
     // 44, 66, 22
 
@@ -1957,7 +2050,7 @@ TEST(CxxQueue, check_operation)
 // ={=========================================================================
 // cxx-set
 
-TEST(StlSet, check_insert_and_emplace)
+TEST(CxxSet, check_insert_and_emplace)
 {
   std::set<int> coll1{};
 
@@ -1974,7 +2067,8 @@ TEST(StlSet, check_insert_and_emplace)
   EXPECT_THAT(coll2, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
 }
 
-TEST(StlSet, check_order)
+// ={=========================================================================
+TEST(CxxSet, check_order)
 {
   {
     // cxx-less <
@@ -1984,12 +2078,13 @@ TEST(StlSet, check_order)
 
   {
     // cxx-greater > like cxx-sp, unique pointer, use typename
-    std::set<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    std::set<int, std::greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
     EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 2));
   }
 }
 
-TEST(StlSet, check_assign)
+// ={=========================================================================
+TEST(CxxSet, check_assign)
 {
   std::set<int> coll1{13, 9, 10, 2, 11, 12, 8, 7};
   EXPECT_THAT(coll1.size(), 8);
@@ -2003,12 +2098,13 @@ TEST(StlSet, check_assign)
   EXPECT_THAT(coll2, ElementsAre(4, 5, 6));
 }
 
-TEST(StlSet, check_duplicate)
+// ={=========================================================================
+TEST(CxxSet, check_duplicate)
 {
   {
     std::set<int> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
 
-    // duplicate, 7, is removed
+    // duplicate, 7, is not inserted
     EXPECT_THAT(coll.size(), 8);
 
     auto begin = coll.begin();
@@ -2041,6 +2137,40 @@ TEST(StlSet, check_duplicate)
   }
 }
 
+/*
+
+The difference in return types results because unordered multisets and multimaps
+allow duplicates, whereas unordered sets and maps do not. Thus, the insertion of
+an element might fail for an un- ordered set if it already contains an element
+with the same value.
+
+pair<iterator,bool> insert(const value_type& val);
+
+1. The member second of the pair structure returns whether the insertion was
+successful.
+
+2. The member first of the pair structure returns the position of the newly
+inserted element or the position of the still existing element.
+
+*/
+
+TEST(CxxSet, check_insert_and_duplicate)
+{
+  std::set<int> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+
+  // duplicate, 7, is not inserted
+  EXPECT_THAT(coll.size(), 8);
+
+  auto ret = coll.insert(7);
+
+  EXPECT_THAT(ret.second, false);
+
+  ret = coll.insert(20);
+
+  EXPECT_THAT(ret.second, true);
+}
+
+// ={=========================================================================
 // note that use lower_bound() to see if serch item falls in between items.
 //
 // std::map<Key,T,Compare,Allocator>::lower_bound
@@ -2049,7 +2179,7 @@ TEST(StlSet, check_duplicate)
 // 1) Returns an iterator pointing to the first element that is not less than
 // (i.e. greater or equal to) key.
 
-TEST(StlSet, check_equal_range)
+TEST(CxxSet, check_equal_range)
 {
   {
     std::set<int> coll;
@@ -2145,7 +2275,8 @@ TEST(StlSet, check_equal_range)
   }
 }
 
-TEST(StlSet, check_erase)
+// ={=========================================================================
+TEST(CxxSet, check_erase)
 {
   // if there is match at the beginning, removes them
   {
@@ -2177,8 +2308,9 @@ TEST(StlSet, check_erase)
   }
 }
 
+// ={=========================================================================
 // cxx-17
-TEST(StlSet, check_merge)
+TEST(CxxSet, check_merge)
 {
   std::set<int> coll1{5, 6, 7, 8};
   std::set<int> coll2{3, 4, 5, 6};
@@ -2765,7 +2897,11 @@ TEST(StlMapMulti, check_equal_range_2)
 // ={=========================================================================
 // cxx-unordered
 
-TEST(CxxUnordered, check_set)
+// *cxx-unordered-order*
+// The only guarantee is that duplicates, which are possible because a multiset
+// is used, are grouped together in the order of their insertion.
+
+TEST(CxxUnordered, check_duplicates)
 {
   std::unordered_multiset<string> cities{"Braunschweig",
                                          "Hanover",
@@ -2787,8 +2923,8 @@ TEST(CxxUnordered, check_set)
                             "Toronto",
                             "Chicago",
                             "New York",
-                            "Frankfurt",
-                            "Frankfurt",
+                            "Frankfurt",  // see
+                            "Frankfurt",  // see
                             "Hanover",
                             "Braunschweig"));
   }
@@ -2805,17 +2941,93 @@ TEST(CxxUnordered, check_set)
     EXPECT_THAT(result,
                 ElementsAreArray({"Munich",
                                   "London",
-                                  "Frankfurt",
-                                  "Frankfurt", // duplicates
+                                  "Frankfurt", // see
+                                  "Frankfurt", // see
                                   "New York",
-                                  "Braunschweig",
-                                  "Braunschweig", // duplicates
+                                  "Braunschweig", // see
+                                  "Braunschweig", // see
                                   "Chicago",
                                   "Toronto",
-                                  "Hanover",
-                                  "Hanover", // duplicates
+                                  "Hanover", // see
+                                  "Hanover", // see
                                   "Paris"}));
   }
+}
+
+TEST(CxxUnordered, search)
+{
+  {
+    std::unordered_multiset<std::string> coll{"Braunschweig",
+      "Hanover",
+      "Frankfurt",
+      "New York",
+      "Chicago",
+      "Toronto",
+      "Paris",
+      "Frankfurt"};
+
+    EXPECT_THAT(coll.count("Frankfurt"), 2);
+    EXPECT_NE(coll.find("Frankfurt"), coll.end());
+  }
+
+  {
+    std::vector<std::string> result{};
+
+    std::unordered_multiset<std::string> coll{"Braunschweig",
+      "Hanover",
+      "Frankfurt",
+      "New York",
+      "Chicago",
+      "Toronto",
+      "Paris",
+      "Frankfurt"};
+
+    auto range = coll.equal_range("Frankfurt");
+    EXPECT_THAT(std::distance(range.first, range.second), 2);
+
+    auto loop = coll.count("Frankfurt");
+
+    auto first = coll.find("Frankfurt");
+
+    for (int i = 0; i < (int)loop; ++i)
+    {
+      result.emplace_back(*first);
+      ++first;
+    }
+
+    EXPECT_THAT(result, ElementsAre("Frankfurt","Frankfurt"));
+
+    // when not found
+    EXPECT_THAT(coll.count("Seoul"), 0);
+  }
+
+  {
+    std::unordered_map<int, int> coll{{100, 1}, {200, 2}, {300, 3}};
+
+    auto ret = coll.find(200);
+
+    EXPECT_THAT(ret->first, 200);
+    EXPECT_THAT(ret->second, 2);
+  }
+}
+
+TEST(CxxUnordered, insert)
+{
+  // do not have duplicates
+  std::unordered_set<std::string> coll{"Braunschweig",
+      "Hanover",
+      // "Frankfurt",
+      "New York",
+      "Chicago",
+      "Toronto",
+      "Paris",
+      "Frankfurt"};
+
+  // not allowed to add duplicate
+  auto ret = coll.insert("Frankfurt");
+
+  // to indicate "insert has failed"
+  EXPECT_THAT(ret.second, false);
 }
 
 namespace collunordered
@@ -3309,10 +3521,21 @@ TEST(ForwadList, BookExample)
               ElementsAreArray({1, 2, 3, 4, 10, 11, 12, 13, 77, 88, 99}));
 }
 
-// ={=========================================================================
-// cxx-stack
+/*
+={=========================================================================
+cxx-stack
 
-TEST(Stack, BookExample)
+class Stack
+{
+   bool empty() const;
+   void push(T const &elem);
+   void pop();
+   T &top();
+}
+
+*/
+
+TEST(StlStack, check_basic_example)
 {
   std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
 
@@ -3343,61 +3566,57 @@ TEST(Stack, BookExample)
 
 namespace cxx_stack
 {
-  class ReadEmptyStack : public std::exception
+  class ReadOnEmptyStack : public std::exception
   {
   public:
     virtual const char *what() const noexcept
     {
-      return "cannot read on empty stack";
+      return "connot read when statck is empty";
     }
   };
 
   template <typename T>
   class Stack
   {
+  private:
+    std::deque<T> _coll;
+
   public:
-    typename std::deque<T>::size_type size() const { return coll_.size(); }
+    bool empty() const { return _coll.empty(); }
 
-    bool empty() const { return coll_.empty(); }
+    void push(const T &elem) { _coll.emplace_back(elem); }
 
-    void push(T const &elem) { coll_.push_back(elem); }
-
-    T pop()
+    void pop()
     {
-      if (coll_.empty())
-        throw ReadEmptyStack();
+      if (_coll.empty())
+        throw ReadOnEmptyStack();
 
-      T elem(coll_.back());
-      coll_.pop_back();
-      return elem;
+      _coll.pop_back();
     }
 
     T &top()
     {
-      if (coll_.empty())
-        throw ReadEmptyStack();
+      if (_coll.empty())
+        throw ReadOnEmptyStack();
 
-      return coll_.back();
+      // note "back() but not pop_back()"
+      return _coll.back();
     }
-
-  private:
-    std::deque<T> coll_;
   };
-
 } // namespace cxx_stack
 
-TEST(Stack, ImplementedInTermsOf)
+TEST(StlStack, check_implemented_in_terms_of)
 {
   using namespace cxx_stack;
 
-  Stack<int> coll;
-  vector<int> result;
+  Stack<int> coll{};
+  std::vector<int> result{};
 
   coll.push(10);
   coll.push(20);
   coll.push(30);
 
-  EXPECT_THAT(coll.pop(), 30);
+  coll.pop();
 
   coll.top() = 80;
 
@@ -3406,14 +3625,14 @@ TEST(Stack, ImplementedInTermsOf)
 
   while (!coll.empty())
   {
-    result.push_back(coll.pop());
+    result.emplace_back(coll.top());
+    coll.pop();
   }
 
   EXPECT_THAT(result, ElementsAre(200, 100, 80, 10));
 
   // stack is already empty
-
-  EXPECT_THROW(coll.pop(), ReadEmptyStack);
+  EXPECT_THROW(coll.pop(), ReadOnEmptyStack);
 }
 
 // ={=========================================================================

@@ -16,6 +16,8 @@ set(CMAKE_AUTOUIC ON)
 # have to say where Qt is by either:
 #
 # CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
+# if the above do not work
+# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.6/gcc_64/lib/cmake cmake ..
 #
 # or 
 #

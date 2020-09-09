@@ -11,7 +11,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 # CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
-TESTS = test_soname_1 test_soname_2 test_soname_3
+TESTS = test_soname_1 test_soname_2 test_soname_3 test_soname_4
 
 # TESTS = test_soname \
 # 				$(TARGET2)_out \
@@ -23,18 +23,18 @@ TESTS = test_soname_1 test_soname_2 test_soname_3
 all : $(TESTS)
 
 clean :
-	rm -f $(TESTS) *.a *.o *.so
+	rm -f $(TESTS) *.a *.o *.so.*
 
 # 1
 # when use so without soname
 #
 # $ readelf -d test_soname_1 | grep NEEDED
-# 0x0000000000000001 (NEEDED)             Shared library: [libfoo.so]
+# 0x0000000000000001 (NEEDED)             Shared library: [libfoo1.so]
 # 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 #
-# $ readelf -d libfoo.so | grep SONAME
+# $ readelf -d libfoo1.so | grep SONAME
 # $ ./test_soname_1
-# ./test_soname_1: error while loading shared libraries: libfoo.so: cannot open shared object file: No such file or directory
+# ./test_soname_1: error while loading shared libraries: libfoo1.so: cannot open shared object file: No such file or directory
 #
 # $ LD_LIBRARY_PATH=. ./test_soname_1
 # main: calls foo()...
@@ -91,7 +91,53 @@ test_soname_2 : libfoo2.so main.c
 libfoo3.so : foo.c
 	gcc -g -c -fpic foo.c
 	gcc -g -shared foo.o -o libfoo3.so
+	ln -s libfoo3.so libbar.so
 
 # when use, do not specify soname
 test_soname_3 : libfoo3.so main.c
 	gcc -g main.c libbar.so -o $@
+
+
+# 4
+# 
+# Typically, the linker name is created in the same directory as the file to
+# which it refers. It can be linked either to the real name or to the soname of
+# the most recent major version of the library. Usually, a link to the soname is
+# preferable, so that changes to the soname are automatically reflected in the
+# linker name.
+#
+# the point of method 4 is:
+# `The linker name allows us to construct version-independent link commands`
+#
+# libdemo.so (sym) -> libdemo.so.1 (sym) -> libdemo.so.1.0.1 (real, soname)
+#
+# ./test_soname_4
+# ./test_soname_4: error while loading shared libraries: libfoo.so.1: cannot open shared object file: No such file or directory
+#
+# readelf -d test_soname_4 | ag NEEDED
+#  0x0000000000000001 (NEEDED)             Shared library: [libfoo.so.1]
+#  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+#
+# So this method is better since the method 2 which use soname only force the
+# client speficy so file name in link command
+#
+# for example
+#
+# gcc -g main.c libfoo1.1.so -o $@
+# 
+# since a.out finds soname, libbar.1.so at runtime, real so file can be
+# controlled by lib owner via symlink.
+#
+# libbar.1.so -> libfoo.1.1.so (under lib owner control)
+# libbar.1.so -> libfoo.1.2.so (under lib owner control)
+#
+# libbar.2.so -> libfoo.2.1.so (under lib oweer control)
+
+libfoo4.so : foo.c
+	gcc -g -c -fpic foo.c
+	gcc -g -shared -Wl,-soname,libfoo.so.1 foo.o -o libfoo.so.1.0.1
+	ln -s libfoo.so.1.0.1 libfoo.so.1
+	ln -s libfoo.so.1 libfoo.so
+
+test_soname_4 : libfoo4.so main.c
+	gcc -g main.c libfoo.so -o $@

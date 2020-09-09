@@ -9,6 +9,7 @@
 #include <random>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -19,7 +20,9 @@
 using namespace std;
 using namespace testing;
 
-// ={=========================================================================
+/*
+={=========================================================================
+*/
 template <typename T>
 void PRINT_ELEMENTS(T &coll, const string optstr = "")
 {
@@ -2250,7 +2253,7 @@ o Each input value are less than 256 and the # of input are less than unit
 o What does "first" mean? first unique byte seen or first unique byte in
  input order?
 
-Not byte seen first since every byte is seen first at first time and ther may be
+Not byte seen first since every byte is seen first at first time and then may be
 repeats later in the stream. The problem is that it can be shown in later of a
 stream.
  
@@ -2306,8 +2309,8 @@ namespace algounique
 
   unsigned char check_first_unique_2(const vector<unsigned char> &input)
   {
-    // pair<occurance, index> and 255
-    vector<pair<size_t, size_t>> lookup_table(255);
+    // pair<occurance, index> and 255. size init but not list init
+    std::vector<pair<size_t, size_t>> lookup_table(255);
 
     // first pass, build table with occurance and input index
     size_t input_index{};
@@ -2342,7 +2345,7 @@ namespace algounique
   }
 
   // 2020.06
-  // don't need to keep order as _1 and _2.
+  // don't need to keep order as _1 and _2. No, see below.
   unsigned char check_first_unique_3(const std::vector<unsigned char> &input)
   {
     std::size_t table[256]{};
@@ -2385,6 +2388,21 @@ TEST(AlgoUnique, check_first_unique)
       for (const auto &i : inputs)
         EXPECT_THAT(f(i.first), i.second);
     }
+  }
+
+  {
+    // expects 2
+    const std::vector<unsigned char> coll1{6, 6, 2, 3, 3, 1, 1, 5, 4, 4};
+
+    // expects 5
+    const std::vector<unsigned char> coll2{6, 6, 5, 3, 3, 1, 1, 2, 4, 4};
+
+    EXPECT_THAT(check_first_unique_2(coll1), 2);
+    EXPECT_THAT(check_first_unique_2(coll2), 5);
+
+    EXPECT_THAT(check_first_unique_3(coll1), 2);
+    // fails
+    // EXPECT_THAT(check_first_unique_3(coll2), 5);
   }
 }
 
@@ -2440,9 +2458,10 @@ Test score: 100% 100 out of 100 points
 Detected time complexity: O(N) or O(N*log(N))
   
 
-{Q} How to implement it using c? 2014.02. How about running the modified
-binary search that use abs comparison on each item? May be nlogn? That may be
-the same as set version?
+{Q} How to implement it using c? 
+
+2014.02. How about running the modified binary search that use abs comparison on
+each item? May be nlogn? That may be the same as set version?
 
 2014.04.12. 
 cannot use binary search since when move index from the start, no way to set
@@ -2543,6 +2562,18 @@ namespace algounique
 
     return coll.size();
   }
+
+  // use std::unordered_set
+  int distinct_count_5(const std::vector<int> &input)
+  {
+    std::unordered_set<int> coll{};
+
+    // loop1.
+    for (const auto e : input)
+      coll.emplace(std::abs(e));
+
+    return coll.size();
+  }
 } // namespace algounique
 
 TEST(AlgoUnique, check_count_unique)
@@ -2566,6 +2597,217 @@ TEST(AlgoUnique, check_count_unique)
         EXPECT_THAT(f(i.first), i.second);
     }
   }
+}
+
+/*
+={=========================================================================
+algo-unique
+
+217. Contains Duplicate, Easy
+
+Given an array of integers, find if the array contains any duplicates.
+
+Your function should return true if any value appears at least twice in the
+array, and it should return false if every element is distinct.
+
+Example 1:
+
+Input: [1,2,3,1]
+Output: true
+Example 2:
+
+Input: [1,2,3,4]
+Output: false
+Example 3:
+
+Input: [1,1,1,3,3,4,3,2,4,2]
+Output: true
+
+*/
+
+namespace leetcode_easy_217
+{
+  // cannot use lookup table using input value since "integer" is too big.
+  //
+  // cxx-unordered
+  // Assuming that the hashing strategy is well chosen and well implemented, you
+  // can guarantee `amortized constant time` for insertions, deletions, and
+  // element search
+
+  // return true when there are duplicates
+  //
+  // Runtime: 60 ms, faster than 92.40% of C++ online submissions for Contains Duplicate.
+  // Memory Usage: 20.2 MB, less than 45.77% of C++ online submissions for Contains Duplicate.
+
+  bool check_duplicates_1(const std::vector<int> &nums)
+  {
+    std::unordered_set<int> coll{};
+
+    for (const auto e : nums)
+    {
+      auto ret = coll.insert(e);
+
+      if (ret.second == false)
+        return true;
+    }
+
+    return false;
+  }
+
+  // use size from the discussion
+  //
+  // Runtime: 68 ms, faster than 72.85% of C++ online submissions for Contains Duplicate.
+  // Memory Usage: 20.4 MB, less than 37.42% of C++ online submissions for Contains Duplicate.
+
+  bool check_duplicates_2(const std::vector<int> &nums)
+  {
+    std::unordered_set<int> coll{nums.begin(), nums.end()};
+
+    return (nums.size() != coll.size()) ? true : false;
+  }
+} // namespace leetcode_easy_217
+
+TEST(AlgoUnique, check_unique_integer)
+{
+  using namespace leetcode_easy_217;
+
+  auto imps = {check_duplicates_1, check_duplicates_2};
+
+  for (const auto f : imps)
+  {
+    EXPECT_THAT(f({1, 2, 3, 1}), true);
+    EXPECT_THAT(f({1, 2, 3, 4}), false);
+    EXPECT_THAT(f({1, 1, 1, 3, 3, 4, 3, 2, 4, 2}), true);
+  }
+}
+
+/*
+={=========================================================================
+algo-unique
+
+219. Contains Duplicate II
+
+Given an array of integers and an integer k, find out whether there are two
+distinct indices i and j in the array such that nums[i] = nums[j] and the
+absolute difference between i and j is at most k.
+
+Example 1:
+
+Input: nums = [1,2,3,1], k = 3
+Output: true
+
+Example 2:
+
+Input: nums = [1,0,1,1], k = 1
+Output: true
+
+Example 3:
+
+Input: nums = [1,2,3,1,2,3], k = 2
+Output: false
+
+*/
+
+namespace leetcode_easy_219
+{
+  // fails on EXPECT_THAT(f({99, 99}, 2), true); since "at most"
+  bool contain_duplicates_1(const std::vector<int> &nums, int k)
+  {
+    int first = 0;
+    int last  = k;
+
+    while (last < (int)nums.size())
+    {
+      if (nums[first] == nums[last])
+        return true;
+
+      ++first;
+      last = first + k;
+    }
+
+    return false;
+  }
+
+  // Time Limit Exceeded when the input is huge
+  bool contain_duplicates_2(const std::vector<int> &nums, int k)
+  {
+    auto loop = nums.size();
+
+    for (int run = 0; run < (int)loop; ++run)
+    {
+      for (int scan = run + 1; (scan < (int)loop) && ((scan - run) <= k);
+           ++scan)
+      {
+        if (nums[run] == nums[scan])
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+  // from the discussion.
+  // [Java] Linear Time Solution using HashMap
+  // https://leetcode.com/problems/contains-duplicate-ii/discuss/824527/Java-Linear-Time-Solution-using-HashMap
+  //
+  // class Solution {
+  //     public boolean containsNearbyDuplicate(int[] nums, int k) {
+  //         Map<Integer, Integer> map = new HashMap();
+  //         for(int i = 0; i < nums.length; i++) {
+  //             if(map.containsKey(nums[i]) && Math.abs(i - map.get(nums[i])) <= k)
+  //                 return true;
+  //             map.put(nums[i], i);
+  //         }
+  //         return false;
+  //     }
+  // }
+  //
+  // tried it in c++
+  //
+  // Runtime: 52 ms, faster than 75.15% of C++ online submissions for Contains Duplicate II.
+  // Memory Usage: 16.4 MB, less than 73.48% of C++ online submissions for Contains Duplicate II.
+
+  bool contain_duplicates_3(const std::vector<int> &nums, int k)
+  {
+    auto loop = nums.size();
+
+    // pair<value, index>
+    std::unordered_multimap<int, int> coll{};
+
+    for (int i = 0; i < (int)loop; ++i)
+    {
+      auto size  = coll.count(nums[i]);
+      auto first = coll.find(nums[i]);
+
+      // found and scan "equal_range"
+      for (int scan = 0; scan < (int)size; ++scan)
+      {
+        if (std::abs(first->second - i) <= k)
+          return true;
+
+        ++first;
+      }
+
+      // if not found, insert it
+      coll.insert(std::make_pair(nums[i], i));
+    }
+
+    return false;
+  }
+} // namespace leetcode_easy_219
+
+TEST(AlgoUnique, unique_integer_in_range)
+{
+  using namespace leetcode_easy_219;
+
+  // auto f = contain_duplicates_1;
+  auto f = contain_duplicates_3;
+
+  EXPECT_THAT(f({1, 2, 3, 1}, 3), true);
+  EXPECT_THAT(f({1, 0, 1, 1}, 1), true);
+  EXPECT_THAT(f({1, 2, 3, 1, 2, 3}, 2), false);
+
+  EXPECT_THAT(f({99, 99}, 2), true);
 }
 
 /*
@@ -5451,8 +5693,13 @@ see time difference between recursion and iterative version
 [       OK ] LeetCode.Easy_018_ClimbStairs_3 (0 ms)
 */
 
-// ={=========================================================================
-// algo-recursion-factorial
+/*
+={=========================================================================
+algo-recursion-factorial
+
+4! = 4 × 3 × 2 × 1 = 24
+ 
+*/
 
 namespace algo_recursion_factorial
 {
@@ -5499,7 +5746,7 @@ namespace algo_recursion_factorial
 // not good idea to use factorial to see performance difference due to tail
 // recursion since number gets bigger quickly
 
-TEST(AlgoRecursion, Factorial)
+TEST(AlgoRecursion, factorial)
 {
   using namespace algo_recursion_factorial;
 
@@ -5510,6 +5757,197 @@ TEST(AlgoRecursion, Factorial)
   EXPECT_THAT(factorial_2(10), 3628800);
 
   EXPECT_THAT(factorial_3(5), 120);
+  EXPECT_THAT(factorial_3(10), 3628800);
+}
+
+/*
+={=========================================================================
+algo-recursion-factorial
+
+172. Factorial Trailing Zeroes
+
+Given an integer n, return the number of trailing zeroes in n!.
+
+Example 1:
+
+Input: 3
+Output: 0
+Explanation: 3! = 6, no trailing zero.
+Example 2:
+
+Input: 5
+Output: 1
+Explanation: 5! = 120, one trailing zero.
+
+Note: Your solution should be in logarithmic time complexity.
+ 
+*/
+
+namespace algo_recursion_factorial
+{
+  // ok, use itoa way
+  int get_trailing_zero_1(int value)
+  {
+    int zeros{};
+
+    while (value)
+    {
+      auto remainder = value % 10;
+      if (remainder != 0)
+        break;
+
+      value = value / 10;
+      ++zeros;
+    }
+
+    return zeros;
+  }
+
+  // combine factorial and trailing zero.
+  int get_trailing_zero_2(int value)
+  {
+    int fact{1};
+    int zeros{};
+
+    for (int i = 2; i <= value; ++i)
+    {
+      fact *= i;
+    }
+
+    while (fact)
+    {
+      // auto remainder = fact % 10;
+      // if (remainder != 0)
+      //   break;
+
+      if ((fact % 10) != 0)
+        break;
+
+      fact = fact / 10;
+      ++zeros;
+    }
+
+    return zeros;
+  }
+
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Factorial Trailing Zeroes.
+  // Memory Usage: 5.9 MB, less than 62.36% of C++ online submissions for Factorial Trailing Zeroes.
+
+  int get_trailing_zero_3(int value)
+  {
+    int zeros{};
+
+    while (value >= 5)
+    {
+      zeros += value / 5;
+      value = value / 5;
+    }
+
+    return zeros;
+  }
+} // namespace algo_recursion_factorial
+
+TEST(AlgoRecursion, factorial_overflow)
+{
+  using namespace algo_recursion_factorial;
+
+  // Ok. EXPECT_THAT(factorial_1(5), 120);
+  {
+    auto f   = get_trailing_zero_1;
+    auto ret = f(120);
+    EXPECT_THAT(ret, 1);
+  }
+
+  // Ok. EXPECT_THAT(factorial_1(10), 3628800);
+  {
+    auto f   = get_trailing_zero_1;
+    auto ret = f(3628800);
+    EXPECT_THAT(ret, 2);
+  }
+
+  // Ok.
+  {
+    auto f   = get_trailing_zero_2;
+    auto ret = f(5);
+    EXPECT_THAT(ret, 1);
+  }
+
+  // Ok.
+  {
+    auto f   = get_trailing_zero_2;
+    auto ret = f(10);
+    EXPECT_THAT(ret, 2);
+  }
+
+  // However, "int get_trailing_zero_2(int value)" cause runtime overflow error:
+  //
+  // Line 9: Char 12: runtime error: signed integer overflow:
+  // 2432902008176640000 * 21 cannot be represented in type 'long long'
+  // (solution.cpp)
+  //
+  // changed to "long long" but still see the error. to see why.
+  //
+  // long long factorial_2(int value)
+  // {
+  //   long long result{1};
+  //
+  //   for (int i = 2; i <= value; ++i)
+  //   {
+  //     result *= i;
+  //   }
+  //
+  //   return result;
+  // }
+
+  {
+    EXPECT_THAT(std::numeric_limits<int>::max(), 2147483647);
+  }
+
+  // 9223372036854775807
+  // 2432902008176640000
+  {
+    EXPECT_THAT(std::numeric_limits<long long>::max(), 9223372036854775807);
+    // EXPECT_THAT(factorial_2_2(20), 2432902008176640000);
+  }
+
+  // Line 9: Char 12: runtime error: signed integer overflow:
+  // 2432902008176640000 * 21 cannot be represented in type 'long long'
+  // (solution.cpp)
+
+  // NOTE: so "getting factorial" is not a way since it gets too big quickly.
+
+  // see when there are 5, it gets "0" and also see that when value 25, has 6
+  // zeros but not 5. need to do on "remiander" as well.
+  //
+  // 1*2*3*4*5
+  // 6*7*8*9*10
+  // ...
+  //
+  // >>> *5
+  // 120
+  // >>> 120*6
+  // 720
+  // >>> 120*6*7*8*9*10
+  // 3628800
+  // >>> 120*6*7*8*9*10*11*12*13*14*15
+  // 1307674368000
+  // >>> 120*6*7*8*9*10*11*12*13*14*15*16*17*18*19*20
+  // 2432902008176640000
+  // >>> 120*6*7*8*9*10*11*12*13*14*15*16*17*18*19*20*21*22*23*24*25
+  // 15511210043330985984000000L
+
+  // Ok
+  {
+    auto f   = get_trailing_zero_3;
+    auto ret = f(10);
+    EXPECT_THAT(ret, 2);
+  }
+
+  {
+    auto f   = get_trailing_zero_3;
+    auto ret = f(25);
+    EXPECT_THAT(ret, 6);
+  }
 }
 
 // ={=========================================================================
@@ -10364,6 +10802,225 @@ TEST(AlgoConversion, check_to_string)
   }
 }
 
+/*
+={=========================================================================
+algo-conversion algo-leetcode-191
+
+171. Excel Sheet Column Number, Easy
+
+Given a column title as appear in an Excel sheet, return its corresponding
+column number.
+
+For example:
+
+    A -> 1
+    B -> 2
+    C -> 3
+    ...
+    Z -> 26
+    AA -> 27
+    AB -> 28 
+    ...
+
+Example 1:
+Input: "A"
+Output: 1
+
+Example 2:
+Input: "AB"
+Output: 28
+
+Example 3:
+Input: "ZY"
+Output: 701
+
+
+168. Excel Sheet Column Title, Easy
+
+Given a positive integer, return its corresponding column title as appear in an
+Excel sheet.
+
+For example:
+
+    1 -> A
+    2 -> B
+    3 -> C
+    ...
+    26 -> Z
+    27 -> AA
+    28 -> AB 
+    ...
+
+*/
+
+namespace leetcode_easy_171
+{
+  // uses *algo-atoi* when base 26
+  //
+  // A  B  C  ... Z
+  // 1  2  3      26
+  //
+  // AA AB AC ... AZ
+  // 27 28 29 ... 52 (26 + 26)
+  //
+  // BA
+  // 53
+  //
+  // assumes that input are uppercase
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
+  // Sheet Column Number.
+  //
+  // Memory Usage: 8.2 MB, less than 27.21% of C++ online submissions for Excel
+  // Sheet Column Number.
+
+  int get_column_number_1(const std::string &title)
+  {
+    int result{};
+
+    for (auto const e : title)
+    {
+      if (!isalpha(e))
+        return 0;
+
+      result = result * 26 + (e - 'A' + 1);
+    }
+
+    return result;
+  }
+
+  // as with atoi(), use 26 as base
+  int get_column_number_2(const std::string &title)
+  {
+    auto loop{title.size()};
+    int result{};
+
+    for (size_t i = 0; i < loop; ++i)
+    {
+      result = result * 26 + (title[i] - 'A' + 1);
+    }
+
+    return result;
+  }
+
+  // base 10:
+  //
+  // 0  1   2   3   4   5   6   7   8   9
+  // 10 11  12  13  14  15  16  17  18  19
+  // ...
+  //
+  // 1  2   3   4   5   6   ... 25  26
+  // A  B   C   D   E   F       Y   Z
+  // % 26
+  // 1  2   3   4   5   6   ... 25  0
+  //
+  // 27   28    29                  52
+  // AA   AB    AC                  AZ
+  // 1/1  1/2   1/3                 2/0
+  //
+  // so special handing when % is 0.
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
+  // Sheet Column Title.
+  //
+  // Memory Usage: 8 MB, less than 84.11% of C++ online submissions for Excel
+  // Sheet Column Title.
+
+  std::string get_column_title_1(int n)
+  {
+    string result{};
+    char ch{};
+    int value{};
+
+    while (n)
+    {
+      value = (n % 26);
+      n     = value == 0 ? (n / 26) - 1 : n / 26;
+      ch    = value == 0 ? 'Z' : 'A' + value - 1;
+
+      // not use algo-reverse
+      // result += ch;
+      result.insert(result.begin(), 1, ch);
+    }
+
+    return result;
+  }
+
+  // as with itoa(). same as "get_column_title_1"
+  std::string get_column_title_2(int number)
+  {
+    std::string result{};
+    int remainder{};
+
+    while (number)
+    {
+      remainder = (number % 26);
+
+      if (remainder == 0)
+      {
+        result += ('Z');
+        number = number / 26 - 1;
+      }
+      else
+      {
+        result += ('A' + remainder - 1);
+        number = number / 26;
+      }
+    }
+
+    return std::string{result.rbegin(), result.rend()};
+  }
+
+  // remove special handing by using "--n" and make it same as algo-itoa
+  // from discussion:
+  // Efficient C++ solution (easily transposable) by daedric
+
+  std::string get_column_title_3(int number)
+  {
+    std::string result{};
+    int remainder{};
+
+    while (number)
+    {
+      --number;
+
+      remainder = (number % 26);
+      number    = number / 26;
+      result += ('A' + remainder);
+    }
+
+    return std::string{result.rbegin(), result.rend()};
+  }
+} // namespace leetcode_easy_171
+
+TEST(AlgoConversion, check_get_column_number)
+{
+  using namespace leetcode_easy_171;
+
+  auto imps = {get_column_number_1, get_column_number_1};
+
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f("A"), 1);
+    EXPECT_THAT(f("AB"), 28);
+    EXPECT_THAT(f("ZY"), 701);
+  }
+}
+
+TEST(AlgoConversion, check_get_column_title)
+{
+  using namespace leetcode_easy_171;
+
+  auto imps = {get_column_title_1, get_column_title_2, get_column_title_3};
+
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f(1), "A");
+    EXPECT_THAT(f(28), "AB");
+    EXPECT_THAT(f(701), "ZY");
+  }
+}
+
 // ={=========================================================================
 // algo-list
 
@@ -11181,26 +11838,29 @@ TEST(AlgoList, Divide)
 //   }
 // } // namespace
 
-// ={=========================================================================
-// algo-stack
+/*
+={=========================================================================
+algo-stack
 
-// class Stack
-// {
-//   public:
-//     void create();
-//     void clear();
-//     bool empty();
-//     bool full();
-//     int size();
-//
-//     // as push_back();
-//     void push(ListEntry const& entry);
-//     void pop();
-//     ListEntry top();
-//
-//     // as traverse()
-//     std::vector<ListEntry> snap();
-// };
+class Stack
+{
+  public:
+    void create();
+    void clear();
+    bool empty();
+    bool full();
+    int size();
+
+    // as push_back();
+    void push(ListEntry const& entry);
+    void pop();
+    ListEntry top();
+
+    // as traverse()
+    std::vector<ListEntry> snap();
+};
+
+*/
 
 namespace algo_stack_contiguous
 {
@@ -11281,7 +11941,7 @@ namespace algo_stack_contiguous
   };
 } // namespace algo_stack_contiguous
 
-TEST(AlgoStack, ContiguousSimple)
+TEST(AlgoStack, check_contiguous_simple)
 {
   using namespace algo_stack_contiguous;
 
@@ -11312,6 +11972,276 @@ TEST(AlgoStack, ContiguousSimple)
   auto expected = {ListEntry(1, 2), ListEntry(2, 3)};
 
   EXPECT_THAT(coll.snap(), expected);
+}
+
+/*
+={=========================================================================
+algo-leetcode-155
+
+155. Min Stack, Easy
+
+Design a stack that supports push, pop, top, and retrieving the minimum element
+in constant time.
+
+push(x) -- Push element x onto stack.
+pop() -- Removes the element on top of the stack.
+top() -- Get the top element.
+getMin() -- Retrieve the minimum element in the stack.
+
+Example:
+
+MinStack minStack = new MinStack();
+minStack.push(-2);
+minStack.push(0);
+minStack.push(-3);
+minStack.getMin();   --> Returns -3.
+minStack.pop();
+minStack.top();      --> Returns 0.
+minStack.getMin();   --> Returns -2.
+
+*/
+
+namespace leetcode_easy_155
+{
+  // 1. can keep the min while doing push but the problem is when doing pop. if
+  // search the min whenever doing pop, cannot meet the condition:
+  // "retrieving the minimum element in constant time"
+
+  // 2. Python single stack O(1) all operations, by destinynitsed
+  //
+  // uses "extra space" to keep the last min value along with element to push
+  // and read the min value from the fixed pos. each last min value is value
+  // when each is pushed.
+  //
+  // Python code is clearer
+  //
+  // class MinStack:
+  //
+  //     def __init__(self):
+  //         self.stack = []
+  //
+  //     def push(self, x):
+  //         if self.stack:
+  // 			      self.stack.append(min(self.stack[-2], x))
+  //         else:
+  //             self.stack.append(x)
+  //         self.stack.append(x)
+  //
+  //
+  //     def pop(self):
+  //         if self.stack:
+  //             self.stack.pop()
+  //             self.stack.pop()
+  //
+  //     def top(self):
+  //         if self.stack:
+  //             return self.stack[-1]
+  //
+  //     def getMin(self):
+  //         if self.stack:
+  //             return self.stack[-2]
+  //
+  // For example, input -2, 0, 3 makes
+  // [-2, -2, -2, 0, -3, -3]
+  //  ^^      ^^     ^^      where ^^ are the min values.
+
+  class MinStack_2
+  {
+  private:
+    std::vector<int> _coll;
+
+  public:
+    bool empty() { return _coll.empty(); }
+
+    void push(int elem)
+    {
+      if (empty())
+      {
+        _coll.emplace_back(elem);
+      }
+      else
+      {
+        // so get the min value and push it
+        _coll.emplace_back(std::min(*(_coll.end() - 2), elem));
+      }
+
+      // and push the element.
+      _coll.emplace_back(elem);
+    }
+
+    void pop()
+    {
+      if (empty())
+        throw std::runtime_error("stack is empty");
+
+      _coll.pop_back();
+      _coll.pop_back();
+    }
+
+    int &top()
+    {
+      if (empty())
+        throw std::runtime_error("stack is empty");
+
+      return _coll.back();
+    }
+
+    int getMin()
+    {
+      if (empty())
+        throw std::runtime_error("stack is empty");
+
+      return *(_coll.end() - 2);
+    }
+  };
+
+  // 3. Java accepted solution using one stack, by sometimescrazy
+  // saves space by adding previous min only when min changes then 2.
+  //
+  // For example, input -2, 0, 3 makes
+  //
+  // MinStack_2: [-2, -2, -2, 0, -3, -3]
+  // MinStatk_3: [max, -2, 0, -2, -3]
+
+  class MinStack_3
+  {
+  private:
+    std::vector<int> _coll;
+    int _min{std::numeric_limits<int>::max()};
+
+  public:
+    bool empty() { return _coll.empty(); }
+
+    // do not save the min value if do not see elem which is less than current
+    // min value. so need to save the previous min value when see the lesser.
+    // here save the previous before updating it.
+    //
+    // _coll.emplace_back(_min);
+
+    void push(int elem)
+    {
+      if (elem <= _min)
+      {
+        _coll.emplace_back(_min);
+        _min = elem;
+      }
+
+      _coll.emplace_back(elem);
+    }
+
+    void pop()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
+
+      if (_coll.back() == _min)
+      {
+        _coll.pop_back();
+
+        // restore min with the previous min
+        _min = _coll.back();
+      }
+
+      _coll.pop_back();
+    }
+
+    int &top()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
+
+      return _coll.back();
+    }
+
+    int getMin()
+    {
+      if (empty())
+        throw runtime_error("stack is empty");
+
+      return _min;
+    }
+  };
+} // namespace leetcode_easy_155
+
+TEST(AlgoStack, check_min_stack)
+{
+  using namespace leetcode_easy_155;
+
+  {
+    MinStack_2 ms;
+
+    ms.push(-2);
+    ms.push(0);
+    ms.push(-3);
+
+    EXPECT_THAT(ms.getMin(), -3);
+
+    ms.pop();
+    EXPECT_THAT(ms.top(), 0);
+
+    EXPECT_THAT(ms.getMin(), -2);
+  }
+
+  {
+    MinStack_2 ms;
+
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.top();
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+
+    ms.push(2147483647);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+    ms.push(-2147483648);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), -2147483648);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+  }
+
+  {
+    MinStack_3 ms;
+
+    ms.push(-2);
+    ms.push(0);
+    ms.push(-3);
+
+    EXPECT_THAT(ms.getMin(), -3);
+
+    ms.pop();
+    EXPECT_THAT(ms.top(), 0);
+
+    EXPECT_THAT(ms.getMin(), -2);
+  }
+
+  {
+    MinStack_3 ms;
+
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.top();
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+
+    ms.push(2147483647);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+    ms.push(-2147483648);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), -2147483648);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+  }
 }
 
 /*
@@ -12187,7 +13117,7 @@ use the dest which is the end of the matched group
 The first form removes from the range [beg,end) all elements that are equal
 to `the previous elements.`
 
-Thus, only when the elements in the sequence are sorted, or at least when
+Thus, only when the elements in the sequence are *sorted*, or at least when
 all elements of the same value are adjacent, it remove all duplicates.
 
 Both forms collapse *consecutive* equal elements by removing the following
@@ -14322,6 +15252,7 @@ namespace algo_binary_search
   //
   // *cxx-undefined* since can be negative
   // size_t low{}; size_t high{}; size_t mid{};
+  //
   // it can cause `overflow` when mid gets minus value
   // mid = (high-low)/2 + low;
   //
@@ -14440,9 +15371,10 @@ namespace algo_binary_search
 
   // NOTE:
   // To sum, use EQ and index version.
+
 } // namespace algo_binary_search
 
-TEST(AlgoSearch, check_binary_search)
+TEST(AlgoSearchBinarySearch, check_binary_search)
 {
   using namespace algo_binary_search;
 
@@ -14450,7 +15382,7 @@ TEST(AlgoSearch, check_binary_search)
   //
   // 11.10 Sorted-Range Algorithms
   //
-  // The following algorithms search certain values in sorted ranges.  Checking
+  // The following algorithms search certain values in sorted ranges. Checking
   // Whether One Element Is Present
   //
   // bool binary_search (ForwardIterator beg, ForwardIterator end, const T&
@@ -14585,6 +15517,9 @@ namespace algo_binary_search
   //   }
 
   // exact copy from stl but removes _Compare
+  // 1. use "len" in the loop
+  // 2. move "first"
+
   template <typename _ForwardIterator, typename _Tp>
   _ForwardIterator __my_lower_bound(_ForwardIterator __first,
                                     _ForwardIterator __last,
@@ -14653,7 +15588,7 @@ namespace algo_binary_search
       }
     }
 
-    // found index or index to insert
+    // return found index or index to insert
     return std::distance(_saved_first, first);
   }
 
@@ -14671,8 +15606,8 @@ namespace algo_binary_search
   //     return __i != __last && !(__val < *__i);
   //   }
 
-  // since __my_lower_bound() can return `end` or `iterator for element >=
-  // value. so two checks
+  // since __my_lower_bound() can return `end`. so if found, then it should be
+  // in [begin, end). also `iterator for element >= value. so two checks.
   //
   // return __i != __last && !(__val < *__i);
 
@@ -14743,9 +15678,13 @@ TEST(AlgoSearch, check_binary_search_stl_version)
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 1);
 
     pos = std::lower_bound(coll.cbegin(), coll.cend(), 7);
+    // equals to end
+    EXPECT_THAT(coll.cend(), pos);
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 4);
 
     pos = std::lower_bound(coll.cbegin(), coll.cend(), 0);
+    // equals to begin
+    EXPECT_THAT(coll.cbegin(), pos);
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 0);
   }
 
@@ -14761,9 +15700,13 @@ TEST(AlgoSearch, check_binary_search_stl_version)
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 1);
 
     pos = my_lower_bound(coll.cbegin(), coll.cend(), 7);
+    // equals to end
+    EXPECT_THAT(coll.cend(), pos);
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 4);
 
     pos = my_lower_bound(coll.cbegin(), coll.cend(), 0);
+    // equals to begin
+    EXPECT_THAT(coll.cbegin(), pos);
     EXPECT_THAT(std::distance(coll.cbegin(), pos), 0);
   }
 
@@ -14791,8 +15734,10 @@ TEST(AlgoSearch, check_binary_search_stl_version)
   // NOTE: stl version looks better.
 }
 
-// algo-binary-search algo-leetcode-17
 /*
+={=========================================================================
+algo-search-binary-search algo-leetcode-17
+
 69. Sqrt(x), Easy
 
 Implement int sqrt(int x).
@@ -14812,233 +15757,235 @@ Input: 8
 Output: 2
 Explanation: The square root of 8 is 2.82842..., and since 
              the decimal part is truncated, 2 is returned.
+
+NAME
+       sqrt, sqrtf, sqrtl - square root function
+
+SYNOPSIS
+       #include <math.h>
+
+       double sqrt(double x);
+       float sqrtf(float x);
+       long double sqrtl(long double x);
+
+
+>>> import math
+>>> print(math.sqrt(4))
+2.0
+
+>>> print(math.sqrt(8))
+2.82842712475
+
+>>> print(math.sqrt(9))
+3.0
+
+>>> print(math.sqrt(15))
+3.87298334621
+
+>>> print(math.sqrt(16))
+4.0
+
 */
 
-namespace algo_binary_search
+namespace leetcode_easy_017
 {
-  namespace leetcode_easy_017
+  // use binary search to get "floor" square root
+  //
+  // https://www.geeksforgeeks.org/square-root-of-an-integer/
+  //
+  // O(logn)
+  //
+  //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
+  //  |---|--------|-------|--------------------|
+
+  int get_sqrt_1(int x)
   {
+    // base cases
+    if (x == 0 || x == 1)
+      return x;
 
-    // https://www.geeksforgeeks.org/square-root-of-an-integer/
-    // binary search version
-    //
-    // O(Log x)
-    //
-    //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
-    //  |---|--------|-------|--------------------|
-    //
-    //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
-    //  value but used
+    // starts from 1 since is covered in base cases and exclude x.
+    int first{1};
+    int last{x - 1};
+    int ans{};
 
-    int floor_sqrt_1(int x)
+    while (first <= last)
     {
-      // base cases
-      if (x == 0 || x == 1)
-        return x;
+      int mid = (first + last) / 2;
 
-      // starts from 1 since it's covered in base cases
-      int start{1};
-      int end{x - 1};
-      int ans{};
-
-      while (start <= end)
+      // equal and it's perfect square root
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
       {
-        int mid = (start + end) / 2;
+        // discard [1, mid]
+        first = mid + 1;
 
-        // equality; perfect square
-        if (mid * mid == x)
-          return mid;
-        else if (mid * mid < x)
-        {
-          // so discard [1, mid], update start and move closer to sqrt(x)
-          start = mid + 1;
-
-          // we need floor answer so update ans
-          ans = mid;
-        }
-        // discard [mid, x]
-        else
-          end = mid - 1;
+        // to return "floor" value
+        ans = mid;
       }
-
-      // return floor value rather than `not found`
-      return ans;
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
     }
 
-    // Note: The Binary Search can be further optimized to start with ‘start’ = 0
-    // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
-    // 1.
-    //
-    // cxx-error-overflow
-    // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
-    // 536848899 cannot be represented in type 'int' (solution.cpp)
+    // when the loop ends, return "floor" value than "not found"
+    return ans;
+  }
 
-    int floor_sqrt_2(int x)
+  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
+  // and ‘end’ = x/2.
+  // Floor of square root of x cannot be more than x/2 when x > 1.
+  //
+  // cxx-error-overflow Line 18: Char 15: runtime error: signed integer
+  // overflow: 536848899 * 536848899 cannot be represented in type 'int'
+  // (solution.cpp)
+  //
+  // where does overflow happends? since "mid*mid" used in comparisons. NO,
+  // there is "int mid"
+  //
+  // >>> import math
+  // >>> print(math.sqrt(536848899))
+  // 23169.9999784
+  //
+  // _1 and _2 fail
+  //
+  // test_pad.cpp:159: Failure
+  // Value of: f(536848899)
+  // Expected: is equal to 4
+  //   Actual: 266320211 (of type int)
+  //
+  // test_pad.cpp:159: Failure
+  // Value of: f(536848899)
+  // Expected: is equal to 4
+  //   Actual: 268402686 (of type int)
+
+  int get_sqrt_2(int x)
+  {
+    int first{0};
+    int last{x / 2};
+    int ans{};
+
+    while (first <= last)
     {
-      // // base cases
-      // if (x == 0 || x == 1)
-      //   return x;
+      int mid = (first + last) / 2;
 
-      // starts from 1 since it's covered in base cases
-      int start{0};
-      int end{x / 2};
-      int ans{};
-
-      while (start <= end)
+      // equal and it's perfect square root
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
       {
-        int mid = (start + end) / 2;
+        // discard [1, mid]
+        first = mid + 1;
 
-        // equality; perfect square
-        if (mid * mid == x)
-          return mid;
-        else if (mid * mid < x)
-        {
-          // so discard [1, mid], update start and move closer to sqrt(x)
-          start = mid + 1;
-
-          // we need floor answer so update ans
-          ans = mid;
-        }
-        // discard [mid, x]
-        else
-          end = mid - 1;
+        // to return "floor" value
+        ans = mid;
       }
-
-      // return floor value rather than `not found`
-      return ans;
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
     }
 
-    // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
-    //
-    // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
-    // Sqrt(x).
+    // when the loop ends, return "floor" value than "not found"
+    return ans;
+  }
 
-    int floor_sqrt_3(int x)
+  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
+  // Sqrt(x).
+
+  int get_sqrt_3(int x)
+  {
+    int first{0};
+    int last{x / 2};
+    int ans{};
+
+    // base cases. NOTE: must have
+    if (x == 0 || x == 1)
+      return x;
+
+    while (first <= last)
     {
-      // // base cases
-      if (x == 0 || x == 1)
-        return x;
+      long long mid    = (first + last) / 2;
+      long long square = mid * mid;
 
-      // starts from 1 since it's covered in base cases
-      int start{0};
-      int end{x / 2};
-      int ans{};
-
-      while (start <= end)
+      // equal and it's perfect square root
+      if (square == x)
+        return mid;
+      else if (square < x)
       {
-        long long mid   = (start + end) / 2;
-        long long sqare = mid * mid;
+        // discard [1, mid]
+        first = mid + 1;
 
-        // equality; perfect square
-        if (sqare == x)
-          return mid;
-        else if (sqare < x)
-        {
-          // so discard [1, mid], update start and move closer to sqrt(x)
-          start = mid + 1;
-
-          // we need floor answer so update ans
-          ans = mid;
-        }
-        // discard [mid, x]
-        else
-          end = mid - 1;
+        // to return "floor" value
+        ans = mid;
       }
-
-      // return floor value rather than `not found`
-      return ans;
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
     }
 
-    // having square variable for mid * mid causes performance penalty?
-    //
-    // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-    //
-    // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
-    // Sqrt(x).
+    // when the loop ends, return "floor" value than "not found"
+    return ans;
+  }
 
-    int floor_sqrt_4(int x)
+  // NOTE: having square variable for mid * mid causes performance penalty?
+  //
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
+  // Sqrt(x).
+
+  int get_sqrt_4(int x)
+  {
+    int first{0};
+    int last{x / 2};
+    int ans{};
+
+    // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    while (first <= last)
     {
-      // // base cases
-      if (x == 0 || x == 1)
-        return x;
+      long long mid = (first + last) / 2;
 
-      // starts from 1 since it's covered in base cases
-      int start{0};
-      int end{x / 2};
-      int ans{};
-
-      long long mid{};
-
-      while (start <= end)
+      // equal and it's perfect square root
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
       {
-        mid = (start + end) / 2;
+        // discard [1, mid]
+        first = mid + 1;
 
-        // equality; perfect square
-        if (mid * mid == x)
-          return mid;
-        else if (mid * mid < x)
-        {
-          // so discard [1, mid], update start and move closer to sqrt(x)
-          start = mid + 1;
-
-          // we need floor answer so update ans
-          ans = mid;
-        }
-        // discard [mid, x]
-        else
-          end = mid - 1;
+        // to return "floor" value
+        ans = mid;
       }
-
-      // return floor value rather than `not found`
-      return ans;
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
     }
 
-    // code discussion forum
-    //
-    // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-    //
-    // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
-    // Sqrt(x).
+    // when the loop ends, return "floor" value than "not found"
+    return ans;
+  }
+} // namespace leetcode_easy_017
 
-    int floor_sqrt_5(int x)
-    {
-      long long l = 1, r = x, mid;
-
-      if (x == 0)
-        return 0;
-
-      while (l <= r)
-      {
-        mid = l + (r - l) / 2;
-
-        if (mid * mid == x)
-          return mid;
-        else if (mid * mid > x)
-          r = mid - 1;
-        else
-        {
-          l = mid + 1;
-          if (l * l > x)
-            return mid;
-        }
-      }
-
-      // just to avoid warning
-      return mid;
-    }
-  } // namespace leetcode_easy_017
-} // namespace algo_binary_search
-
-TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
+TEST(AlgoSearchBinarySearch, check_sqrt)
 {
-  using namespace algo_binary_search::leetcode_easy_017;
+  using namespace leetcode_easy_017;
 
+  // when use sqrt() function
   {
-    // #include <math.h>
-    // double sqrt(double x);
-    // float sqrtf(float x);
-    // long double sqrtl(long double x);
-
     // 2
     // 2.82843
     // 3.16228
@@ -15058,49 +16005,565 @@ TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
   }
 
   {
-    auto func = floor_sqrt_1;
+    // since _1 and _2 fails on the last case
+    // auto imps = {get_sqrt_1, get_sqrt_2};
 
-    EXPECT_THAT(func(4), 2);
-    EXPECT_THAT(func(8), 2);
-    EXPECT_THAT(func(10), 3);
-    EXPECT_THAT(func(16), 4);
+    auto imps = {get_sqrt_3, get_sqrt_4};
+
+    for (const auto &f : imps)
+    {
+      EXPECT_THAT(f(4), 2);
+      EXPECT_THAT(f(8), 2);
+      EXPECT_THAT(f(10), 3);
+      EXPECT_THAT(f(16), 4);
+      EXPECT_THAT(f(536848899), 23169);
+
+      // >>> 46339*46339, floor
+      // 2,147,302,921
+      //
+      // 2,147,395,599
+      //
+      // >>> 46340*46340, ceiling
+      // 2,147,395,600
+      EXPECT_THAT(f(2147395599), 46339);
+      EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+    }
   }
+}
+
+// really see performance difference between them? not really from simple run
+// below. maybe we need to have random to simulate
+
+TEST(AlgoSearchBinarySearch, check_sqrt_performance_1)
+{
+  using namespace leetcode_easy_017;
+
+  auto f = get_sqrt_3;
+
+  for (int i = 0; i < 1000000; ++i)
   {
-    auto func = floor_sqrt_2;
-
-    EXPECT_THAT(func(4), 2);
-    EXPECT_THAT(func(8), 2);
-    EXPECT_THAT(func(10), 3);
-    EXPECT_THAT(func(16), 4);
+    EXPECT_THAT(f(1), 1);
+    EXPECT_THAT(f(2147395599), 46339);
   }
+}
+
+TEST(AlgoSearchBinarySearch, check_sqrt_performance_2)
+{
+  using namespace leetcode_easy_017;
+
+  auto f = get_sqrt_4;
+
+  for (int i = 0; i < 1000000; ++i)
   {
-    // >>> 46339*46339, floor
-    // 2,147,302,921
-    //
-    // 2,147,395,599
-    //
-    // >>> 46340*46340, ceiling
-    // 2,147,395,600
-
-    auto func = floor_sqrt_3;
-    EXPECT_THAT(func(2147395599), 46339);
-    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+    EXPECT_THAT(f(1), 1);
+    EXPECT_THAT(f(2147395599), 46339);
   }
+}
 
+/*
+={=========================================================================
+
+TODO: skip for now for full study
+
+algo-search-binary-tree
+
+10.1.1 Definitions
+
+The linked list have great advantages of flexibility over contiguous
+implementation but have one weak feature: *list-contiguous-and-linked* they are
+sequential list; that is, have to access through them only one position at a
+time, not random access.
+
+Tree overcome this and is valuable for problems of information retrieval.
+
+
+*adt-binary-tree*
+
+A binary tree is either empty, or consist of a node called the "root" together
+with two binary tree called the 'left-subtree' and the 'right-subtree' of the
+root.
+
+The left and right are important for binary tree and has recursive nature that
+allows "empty binary tree" and the empty tree is base case for recursive and
+determine when to stop.
+
+note: 2-tree is different from binary tree since 2-tree has always 0 or 2
+children but never 1.
+
+Excercise: get all fourteen binary trees with four nodes.
+
+
+10.1.2 Traversal of Binary Trees
+
+There are many different traversal orders for trees and reduced to 'three' by
+permitting only the ways in which the left is traversed before the right.
+
+The (V)isiting a node, traversing the left subtree L, and the right subtree R.
+<note> that visit, traverse and subtree in wording since traverse is not visit.
+
+VLR(preorder) LVR(inorder) LRV(postorder)
+^              ^             ^
+
+Do this order for every node so has recursive nature. For example, traverse the
+following tree
+
+  ()1
+    ()2
+  ()3
+()4  ()5
+
+pre 12345, in 14352 and post 45321
+
+
+={=========================================================================
+algo-leetcode-19
+
+100. Same Tree, Easy
+
+Given two binary trees, write a function to check if they are the same or not.
+
+Two binary trees are considered the same if they are structurally identical and
+the nodes have the same value.
+
+Example 1:
+
+Input:     1         1
+          / \       / \
+         2   3     2   3
+
+        [1,2,3],   [1,2,3]
+
+Output: true
+
+Example 2:
+
+Input:     1         1
+          /           \
+         2             2
+
+        [1,2],     [1,null,2]
+
+Output: false
+
+Example 3:
+
+Input:     1         1
+          / \       / \
+         2   1     1   2
+
+        [1,2,1],   [1,1,2]
+
+Output: false
+
+
+Definition for a binary tree node.
+
+struct TreeNode {
+   int val;
+   TreeNode *left;
+   TreeNode *right;
+   TreeNode() : val(0), left(nullptr), right(nullptr) {}
+   TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+   TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+};
+
+class Solution {
+public:
+    bool isSameTree(TreeNode* p, TreeNode* q);
+};
+ 
+*/
+
+namespace algo_binary_tree
+{
+  enum class ErrorCode
   {
-    // >>> 46339*46339, floor
-    // 2,147,302,921
-    //
-    // 2,147,395,599
-    //
-    // >>> 46340*46340, ceiling
-    // 2,147,395,600
+    success,
+    overflow,
+    underflow,
+    duplicate,
+    not_present
+  };
 
-    auto func = floor_sqrt_4;
-    EXPECT_THAT(func(1), 1);
-    EXPECT_THAT(func(2147395599), 46339);
-    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+  // 10.1.3 Linked Implementation of Binary Trees
+
+  // if want to express "Entry"
+  // template <typename Entry>
+
+  template <typename T>
+  struct BinaryNode
+  {
+    BinaryNode<T> *_left;
+    BinaryNode<T> *_right;
+    T _data;
+
+    BinaryNode()
+        : _left{nullptr}
+        , _right{nullptr}
+    {}
+
+    BinaryNode(const T &data)
+        : _left{nullptr}
+        , _right{nullptr}
+        , _data(data)
+    {}
+  };
+
+  // NOTE: do not implement full interface shown in the text since the text do
+  // not have full code and left them as exercise.
+
+  template <typename T>
+  class BinaryTree
+  {
+  protected:
+    BinaryNode<T> *_root;
+
+  public:
+    // ctor to make empty binary tree
+    BinaryTree()
+        : _root{nullptr}
+    {}
+
+    // true if tree is empty
+    bool empty() const { return nullptr == _root; }
+
+    // Recursion will make it especially easy for us to traverse the subtrees.
+    // function * visit that does the desired task for each node.
+    void inorder(void (*visit)(T &)) { recursive_inorder(_root, visit); }
+
+  private:
+    void recursive_inorder(BinaryNode<T> *root, void (*visit)(T &))
+    {
+      if (nullptr != root)
+      {
+        recursive_inorder(root->_left, visit);
+        visit(root->_data);
+        recursive_inorder(root->_right, visit);
+      }
+    }
+
+    // void recursive_preorder(BinaryNode<T> *root, void(*visit)(T&))
+    // void recursive_postorder(BinaryNode<T> *root, void(*visit)(T&))
+  };
+
+  // NOTE that the entries in a binary search tree must have keys that can be
+  // compared
+  //
+  // 10.2.2 Tree Search
+  //
+  // NOTE BST can have different forms.
+  //
+  // Suppose, as an example, that we apply binary search to the list of seven
+  // letters a , b , c , d , e , f , and g . The resulting tree is shown in part
+  // (a) of Figure 10.8. If tree_search is applied to this tree, it will do the
+  // same number of comparisons as binary search.
+  //
+  // It is quite possible, however, that the same letters may be built into a
+  // binary search tree of a quite different shape, such as any of those shown
+  // in the remaining parts of Figure 10.8.
+  //
+  // The tree shown as part (a) of Figure 10.8 is the best possible for
+  // searching. It is as “bushy” as possible: It has the smallest possible
+  // height for a given number of vertices. The number of vertices between the
+  // root and the target, inclusive, is the number of comparisons that must be
+  // done to find the target. The bushier the tree, therefore, the smaller the
+  // number of comparisons that will usually need to be done.
+
+  template <typename T>
+  class BinarySearchTree : public BinaryTree<T>
+  {
+  public:
+    ErrorCode insert(const T &data)
+    {
+      return search_and_insert(this->_root, data);
+    }
+
+    ErrorCode remove(const T &data)
+    {
+      return search_and_destroy(this->_root, data);
+    }
+
+    // if there is an entry in the tree whose key matches that in target, the
+    // target is replaced by the corresponding record from the tree and a
+    // success is returned.
+    //
+    // note: no need to save(output) target since that's what is requested to
+    // search.
+    //
+    // note: Although the returned pointer can be used to gain access to the
+    // data stored in a tree object, the only functions that can call the
+    // auxiliary search must be tree methods, since only the methods are able to
+    // pass the root as a parameter. Thus, returning a node pointer from the
+    // auxiliary function will not compromise tree encapsulation.
+    // valid point?
+
+    ErrorCode search_1(T &target) const
+    {
+      ErrorCode ret{ErrorCode::success};
+
+      BinaryNode<T> *found = search_for_node_1(this->_root, target);
+
+      if (nullptr == found)
+        return ErrorCode::not_present;
+      else
+        target = found->_data;
+
+      return ret;
+    }
+
+    ErrorCode search_2(T &target) const
+    {
+      ErrorCode ret{ErrorCode::success};
+
+      BinaryNode<T> *found = search_for_node_2(this->_root, target);
+
+      if (nullptr == found)
+        return ErrorCode::not_present;
+      else
+        target = found->_data;
+
+      return ret;
+    }
+
+  private:
+    // recursion version
+    //
+    // What event will be the termination condition for the recursive search?
+    // Clearly, if we find the target, the function finishes successfully. If
+    // not, then we continue searching until we hit an empty subtree, in which
+    // case the search fails.
+    //
+    // returns:
+    // 1. If the key of target is not in the subtree, returns NULL.
+    // 2. a pointer to the ndoe if found.
+
+    BinaryNode<T> *search_for_node_1(BinaryNode<T> *root, const T &target) const
+    {
+      if ((nullptr == root) || (root->_data == target))
+        return root;
+      else if (root->_data < target)
+        return search_for_node_1(root->_right, target);
+      else
+        return search_for_node_1(root->_left, target);
+    }
+
+    // non-recursion, iterative version
+    // Recursion occurs in this function only as tail recursion , that is, as
+    // the last statement executed in the function.
+
+    BinaryNode<T> *search_for_node_2(BinaryNode<T> *root, const T &target) const
+    {
+      while (root && (root->_data != target))
+      {
+        if (root->_data < target)
+          root = root->_right;
+        else
+          root = root->_left;
+      }
+
+      return root;
+    }
+
+    // 10.2.3 Insertion into a Binary Search Tree
+    //
+    // If the keys to be inserted into an empty binary search tree are in their
+    // natural order, then the method insert will produce a tree that degenerates
+    // into an inefficient chain. The method insert should never be used with keys
+    // that are already sorted into order.
+
+    // as with search_for_node_1(), recursion version. add a node when not found
+    // and not allow duplicated.
+
+    // NOTE: reference
+    // ErrorCode search_and_insert(BinaryNode<T> *root, const T &target)
+    ErrorCode search_and_insert(BinaryNode<T> *&root, const T &target)
+    {
+      // when not found
+      if (nullptr == root)
+      {
+        // use copy ctor
+        root = new BinaryNode<T>(target);
+        return ErrorCode::success;
+      }
+      else if (root->_data < target)
+        return search_and_insert(root->_right, target);
+      else if (root->_data > target)
+        return search_and_insert(root->_left, target);
+      else
+        return ErrorCode::duplicate;
+    }
+
+    // 10.2.4 Treesort
+    //
+    // Hence inorder traversal always gives the sorted order for the keys.
+
+    // 10.2.5 Removal from a Binary Search Tree
+
+    // NOTE: reference
+    // ErrorCode search_and_destroy(BinaryNode<T> *root, const T &target)
+    ErrorCode search_and_destroy(BinaryNode<T> *&root, const T &target)
+    {
+      // when found or not-found. remove_root() handles a case when root is null.
+      if ((nullptr == root) || (root->_data == target))
+        return remove_root(root);
+      else if (root->_data < target)
+        return search_and_destroy(root->_right, target);
+      else
+        return search_and_destroy(root->_left, target);
+    }
+
+    // remove arg "root" from the tree. can remvoe any node in the tree and the
+    // problem is that we still need to maintain "binary search tree" property.
+    //
+    // that is there are couple of cases to think when "both subtree are not
+    // empty" when removing a node.
+    //
+    // 1. case when remove 4.
+    //    move 3's data to 4 and delete 3 node. this still works when node 3 has
+    //    left subtree but no right one.
+    //
+    // 2. case when remove 2.
+    //
+    //  tree of {0, ..., 13}
+    //
+    //              6
+    //        2         ...
+    //    0     4
+    //  x   1 3   5
+    //
+    //    when follows the code
+    //              6
+    //        1
+    //    0     4
+    //  x   x 3   5
+    //
+    //    when do manually
+    //              6
+    //        3
+    //    0     4
+    //  x   1 x   5
+    //
+    // note that there is no need to handle from parant of arg node to delete.
+    //
+    // the both still BST. which one is right?
+    //
+    // from the text:
+    //
+    // First, we find the immediate predecessor of the node under inorder
+    // traversal by moving to its left child and then as far right as possible.
+    // (The immediate successor would work just as well.)
+    //
+    // NOTE: reference?
+    //
+    // Moreover, this parameter is passed by reference so that any changes to it
+    // are reflected in the calling environment. Since the purpose is to update a
+    // binary search tree, we must assume that in the calling program, the actual
+    // parameter is one of the links of the tree, and not just a copy, or else the
+    // tree structure itself will not be changed as it should.
+
+    ErrorCode remove_root(BinaryNode<T> *&root)
+    {
+      if (nullptr == root)
+        return ErrorCode::not_present;
+
+      BinaryNode<T> *node_to_delete = root;
+
+      if (nullptr == root->_right)
+      {
+        root = root->_left;
+      }
+      else if (nullptr == root->_left)
+      {
+        root = root->_right;
+      }
+      // both subtree are not empty
+      else
+      {
+        node_to_delete = root->_left;
+
+        BinaryNode<T> *parent = root;
+
+        while (nullptr != node_to_delete->_right)
+        {
+          parent         = node_to_delete;
+          node_to_delete = node_to_delete->_right;
+        }
+
+        root->_data = node_to_delete->_data;
+
+        // when do not run while loop; that is, right subtree is null
+        if (parent == root)
+        {
+          root->_left = node_to_delete->_left;
+        }
+        // when run while loop;
+        else
+        {
+          parent->_right = node_to_delete->_left;
+        }
+      }
+
+      // remove a node
+      delete node_to_delete;
+
+      return ErrorCode::success;
+    }
+  };
+
+  void PrintTreeNode(int &entry) { std::cout << " " << entry << ","; }
+} // namespace algo_binary_tree
+
+// do not use dtor to clean up and use "remove" insted.
+//
+// [ RUN      ] AlgoSearchBinaryTree.check_binary_search_tree
+// { 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33,}
+// {}
+// [       OK ] AlgoSearchBinaryTree.check_binary_search_tree (0 ms)
+
+TEST(AlgoSearchBinarySearch, check_binary_search_tree)
+{
+  using namespace algo_binary_tree;
+
+  int arr[] = {33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+
+  int size = (sizeof(arr) / sizeof(arr[0]));
+
+  BinarySearchTree<int> bst;
+  ErrorCode result;
+
+  // insert elements to a tree
+  for (int idx = 0; idx < size; idx++)
+  {
+    result = bst.insert(arr[idx]);
+
+    if (result != ErrorCode::success)
+    {
+      std::cout << "insert failed: " << arr[idx] << " into a tree" << std::endl;
+    }
   }
+
+  // treesort and expects the ordered:
+  // int arr[] = { 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 };
+  std::cout << "{";
+  bst.inorder(PrintTreeNode);
+  std::cout << "}" << std::endl;
+
+  // remove
+  for (int idx = 0; idx < size; idx++)
+  {
+    result = bst.remove(arr[idx]);
+
+    if (result != ErrorCode::success)
+    {
+      std::cout << "remove failed: " << arr[idx] << ", error: " << (int)result
+                << std::endl;
+    }
+  }
+
+  // print
+  std::cout << "{";
+  bst.inorder(PrintTreeNode);
+  std::cout << "}" << std::endl;
 }
 
 // ={=========================================================================

@@ -181,14 +181,13 @@ include_directories(${Boost_INCLUDE_DIRS})
 # endif()
 
 
-# cxx.cpp
-add_executable(${PROJECT_NAME} "test_cxx.cpp")
+# test_cxx_1.cpp
+add_executable(test_cxx_1 "test_cxx_1.cpp")
+target_link_libraries(test_cxx_1 gmock_main)
 
-# cause link errors to Boost::thread
-# target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
-
-# target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
-target_link_libraries(${PROJECT_NAME} gmock_main)
+# test_cxx_2.cpp
+add_executable(test_cxx_2 "test_cxx_2.cpp")
+target_link_libraries(test_cxx_2 gmock_main)
 
 # _pad.cpp
 add_executable(${PROJECT_NAME}_pad "test_cxx_pad.cpp")
@@ -209,10 +208,6 @@ add_executable(test_boost "test_boost.cpp")
 # target_link_libraries(test_boost gmock_main Boost::thread)
 target_link_libraries(test_boost gmock_main)
 
-# test_stl.cpp
-add_executable(test_stl "test_stl.cpp")
-# target_link_libraries(test_stl gmock_main Boost::thread)
-target_link_libraries(test_stl gmock_main)
 
 # test_gcc.cpp
 add_executable(test_gcc "test_gcc.cpp")

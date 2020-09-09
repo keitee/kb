@@ -1339,7 +1339,10 @@ namespace leetcode_easy_010
     }
 
     // when not found
-    return std::string::npos;
+    return -1; // std::string::npos;
+
+    // return std::string::npos;
+    // warning: overflow in implicit constant conversion [-Woverflow]
   }
 
   // NOTE:
@@ -1833,9 +1836,10 @@ TEST(AlgoLeetCode, check_last_word_length)
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-15
 /*
+={=========================================================================
+algo-leetcode-15
+
 66. Plus One, Easy
 
 Given a non-empty array of digits representing a non-negative integer, plus one
@@ -1861,30 +1865,18 @@ Explanation: The array represents the integer 4321.
 
 namespace leetcode_easy_015
 {
-  // initially, thought
+  // simple approach:
   //
   // o like atoi, convert input to nmumber
   // o add +1
   // o like itoa, conver it back to array
   // o reverse it
   //
-  // but looks it's not right approach
-  //
-  // vector<int> plusOne_1(vector<int>& digits)
-  // {
-  // }
-  //
-  //  python solution:
-  //
-  //  def answer(self, digits):
-  //      return [int(c) for c in str(int(''.join(str(d) for d in digits)) + 1)]
-
   // solution from lonelydream
   //
   // the key idea is that:
   //
-  // if addition cause a carry made then continue doing so until it do not
-  // create a carry.
+  // +1 addition can cause a carry to the next and which can carry on to msb.
   //
   // when done, if [0] == 0, means there was a carry so insert 1 at the
   // beginning.
@@ -1894,54 +1886,72 @@ namespace leetcode_easy_015
   // Memory Usage: 8.7 MB, less than 15.95% of C++ online submissions for Plus
   // One.
 
-  vector<int> plusOne_2(vector<int> &digits)
+  std::vector<int> plus_one_1(std::vector<int> &coll)
   {
-    for (int i = digits.size() - 1; i >= 0; --i)
-    {
-      digits[i] += 1;
+    int i{};
 
-      if (digits[i] > 9)
+    for (i = coll.size() - 1; i >= 0; --i)
+    {
+      // add +1; +1 at first and means a carry after that.
+      coll[i] = coll[i] + 1;
+
+      // check if addition(+1) causes a carry. since we add +1, a carry only
+      // happens when it gets from 9 to 10.
+      //
+      // do "continue" to carry on the next digit
+      if (coll[i] > 9)
       {
-        digits[i] = 0;
+        coll[i] = 0;
         continue;
       }
-      // else
-      //   break;
 
-      // also works without else clause
+      // if not cause a carry, stops.
       break;
     }
 
-    if (digits[0] == 0)
-      digits.insert(digits.begin(), 1);
+    // ok, run through all digits and if the last is 0, it means there was a
+    // carry made from the loop.
+    if (coll[0] == 0)
+      coll.insert(coll.begin(), 1);
 
-    return digits;
+    // input arg is modified but return a copy here
+    return coll;
   }
 } // namespace leetcode_easy_015
 
-TEST(LeetCode, Easy_015_PlusOne)
+TEST(AlgoLeetCode, check_plus_one)
 {
   using namespace leetcode_easy_015;
 
-  auto func = plusOne_2;
+  {
+    auto imps = {plus_one_1};
 
-  {
-    vector<int> coll{1, 2, 3};
-    EXPECT_THAT(func(coll), ElementsAre(1, 2, 4));
-  }
-  {
-    vector<int> coll{4, 3, 2, 1};
-    EXPECT_THAT(func(coll), ElementsAre(4, 3, 2, 2));
-  }
-  {
-    vector<int> coll{9, 9, 9};
-    EXPECT_THAT(func(coll), ElementsAre(1, 0, 0, 0));
+    for (const auto &f : imps)
+    {
+      {
+        std::vector<int> coll{1, 2, 3};
+        EXPECT_THAT(f(coll), ElementsAre(1, 2, 4));
+      }
+      {
+        std::vector<int> coll{4, 3, 2, 1};
+        EXPECT_THAT(f(coll), ElementsAre(4, 3, 2, 2));
+      }
+      {
+        std::vector<int> coll{9, 9, 9};
+        EXPECT_THAT(f(coll), ElementsAre(1, 0, 0, 0));
+      }
+      {
+        std::vector<int> coll{9, 1, 9};
+        EXPECT_THAT(f(coll), ElementsAre(9, 2, 0));
+      }
+    }
   }
 }
 
-// ={=========================================================================
-// algo-leetcode-16
 /*
+={=========================================================================
+algo-leetcode-16
+
 67. Add Binary, Easy
 
 Given two binary strings, return their sum (also a binary string).
@@ -1958,1115 +1968,173 @@ Output: "10101"
 
 */
 
-// Like, Plus One, loop on input strings while caring about `carry`
-//
-// o since the length of inputs can be different, loops on max between them,
-// decrease them and note that then can go negative.
-//
-// o convert char to int
-
 namespace leetcode_easy_016
 {
-  // Runtime: 8 ms, faster than 95.80% of C++ online submissions for Add Binary.
-  //
-  // Memory Usage: 8.6 MB, less than 55.73% of C++ online submissions for Add
-  // Binary.
-
-  string addBinary_1(string a, string b)
+  std::string add_binary_1(std::string a, std::string b)
   {
-    int i    = a.size() - 1;
-    int j    = b.size() - 1;
-    auto len = max(i, j);
-
-    int carry{};
+    std::string ret{};
     int sum{};
-    string result{};
+    int first{}, second{};
+    int carry{};
 
-    for (; len >= 0; --len, --i, --j)
+    // num of loop
+    int asize = a.size() - 1;
+    int bsize = b.size() - 1;
+    int i     = std::max(asize, bsize);
+
+    for (; i >= 0; --i, --asize, --bsize)
     {
-      // sum = (i >= 0 ? stoi(a.substr(i, 1)) : 0) + (j >= 0 ? stoi(b.substr(j, 1)) : 0) + carry;
+      first  = (asize >= 0) ? (a[asize] - '0') : 0;
+      second = (bsize >= 0) ? (b[bsize] - '0') : 0;
 
+      sum = first + second + carry;
+
+      // std::cout << "sum: " << sum << endl;
+
+      if (sum == 2)
+      {
+        ret.push_back('0');
+        carry = 1;
+      }
+      else
+      {
+        ret.push_back(sum + '0');
+        carry = 0;
+      }
+    }
+
+    // ok, run through all digits and if the last is 0, it means there was a
+    // carry made from the loop.
+    if (carry == 1)
+      ret.push_back('1');
+
+    // std::cout << "ret: " << ret << endl;
+
+    // ok, return the reversed string
+    return std::string(ret.rbegin(), ret.rend());
+  }
+
+  // 1. num of loop should be max between a.size and b.size
+  // 2. while doing a loop, index of a is different from one of b.
+  //    0 1 2 3     0 1
+  //    1 1 1 1     1 1
+
+  std::string add_binary_2(std::string a, std::string b)
+  {
+    int aindex = a.size() - 1;
+    int bindex = b.size() - 1;
+    int loop   = std::max(aindex, bindex);
+
+    int sum{}, carry{};
+    std::string ret{};
+
+    // while doing a loop, decrease index of a and b since we read them up.
+    for (; loop >= 0; --loop, --aindex, --bindex)
+    {
+      // get sum
+      sum = ((aindex >= 0) ? a[aindex] - '0' : 0) +
+            ((bindex >= 0) ? b[bindex] - '0' : 0) + carry;
+
+      // set carry
+      sum == 2 ? carry = 1 : carry = 0;
+
+      // get result
+      ret.push_back((sum % 2) + '0');
+    }
+
+    if (carry)
+      ret.push_back('1');
+
+    return std::string(ret.rbegin(), ret.rend());
+  }
+
+  // do not "reverse" and use "ch"
+  std::string add_binary_3(std::string a, std::string b)
+  {
+    int aindex = a.size() - 1;
+    int bindex = b.size() - 1;
+    int loop   = std::max(aindex, bindex);
+
+    int sum{}, carry{};
+    std::string ret{};
+
+    // while doing a loop, decrease index of a and b since we read them up.
+    for (; loop >= 0; --loop, --aindex, --bindex)
+    {
+      // get sum
+      sum = ((aindex >= 0) ? a[aindex] - '0' : 0) +
+            ((bindex >= 0) ? b[bindex] - '0' : 0) + carry;
+
+      // set carry
+      sum == 2 ? carry = 1 : carry = 0;
+
+      // get result
+      ret.insert(ret.begin(), ((sum % 2) + '0'));
+    }
+
+    if (carry)
+      ret.insert(ret.begin(), '1');
+
+    return ret;
+  }
+
+  // do not "reverse"
+  std::string add_binary_4(std::string a, std::string b)
+  {
+    int aindex = a.size() - 1;
+    int bindex = b.size() - 1;
+    int loop   = std::max(aindex, bindex);
+
+    int sum{}, carry{};
+    std::string ret{};
+
+    // while doing a loop, decrease index of a and b since we read them up.
+    for (; loop >= 0; --loop, --aindex, --bindex)
+    {
+      // get sum
+      //
       // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Add
       // Binary.
 
-      sum = (i >= 0 ? a[i] - '0' : 0) + (j >= 0 ? b[j] - '0' : 0) + carry;
+      sum = ((aindex >= 0) ? a[aindex] - '0' : 0) +
+            ((bindex >= 0) ? b[bindex] - '0' : 0) + carry;
 
-      sum >= 2 ? carry = sum / 2 : carry = 0;
+      // set carry
+      sum == 2 ? carry = 1 : carry = 0;
 
-      // cout << "insert: " << (sum % 2) << endl;
-
-      result.insert(0, to_string(sum % 2));
+      // get result
+      ret.insert(0, std::to_string(sum % 2));
     }
-
-    // cout << "sum: " << sum << ", carry: " << carry << endl;
 
     if (carry)
-    {
-      // cout << "insert: " << (1) << endl;
-      result.insert(0, to_string(1));
-    }
+      ret.insert(0, std::to_string(1));
 
-    return result;
+    return ret;
   }
 } // namespace leetcode_easy_016
 
-TEST(LeetCode, Easy_016_AddBinary)
+TEST(AlgoLeetCode, check_add_binary)
 {
   using namespace leetcode_easy_016;
 
-  auto func = addBinary_1;
-
-  EXPECT_THAT(func("10", "11"), "101");
-  EXPECT_THAT(func("1", "11"), "100");
-  EXPECT_THAT(func("1010", "1011"), "10101");
-  EXPECT_THAT(func("", ""), "");
-
-  // fails at run and fixed
-  EXPECT_THAT(func("0", "0"), "0");
-}
-
-// ={=========================================================================
-// algo-leetcode-17
-/*
-69. Sqrt(x), Easy
-
-Implement int sqrt(int x).
-
-Compute and return the square root of x, where x is guaranteed to be a
-non-negative integer.
-
-Since the return type is an integer, the decimal digits are truncated and only
-the integer part of the result is returned.
-
-Example 1:
-Input: 4
-Output: 2
-
-Example 2:
-Input: 8
-Output: 2
-Explanation: The square root of 8 is 2.82842..., and since 
-             the decimal part is truncated, 2 is returned.
-*/
-
-namespace leetcode_easy_017
-{
-
-  // https://www.geeksforgeeks.org/square-root-of-an-integer/
-  // binary search version
-  //
-  // O(Log x)
-  //
-  //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
-  //  |---|--------|-------|--------------------|
-  //
-  //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
-  //  value but used
-
-  int floor_sqrt_1(int x)
   {
-    // base cases
-    if (x == 0 || x == 1)
-      return x;
+    auto imps = {add_binary_1, add_binary_2, add_binary_3, add_binary_4};
 
-    // starts from 1 since it's covered in base cases
-    int start{1};
-    int end{x - 1};
-    int ans{};
-
-    while (start <= end)
+    for (const auto &f : imps)
     {
-      int mid = (start + end) / 2;
-
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
+      EXPECT_THAT(f("10", "11"), "101");
+      EXPECT_THAT(f("1", "11"), "100");
+      EXPECT_THAT(f("1010", "1011"), "10101");
+      EXPECT_THAT(f("", ""), "");
+      EXPECT_THAT(f("0", "0"), "0");
     }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
-  // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
-  // 1.
-  //
-  // cxx-error-overflow
-  // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
-  // 536848899 cannot be represented in type 'int' (solution.cpp)
-
-  int floor_sqrt_2(int x)
-  {
-    // // base cases
-    // if (x == 0 || x == 1)
-    //   return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x / 2};
-    int ans{};
-
-    while (start <= end)
-    {
-      int mid = (start + end) / 2;
-
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_3(int x)
-  {
-    // // base cases
-    if (x == 0 || x == 1)
-      return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x / 2};
-    int ans{};
-
-    while (start <= end)
-    {
-      long long mid   = (start + end) / 2;
-      long long sqare = mid * mid;
-
-      // equality; perfect square
-      if (sqare == x)
-        return mid;
-      else if (sqare < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // having square variable for mid * mid causes performance penalty?
-  //
-  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_4(int x)
-  {
-    // // base cases
-    if (x == 0 || x == 1)
-      return x;
-
-    // starts from 1 since it's covered in base cases
-    int start{0};
-    int end{x / 2};
-    int ans{};
-
-    long long mid{};
-
-    while (start <= end)
-    {
-      mid = (start + end) / 2;
-
-      // equality; perfect square
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid < x)
-      {
-        // so discard [1, mid], update start and move closer to sqrt(x)
-        start = mid + 1;
-
-        // we need floor answer so update ans
-        ans = mid;
-      }
-      // discard [mid, x]
-      else
-        end = mid - 1;
-    }
-
-    // return floor value rather than `not found`
-    return ans;
-  }
-
-  // code discussion forum
-  //
-  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
-  // Sqrt(x).
-
-  int floor_sqrt_5(int x)
-  {
-    long long l = 1, r = x, mid;
-
-    if (x == 0)
-      return 0;
-
-    while (l <= r)
-    {
-      mid = l + (r - l) / 2;
-
-      if (mid * mid == x)
-        return mid;
-      else if (mid * mid > x)
-        r = mid - 1;
-      else
-      {
-        l = mid + 1;
-        if (l * l > x)
-          return mid;
-      }
-    }
-
-    // just to avoid warning
-    return mid;
-  }
-} // namespace leetcode_easy_017
-
-TEST(LeetCode, Easy_017_Sqrt)
-{
-  using namespace leetcode_easy_017;
-
-  {
-    // #include <math.h>
-    // double sqrt(double x);
-    // float sqrtf(float x);
-    // long double sqrtl(long double x);
-
-    // 2
-    // 2.82843
-    // 3.16228
-    // 4
-
-    EXPECT_DOUBLE_EQ(sqrt(4), 2);
-    EXPECT_NEAR(sqrt(8), 2.82843, 0.00001);
-
-    // Expected equality of these values:
-    //   sqrt(10)
-    //     Which is: 3.1622776601683795
-    //   3.16228
-    // EXPECT_DOUBLE_EQ(sqrt(10), 3.16228);
-
-    EXPECT_NEAR(sqrt(10), 3.16228, 0.00001);
-    EXPECT_DOUBLE_EQ(sqrt(16), 4);
-  }
-
-  {
-    auto func = floor_sqrt_1;
-
-    EXPECT_THAT(func(4), 2);
-    EXPECT_THAT(func(8), 2);
-    EXPECT_THAT(func(10), 3);
-    EXPECT_THAT(func(16), 4);
-  }
-  {
-    auto func = floor_sqrt_2;
-
-    EXPECT_THAT(func(4), 2);
-    EXPECT_THAT(func(8), 2);
-    EXPECT_THAT(func(10), 3);
-    EXPECT_THAT(func(16), 4);
-  }
-  {
-    // >>> 46339*46339, floor
-    // 2,147,302,921
-    //
-    // 2,147,395,599
-    //
-    // >>> 46340*46340, ceiling
-    // 2,147,395,600
-
-    auto func = floor_sqrt_3;
-    EXPECT_THAT(func(2147395599), 46339);
-    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
-  }
-
-  {
-    // >>> 46339*46339, floor
-    // 2,147,302,921
-    //
-    // 2,147,395,599
-    //
-    // >>> 46340*46340, ceiling
-    // 2,147,395,600
-
-    auto func = floor_sqrt_4;
-    EXPECT_THAT(func(1), 1);
-    EXPECT_THAT(func(2147395599), 46339);
-    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
-  }
-}
-
-TEST(LeetCode, Easy_017_Sqrt_Performance_1)
-{
-  using namespace leetcode_easy_017;
-  auto func = floor_sqrt_3;
-
-  for (int i = 0; i < 1000; ++i)
-  {
-    EXPECT_THAT(func(1), 1);
-    EXPECT_THAT(func(2147395599), 46339);
-  }
-}
-
-TEST(LeetCode, Easy_017_Sqrt_Performance_2)
-{
-  using namespace leetcode_easy_017;
-  auto func = floor_sqrt_4;
-
-  for (int i = 0; i < 1000; ++i)
-  {
-    EXPECT_THAT(func(1), 1);
-    EXPECT_THAT(func(2147395599), 46339);
   }
 }
 
 /*
-Approach 3: Dynamic Programming
+={=========================================================================
+algo-leetcode-198
 
-As we can see this problem can be broken into subproblems, and it contains the
-optimal substructure property i.e. its optimal solution can be constructed
-efficiently from optimal solutions of its subproblems, we can use dynamic
-programming to solve this problem.
-
-One can reach ith step in one of the two ways:
-
-Taking a single step from (i-1) th step.
-
-Taking two step from (i−2) th step.
-
-(since it is about way to reach to n but not number of steps)
-
-So, the total number of ways to reach i th is equal to sum of ways of reaching
-(i−1)th step and ways of reaching (i-2)th step.  
-
-Let dp[i] denotes the number of ways to reach on i th step:
-
-dp[i]=dp[i-1]+dp[i-2]
-
-
-Approach 4: Fibonacci Number
-
-In the above approach we have used dpdp array where dp[i]=dp[i-1]+dp[i-2]. It
-can be easily analysed that dp[i] is nothing but ith fibonacci number.
-
-means the dp value sequence. this is fibonacci sequence:
-
-0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
-
-dp value sequence:
-
-0, 1, 2, 3, 5, 8, 13, 21, 34, ...
-
-Now we just have to find n th number of the fibonacci series having 1 and 2
-their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
-
-
-  int fibonacci_2(int n)
-  {
-    int twoback{};  // f(n-2)
-    int oneback{};  // f(n-1)
-    int current{};
-
-    if (n <= 0)
-      return 0;
-    else if (n == 1)
-      return 1;
-    else
-    {
-      // back from current
-      twoback = 0;
-      oneback = 1;
-
-      for (int i = 2; i <= n; ++i)
-      {
-        current = twoback + oneback;
-
-        // for next f
-        twoback = oneback;
-        oneback = current;
-      }
-    }
-
-    return current;
-  }
-*/
-
-namespace leetcode_easy_018
-{
-  int climbStairs_3(int n)
-  {
-    // base cases
-    if (n <= 0)
-      return 0;
-    if (n == 1)
-      return 1;
-    if (n == 2)
-      return 2;
-
-    int one_step_before  = 2; // when n == 2
-    int two_steps_before = 1; // when n == 1
-    int all_ways         = 0;
-
-    // starts from n == 3
-    for (int i = 3; i <= n; i++)
-    {
-      all_ways         = one_step_before + two_steps_before;
-      two_steps_before = one_step_before;
-      one_step_before  = all_ways;
-    }
-
-    return all_ways;
-  };
-} // namespace leetcode_easy_018
-
-TEST(LeetCode, Easy_018_ClimbStairs_3)
-{
-  using namespace leetcode_easy_018;
-  auto func = climbStairs_3;
-
-  EXPECT_THAT(func(2), 2);
-  EXPECT_THAT(func(3), 3);
-  EXPECT_THAT(func(4), 5);
-  EXPECT_THAT(func(30), 1346269);
-}
-
-// ={=========================================================================
-// algo-leetcode-19
-/*
-100. Same Tree, Easy
-
-Given two binary trees, write a function to check if they are the same or not.
-
-Two binary trees are considered the same if they are structurally identical and
-the nodes have the same value.
-
-Example 1:
-
-Input:     1         1
-          / \       / \
-         2   3     2   3
-
-        [1,2,3],   [1,2,3]
-
-Output: true
-
-Example 2:
-
-Input:     1         1
-          /           \
-         2             2
-
-        [1,2],     [1,null,2]
-
-Output: false
-
-Example 3:
-
-Input:     1         1
-          / \       / \
-         2   1     1   2
-
-        [1,2,1],   [1,1,2]
-
-Output: false
- 
-*/
-
-// ={=========================================================================
-// algo-leetcode-155
-/* 155. Min Stack, Easy
-
-Design a stack that supports push, pop, top, and retrieving the minimum element
-in constant time.
-
-push(x) -- Push element x onto stack.
-pop() -- Removes the element on top of the stack.
-top() -- Get the top element.
-getMin() -- Retrieve the minimum element in the stack.
-Example:
-MinStack minStack = new MinStack();
-minStack.push(-2);
-minStack.push(0);
-minStack.push(-3);
-minStack.getMin();   --> Returns -3.
-minStack.pop();
-minStack.top();      --> Returns 0.
-minStack.getMin();   --> Returns -2.
-
-*/
-
-namespace leetcode_easy_155
-{
-  // o changed from using fixed contiguous arrary to using vector
-  // o passes but slow and do not meet condition, "retrieving the minimum
-  //   element in constant time"
-
-  class MinStack_1
-  {
-  public:
-    MinStack_1() {}
-
-    bool empty() { return data_.empty(); }
-
-    void push(int x)
-    {
-      data_.push_back(x);
-      min_ = min(min_, x);
-    }
-
-    void pop()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      data_.pop_back();
-
-      auto it = std::min_element(data_.begin(), data_.end());
-      if (it == data_.end())
-        min_ = std::numeric_limits<int>::max();
-      else
-        min_ = *it;
-    }
-
-    int top()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      return data_.back();
-    }
-
-    int getMin() { return min_; }
-
-  private:
-    std::vector<int> data_;
-    int min_{std::numeric_limits<int>::max()};
-  };
-
-  // o as in the dicusstion, can use priority_queue<> but still do not meet
-  //   condition, "retrieving the minimum element in constant time"
-
-  // o can keep the min value as last min value and pop() without looping until
-  // see that than updating min every time do pop().
-  //
-  // improvement but when see the last min and poped it, search min and update
-  // min value. still not constant.
-  //
-  // Looked at:
-  //
-  // Python single stack O(1) all operations, by destinynitsed
-  //
-  // both uses extra space to keep last min value when that item waw pushed and
-  // use the same idea.
-  //
-  // Python code is clearer
-  //
-  // class MinStack:
-  //
-  //     def __init__(self):
-  //         self.stack = []
-  //
-  //     def push(self, x):
-  //         if self.stack:
-  // 			      self.stack.append(min(self.stack[-2], x))
-  //         else:
-  //             self.stack.append(x)
-  //         self.stack.append(x)
-  //
-  //
-  //     def pop(self):
-  //         if self.stack:
-  //             self.stack.pop()
-  //             self.stack.pop()
-  //
-  //     def top(self):
-  //         if self.stack:
-  //             return self.stack[-1]
-  //
-  //     def getMin(self):
-  //         if self.stack:
-  //             return self.stack[-2]
-  //
-  // For example, input -2, 0, 3 makes
-  // [-2, -2, -2, 0, -3, -3]
-
-  class MinStack_2
-  {
-  public:
-    MinStack_2() {}
-
-    bool empty() { return data_.empty(); }
-
-    void push(int x)
-    {
-      if (empty())
-      {
-        data_.push_back(x);
-      }
-      else
-      {
-        data_.push_back(min(*(data_.end() - 2), x));
-      }
-
-      data_.push_back(x);
-    }
-
-    void pop()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      data_.pop_back();
-      data_.pop_back();
-    }
-
-    int top()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      return data_.back();
-    }
-
-    int getMin()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      return *(data_.end() - 2);
-    }
-
-  private:
-    std::vector<int> data_;
-  };
-
-  // Java accepted solution using one stack, by sometimescrazy
-  // saves space by adding previous min only when min changes.
-  //
-  // For example, input -2, 0, 3 makes
-  //
-  // # [-2, -2, -2, 0, -3, -3]
-  // [max, -2, 0, -2, -3]
-
-  class MinStack_3
-  {
-  public:
-    MinStack_3() {}
-
-    bool empty() { return data_.empty(); }
-
-    // only push the old minimum value when the current
-    // minimum value changes after pushing the new value x
-
-    void push(int x)
-    {
-      if (x <= min_)
-      {
-        data_.push_back(min_);
-        min_ = x;
-      }
-
-      data_.push_back(x);
-    }
-
-    // if pop operation could result in the changing of the current minimum
-    // value, pop twice and change the current minimum value to the last
-    // minimum value.
-
-    void pop()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      if (data_.back() == min_)
-      {
-        data_.pop_back();
-        min_ = data_.back();
-      }
-
-      data_.pop_back();
-    }
-
-    int top()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      return data_.back();
-    }
-
-    int getMin()
-    {
-      if (empty())
-        throw runtime_error("stack is empty");
-
-      return min_;
-    }
-
-  private:
-    std::vector<int> data_;
-    int min_{std::numeric_limits<int>::max()};
-  };
-} // namespace leetcode_easy_155
-
-TEST(LeetCode, Easy_155_MinStack_1)
-{
-  using namespace leetcode_easy_155;
-
-  {
-    MinStack_1 ms;
-
-    ms.push(-2);
-    ms.push(0);
-    ms.push(-3);
-
-    EXPECT_THAT(ms.getMin(), -3);
-
-    ms.pop();
-    EXPECT_THAT(ms.top(), 0);
-
-    EXPECT_THAT(ms.getMin(), -2);
-  }
-
-  {
-    MinStack_1 ms;
-
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.top();
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-
-    ms.push(2147483647);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-    ms.push(-2147483648);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), -2147483648);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-  }
-
-  {
-    MinStack_2 ms;
-
-    ms.push(-2);
-    ms.push(0);
-    ms.push(-3);
-
-    EXPECT_THAT(ms.getMin(), -3);
-
-    ms.pop();
-    EXPECT_THAT(ms.top(), 0);
-
-    EXPECT_THAT(ms.getMin(), -2);
-  }
-
-  {
-    MinStack_2 ms;
-
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.top();
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-
-    ms.push(2147483647);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-    ms.push(-2147483648);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), -2147483648);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-  }
-
-  {
-    MinStack_3 ms;
-
-    ms.push(-2);
-    ms.push(0);
-    ms.push(-3);
-
-    EXPECT_THAT(ms.getMin(), -3);
-
-    ms.pop();
-    EXPECT_THAT(ms.top(), 0);
-
-    EXPECT_THAT(ms.getMin(), -2);
-  }
-  {
-    MinStack_3 ms;
-
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.push(2147483646);
-    ms.top();
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483646);
-    ms.pop();
-
-    ms.push(2147483647);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-    ms.push(-2147483648);
-    ms.top();
-    EXPECT_THAT(ms.getMin(), -2147483648);
-    ms.pop();
-    EXPECT_THAT(ms.getMin(), 2147483647);
-  }
-}
-
-// ={=========================================================================
-// algo-leetcode-191
-/*
-171. Excel Sheet Column Number, Easy
-
-Given a column title as appear in an Excel sheet, return its corresponding
-column number.
-
-For example:
-
-    A -> 1
-    B -> 2
-    C -> 3
-    ...
-    Z -> 26
-    AA -> 27
-    AB -> 28 
-    ...
-
-Example 1:
-Input: "A"
-Output: 1
-
-Example 2:
-Input: "AB"
-Output: 28
-
-Example 3:
-Input: "ZY"
-Output: 701
-
-
-168. Excel Sheet Column Title, Easy
-
-Given a positive integer, return its corresponding column title as appear in an
-Excel sheet.
-
-For example:
-
-    1 -> A
-    2 -> B
-    3 -> C
-    ...
-    26 -> Z
-    27 -> AA
-    28 -> AB 
-    ...
-
-*/
-
-namespace leetcode_easy_171
-{
-  // uses *algo-atoi* when base 26
-  //
-  // A  B  C  ... Z
-  // 1  2  3      26
-  //
-  // AA AB AC ... AZ
-  // 27 28 29 ... 52 (26 + 26)
-  //
-  // BA
-  // 53
-  //
-  // assumes that input are uppercase
-  //
-  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
-  // Sheet Column Number.
-  //
-  // Memory Usage: 8.2 MB, less than 27.21% of C++ online submissions for Excel
-  // Sheet Column Number.
-
-  int titleToNumber_1(string s)
-  {
-    int result{};
-
-    for (auto const e : s)
-    {
-      if (!isalpha(e))
-        return 0;
-
-      result = result * 26 + (e - 'A' + 1);
-    }
-
-    return result;
-  }
-
-  // base 10:
-  //
-  // 0  1   2   3   4   5   6   7   8   9
-  // 10 11  12  13  14  15  16  17  18  19
-  // ...
-  //
-  // 1  2   3   4   5   6   ... 25  26
-  // A  B   C   D   E   F       Y   Z
-  // % 26
-  // 1  1   3   4   5   6   ... 25  0
-  //
-  // 27   28    29                  52
-  // AA   AB    AC                  AZ
-  // 1/1  1/2   1/3                 2/0
-  //
-  // so special handing when % is 0.
-  //
-  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
-  // Sheet Column Title.
-  //
-  // Memory Usage: 8 MB, less than 84.11% of C++ online submissions for Excel
-  // Sheet Column Title.
-
-  string convertToTitle_1(int n)
-  {
-    string result{};
-    char ch{};
-    int value{};
-
-    while (n)
-    {
-      value = (n % 26);
-      n     = value == 0 ? (n / 26) - 1 : n / 26;
-      ch    = value == 0 ? 'Z' : 'A' + value - 1;
-
-      // not use algo-reverse
-      // result += ch;
-      result.insert(result.begin(), 1, ch);
-    }
-
-    return result;
-  }
-
-  // remove special handing by using "--n" and make it same as algo-itoa
-  // from discussion:
-  // Efficient C++ solution (easily transposable) by daedric
-
-  string convertToTitle_2(int n)
-  {
-    string result{};
-    char ch{};
-
-    while (n)
-    {
-      --n;
-      ch = 'A' + n % 26;
-      n /= 26;
-
-      // not use algo-reverse
-      // result += ch;
-      result.insert(result.begin(), 1, ch);
-    }
-
-    return result;
-  }
-
-  // algo-recursive
-  // My 1 lines code in Java, C++, and Python, xcv58
-
-  string convertToTitle_3(int n)
-  {
-    // update: because the behavior of different compilers, the safe version should be:
-    return n == 0 ? ""
-                  : convertToTitle_3((n - 1) / 26) + (char)((n - 1) % 26 + 'A');
-  }
-
-} // namespace leetcode_easy_171
-
-TEST(LeetCode, Easy_171_ExcelSheetColumnNumber)
-{
-  using namespace leetcode_easy_171;
-
-  {
-    auto func = titleToNumber_1;
-
-    EXPECT_THAT(func("A"), 1);
-    EXPECT_THAT(func("AB"), 28);
-    EXPECT_THAT(func("ZY"), 701);
-  }
-  {
-    auto func = convertToTitle_1;
-
-    EXPECT_THAT(func(1), "A");
-    EXPECT_THAT(func(28), "AB");
-    EXPECT_THAT(func(701), "ZY");
-  }
-  {
-    auto func = convertToTitle_2;
-
-    EXPECT_THAT(func(1), "A");
-    EXPECT_THAT(func(28), "AB");
-    EXPECT_THAT(func(701), "ZY");
-  }
-  {
-    auto func = convertToTitle_3;
-
-    EXPECT_THAT(func(1), "A");
-    EXPECT_THAT(func(28), "AB");
-    EXPECT_THAT(func(701), "ZY");
-  }
-}
-
-// ={=========================================================================
-// algo-leetcode-198
-/*
 198. House Robber, Easy
 
 You are a professional robber planning to rob houses along a street. Each house
@@ -3101,6 +2169,17 @@ Total amount you can rob = 2 + 9 + 1 = 12.
 
 namespace leetcode_easy_198
 {
+  /*
+  rob1 falis since return 3 when expects 4
+  vector<int> coll{2, 1, 1, 2};
+
+  rob2 falis since return 5 when expects 4
+  vector<int> coll{2, 1, 1, 2};
+
+  rob2 falis since return 6 when expects 4
+  vector<int> coll{1, 2, 3, 1};
+  */
+
   int rob_1(vector<int> &nums)
   {
     int sum{};
@@ -3148,351 +2227,291 @@ namespace leetcode_easy_198
 
   // C 1ms, O(1)space,  very simple solution, Jasonly
 
-  int rob_3(vector<int> &nums)
-  {
-    int a = 0;
-    int b = 0;
+  // 1. due to constraint which is "no two adjacent houses", min step is to move
+  // +2. and then +x move to get max.
+  //
+  // 2. the other sequence is to start from 1 and move +2. and then +x move to
+  // get max.
+  //
+  // 3. "possibe max" you can get. imagine that two robbers runs and check each
+  // others max. even if moves +x, should be within possible(current) max.
 
-    for (size_t i = 0; i < nums.size(); i++)
+  int rob_3(std::vector<int> &nums)
+  {
+    auto loop{nums.size()};
+
+    size_t runner1_sum{};
+    size_t runner2_sum{};
+
+    for (size_t i = 0; i < loop; ++i)
     {
+      // run on even indexes
       if (i % 2 == 0)
       {
-        a = max(a + nums[i], b);
+        runner1_sum += nums[i];
+        runner1_sum = std::max(runner1_sum, runner2_sum);
       }
       else
       {
-        b = max(a, b + nums[i]);
+        runner2_sum += nums[i];
+        runner2_sum = std::max(runner1_sum, runner2_sum);
       }
     }
 
-    return max(a, b);
+    return std::max(runner1_sum, runner2_sum);
   }
-
 } // namespace leetcode_easy_198
 
-TEST(LeetCode, Easy_198_Rob)
+TEST(AlgoLeetCode, check_robber)
 {
   using namespace leetcode_easy_198;
 
-  {
-    auto func = rob_1;
+  auto imps = {rob_3};
 
+  for (const auto &f : imps)
+  {
     {
       vector<int> coll{1, 2, 3, 1};
-      EXPECT_THAT(func(coll), 4);
+      EXPECT_THAT(f(coll), 4);
     }
     {
       vector<int> coll{2, 7, 9, 3, 1};
-      EXPECT_THAT(func(coll), 12);
-    }
-
-    // falis as expects 4
-    {
-      vector<int> coll{2, 1, 1, 2};
-      EXPECT_THAT(func(coll), 3);
-    }
-  }
-  {
-    auto func = rob_2;
-
-    // fails as expects 4
-    {
-      vector<int> coll{2, 1, 1, 2};
-      EXPECT_THAT(func(coll), 5);
-    }
-
-    // fails as expects 4
-    {
-      vector<int> coll{1, 2, 3, 1};
-      EXPECT_THAT(func(coll), 6);
-    }
-  }
-
-  {
-    auto func = rob_3;
-
-    {
-      vector<int> coll{1, 2, 3, 1};
-      EXPECT_THAT(func(coll), 4);
-    }
-    {
-      vector<int> coll{2, 7, 9, 3, 1};
-      EXPECT_THAT(func(coll), 12);
+      EXPECT_THAT(f(coll), 12);
     }
     {
       vector<int> coll{2, 1, 1, 2};
-      EXPECT_THAT(func(coll), 4);
+      EXPECT_THAT(f(coll), 4);
     }
     {
       vector<int> coll{1, 2, 3, 1};
-      EXPECT_THAT(func(coll), 4);
+      EXPECT_THAT(f(coll), 4);
     }
     {
       vector<int> coll{2, 7, 9, 3, 1, 4};
-      EXPECT_THAT(func(coll), 15);
+      EXPECT_THAT(f(coll), 15);
     }
   }
 }
 
-// ={=========================================================================
-// algo-xxx
+/*
+={=========================================================================
+algo-leetcode-118
 
-namespace algo_xxx
+Pascal's Triangle
+ 
+NOTE: it's is DP example?
+
+Approach 1: Dynamic Programming
+
+Intuition
+
+If we have the a row of Pascal's triangle, we can easily compute the next row by
+each pair of adjacent values.
+
+Algorithm
+
+Although the algorithm is very simple, the iterative approach to constructing
+Pascal's triangle can be classified as dynamic programming because we construct
+each row based on the previous row.
+
+First, we generate the overall triangle list, which will store each row as a
+sublist. Then, we check for the special case of 00, as we would otherwise return
+[1][1]. If numRows > 0numRows>0, then we initialize triangle with [1][1] as its
+first row, and proceed to fill the rows as follows:
+
+
+from solution.
+
+class Solution {
+    public List<List<Integer>> generate(int numRows) {
+        List<List<Integer>> triangle = new ArrayList<List<Integer>>();
+
+        // First base case; if user requests zero rows, they get zero rows.
+        if (numRows == 0) {
+            return triangle;
+        }
+
+        // Second base case; first row is always [1].
+        triangle.add(new ArrayList<>());
+        triangle.get(0).add(1);
+
+        for (int rowNum = 1; rowNum < numRows; rowNum++) {
+            List<Integer> row = new ArrayList<>();
+            List<Integer> prevRow = triangle.get(rowNum-1);
+
+            // The first row element is always 1.
+            row.add(1);
+
+            // Each triangle element (other than the first and last of each row)
+            // is equal to the sum of the elements above-and-to-the-left and
+            // above-and-to-the-right.
+            for (int j = 1; j < rowNum; j++) {
+                row.add(prevRow.get(j-1) + prevRow.get(j));
+            }
+
+            // The last row element is always 1.
+            row.add(1);
+
+            triangle.add(row);
+        }
+
+        return triangle;
+    }
+ 
+*/
+
+namespace leetcode_easy_118
 {
-  int water_volume(vector<int> const &A)
+  std::vector<std::vector<int>> triangle_1(int rows)
   {
-    int lindex{};
-    int rindex{A.size() - 1};
-    int lmax{};
-    int rmax{};
-    int volume{};
+    std::vector<std::vector<int>> tri{};
 
-    while (lindex < rindex)
+    tri.emplace_back(std::vector<int>({1}));
+    tri.emplace_back(std::vector<int>({1, 1}));
+    tri.emplace_back(std::vector<int>({1, 2, 1}));
+    tri.emplace_back(std::vector<int>({1, 3, 3, 1}));
+
+    for (const auto &row : tri)
     {
-      if (A[lindex] < A[rindex])
+      std::cout << "{";
+
+      for (const auto &e : row)
       {
-        lmax = max(lmax, A[lindex]);
-        volume += (lmax - A[lindex]);
-        ++lindex;
+        std::cout << e << ", ";
       }
-      else
-      {
-        rmax = max(rmax, A[rindex]);
-        volume += (rmax - A[rindex]);
-        --rindex;
-      }
+
+      std::cout << "}" << std::endl;
     }
 
-    return volume;
+    return tri;
   }
-} // namespace algo_xxx
 
-TEST(X, XX)
+  // draw picture of triangle and implements the above java solution.
+  // space and time of O(rows^2)
+
+  std::vector<std::vector<int>> triangle_2(int rows)
+  {
+    std::vector<std::vector<int>> tri{};
+    std::vector<int> row{};
+
+    // if row is 0
+    if (rows == 0)
+      return tri;
+
+    // if row is 1
+    // row.emplace_back(1);
+    tri.emplace_back(std::vector<int>({1}));
+
+    // for row is >= 2
+    for (int i = 2; i <= rows; ++i)
+    {
+      std::vector<int> row;
+
+      // first
+      row.emplace_back(1);
+
+      // note that to access the previous use -1 since vector index starts from
+      // 0.
+      for (int run = 1; run <= (i - 2); ++run)
+      {
+        auto sum = tri[i - 2][run - 1] + tri[i - 2][run];
+        row.emplace_back(sum);
+      }
+
+      // last
+      row.emplace_back(1);
+
+      // for (const auto &e : row)
+      // {
+      //   std::cout << e << ", ";
+      // }
+      // std::cout << "\n";
+
+      tri.emplace_back(row);
+    }
+
+    return tri;
+  }
+
+  // row number starts from 0
+  // https://leetcode.com/problems/pascals-triangle/discuss/825125/C%2B%2B-100-faster
+  // C++ 100% faster. really?
+
+  std::vector<std::vector<int>> triangle_3(int rows)
+  {
+    std::vector<std::vector<int>> tri{};
+
+    // fill tri with the required num of elements and init them as 1.
+    //
+    // note that
+    // tri.emplace_back(std::vector<int>(i + 0, 1));
+    // makes wrong result since it affects `size` in the next loop
+    for (int i = 0; i < rows; ++i)
+    {
+      tri.emplace_back(std::vector<int>(i + 1, 1));
+    }
+
+    // execlude the first row
+    for (int i = 1; i < rows; ++i)
+    {
+      // execlude the first and the last element
+      for (int j = 1; j < (int)tri[i].size() - 1; j++)
+        tri[i][j] = tri[i - 1][j - 1] + tri[i - 1][j];
+    }
+
+    return tri;
+  }
+
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Pascal's Triangle.
+  // Memory Usage: 6.4 MB, less than 84.98% of C++ online submissions for Pascal's Triangle.
+
+  std::vector<std::vector<int>> triangle_4(int rows)
+  {
+    std::vector<std::vector<int>> tri{};
+
+    // fill tri with the required num of elements and init them as 1.
+    //
+    // note that
+    // tri.emplace_back(std::vector<int>(i + 0, 1));
+    // makes wrong result since it affects `size` in the next loop
+    for (int i = 0; i < rows; ++i)
+    {
+      tri.emplace_back(std::vector<int>(i + 1, 1));
+    }
+
+    // execlude the first row
+    for (int i = 1; i < rows; ++i)
+    {
+      // execlude the first and the last element
+      for (int j = 1; j < i; j++)
+        tri[i][j] = tri[i - 1][j - 1] + tri[i - 1][j];
+    }
+
+    return tri;
+  }
+} // namespace leetcode_easy_118
+
+TEST(AlgoLeetCode, check_triangle)
 {
-  using namespace algo_xxx;
+  using namespace leetcode_easy_118;
 
-  auto func = water_volume;
+  std::vector<std::vector<int>> expected{{1},
+                                         {1, 1},
+                                         {1, 2, 1},
+                                         {1, 3, 3, 1},
+                                         {1, 4, 6, 4, 1}};
 
   {
-    vector<int> coll{2, 5, 1, 2, 3, 4, 7, 7, 6};
-    EXPECT_THAT(func(coll), 10);
-  }
-  {
-    vector<int> coll{2, 5, 1, 3, 1, 2, 1, 7, 7, 6};
-    EXPECT_THAT(func(coll), 17);
-  }
-  {
-    vector<int> coll{2, 5, 4, 3, 4, 7, 6, 5, 4, 5, 7, 9, 5, 4, 3, 4, 5, 6};
-    EXPECT_THAT(func(coll), 21);
-  }
-}
-
-// ={=========================================================================
-// algo-list
-
-// single
-//
-// class List
-// {
-//   public:
-//     void clear();
-//     bool empty();
-//     int size();
-//
-//     // as push_back();
-//     void push(ListEntry const& entry);
-//
-//     // as traverse()
-//     std::vector<ListEntry> snap();
-// };
-
-namespace algo_list_linked
-{
-  // when node and entry are in a single structure and these can be different
-  // structure such as ListEntry and ListNode
-
-  struct ListEntry
-  {
-    explicit ListEntry(int row = 0, int col = 0) noexcept
-        : row_(row)
-        , col_(col)
-        , next_(nullptr)
-    {}
-
-    int row_{};
-    int col_{};
-
-    ListEntry *next_;
-  };
-
-  // cxx-operator-overload
-  bool operator==(ListEntry const &lhs, ListEntry const &rhs)
-  {
-    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+    auto f   = triangle_2;
+    auto ret = f(5);
+    EXPECT_THAT(ret, expected);
   }
 
-  bool operator!=(ListEntry const &lhs, ListEntry const &rhs)
   {
-    return !(lhs == rhs);
+    auto f   = triangle_3;
+    auto ret = f(5);
+    EXPECT_THAT(ret, expected);
   }
-
-  class List
-  {
-  public:
-    explicit List() noexcept
-        : head_(nullptr)
-    {}
-
-    bool emptry() { return count_ == 0 ? true : false; }
-
-    int size() { return count_; }
-
-    // push_back()
-    void push_old(ListEntry const &entry)
-    {
-      if (!head_)
-        head_ = new ListEntry(entry);
-      else
-      {
-        ListEntry *run = head_;
-
-        // unlike clear(), snap(), run shall be before end() so that can
-        // insert new one. Hence check run->next
-
-        while (run->next_)
-          run = run->next_;
-
-        run->next_ = new ListEntry(entry);
-      }
-
-      ++count_;
-    }
-
-    // push_back()
-    void push(ListEntry const &entry)
-    {
-      ListEntry *run{};
-
-      // find node for insertion *algo-list-find-end*
-      // works both when head_ is null and is not null
-
-      for (run = head_; run && run->next_; run = run->next_)
-        ;
-
-      // first item
-      if (!run)
-        head_ = new ListEntry(entry);
-      else
-        run->next_ = new ListEntry(entry);
-
-      ++count_;
-    }
-
-    void clear()
-    {
-      ListEntry *run = head_;
-      ListEntry *prev{};
-
-      while (run)
-      {
-        prev = run;
-        run  = run->next_;
-        free(prev);
-        --count_;
-      }
-
-      head_ = run;
-    }
-
-    std::vector<ListEntry> snap()
-    {
-      ListEntry *run = head_;
-      std::vector<ListEntry> coll;
-
-      while (run)
-      {
-        // ok as well
-        // coll.push_back(ListEntry(*run));
-        coll.push_back(*run);
-        run = run->next_;
-      }
-
-      return coll;
-    }
-
-  private:
-    int count_{};
-
-    // can use ListEntry head_; which changes member implementation
-
-    ListEntry *head_;
-  };
-
-  struct ListNode
-  {
-    explicit ListNode(int row = 0, int col = 0) noexcept
-        : row_(row)
-        , col_(col)
-        , next(nullptr)
-    {}
-
-    int row_{};
-    int col_{};
-
-    ListNode *next;
-  };
-
-  bool hasCycle(ListNode *head)
-  {
-    ListNode *slow;
-    ListNode *fast;
-
-    for (slow = head, fast = slow;
-         slow && (fast = fast->next) && (fast = fast->next);)
-    {
-      if (slow == fast)
-        return true;
-
-      slow = slow->next;
-    }
-
-    return false;
-  }
-
-} // namespace algo_list_linked
-
-TEST(AlgoList, LinkedSimple)
-{
-  using namespace algo_list_linked;
-
-  std::vector<ListEntry> values{ListEntry(1, 2),
-                                ListEntry(2, 3),
-                                ListEntry(3, 4),
-                                ListEntry(4, 5),
-                                ListEntry(5, 6)};
-
-  List coll;
-
-  for (auto &e : values)
-    coll.push(e);
-
-  EXPECT_THAT(coll.size(), 5);
-
-  coll.push(ListEntry(6, 7));
-  EXPECT_THAT(coll.size(), 6);
-
-  // requires cxx-operator-overload
-  std::vector<ListEntry> expected{ListEntry(1, 2),
-                                  ListEntry(2, 3),
-                                  ListEntry(3, 4),
-                                  ListEntry(4, 5),
-                                  ListEntry(5, 6),
-                                  ListEntry(6, 7)};
-
-  EXPECT_THAT(coll.snap(), expected);
-
-  coll.clear();
-  EXPECT_THAT(coll.size(), 0);
 }
 
 // ={=========================================================================

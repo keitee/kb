@@ -108,13 +108,13 @@ TEST(StringCtor, check_const)
 
   // *cxx-string-const-ctor-const*
 
-  // ctor and append cause error:
+  // ctor and string-append cause error:
   //
   // {
   //   char letter = 'A';
   //
   //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
-  //   char*’ [-fpermissive]
+  //   // char*’ [-fpermissive]
   //   //      string s(letter);
   //
   //   string s(letter);
@@ -124,7 +124,7 @@ TEST(StringCtor, check_const)
   //   char letter = 'A';
   //
   //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
-  //   char*’ [-fpermissive]
+  //   // char*’ [-fpermissive]
   //   //         s.append(letter);
   //
   //   string s;
@@ -342,7 +342,7 @@ namespace string_find
                                  std::string::size_type pos = std::string::npos)
   {
     const auto size_string_ = str.size();
-    const auto size_sub_ = sub.size();
+    const auto size_sub_    = sub.size();
 
     if (size_sub_ <= size_string_)
     {
@@ -366,7 +366,7 @@ namespace string_find
 
     return std::string::npos;
   }
-}
+} // namespace string_find
 
 TEST(StringOperation, check_find_char)
 {
@@ -785,7 +785,7 @@ TEST(CxxStringOperation, find_substring_3)
 
     const std::string s = "/as/players/2/";
 
-    // starts from 0 
+    // starts from 0
     EXPECT_THAT(my_rfind(request1, s, 0), 0);
 
     // starts from 0
@@ -828,6 +828,7 @@ TEST(StringOperation, check_substr)
   EXPECT_THAT(coll.substr(0, 0), "");
 }
 
+// ={=========================================================================
 // string-add-char
 
 TEST(StringOperation, check_add_char)
@@ -843,6 +844,9 @@ TEST(StringOperation, check_add_char)
 
     EXPECT_THAT(coll, "str");
   }
+
+  // no
+  // coll.push_back("s");
 
   // cxx-string-insert
   // string& string::insert (size_type idx, size_type num, char c);
@@ -865,6 +869,19 @@ TEST(StringOperation, check_add_char)
     coll.insert(coll.end(), 'r');
 
     EXPECT_EQ(coll, "str");
+  }
+
+  // basic_string& insert( size_type index, const basic_string& str );
+  // NOTE:
+  // coll.insert(pos, ) uses iterator for pos
+  {
+    std::string coll{};
+
+    coll.insert(0, "s");
+    coll.insert(0, "t");
+    coll.insert(0, "r");
+
+    EXPECT_EQ(coll, "rts");
   }
 
   // cxx-string-append
@@ -901,6 +918,7 @@ TEST(StringOperation, check_add_char)
   }
 }
 
+// ={=========================================================================
 // string-erase, string-replace
 
 TEST(StringOperation, EraseReplace)
@@ -1126,13 +1144,13 @@ namespace stringcompare
       return false;
 
     for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend();
-        ++lhs, ++rhs)
+         ++lhs, ++rhs)
       if (toupper(*lhs) != toupper(*rhs))
         return false;
 
     return true;
   }
-}
+} // namespace stringcompare
 
 TEST(StringCompare, check_no_case)
 {
@@ -1259,7 +1277,7 @@ TEST(StringCompare, check_traits)
     std::string s1{"1a"};
     std::string s2{"a1"};
 
-    // std::cout << "usual string compare : " << std::boolalpha 
+    // std::cout << "usual string compare : " << std::boolalpha
     // << (s1 < s2) << std::endl;
     //
     // since "numbers" are lower, before, than "alphabets"
@@ -1381,14 +1399,14 @@ TEST(StringForC, check_cstring_1)
   {
     // cstring include a null
     const char cs[] = "zoo";
-    EXPECT_EQ(strlen(cs), 3);   // excludes null
-    EXPECT_EQ(sizeof(cs), 4);   // +1 for null
+    EXPECT_EQ(strlen(cs), 3); // excludes null
+    EXPECT_EQ(sizeof(cs), 4); // +1 for null
     EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
   }
 
   {
     // there is std::string ctor(const char*)
-    const char s1[]  = "0123456789012345";
+    const char s1[] = "0123456789012345";
     std::string coll{s1};
 
     EXPECT_THAT(sizeof(s1), 17);  // +1 for null
@@ -1401,7 +1419,7 @@ TEST(StringForC, check_cstring_1)
 
     // int memcmp(const void *s1, const void *s2, size_t n);
     EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
-    EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size()+1), 0);
+    EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size() + 1), 0);
   }
 }
 
@@ -1498,7 +1516,7 @@ namespace stringcstring
 
     return false;
   }
-} // namespace string_cstring
+} // namespace stringcstring
 
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
@@ -1520,9 +1538,9 @@ TEST(StringForC, check_strend)
   EXPECT_EQ(false, strend_02(s1, t2));
 }
 
-
-/* ={=========================================================================
-  string-conversion
+/* 
+={=========================================================================
+string-conversion
 
 Defined in header <string>
 
@@ -1616,8 +1634,9 @@ TEST(StringConverison, check_functions)
   }
 }
 
+// ={=========================================================================
 // cxx-stringstream
-TEST(StringConverison, check_stringstream)
+TEST(StringConversion, check_stringstream)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.
   // *cxx-string-convert-to-string*
@@ -1733,14 +1752,14 @@ TEST(StringConverison, check_stringstream)
     }
 
     {
-      // to hex and okay 
+      // to hex and okay
       std::stringstream is{"00000000000000000016060300000001"};
       long long value{};
       is >> std::hex >> value;
       EXPECT_THAT(value, 6199059442302977);
     }
 
-    // as octal since 
+    // as octal since
     // otherwise, a zero base is taken as 10 (decimal) unless the next character
     // is '0', in which case it  is taken as 8 (octal).
     EXPECT_THAT(std::stoll("00000000000000000016060300000001", nullptr, 0),
@@ -1805,7 +1824,8 @@ TEST(StringConverison, check_stringstream)
   }
 }
 
-TEST(StringConverison, boost_lexicalcast)
+// ={=========================================================================
+TEST(StringConversion, check_boost_lexicalcast)
 {
   EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
   EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
@@ -1815,7 +1835,8 @@ TEST(StringConverison, boost_lexicalcast)
   EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
 }
 
-TEST(StringConverison, NarrowNumericConversion)
+// ={=========================================================================
+TEST(StringConversion, check_narrow_conversion)
 {
   // warning/error
   // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’
@@ -1837,6 +1858,30 @@ TEST(StringConverison, NarrowNumericConversion)
   EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
   ++i;
   EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
+}
+
+// ={=========================================================================
+TEST(StringConversion, check_case)
+{
+  // use cxx-transform
+  {
+    std::string coll{"CONVERSION"};
+
+    std::transform(coll.begin(), coll.end(), coll.begin(), [](char &ch) {
+      return std::tolower(ch);
+    });
+
+    EXPECT_THAT(coll, "conversion");
+  }
+
+  // use boost
+  {
+    std::string coll{"CONVERSION"};
+
+    boost::to_lower(coll);
+
+    EXPECT_THAT(coll, "conversion");
+  }
 }
 
 // ={=========================================================================
@@ -3549,13 +3594,13 @@ TEST(StringParse, check_case_1)
     std::string dst{};
     ss >> dst;
 
-    int dstvalue = std::stoi(dst.substr(dst.find('=')+1));
+    int dstvalue = std::stoi(dst.substr(dst.find('=') + 1));
     EXPECT_THAT(dstvalue, 1);
 
     std::string offset{};
     ss >> offset;
 
-    int offsetvalue = std::stoi(offset.substr(offset.find('=')+1));
+    int offsetvalue = std::stoi(offset.substr(offset.find('=') + 1));
     EXPECT_THAT(offsetvalue, 3600);
   }
 }
@@ -3720,7 +3765,7 @@ TEST(StringLiteral, check_define_literal)
   // constexpr name{"this is name"s};
   // constexpr name = "this is name"s;
 
-  // error: the type ‘const string {aka const std::__cxx11::basic_string<char>}’ 
+  // error: the type ‘const string {aka const std::__cxx11::basic_string<char>}’
   // of constexpr variable ‘name’ is not literal
   // {
   //   constexpr std::string name{"this is name"};

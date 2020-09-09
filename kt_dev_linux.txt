@@ -425,7 +425,7 @@
 *kt_linux_core_400* os-lib-shared os-solib
 *kt_linux_core_400* os-lib-soname
 *kt_linux_core_400* os-lib-dependancy
-*kt_linux_core_400* linux-lib-ld linux-dynamic-linker
+*kt_linux_core_400* os-lib-ld os-dynamic-linker tool-ldd
 *kt_linux_core_400* linux-lib-ld-glibc ld-gdb
 *kt_linux_core_400* linux-lib-ld-uclibc spk-toolchain-uclibc
 *kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
@@ -596,7 +596,8 @@
 
 *kt_linux_core_700* win-wayland
 *kt_linux_core_700* os-virtual-terminal
-*kt_linux_core_000* os-admin: check nvidia version
+*kt_linux_core_000* os-admin-check-nvidia-version
+*kt_linux_core_000* os-admin-hangul
 
 *kt_linux_sete_005* admin-gnome: check gnome version
 *kt_linux_sete_005* admin-gnome: shortcuts
@@ -2587,7 +2588,16 @@ current locale. The test command uses ASCII ordering.
 Unless otherwise specified, `primaries` that operate on files follow symbolic
 links and operate on the target of the link, rather than the link itself.
 
-<man-test> <sh-test>
+<man-test> *sh-test*
+
+-d file
+True if file exists and is a directory.
+
+-n string
+string
+True if the length of string is non-zero.
+
+
 '-e FILE'
      True if FILE exists.
 
@@ -2606,9 +2616,6 @@ links and operate on the target of the link, rather than the link itself.
 '-z STRING'
      True if the length of STRING is zero.
 
-'-n STRING'
-'STRING'
-     True if the length of STRING is non-zero.
 
 <ex>
 if [ -z "${ZB_CFG}" ]; then
@@ -54099,7 +54106,7 @@ mount --bind /some/where /else/where
 mount -o bind /some/where /else/where
 
 Here, the “device” /some/where is not a disk partition like in the case of an
-on-disk filesystem, but an existing directory. The mount point /else/where
+on-disk filesystem, `but an existing directory.` The mount point /else/where
 must be an existing directory as usual. 
 
 Note that no filesystem type is specified either way: making a bind mount
@@ -54125,6 +54132,7 @@ under /else/where.
 mount-copybind /tmp/usb/libb_secbuf.so /usr/lib/libb_secbuf.so
 
 root@arrisxi6-morty:/tmp/data# more /sbin/mount-copybind
+///
 #!/bin/sh
 #
 # Perform a bind mount, copying existing files as we do so to ensure the
@@ -54159,6 +54167,23 @@ elif [ -f "$mountpoint" ]; then
 fi
 
 mount -o "bind$options" "$spec" "$mountpoint"
+///
+
+root@skyxione:/opt# ./mount-copybind ./asrdkplayer /usr/sbin/asrdkplayer
++ '[' 2 -lt 2 ']'
++ spec=./asrdkplayer
++ mountpoint=/usr/sbin/asrdkplayer
++ '[' 2 -gt 2 ']'
++ options=
++ '[' -n '' ']'
++ mkdir -p .
++ '[' -d /usr/sbin/asrdkplayer ']'
++ '[' -f /usr/sbin/asrdkplayer ']'
++ '[' '!' -f ./asrdkplayer ']'
++ mount -o bind ./asrdkplayer /usr/sbin/asrdkplayer
+
+root@skyxione:/opt# mount
+/dev/mmcblk0p3 on /usr/sbin/asrdkplayer type ext4 (rw,noatime,block_validity,discard,delalloc,barrier,user_xattr,acl)
 
 
 *tool-mount-rbind*
@@ -85576,6 +85601,8 @@ Segmentation fault (core dumped)
 ={============================================================================
 *kt_linux_core_400* os-lib-soname
 
+41.4.4 The Shared Library Soname
+
 In the above example, `libfoo is realname.` As with a realname, soname is used in
 linking and is embedded in the executable, and used by the linker at runtime.
 
@@ -85588,7 +85615,7 @@ $ gcc -c -fpic foo.c
 
 $ gcc -shared -Wl,-soname,libbar.so -o libfoo.so foo.o      
 
-note: shall no space between -soname
+# shall no space between -soname
 
 $ gcc -shared -Wl,-soname -Wl,libbar.so -o libfoo.so foo.o  
 
@@ -85658,7 +85685,11 @@ test_soname_3 : libfoo3.so main.c
 So soname removes dependency from user.
 
 
-{os-lib-version} soname-case
+*os-lib-version* soname-case
+
+41.6 Shared Library Versions and Naming Conventions
+
+<case> when use only major numbers and soname
 
 The same calling interface and are semantically equivalent; they achieve
 identical results. Such differing but compatible versions are referred to as
@@ -85673,7 +85704,6 @@ libdemo.so.1.0.1
 libdemo.so.1.0.2        Minor version, compatible with version 1.0.1
 libdemo.so.2.0.0        New major version, incompatible with version 1.*
 
-<soname> minor-independent link
 The soname of the shared library includes the same major version identifier as
 its corresponding real library name, but excludes the minor version
 identifier.  Thus, the soname has the form libname.so.major-id.
@@ -85686,9 +85716,10 @@ libdemo.so.1   -> libdemo.so.1.0.2
 libdemo.so.2   -> libdemo.so.2.0.0
 
 Normally, the soname corresponding to each major library version points to the
-most recent `minor` version within the major version. This setup allows for
-the correct versioning semantics during the runtime operation of shared
-libraries. 
+most recent `minor` version within the major version. 
+
+This setup allows for the correct versioning semantics during the runtime
+operation of shared libraries. 
 
 Because `the static-linking phase embeds the soname` in the executable which
 has major, and the soname symbolic link may subsequently be modified to point
@@ -85704,11 +85735,31 @@ note:
 After all, use soname and sym link to have `flexibility`
 
 
-os-lib-realname os-lib-linkername:
+*os-lib-linkername*
+
+In addition to the real name and soname, a third name is usually defined for
+each shared library: the linker name, which is used when linking an executable
+against the shared library. 
+
+The linker name is a symbolic link containing just the library name without
+the major or minor version identifiers, and thus has the form lib name .so. 
+
+`The linker name allows us to construct version-independent link commands` that
+automatically operate with the correct (i.e., most up-to-date) version of the
+shared library.
+
+libdemo.so -> libdemo.so.1 -> libdemo.so.1.0.1
+
+Typically, the linker name is created in the same directory as the file to
+which it refers. It can be linked either to the real name or to the soname of
+the most recent major version of the library. Usually, a link to the soname is
+preferable, so that changes to the soname are automatically reflected in the
+linker name.
+
 
 $ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
 
-// set lib-soname, libdemo.so.1
+// set soname, libdemo.so.1
 
 $ gcc -g -shared -Wl,-soname,libdemo.so.1 -o libdemo.so.1.0.1 \
     mod1.o mod2.o mod3.o
@@ -85728,37 +85779,51 @@ $ gcc -g -Wall -o prog prog.c -L. -ldemo
 $ gcc -g -Wall -o prog prog.c `libdemo.so`
 
 
+# readelf -d prog | ag NEEDED
+#  0x0000000000000001 (NEEDED)             Shared library: [libdemo.so.1]
+#  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+
 $ LD_LIBRARY_PATH=. ./prog
 Called mod1-x1
 Called mod2-x2
 
-So three cases:
 
-o the case when linkername is realname. Means that no soname is used. 
-o the case when linkername is soname. This is one-level indirection. 
-o the case when linkername is different from soname. This is two-level
-indirection.
+executable embeds `soname` and the linkername is a name to use linking stage
+that must be exist before doing linking. Checked with the above one example. 
 
-note: 
-Even when linkername is different from soname, executable embeds `soname` and
-the linkername is a name to use linking stage that must be exist before doing
-linking. Checked with the above one example. 
+client -> so -> so.x (has soname)  -> so.x.x
+            sym link              sym link
 
 `Using two names and two indirections` enable us to change major and minor
 libs to use. 
 
-o When major changes, changes linkname link: need to link again 
+o When major changes, changes linkname link: need to link again since soname
+changes
 
 libdemo.so -> libdemo.so.1          =>    libdemo.so -> libdemo.so.2
 
-o When minor changes, change soname link: no need to link.
+o When minor changes, change soname link: no need to link since soname is same
 
 libdemo.so.1 -> libdemo.so.1.0.1    =>    libdemo.so.1 -> libdemo.so.1.0.1
 
-note: The above is convention but not mandatory so can have followings:
+
+The above is convention but not mandatory so can have followings:
 
 17 Dec 29 13:08 liblog4c.so -> liblog4c.so.3.1.0*
 17 Dec 29 13:08 liblog4c.so.3 -> liblog4c.so.3.1.0*
+
+the other case when "libFutarqueBasic.so.8.1" is soname:
+
+lrwxrwxrwx    1 root     root            25 Aug 21 18:16 libFutarqueBasic.so -> libFutarqueBasic.so.8.1.0
+lrwxrwxrwx    1 root     root            25 Aug 21 18:16 libFutarqueBasic.so.8.1 -> libFutarqueBasic.so.8.1.0
+-rwxr-xr-x    1 root     root       1686388 Aug 21 18:16 libFutarqueBasic.so.8.1.0
+
+
+So three cases:
+
+o when linkername is `realname`. Means that no soname is used. 
+o when linkername is `soname`. This is one-level indirection. 
+o when linkername is different from soname. This is two-level indirection.
 
 
 ={============================================================================
@@ -85829,6 +85894,8 @@ gcc sample.c
 
 // debian vm libc case
 
+*check-os-lib-dependancy*
+
 @kit-debian:~$ readelf -d a.out | grep NEEDED
 4: 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
 
@@ -85875,8 +85942,7 @@ lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9
 
 
 <ex>
-$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-
-gnu/bin/i686-nptl-linux-gnu-ldd PWM_Process
+$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-ldd PWM_Process
 i686-nptl-linux-gnu-ldd: no root given
 Try `i686-nptl-linux-gnu-ldd --help' for more information
 
@@ -85904,7 +85970,7 @@ $ /i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-ldd --root ~/si_logs/flash0-vstb-
 
 
 ={============================================================================
-*kt_linux_core_400* linux-lib-ld linux-dynamic-linker
+*kt_linux_core_400* os-lib-ld os-dynamic-linker tool-ldd
 
 // Linkers, Ian Lance Taylor
 
@@ -88083,6 +88149,34 @@ libraries may differ.
 
 *os-lib-ld-library-path*
 
+41.4.3 Using a Shared Library
+
+The LD_LIBRARY_PATH environment variable
+
+One way of informing the dynamic linker that a shared library resides in a
+non-standard directory is to specify that directory as part of a
+colon-separated list of directories in the LD_LIBRARY_PATH environment
+variable. 
+
+Semicolons can also be used to separate the directories, in which case the
+list must be quoted to prevent the shell from interpreting the semicolons.
+
+If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared
+library in the directories `before looking in the standard library directories.`
+
+NOTE Later, we’ll see that a production application should never rely on
+LD_LIBRARY_PATH , but for now, this variable provides us with a simple way of
+getting started with shared libraries.
+
+
+41.7 Installing Shared Libraries
+
+However, this technique should not be employed in production applications.
+More usually, a shared library and its associated symbolic links are installed
+in one of a number of standard library directories, in particular, one of the
+following:
+
+
 41.10 Specifying Library Search Directories in an Object File
 
 standard library directories (/lib, /usr/lib, or one of the directories listed
@@ -88092,8 +88186,14 @@ Some of these rules specify a set of `standard directories` in which shared
 libraries normally reside. To inform the dynamic linker that a shared library
 resides in a non-standard directory
 
-If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared
-library in the directories `before looking in the standard library directories.`
+
+NOTE: not from the LPI text
+`LD_LIBRARY_PATH is broken and should 'not' be used` if at all possible since
+LD_LIBRARY_PATH is `great for quick tests` and for systems on which you don't
+have admin privileges. However, as a downside, exporting the LD_LIBRARY_PATH
+variable means it may cause problems with other programs if you don't reset it
+to its previous state when you're done.
+
 
 *sh-env-export* 
 Creates an environment variable definition `within the process` executing
@@ -88113,13 +88213,6 @@ $ ./one
 foo: this is foo...
 
 
-NOTE:
-`LD_LIBRARY_PATH is broken and should 'not' be used` if at all possible since
-LD_LIBRARY_PATH is `great for quick tests` and for systems on which you don't
-have admin privileges. However, as a downside, exporting the LD_LIBRARY_PATH
-variable means it may cause problems with other programs if you don't reset it
-to its previous state when you're done.
-
 <ex>
 $ export LD_LIBRARY_PATH=$HOME/install/fftw/lib
 $ ldd libfftw3_mpi.so |grep fftw
@@ -88133,6 +88226,7 @@ directories that should be searched at run time for shared libraries.
 
 This is useful if we have libraries that reside `in fixed locations` that are
 not among the standard locations searched by the dynamic linker. 
+
 To do this, we employ the -rpath linker option when creating an executable:
 
 $ gcc -g -Wall -Wl,-rpath,/home/mtk/pdir -o prog prog.c libdemo.so
@@ -88465,9 +88559,9 @@ xyz() from the main program would always invoke the version of xyz() defined
 in the main program.
 
 *cxx-static*
-This effect of the static keyword is similar to the –Bsymbolic linker option described in Section
-41.12, with the difference that the static keyword affects a single symbol within a single source
-file.
+This effect of the static keyword is similar to the –Bsymbolic linker option
+described in Section 41.12, with the difference that the static keyword
+affects a single symbol within a single source file.
 
 
 <lib-resolve-use-name> *ld-so-runtime-resolve*
@@ -94955,11 +95049,18 @@ including starting up another X session!
 
 
 ={============================================================================
-*kt_linux_sete_005* os-admin: check nvidia version
+*kt_linux_core_000* os-admin-check-nvidia-version
 
 $ cat /proc/driver/nvidia/version 
 NVRM version: NVIDIA UNIX x86_64 Kernel Module  340.96  Sun Nov  8 22:33:28 PST 2015
 GCC version:  gcc version 4.8.4 (Debian 4.8.4-1) 
+
+
+={============================================================================
+*kt_linux_core_000* os-admin-hangul
+
+http://progtrend.blogspot.com/2018/06/ubuntu-1804-uim.html
+https://codechacha.com/ko/ubunutu-uim-keyboard/
 
 
 ={============================================================================
