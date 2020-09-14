@@ -2,7 +2,7 @@
 //  statemachine.cpp
 //
 
-#include "qfsm.h"
+#include "statemachine.h"
 #include "slog.h"
 
 #define LOG_ERROR LOG_MSG
@@ -62,7 +62,7 @@ void StateMachine::logTransition(int oldState, int newState) const
 
   if (m_transitionLogLevel)
   {
-    std::cout << message.str() << std::endl;
+    LOG_MSG("%s", message.str().c_str());
   }
 }
 
@@ -104,7 +104,6 @@ std::list<int> StateMachine::stateTreeFor(int state, bool bottomUp) const
   // this is done when the states are added
   do
   {
-
     if (bottomUp)
       tree.push_back(state);
     else
@@ -141,7 +140,6 @@ void StateMachine::moveToState(int newState)
   }
   else
   {
-
     // lookup the new state to check if we should be moving to an initial state
     auto it = m_states.find(newState);
 
@@ -215,6 +213,7 @@ void StateMachine::moveToState(int newState)
   // stop the state machine
   if ((m_currentState == m_finalState) || m_stopPending)
   {
+    LOG_MSG("reached to the final state{%d} and cleaned up", m_currentState);
 
     m_running = false;
     cleanUpEvents();
@@ -235,7 +234,7 @@ void StateMachine::triggerStateMove(int newState)
   // events being added to local event queue
   moveToState(newState);
 
-  // then check if we have any other events on the queue, note we can get
+  // then check if we have "any other events on the queue", note we can get
   // into an infinite loop here if the code using the statemachine is
   // poorly designed, however that's their fault not mine
   while (m_running && !m_localEvents.empty())
@@ -715,7 +714,7 @@ bool StateMachine::cancelDelayedEvents(QEvent::Type eventType)
   Returns the current (non super) state the state machine is in.
   If the state machine is not currently running then \c -1 is returned.
  */
-int StateMachine::state() const
+int StateMachine::getState() const
 {
   if (!m_running)
     return -1;

@@ -33,7 +33,7 @@ public:
 
   bool postEvent(int event);
 
-  int state() const;
+  int getState() const;
   bool inState(int state) const;
   bool inState(std::set<int> const &states) const;
 

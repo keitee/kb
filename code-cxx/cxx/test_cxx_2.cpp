@@ -72,7 +72,7 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 // cxx-iter
 
 // core will be generated
-TEST(StlIterator, invalid)
+TEST(CxxIterator, invalidated)
 {
   std::vector<int> coll{1, 2, 3, 4};
 
@@ -90,16 +90,18 @@ TEST(StlIterator, invalid)
     // veci.insert( it, 6 );
     // veci.insert( it, 5 );
     //
-    // core dump since it gets invalidated.
+    // core dump since "it" gets invalidated.
   }
 
   EXPECT_THAT(coll, ElementsAre(1, 5, 6, 7, 2, 3, 4));
 }
 
+// ={=========================================================================
 // *cxx-undefined*
 // may cause runtime error but not always so undefined.
+//
 // Calling erase() for the element to which you are referring with it
-// invalidates it as an iterator of coll and calling ++it results in
+// invalidates "it" as an iterator of coll and calling ++it results in
 // undefined behavior.
 //
 // However, when use -D_GLIBCXX_DEBUG:
@@ -131,7 +133,7 @@ TEST(StlIterator, invalid)
 //       std::char_traits<char>, std::allocator<char> > const, int> > >' @
 //       0x0x7ffcae5ac600 }
 
-TEST(DISABLED_Iterator, InvalidOnMap)
+TEST(CxxIterator, DISABLED_invalidated_on_map)
 {
   std::map<std::string, int> coll{{"one", 1},
                                   {"two", 2},
@@ -148,7 +150,8 @@ TEST(DISABLED_Iterator, InvalidOnMap)
   }
 }
 
-TEST(Iterator, ValidOnMapBeforeC11)
+// ={=========================================================================
+TEST(CxxIterator, map)
 {
   // before C++11
   {
@@ -190,9 +193,10 @@ TEST(Iterator, ValidOnMapBeforeC11)
   }
 }
 
+// ={=========================================================================
 // https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
 
-TEST(Iterator, InvalidOnDeque_Okays)
+TEST(CxxIterator, deque)
 {
   // why this work?
   {
@@ -320,19 +324,55 @@ TEST(Iterator, OperationOnTemporary)
   }
 }
 
-TEST(CxxIterator, iterator_next)
+// ={=========================================================================
+TEST(CxxIterator, next)
 {
+  // why use cxx-next
+  //
+  // 9.2.6 The Increment and Decrement Problem of Vector Iterators The
+  //
+  // Depending on the platform, the compilation of ++coll.begin() might fail.
+  // However, if you use, for example, a deque rather than a vector, the
+  // compilation always succeeds.  The reason for this strange problem lies in the
+  // fact that iterators of vectors, arrays, and strings might be implemented as
+  // ordinary pointers. And for all fundamental data types, such as pointers, you
+  // are not allowed to modify temporary values. For structures and classes,
+  // however, doing so is allowed. Thus, if the iterator is implemented as an
+  // ordinary pointer, the compilation fails; if implemented as a class, it
+  // succeeds.
+  //
+  // To make your code portable, the utility function next() is provided since
+  // C++11 (see Sec- tion 9.3.2, page 443), so you can write:
+
   {
-    vector<int> coll{1, 2, 3, 4, 5};
+    std::vector<int> coll{2, 4, 1, 5, 6};
+
+    std::sort(++coll.begin(), coll.end());
+
+    EXPECT_THAT(coll, ElementsAre(2, 1, 4, 5, 6));
+  }
+
+  {
+    std::vector<int> coll{2, 4, 1, 5, 6};
+
+    std::sort(std::next(coll.begin()), coll.end());
+
+    EXPECT_THAT(coll, ElementsAre(2, 1, 4, 5, 6));
+  }
+
+  // since next() uses copy, do not change "pos"
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+
     auto pos = coll.begin();
     EXPECT_EQ(*pos, 1);
 
     ++pos;
+
     EXPECT_EQ(*pos, 2);
 
-    // since next() uses copy, do not change input iterator
+    auto next_pos = std::next(pos);
 
-    auto next_pos = next(pos);
     EXPECT_EQ(*pos, 2);
     EXPECT_EQ(*next_pos, 3);
   }
@@ -341,10 +381,10 @@ TEST(CxxIterator, iterator_next)
   // Note that next() does not check whether it crosses the end() of a sequence.
   // Thus, it is up to the caller to ensure that the result is valid.
   {
-    vector<int> coll{1, 2, 3, 4, 5};
-    vector<int> result{};
+    std::vector<int> coll{1, 2, 3, 4, 5};
+    std::vector<int> result{};
 
-    for (auto pos = coll.begin(); pos != coll.end(); pos = next(pos))
+    for (auto pos = coll.begin(); pos != coll.end(); pos = std::next(pos))
       result.push_back(*pos);
 
     EXPECT_THAT(coll, result);
@@ -354,21 +394,27 @@ TEST(CxxIterator, iterator_next)
   //
   // /usr/include/c++/4.9/debug/safe_iterator.h:356:error: attempt to advance a
   //     past-the-end iterator 1 steps, which falls outside its valid range.
-
+  //
+  // ok here since do not access through "result"
   {
-    vector<int> coll{};
+    std::vector<int> coll{};
+
     auto pos    = coll.begin();
-    auto result = next(pos);
+    auto result = std::next(pos);
+
     (void)result;
   }
 }
 
-TEST(StlIterator, check_distance)
+// ={=========================================================================
+TEST(CxxIterator, distance)
 {
   // cxx-distance which returns positive/negative
   {
     std::vector<int> coll{1, 2, 3, 4, 5};
+
     auto pos = std::find(coll.begin(), coll.end(), 3);
+
     EXPECT_EQ(std::distance(coll.begin(), pos), 2);
     EXPECT_EQ(std::distance(pos, coll.begin()), -2);
 
@@ -378,7 +424,9 @@ TEST(StlIterator, check_distance)
 
   {
     std::set<int> coll{1, 2, 3, 4, 5};
+
     auto pos = std::find(coll.begin(), coll.end(), 3);
+
     EXPECT_EQ(std::distance(coll.begin(), pos), 2);
 
     // /usr/include/c++/4.9/debug/safe_iterator.h:289:error: attempt to
@@ -434,84 +482,106 @@ TEST(StlIterator, check_distance)
   }
 }
 
-TEST(CxxIterator, Array)
+// ={=========================================================================
+TEST(CxxIterator, array)
 {
-  int vals[] = {33, 67, -4, 13, 5, 2};
-
-  std::vector<int> coll(std::begin(vals), std::end(vals));
-  decltype(coll) out;
-
-  // These functions are also overloaded, so you can use STL containers or all
-  // classes that provide begin() and end() as member functions:
-  //
-  // std::begin(v)  // yields v.begin()
-  // std::end(v)    // yields v.end()
-
-  // cxx-algo-copy
-  std::copy(std::begin(coll), std::end(coll), back_inserter(out));
-  EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
-}
-
-TEST(CxxIterator, Adapters)
-{
-  list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  // cxx-iter-back-inserter
   {
-    vector<int> ocoll;
+    int vals[] = {33, 67, -4, 13, 5, 2};
+
+    std::vector<int> coll(std::begin(vals), std::end(vals));
+
+    decltype(coll) out;
+
+    // These functions are also overloaded, so you can use STL containers or all
+    // classes that provide begin() and end() as member functions:
+    //
+    // std::begin(v)  // yields v.begin()
+    // std::end(v)    // yields v.end()
 
     // cxx-algo-copy
-    std::copy(coll.cbegin(), coll.cend(), back_inserter(ocoll));
-    EXPECT_THAT(ocoll, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
+    std::copy(std::begin(coll), std::end(coll), back_inserter(out));
+
+    EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
+  }
+
+  {
+    int values[] = { 33, 67, -4, 13, 5, 2 };
+    vector<int> vec(begin(values), end(values));
+
+    copy(vec.begin(), vec.end(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    // on ordinary array
+    copy(begin(values), end(values), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    // on container
+    copy(begin(vec), end(vec), ostream_iterator<int>(cout, " "));
+    cout << endl;
+  }
+}
+
+// ={=========================================================================
+// Kinds of Insert Iterators
+// The C++ standard library provides three kinds of insert iterators: back
+// inserters, front inserters, and general inserters.
+//
+// They differ in their handling of the position at which to insert a value. In
+// fact, each uses a different member function, which it calls for the container
+// to which it belongs. Thus, an insert iterator must be always initialized with
+// its container.
+//
+// c.insert(pos,elem)
+//
+// For this reason, back inserters are available only for vectors, deques,
+// lists, and strings; front inserters are available only for deques and lists.
+//
+// Each kind of insert iterator has a convenience function for its creation and
+// initialization.
+
+TEST(CxxIterator, adapters_insert_kinds)
+{
+  std::list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  // cxx-inserter-back
+  {
+    std::vector<int> ret;
+
+    // cxx-algo-copy
+    std::copy(coll.cbegin(), coll.cend(), std::back_inserter(ret));
+    EXPECT_THAT(ret, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
 
   // *cxx-reverse*
-  // cxx-iter-front-inserter
+  // cxx-inserter-front
   // have to use cxx-deque since it uses push_front
   {
-    deque<int> ocoll;
+    std::deque<int> ret;
 
     // cxx-algo-copy
-    std::copy(coll.cbegin(), coll.cend(), front_inserter(ocoll));
-    EXPECT_THAT(ocoll, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1}));
+    std::copy(coll.cbegin(), coll.cend(), std::front_inserter(ret));
+    EXPECT_THAT(ret, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1}));
   }
 
-  // *cxx-iter-inserter*
+  // *cxx-inserter*
   {
-    vector<int> ocoll;
+    std::vector<int> ret{};
 
     // cxx-algo-copy
-    std::copy(coll.cbegin(), coll.cend(), inserter(ocoll, ocoll.begin()));
-    EXPECT_THAT(ocoll, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
+    std::copy(coll.cbegin(), coll.cend(), std::inserter(ret, ret.begin()));
+
+    EXPECT_THAT(ret, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
 }
 
-// shows that inserter() uses insert_iterator internally and that how it works.
+// ={=========================================================================
+// shows that inserter() uses insert_iterator internally and inserter is helper
+// 9.4.2 Insert Iterators
 
-TEST(Iterator, InsertIterator)
+TEST(CxxIterator, adaptor_insert)
 {
   {
-    list<int> coll;
-
-    insert_iterator<list<int>> iter(coll, coll.begin());
-
-    // use usual iterator interface which has the same result
-    // no ++? since this is becuase operator=() do that as above
-    //
-    // *iter = 1; iter++;
-    // *iter = 2; iter++;
-    // *iter = 3; iter++;
-
-    *iter = 1;
-    *iter = 2;
-    *iter = 3;
-    *iter = 44;
-    *iter = 55;
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
-  }
-
-  {
-    list<int> coll;
+    std::list<int> coll;
 
     coll.push_back(1);
     coll.push_back(2);
@@ -522,23 +592,79 @@ TEST(Iterator, InsertIterator)
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
   }
 
+  // when not use insert interator, no insertion.
   {
-    list<int> coll{1, 2, 3, 44, 55};
-    list<int> ocoll{};
+    std::list<int> coll;
 
-    copy(coll.begin(), coll.end(), inserter(ocoll, ocoll.begin()));
+    auto it = coll.begin();
 
-    EXPECT_THAT(ocoll, ElementsAre(1, 2, 3, 44, 55));
+    EXPECT_THAT(coll.size(), 0);
+
+    *it++ = 1;
+    *it++ = 2;
+    *it++ = 3;
+    *it++ = 44;
+    *it++ = 55;
+
+    // NOTE: Q: WHY 55 but not 0??
+    // EXPECT_THAT(coll.size(), 0);
+  }
+
+  // when use insert iterator
+  // insert_iterator( Container& c, typename Container::iterator i );
+  {
+    std::list<int> coll;
+
+    std::insert_iterator<std::list<int>> it(coll, coll.begin());
+
+    *it = 1;
+    *it = 2;
+    *it = 3;
+    *it = 44;
+    *it = 55;
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
+  }
+
+  // inserter is a helper function
+  {
+    std::list<int> coll;
+
+    auto it = std::inserter(coll, coll.begin());
+
+    *it = 1;
+    *it = 2;
+    *it = 3;
+    *it = 44;
+    *it = 55;
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
+  }
+
+  {
+    std::list<int> coll{1, 2, 3, 44, 55};
+    std::list<int> ret{};
+
+    std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.begin()));
+
+    EXPECT_THAT(ret, ElementsAre(1, 2, 3, 44, 55));
   }
 }
 
-TEST(Iterator, ReverseIterator)
+// ={=========================================================================
+// cxx-reverse
+// 9.4.1 Reverse Iterators
+// Most container classes — all except forward lists and unordered containers —
+// as well as strings provide the ability to use reverse iterators to iterate
+// over their elements.
+
+TEST(CxxIterator, adaptor_reverse)
 {
   {
-    string coll{"PARK"};
-    string result;
+    std::string coll{"PARK"};
+    std::string result{};
 
-    string::const_reverse_iterator it = coll.crbegin();
+    std::string::const_reverse_iterator it = coll.crbegin();
 
     while (it != coll.crend())
       result.push_back(*it++);
@@ -546,50 +672,57 @@ TEST(Iterator, ReverseIterator)
     EXPECT_THAT(result, "KRAP");
   }
 
-  {
-    string coll{"FIRST,MIDDLE,LAST"};
+  // pos vs rpos
+  // You can convert normal iterators into reverse iterators. Naturally, the
+  // iterators must be bidirectional iterators, but note that the logical
+  // position of an iterator is moved during the conversion.
 
-    auto delim = find(coll.cbegin(), coll.cend(), ',');
-    EXPECT_THAT(string(coll.cbegin(), delim), "FIRST");
+  {
+    // create deque with elements from 1 to 9
+    std::deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::deque<int>::const_iterator pos;
+
+    pos = std::find(coll.cbegin(), coll.cend(), 7);
+    EXPECT_THAT(*pos, 7);
+
+    std::deque<int>::const_reverse_iterator rpos(pos);
+    EXPECT_THAT(*rpos, 6);
+  }
+
+  {
+    std::string coll{"FIRST,MIDDLE,LAST"};
+
+    auto delim = std::find(coll.cbegin(), coll.cend(), ',');
+
+    EXPECT_THAT(std::string(coll.cbegin(), delim), "FIRST");
 
     // The result is "TSAL" since iterator goes backward and means [crbegin(),
     // rcomma). To get the expected result, shall use instead [rcomma.base(),
     // cend() ) which converts reverse iterator to normal interator.
 
-    auto rdelim = find(coll.crbegin(), coll.crend(), ',');
-    EXPECT_THAT(string(coll.crbegin(), rdelim), "TSAL");
+    auto rdelim = std::find(coll.crbegin(), coll.crend(), ',');
 
-    EXPECT_THAT(string(rdelim.base(), coll.cend()), "LAST");
-  }
+    EXPECT_THAT(std::string(coll.crbegin(), rdelim), "TSAL");
 
-  // reverse_iterator operator*() do --
-  {
-    // create deque with elements from 1 to 9
-    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-    deque<int>::const_iterator pos;
-    pos = find(coll.cbegin(), coll.cend(), 7);
-    EXPECT_THAT(*pos, 7);
-
-    deque<int>::const_reverse_iterator rpos(pos);
-    EXPECT_THAT(*rpos, 6);
+    // Converting Reverse Iterators Back Using base()
+    EXPECT_THAT(std::string(rdelim.base(), coll.cend()), "LAST");
   }
 
   {
-    ostringstream os;
+    std::ostringstream os{};
 
     // create deque with elements from 1 to 9
-    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
     // find range [2,7]
     deque<int>::const_iterator pos1;
-    pos1 = find(coll.cbegin(), coll.cend(), 2);
+    pos1 = std::find(coll.cbegin(), coll.cend(), 2);
 
     deque<int>::const_iterator pos2;
-    pos2 = find(coll.cbegin(), coll.cend(), 7);
+    pos2 = std::find(coll.cbegin(), coll.cend(), 7);
 
     // [2,6]
-    for_each(pos1, pos2, [&](int e) { os << e << ","; });
+    std::for_each(pos1, pos2, [&](int e) { os << e << ","; });
 
     EXPECT_THAT(os.str(), "2,3,4,5,6,");
 
@@ -601,20 +734,22 @@ TEST(Iterator, ReverseIterator)
     // *cxx-error* cause runtime error -D_GLIBCXX_DEBUG
     // for_each(rpos1, rpos2, [&](int e)
     //
-    // since rpos1 that point 2 and rpos1++ means pos1-- and goes below begin()
+    // since rpos1 that point 2 and rpos1++ means pos1-- and
+    // goes below begin()
 
-    for_each(rpos2, rpos1, [&](int e) { os << e << ","; });
+    std::for_each(rpos2, rpos1, [&](int e) { os << e << ","; });
 
     EXPECT_THAT(os.str(), "6,5,4,3,2,");
   }
 }
 
-TEST(Iterator, StreamIterator)
+// ={=========================================================================
+TEST(CxxIterator, adaptor_stream)
 {
   // as gets from std::cin, use stream
   {
-    istringstream is{"1 2 3 4 5 6"};
-    vector<int> coll;
+    std::istringstream is{"1 2 3 4 5 6"};
+    std::vector<int> coll;
 
     int value{};
 
@@ -626,10 +761,10 @@ TEST(Iterator, StreamIterator)
 
   // as gets from std::cin, use iterator
   {
-    istringstream is{"1 2 3 4 5 6"};
-    vector<int> coll;
+    std::istringstream is{"1 2 3 4 5 6"};
+    sdt::vector<int> coll;
 
-    istream_iterator<int> isi(is), eof;
+    std::istream_iterator<int> isi(is), eof;
 
     while (isi != eof)
       coll.push_back(*isi++);
@@ -639,59 +774,55 @@ TEST(Iterator, StreamIterator)
 
   // use iterator but direct
   {
-    istringstream is{"1 2 3 4 5 6"};
+    std::istringstream is{"1 2 3 4 5 6"};
 
-    istream_iterator<int> isi(is), eof;
+    std::istream_iterator<int> isi(is), eof;
 
     // *cxx-vector-ctor*
     // no loop and no isi++
-    vector<int> coll(isi, eof);
+    std::vector<int> coll(isi, eof);
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
   // use iterator but direct
   {
-    istringstream is{"1 2 3 4 5 6"};
+    std::istringstream is{"1 2 3 4 5 6"};
 
-    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
-
-    // *cxx-error* without additional (). WHY?
-    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+    std::vector<int> coll((std::istream_iterator<int>(is)), std::istream_iterator<int>());
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
   // use iterator but direct
   {
-    istringstream is{"1 2 3 4 5 6"};
+    std::istringstream is{"1 2 3 4 5 6"};
 
-    istream_iterator<int> isi(is), eof;
+    std::istream_iterator<int> isi(is), eof;
 
     // no loop and no isi++
-    vector<int> coll;
-    std::copy(isi, eof, back_inserter(coll));
+    std::vector<int> coll;
+    std::copy(isi, eof, std::back_inserter(coll));
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
   // as gets from std::cin, use stream
   {
-    // istream_iterator<int> isi(cin), eof;
-
-    istringstream is{"1 2 3 4 5 6"};
-    istream_iterator<int> isi(is), eof;
+    std::istringstream is{"1 2 3 4 5 6"};
+    std::istream_iterator<int> isi(is), eof;
 
     auto result = std::accumulate(isi, eof, 0);
 
     EXPECT_THAT(result, 21);
   }
 
-  // ostream_iterator as std::cout
+  // link ostream_iterator to ostringstream
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6};
-    ostringstream os;
-    ostream_iterator<int> osi(os, ",");
+    std::vector<int> coll{1, 2, 3, 4, 5, 6};
+    std::ostringstream os;
+
+    std::ostream_iterator<int> osi(os, ",");
 
     for (auto e : coll)
       *osi++ = e;
@@ -699,12 +830,15 @@ TEST(Iterator, StreamIterator)
     EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
   }
 
+  // Table 9.9. Operations of ostream Iterators
+  // same as cxx-inserter since ++ is nop.
+  //
   // With/without "++oo", the result is the same. The ++oo is done to mimic
   // writing into an array through a pointer.
 
   {
-    ostringstream os;
-    ostream_iterator<string> osi(os);
+    std::ostringstream os;
+    std::ostream_iterator<string> osi(os);
 
     *osi = "Hello, ";
     ++osi;
@@ -713,8 +847,8 @@ TEST(Iterator, StreamIterator)
     EXPECT_THAT(os.str(), "Hello, world!");
   }
   {
-    ostringstream os;
-    ostream_iterator<string> osi(os);
+    std::ostringstream os;
+    std::ostream_iterator<string> osi(os);
 
     *osi = "Hello, ";
     *osi = "world!";
@@ -979,7 +1113,7 @@ namespace cxx_vector
 
     ASSERT_THAT(coll_.size(), 6);
   }
-}
+} // namespace cxx_vector
 
 // ={=========================================================================
 TEST(CxxVector, check_assign)
@@ -2923,8 +3057,8 @@ TEST(CxxUnordered, check_duplicates)
                             "Toronto",
                             "Chicago",
                             "New York",
-                            "Frankfurt",  // see
-                            "Frankfurt",  // see
+                            "Frankfurt", // see
+                            "Frankfurt", // see
                             "Hanover",
                             "Braunschweig"));
   }
@@ -2958,13 +3092,13 @@ TEST(CxxUnordered, search)
 {
   {
     std::unordered_multiset<std::string> coll{"Braunschweig",
-      "Hanover",
-      "Frankfurt",
-      "New York",
-      "Chicago",
-      "Toronto",
-      "Paris",
-      "Frankfurt"};
+                                              "Hanover",
+                                              "Frankfurt",
+                                              "New York",
+                                              "Chicago",
+                                              "Toronto",
+                                              "Paris",
+                                              "Frankfurt"};
 
     EXPECT_THAT(coll.count("Frankfurt"), 2);
     EXPECT_NE(coll.find("Frankfurt"), coll.end());
@@ -2974,13 +3108,13 @@ TEST(CxxUnordered, search)
     std::vector<std::string> result{};
 
     std::unordered_multiset<std::string> coll{"Braunschweig",
-      "Hanover",
-      "Frankfurt",
-      "New York",
-      "Chicago",
-      "Toronto",
-      "Paris",
-      "Frankfurt"};
+                                              "Hanover",
+                                              "Frankfurt",
+                                              "New York",
+                                              "Chicago",
+                                              "Toronto",
+                                              "Paris",
+                                              "Frankfurt"};
 
     auto range = coll.equal_range("Frankfurt");
     EXPECT_THAT(std::distance(range.first, range.second), 2);
@@ -2995,7 +3129,7 @@ TEST(CxxUnordered, search)
       ++first;
     }
 
-    EXPECT_THAT(result, ElementsAre("Frankfurt","Frankfurt"));
+    EXPECT_THAT(result, ElementsAre("Frankfurt", "Frankfurt"));
 
     // when not found
     EXPECT_THAT(coll.count("Seoul"), 0);
@@ -3015,13 +3149,13 @@ TEST(CxxUnordered, insert)
 {
   // do not have duplicates
   std::unordered_set<std::string> coll{"Braunschweig",
-      "Hanover",
-      // "Frankfurt",
-      "New York",
-      "Chicago",
-      "Toronto",
-      "Paris",
-      "Frankfurt"};
+                                       "Hanover",
+                                       // "Frankfurt",
+                                       "New York",
+                                       "Chicago",
+                                       "Toronto",
+                                       "Paris",
+                                       "Frankfurt"};
 
   // not allowed to add duplicate
   auto ret = coll.insert("Frankfurt");
@@ -3993,18 +4127,20 @@ TEST(AlgoRandom, AlgoShuffle)
 //  initValue op a1 op a2 op a3 op ...
 // respectively.
 
-TEST(AlgoAccumulate, Stream)
+TEST(CxxAlgoAccumulate, on_stream)
 {
-  istringstream is{"1 2 3 4 5 6"};
-  istream_iterator<int> start(is), eof;
+  std::istringstream is{"1 2 3 4 5 6"};
+  std::istream_iterator<int> start(is), eof;
 
   auto sum = std::accumulate(start, eof, 0);
+
   EXPECT_THAT(sum, 21);
 }
 
-TEST(AlgoAccumulate, Coll)
+// ={=========================================================================
+TEST(CxxAlgoAccumulate, on_container)
 {
-  vector<int> coll{1, 2, 3, 4, 5};
+  std::vector<int> coll{1, 2, 3, 4, 5};
 
   // sum
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0), Eq(15));
@@ -4039,9 +4175,10 @@ TEST(AlgoAccumulate, Coll)
               Eq(15));
 }
 
+// ={=========================================================================
 // see how to use acculumate on map
 
-TEST(AlgoAccumulate, Map)
+TEST(CxxAlgoAccumulate, on_map)
 {
   std::map<int, size_t> counts{{1, 2}, {3, 2}, {5, 3}, {8, 3}, {13, 1}};
 
@@ -4350,7 +4487,7 @@ TEST(AlgoEqual, UsePermutation)
 // ={=========================================================================
 // cxx-reverse
 
-TEST(StlAlgo, algo_Reverse)
+TEST(CxxAlgo, reverse)
 {
   std::vector<int> coll{1, 2, 3, 4, 5, 6, 7};
 
@@ -4365,17 +4502,19 @@ TEST(StlAlgo, algo_Reverse)
 
 namespace algo_reverse
 {
-  using RITERATOR = vector<int>::iterator;
+  // reverse iterator(random)
+  using RITERATOR = std::vector<int>::iterator;
 
   void my_reverse(RITERATOR first, RITERATOR last)
   {
     --last;
 
     for (; first < last; ++first, --last)
-      swap(*first, *last);
+      std::swap(*first, *last);
   }
 
-  using BITERATOR = list<int>::iterator;
+  // bi iterator since it's from cxx-list
+  using BITERATOR = std::list<int>::iterator;
 
   void my_reverse_bi(BITERATOR first, BITERATOR last)
   {
@@ -4385,16 +4524,16 @@ namespace algo_reverse
     // for (;first < last; ++first, --last)
 
     for (; first != last; ++first, --last)
-      swap(*first, *last);
+      std::swap(*first, *last);
   }
 } // namespace algo_reverse
 
-TEST(StlAlgo, algo_ReverseUseOwn)
+TEST(CxxAlgo, reverse_different_iterator)
 {
   using namespace algo_reverse;
 
   {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7};
 
     my_reverse(coll.begin(), coll.end());
     EXPECT_THAT(coll, ElementsAre(7, 6, 5, 4, 3, 2, 1));
@@ -4404,7 +4543,7 @@ TEST(StlAlgo, algo_ReverseUseOwn)
   }
 
   {
-    list<int> coll{1, 2, 3, 4, 5, 6, 7};
+    std::list<int> coll{1, 2, 3, 4, 5, 6, 7};
 
     my_reverse_bi(coll.begin(), coll.end());
     EXPECT_THAT(coll, ElementsAre(7, 6, 5, 4, 3, 2, 1));
@@ -4412,7 +4551,7 @@ TEST(StlAlgo, algo_ReverseUseOwn)
     // since `+/- is only supported for random
     // my_reverse_bi(coll.begin()+1, coll.end()-1);
 
-    my_reverse_bi(next(coll.begin()), prev(coll.end()));
+    my_reverse_bi(std::next(coll.begin()), std::prev(coll.end()));
     EXPECT_THAT(coll, ElementsAre(7, 2, 3, 4, 5, 6, 1));
   }
 }

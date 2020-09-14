@@ -65,7 +65,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 # add_compile_options("-g;-D_GLIBCXX_DEBUG")
-add_compile_options("-g;-Wall;-Wswitch-enum")
+add_compile_options(-g -Wall)
 
 # Supported values are 98, 11 and 14.
 # set( CMAKE_CXX_STANDARD 14 )
@@ -237,6 +237,18 @@ add_executable(bridge_client4 "bridge_client2.cpp"
 
 # aout
 add_executable(aout "aout.cpp") 
+
+# test_core_guideline.cpp
+add_executable(test_core "test_core_guideline.cpp")
+
+# note: must use "PUBLIC" to have the expected result. why?
+target_compile_options(test_core PUBLIC -g 
+  -Wswitch-default 
+#  -Wimplicit-fallthrough
+  -Wextra
+)
+
+target_link_libraries(test_core gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

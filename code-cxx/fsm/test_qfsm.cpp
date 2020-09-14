@@ -8,13 +8,17 @@
 
 #include "gmock/gmock.h"
 
-#include "qfsm.h"
+#include "statemachine.h"
 
 using namespace testing;
 
 /*
+// ={=========================================================================
+qfsm.cpp, qfsm.h
+
 To build:
 -------------------------------------------------------------------------------
+
 class UseFsm 
 {
   private:
@@ -95,23 +99,23 @@ m_stateMachine.postEvent() or;
 m_stateMachine.postDelayed();
 
 
-To use the final state: stop() or setFinalState() to restart fsm again
+To use the final state: stop() or setFinalState() to end fsm
 -------------------------------------------------------------------------------
 
 1. setFinalState() is used to set m_finalState and when transition happens, it's
 checked if new state is the final state. If so run codes that stop() do; make
 running false, call cleanUpEvents(), and make currentState -1
 
-2. or use enter/exit signal of the final state
+// 2. or use enter/exit signal of the final state. (what does it mean?)
 
 
 To start the state machine again:
 -------------------------------------------------------------------------------
 
-1. use start() of a state macnine since it resets state machine's state.
+1. use stop() and start() of a state macnine since it resets state machine's state.
 
-2. use transition of a state machine which can go from the final and to the init
-state and then starts again.
+2. use start() and no stop. use transition of a state machine which can go from
+the final to the init state and then starts again.
 
 
 Each state has a list of transitions and addTransition() add a transition entry
@@ -254,7 +258,7 @@ int StateMachine::shouldMoveState(QEvent::Type eventType) const
 }
 
 
-The unusual thing is that all exited/enterede are fired along the transition
+The unusual thing is that all exited/entered are fired along the transition
 path and user of fsm can decice what to handle in exited/entered handler.
 
 
@@ -325,8 +329,6 @@ void StateMachine::moveToState(int newState)
 // (gdb) b StateMachineTest_handleSuperStateNotSameParent_Test::TestBody()
 // void StateMachineTest_handleSuperStateSameParent_Test::TestBody();
 
-// ={=========================================================================
-
 enum
 {
   e1,
@@ -347,8 +349,9 @@ public:
 protected:
 };
 
+// ={=========================================================================
 // check if initial state gets called when starts fsm
-TEST_F(StateMachineTest, transitionToInitialState)
+TEST_F(StateMachineTest, transit_to_initial_state)
 {
   enum
   {
@@ -361,6 +364,7 @@ TEST_F(StateMachineTest, transitionToInitialState)
   EXPECT_TRUE(fsm.addState(initialState));
   EXPECT_TRUE(fsm.setInitialState(initialState));
 
+  // pair<state, count>
   std::map<int, unsigned> enters;
   std::map<int, unsigned> exits;
 
@@ -380,21 +384,22 @@ TEST_F(StateMachineTest, transitionToInitialState)
 
   EXPECT_TRUE(fsm.start());
 
-  EXPECT_TRUE(fsm.isRunning());
+  EXPECT_THAT(fsm.isRunning(), true);
 
   // return current state
-  EXPECT_EQ(fsm.state(), int(initialState));
+  EXPECT_EQ(fsm.getState(), int(initialState));
 
   fsm.stop();
 
-  EXPECT_FALSE(fsm.isRunning());
+  EXPECT_THAT(fsm.isRunning(), false);
 
   // only one transition which means one `entered` called
   EXPECT_THAT(enters[initialState], 1);
   EXPECT_THAT(exits.size(), 0);
 }
 
-TEST_F(StateMachineTest, startWithNoInitialState)
+// ={=========================================================================
+TEST_F(StateMachineTest, not_set_initial_state)
 {
   enum
   {
@@ -427,14 +432,15 @@ TEST_F(StateMachineTest, startWithNoInitialState)
   // start() return false when there's no initial state set. so isRunning() is
   // false as well.
 
-  EXPECT_FALSE(fsm.start());
-  EXPECT_FALSE(fsm.isRunning());
+  EXPECT_THAT(fsm.start(), false);
+  EXPECT_THAT(fsm.isRunning(), false);
 
   EXPECT_THAT(enters.size(), 0);
   EXPECT_THAT(exits.size(), 0);
 }
 
-TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
+// ={=========================================================================
+TEST_F(StateMachineTest, add_invalid_state_and_transition)
 {
   enum
   {
@@ -474,11 +480,12 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
   EXPECT_FALSE(fsm.addTransition(s1, -1, s2));
 }
 
+// ={=========================================================================
 // check return from postEvent() since do no checking on return of postEvent()
 // and it can go silent without transition. So changed postEvent() to return
 // bool valure more correctly and client should check it
 
-TEST_F(StateMachineTest, postEventError)
+TEST_F(StateMachineTest, post_event_error)
 {
   // state
   enum
@@ -522,24 +529,167 @@ TEST_F(StateMachineTest, postEventError)
   fsm.postEvent(1);
 
   // check current state
-  EXPECT_THAT(fsm.state(), s3);
+  EXPECT_THAT(fsm.getState(), s3);
 
   EXPECT_THAT(enters.size(), 3);
   EXPECT_THAT(exits.size(), 2);
 
   fsm.postEvent(1);
   // check current state
-  EXPECT_THAT(fsm.state(), s1);
+  EXPECT_THAT(fsm.getState(), s1);
 
   // expect no state change since event 2 is not in the transition.
   // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00293 :
   // not found event 2 transition from current state 0
   EXPECT_THAT(fsm.postEvent(2), false);
-  EXPECT_THAT(fsm.state(), s1);
+  EXPECT_THAT(fsm.getState(), s1);
 }
 
-// starts fsm again. stop() or use final state.
-TEST_F(StateMachineTest, startFsmAgain1)
+// ={=========================================================================
+TEST_F(StateMachineTest, post_event_in_eaf)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3,
+    s4
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.addState(s4));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+  EXPECT_TRUE(fsm.addTransition(s3, 1, s1));
+  EXPECT_TRUE(fsm.addTransition(s3, 2, s4));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) {
+    enters[state]++;
+
+    if (state == s2)
+    {
+      EXPECT_THAT(fsm.postEvent(1), true);
+    }
+  };
+
+  auto exited = [&](int state) { exits[state]++; };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  // current s1. post 1 and transit to s2. in eaf, post 1 and transit to s3.
+  EXPECT_THAT(fsm.postEvent(1), true);
+
+  // check current state
+  EXPECT_THAT(fsm.getState(), s3);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+}
+
+/*
+// ={=========================================================================
+
+NOTE: spend hours to find out why.
+
+As with the above, expect that 
+
+"current s1. post 1 and transit to s2. in eaf, post 1 and transit to s3."
+
+HOWEVER, stops at s2 and behave as if there is no second post event. WHY?
+
+Postring event in eaf works but problem is "setting final state to S2.".
+
+1. in triggerStateMove of the first post, m_withinStateMover = true
+2. in moveToState, update currentState and call eaf. 
+3. in eaf, post the second event. In postEvent, m_withinStateMover is true 
+   so queue it up end return.
+4. in context of the first post, currentState is final state and do stop() 
+   work; cleanup queue and set state -1.
+
+Q: can use the same state as init and final state for single run? if it is to
+call eafs during transition, works. but if need to do something based on current
+state, then no since when gets to the final, run eaf and set state -1.
+
+*/
+
+TEST_F(StateMachineTest, post_event_in_eaf_and_final_state)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3,
+    s4
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.addState(s4));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+  EXPECT_TRUE(fsm.setFinalState(s2));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+  EXPECT_TRUE(fsm.addTransition(s3, 1, s1));
+  EXPECT_TRUE(fsm.addTransition(s3, 2, s4));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) {
+    enters[state]++;
+
+    if (state == s2)
+    {
+      EXPECT_THAT(fsm.postEvent(1), true);
+    }
+  };
+
+  auto exited = [&](int state) { exits[state]++; };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  EXPECT_THAT(fsm.postEvent(1), true);
+
+  // check current state
+  EXPECT_THAT(fsm.getState(), -1);
+
+  // -1 for each
+  EXPECT_THAT(enters.size(), 2);
+  EXPECT_THAT(exits.size(), 1);
+}
+
+// ={=========================================================================
+// starts fsm again. stop() and start()
+TEST_F(StateMachineTest, start_fsm_again_1)
 {
   // state
   enum
@@ -581,6 +731,9 @@ TEST_F(StateMachineTest, startFsmAgain1)
   EXPECT_THAT(enters.size(), 3);
   EXPECT_THAT(exits.size(), 2);
 
+  // current state is s3
+  EXPECT_THAT(fsm.getState(), s3);
+
   // ok, try to start fsm again.
   fsm.stop();
   enters.clear();
@@ -600,7 +753,9 @@ TEST_F(StateMachineTest, startFsmAgain1)
   EXPECT_THAT(exits.size(), 2);
 }
 
-TEST_F(StateMachineTest, startFsmAgain2)
+// ={=========================================================================
+// starts fsm again. final state and start()
+TEST_F(StateMachineTest, start_fsm_again_2)
 {
   // state
   enum
@@ -617,6 +772,8 @@ TEST_F(StateMachineTest, startFsmAgain2)
   EXPECT_TRUE(fsm.addState(s2));
   EXPECT_TRUE(fsm.addState(s3));
   EXPECT_TRUE(fsm.setInitialState(s1));
+
+  // set final state
   EXPECT_TRUE(fsm.setFinalState(s3));
 
   EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
@@ -643,6 +800,9 @@ TEST_F(StateMachineTest, startFsmAgain2)
   EXPECT_THAT(enters.size(), 3);
   EXPECT_THAT(exits.size(), 2);
 
+  // current state is -1 due to "final state"
+  EXPECT_THAT(fsm.getState(), -1);
+
   // ok, try to start fsm again. Since used setFinalState(), no need to stop().
   // fsm.stop();
   enters.clear();
@@ -660,6 +820,127 @@ TEST_F(StateMachineTest, startFsmAgain2)
 
   EXPECT_THAT(enters.size(), 3);
   EXPECT_THAT(exits.size(), 2);
+}
+
+// ={=========================================================================
+// starts fsm again. use start() only and fails
+TEST_F(StateMachineTest, start_fsm_again_3)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+
+  std::map<int, unsigned> enters;
+  std::map<int, unsigned> exits;
+
+  auto entered = [&](int state) { enters[state]++; };
+
+  auto exited = [&](int state) { exits[state]++; };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  EXPECT_THAT(enters.size(), 3);
+  EXPECT_THAT(exits.size(), 2);
+
+  // current state is s3
+  EXPECT_THAT(fsm.getState(), s3);
+
+  // ok, try to start fsm again. Since used setFinalState(), no need to stop().
+  // fsm.stop();
+  enters.clear();
+  exits.clear();
+
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  // LOG| F:qfsm.cpp C:bool StateMachine::start() L:00827 : state machine is already running
+  EXPECT_THAT(fsm.start(), false);
+}
+
+// ={=========================================================================
+// starts fsm again. use start() only and no stop. use transition.
+TEST_F(StateMachineTest, start_fsm_again_4)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+
+  // add this
+  EXPECT_TRUE(fsm.addTransition(s3, 1, s1));
+
+  // use vector
+  std::vector<int> enters;
+  std::vector<int> exits;
+
+  auto entered = [&](int state) { enters.emplace_back(state); };
+
+  auto exited = [&](int state) { exits.emplace_back(state); };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  // current state is s3
+  EXPECT_THAT(fsm.getState(), s3);
+
+  // states; 0 -> 1 -> 2
+  EXPECT_THAT(enters, ElementsAre(0, 1, 2));
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  // current state is s1
+  EXPECT_THAT(fsm.getState(), s1);
+
+  // states; 0 -> 1 -> 2 -> 0 -> 1 -> 2 -> 0
+  EXPECT_THAT(enters, ElementsAre(0, 1, 2, 0, 1, 2, 0));
 }
 
 // whenever creates FooFsm, it creates fsm and threads with runs on it. So want
@@ -805,6 +1086,7 @@ TEST_F(StateMachineTest, useFsmWithThread)
   }
 }
 
+// ={=========================================================================
 // start the state fsm but stops right away since it's stopped in `enter`
 // eaf. TODO: what want to see here?
 
@@ -844,6 +1126,7 @@ TEST_F(StateMachineTest, stopWithinSlot)
   EXPECT_THAT(exits.size(), 0);
 }
 
+// ={=========================================================================
 // N/A since qfsm do not support the deplayed post
 // TEST_F(StateMachineTest, stopWithinDelayedSlot)
 
@@ -1070,168 +1353,6 @@ TEST_F(StateMachineTest, super_noTransitionToSuper)
 
   // not allowed to move to super state
   EXPECT_FALSE(fsm.addTransition(s1_2_1, e2, s1));
-}
-
-TEST_F(StateMachineTest, handleFinishedState1)
-{
-  enum
-  {
-    s1,
-    s1_1,
-    s1_2,
-    s1_2_1,
-    s1_2_2,
-    s2
-  };
-
-  StateMachine fsm;
-  fsm.setName("machine");
-
-  // {
-  //   s1,
-  //    s1_1,
-  //    s1_2,
-  //      s1_2_1,
-  //      s1_2_2,
-  //   s2
-  // };
-
-  EXPECT_TRUE(fsm.addState(s1));
-  EXPECT_TRUE(fsm.addState(s1, s1_1));
-  EXPECT_TRUE(fsm.addState(s1, s1_2));
-  EXPECT_TRUE(fsm.addState(s1_2, s1_2_1));
-  EXPECT_TRUE(fsm.addState(s1_2, s1_2_2));
-  EXPECT_TRUE(fsm.addState(s2));
-
-  EXPECT_TRUE(fsm.setInitialState(s1));
-
-  EXPECT_TRUE(fsm.setFinalState(s1_2_2));
-
-  EXPECT_TRUE(fsm.addTransition(s1, e1, s1_2_2));
-  EXPECT_TRUE(fsm.addTransition(s1_2_2, e2, s2));
-
-  // { common code
-  std::vector<int> enters;
-  std::vector<int> exits;
-
-  // since not use QSignalSpy from Qt
-  auto entered = [&](int state) { enters.push_back(state); };
-  auto exited  = [&](int state) { exits.push_back(state); };
-
-  EXPECT_TRUE(fsm.connect(entered, exited));
-  // }
-
-  fsm.start();
-
-  EXPECT_THAT(true, fsm.isRunning());
-  EXPECT_THAT(enters.size(), 1);
-
-  // Removes all items from the list.
-  enters.clear();
-
-  fsm.postEvent(e1);
-
-  // 2 states along the path
-  EXPECT_THAT(enters.size(), 2);
-
-  // reached the final state and get `finished` and isRunning() is false
-  // NOTE: since qfsm do not support `finished` callback
-  // EXPECT_EQ(finisheddSpy.count(), 1);
-  EXPECT_THAT(false, fsm.isRunning());
-
-  // current state is -1 since it reached to the finished
-  EXPECT_THAT(fsm.state(), -1);
-
-  // NOTE:
-  // start() makes fsm running again and set current state with init state.
-  fsm.start();
-
-  // so now true.
-  EXPECT_THAT(true, fsm.postEvent(e2));
-
-  // current state is s2
-  EXPECT_THAT(fsm.state(), s1);
-}
-
-TEST_F(StateMachineTest, handleFinishedState2)
-{
-  enum
-  {
-    s1,
-    s1_1,
-    s1_2,
-    s1_2_1,
-    s1_2_2,
-    s2
-  };
-
-  StateMachine fsm;
-  fsm.setName("machine");
-
-  // {
-  //   s1,
-  //    s1_1,
-  //    s1_2,
-  //      s1_2_1,
-  //      s1_2_2,
-  //   s2
-  // };
-
-  EXPECT_TRUE(fsm.addState(s1));
-  EXPECT_TRUE(fsm.addState(s1, s1_1));
-  EXPECT_TRUE(fsm.addState(s1, s1_2));
-  EXPECT_TRUE(fsm.addState(s1_2, s1_2_1));
-  EXPECT_TRUE(fsm.addState(s1_2, s1_2_2));
-  EXPECT_TRUE(fsm.addState(s2));
-
-  EXPECT_TRUE(fsm.setInitialState(s1));
-
-  EXPECT_TRUE(fsm.setFinalState(s1_2_2));
-
-  EXPECT_TRUE(fsm.addTransition(s1, e1, s1_2_2));
-  EXPECT_TRUE(fsm.addTransition(s1_2_2, e2, s2));
-
-  // { common code
-  std::vector<int> enters;
-  std::vector<int> exits;
-
-  // since not use QSignalSpy from Qt
-  auto entered = [&](int state) { enters.push_back(state); };
-  auto exited  = [&](int state) { exits.push_back(state); };
-
-  EXPECT_TRUE(fsm.connect(entered, exited));
-  // }
-
-  fsm.start();
-
-  EXPECT_THAT(true, fsm.isRunning());
-  EXPECT_THAT(enters.size(), 1);
-
-  // Removes all items from the list.
-  enters.clear();
-
-  fsm.postEvent(e1);
-
-  // 2 states along the path
-  EXPECT_THAT(enters.size(), 2);
-
-  // reached the final state and get `finished` and isRunning() is false
-  // NOTE: since qfsm do not support `finished` callback
-  // EXPECT_EQ(finisheddSpy.count(), 1);
-  EXPECT_THAT(false, fsm.isRunning());
-
-  // current state is -1 since it reached to the finished
-  EXPECT_THAT(fsm.state(), -1);
-
-  // NOTE:
-  // start() makes fsm running again and set current state with init state.
-  fsm.start();
-
-  // so now true.
-  EXPECT_THAT(true, fsm.postEvent(e2));
-
-  // current state is s2
-  EXPECT_THAT(fsm.state(), s1);
 }
 
 // use blercumanager fsm for an example using super state

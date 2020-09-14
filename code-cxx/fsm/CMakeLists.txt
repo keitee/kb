@@ -4,6 +4,8 @@ project(fsm VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
+# $ CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.6/gcc_64/lib/cmake cmake ..
+
 # https://stackoverflow.com/questions/690223/how-to-retrieve-a-user-environment-variable-in-cmake-windows
 # Getting variables into your CMake script
 # You can pass a variable on the line with the cmake invocation:
@@ -94,11 +96,6 @@ add_executable(test_cxxfsm test_cxxfsm.cpp sfsm.cpp dfsm.cpp)
 target_link_libraries(test_cxxfsm gmock_main)
 
 
-# fsm ex
-add_executable(fsm_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
-target_link_libraries(fsm_atm gmock_main)
-
-
 # qtfsm
 find_package(Qt5 COMPONENTS Core REQUIRED)
 if(Qt5Core_FOUND)
@@ -108,13 +105,13 @@ else()
 endif()
 
 find_package(Qt5Test)
-add_executable(qtfsm test_qtfsm.cpp qtfsm.cpp)
-target_link_libraries(qtfsm gmock_main Qt5::Core Qt5::Test ${LIBS})
+add_executable(test_qtfsm test_qtfsm.cpp qtfsm.cpp)
+target_link_libraries(test_qtfsm gmock_main Qt5::Core Qt5::Test ${LIBS})
 
 
 # qfsm which mimic qtfsm without qt
-add_executable(qfsm test_qfsm.cpp qfsm.cpp)
-target_link_libraries(qfsm gmock_main ${LIBS})
+add_executable(test_qfsm test_qfsm.cpp statemachine.cpp)
+target_link_libraries(test_qfsm gmock_main ${LIBS})
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

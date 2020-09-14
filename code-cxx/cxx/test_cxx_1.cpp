@@ -4073,10 +4073,10 @@ TEST(Reference, AccessOnReference)
 
 TEST(CxxTime, check_ratio)
 {
-  // typedef std::ratio<5, 3> FiveThirds;
+  // typedef std::ratio<5, 3> 5/3, FiveThirds;
   using FiveThirds = std::ratio<5, 3>;
 
-  // Numerator and denominator
+  // Numerator and denominator. 5/3
   EXPECT_THAT(FiveThirds::num, 5);
   EXPECT_THAT(FiveThirds::den, 3);
 
@@ -4095,6 +4095,7 @@ TEST(CxxTime, check_ratio)
   EXPECT_THAT(rn.den, 1);
 }
 
+// ={=========================================================================
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
@@ -4136,6 +4137,7 @@ TEST(CxxTime, check_system_call)
   }
 }
 
+// ={=========================================================================
 // The local date and time is: Tue Jun 12 14:42:18 2018
 // The local date and time is: Tue Jun 12 14:42:28 2018
 
@@ -4156,6 +4158,7 @@ TEST(CxxTime, check_sleep_for)
   EXPECT_THAT((curr->tm_sec - prev->tm_sec), 0);
 }
 
+// ={=========================================================================
 // Arithmetic Duration Operations
 //
 // You can compute with durations in the expected way (see Table 5.21):
@@ -4181,6 +4184,7 @@ TEST(CxxTime, check_duration_1)
   EXPECT_THAT(oneMillisecond.count(), 1);
 }
 
+// ={=========================================================================
 // You can also convert durations into durations of different units, as long
 // as there is an implicit type conversion. Thus, you can convert hours into
 // seconds but not the other way around. For example:
@@ -4236,18 +4240,15 @@ TEST(CxxTime, check_duration_2)
   }
 }
 
-#if 0
-
-*cxx-time-duration-cast*
-
-A typical example is code that segments a duration into different units. For
-example, the following code segments a duration of milliseconds into the
-corresponding hours, minutes, seconds, and milliseconds
-
-raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
-     02::00::55::42
-
-#endif
+// ={=========================================================================
+// *cxx-time-duration-cast*
+//
+// A typical example is code that segments a duration into different units. For
+// example, the following code segments a duration of milliseconds into the
+// corresponding hours, minutes, seconds, and milliseconds
+//
+// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+//      02::00::55::42
 
 namespace cxx_time
 {
@@ -4305,6 +4306,7 @@ TEST(CxxTime, check_duration_cast_1)
   EXPECT_THAT(nsec1.count(), nsec2);
 }
 
+// ={=========================================================================
 // As we have seen, implicit conversions to a more precise unit type are always
 // possible. However, conversions to a coarser unit type are not, because you
 // might lose information.
@@ -4315,25 +4317,32 @@ TEST(CxxTime, check_duration_cast_1)
 // explicitly force such a conversion with a duration_cast. For example:
 //
 // std::chrono::seconds sec(55);
+//
 // std::chrono::minutes m1 = sec; // ERROR
+//
 // std::chrono::minutes m2 =
 //    std::chrono::duration_cast<std::chrono::minutes>(sec); // OK
-#if 0
-TEST(CxxTime, check_duration_cast_2)
-{
-  using namespace cxx_time;
 
-  std::chrono::milliseconds ms{7255042};
+// TEST(CxxTime, check_duration_cast_2)
+// {
+//   using namespace cxx_time;
 
-  // convert ms to hours
-  std::chrono::hours hh{};
+//   std::chrono::milliseconds ms{7255042};
 
-  hh = ms;
+//   // convert ms to hours
+//   std::chrono::hours hh{};
 
-  EXPECT_THAT(hh.count(), 2);
-}
-#endif
+//   // error: no match for ‘operator=’ (operand types are ‘std::chrono::hours
+//   // {aka std::chrono::duration<long int, std::ratio<3600> >}’ and
+//   // ‘std::chrono::milliseconds {aka std::chrono::duration<long int, std::ratio<1, 1000> >}’)
+//   //    hh = ms;
 
+//   hh = ms;
+
+//   EXPECT_THAT(hh.count(), 2);
+// }
+
+// ={=========================================================================
 // cxx-time-crono-clock
 
 // the following function prints the properties of a clock
@@ -4406,7 +4415,8 @@ TEST(CxxTime, check_various_clock)
   EXPECT_THAT(os.str(), expected);
 }
 
-TEST(Time, SteadyClock)
+// ={=========================================================================
+TEST(CxxTime, check_steady_clock)
 {
   {
     // now() is static function
@@ -4435,6 +4445,7 @@ TEST(Time, SteadyClock)
   }
 }
 
+// ={=========================================================================
 // cxx-time-timepoint
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
@@ -4452,6 +4463,7 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 
   // remove trailing newline
   ts.resize(ts.size() - 1);
+
   return ts;
 }
 
@@ -4475,9 +4487,8 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 
 // epoch: Thu Jan  1 00:00:00 1970
 // now  : Thu Apr 12 10:01:32 2018
-// min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the
-// book max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from
-// the book
+// min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the book
+// max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
 
 TEST(CxxTime, check_timepoint)
 {
@@ -4499,7 +4510,16 @@ TEST(CxxTime, check_timepoint)
     tp = std::chrono::system_clock::time_point::max();
     cout << "max  : " << as_string(tp) << endl;
   }
+}
 
+// ={=========================================================================
+// now in duration: 1599840788414732866
+// now in seconds : 1599840788
+// now : 1599840923
+// now : 1599840923
+
+TEST(CxxTime, check_now)
+{
   // tp.time_since_epoch()
   // Returns the duration between the epoch and timepoint tp
   {
@@ -4515,8 +4535,16 @@ TEST(CxxTime, check_timepoint)
       << chrono::duration_cast<chrono::seconds>(tp.time_since_epoch()).count()
       << std::endl;
   }
+
+  // static std::chrono::time_point<std::chrono::system_clock> now() noexcept;
+  std::time_t time =
+    std::chrono::system_clock::to_time_t(chrono::system_clock::now());
+
+  std::cout << "now : " << time << std::endl;
+  std::cout << "now : " << std::time(0) << std::endl;
 }
 
+// ={=========================================================================
 TEST(CxxTime, check_timepoint_arithmetic)
 {
   std::ostringstream os{};
@@ -9921,6 +9949,7 @@ namespace cxx_io
   }
 } // namespace cxx_io
 
+// ={=========================================================================
 // $ cat input.txt
 // VOD.L 1 100 184.0 183.7 VOD.X 2 100 189.0 183.8 VOD.L 3 100 185.0 183.9
 
@@ -13401,7 +13430,7 @@ TEST(CxxConst, check_reference)
   }
 }
 
-namespace const_member_function
+namespace cxx_const
 {
   class Screen
   {
@@ -13418,13 +13447,14 @@ namespace const_member_function
   };
 
   // *cxx-const-error-const* when there's no const version of get_message()
+  // since const on arg "print_screen(const Screen &s)"
   //
-  // cxx.cpp: In function ‘std::string const_member_function::print_screen(const
-  // const_member_function::Screen&)’:
+  // cxx.cpp: In function ‘std::string cxx_const::print_screen(const
+  // cxx_const::Screen&)’:
   //
-  // cxx.cpp:3359:26: error: passing ‘const const_member_function::Screen’ as
+  // cxx.cpp:3359:26: error: passing ‘const cxx_const::Screen’ as
   // ‘this’ argument of ‘std::string
-  // const_member_function::Screen::get_message()’ discards qualifiers
+  // cxx_const::Screen::get_message()’ discards qualifiers
   // [-fpermissive]
   //
   //      return s.get_message();
@@ -13454,11 +13484,11 @@ namespace const_member_function
     //  }
     //
     // cxx.cpp: In instantiation of ‘constexpr T&
-    // const_member_function::array2d<T, R, C>::at(size_t, size_t) const [with T
+    // cxx_const::array2d<T, R, C>::at(size_t, size_t) const [with T
     // = int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t =
     // long unsigned int]’: cxx.cpp:3420:21:   required from ‘void
-    // const_member_function::print_array2d(const
-    // const_member_function::array2d<T, R, C>&) [with T = int; long unsigned
+    // cxx_const::print_array2d(const
+    // cxx_const::array2d<T, R, C>&) [with T = int; long unsigned
     // int R = 2ul; long unsigned int C = 3ul]’ cxx.cpp:3439:20:   required from
     // here cxx.cpp:3403:31: error: invalid initialization of reference of type
     // ‘int&’ from expression of type ‘const value_type {aka const int}’
@@ -13469,8 +13499,8 @@ namespace const_member_function
     // *cxx-const-error-const* when there's no const version
     //
     // cxx.cpp:3409:21: error: passing ‘const
-    // const_member_function::array2d<int, 2ul, 3ul>’ as ‘this’ argument of ‘T&
-    // const_member_function::array2d<T, R, C>::at(size_t, size_t) [with T =
+    // cxx_const::array2d<int, 2ul, 3ul>’ as ‘this’ argument of ‘T&
+    // cxx_const::array2d<T, R, C>::at(size_t, size_t) [with T =
     // int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t = long
     // unsigned int]’ discards qualifiers
     // [-fpermissive]
@@ -13502,11 +13532,12 @@ namespace const_member_function
     }
   }
 
-} // namespace const_member_function
+} // namespace cxx_const
 
+// ={=========================================================================
 TEST(CxxConst, check_memeber_function)
 {
-  using namespace const_member_function;
+  using namespace cxx_const;
   {
     Screen screen;
     print_screen(screen);
@@ -13516,6 +13547,79 @@ TEST(CxxConst, check_memeber_function)
     array2d<int, 2, 3> a;
     print_array2d(a);
   }
+}
+
+namespace cxx_const
+{
+  // copy version
+  std::string merge_string_1(const std::vector<std::string> &coll)
+  {
+    std::string ret{};
+
+    for (auto e : coll)
+    {
+      ret += e;
+    }
+
+    return ret;
+  }
+
+  // no copy and reference
+  std::string merge_string_2(const std::vector<std::string> &coll)
+  {
+    std::string ret{};
+
+    for (auto &e : coll)
+    {
+      ret += e;
+    }
+
+    return ret;
+  }
+
+  // can change? no
+  //
+  // : error: no matching function for call to ‘std::__cxx11::basic_string<char>::append(const char [2]) const’
+  //        e.append("3");
+  //
+  // std::string merge_string_3(const std::vector<std::string> &coll)
+  // {
+  //   std::string ret{};
+  //
+  //   for (auto &e : coll)
+  //   {
+  //     e.append("3");
+  //     ret += e;
+  //   }
+  //
+  //   return ret;
+  // }
+
+  // to change, make it non-const
+  std::string merge_string_4(std::vector<std::string> &coll)
+  {
+    std::string ret{};
+
+    for (auto &e : coll)
+    {
+      e.append("3");
+      ret += e;
+    }
+
+    return ret;
+  }
+} // namespace cxx_const
+
+// ={=========================================================================
+TEST(CxxConst, range_for)
+{
+  using namespace cxx_const;
+
+  std::vector<std::string> coll{"const", "range", "for"};
+
+  merge_string_1(coll);
+  merge_string_2(coll);
+  merge_string_4(coll);
 }
 
 // Q: useful case?
@@ -13550,6 +13654,7 @@ namespace cxxconstexpr
   };
 } // namespace cxxconstexpr
 
+// ={=========================================================================
 TEST(CxxConstExpr, check_constexpr_ctor)
 {
   using namespace cxxconstexpr;
