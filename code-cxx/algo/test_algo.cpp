@@ -2989,10 +2989,36 @@ o. cstring or std::string?
 
 o. time O(n) and space O(1)
 
+
+Leetcode 242. Valid Anagram
+
+Given two strings s and t , write a function to determine if t is an anagram of
+s.
+
+Example 1:
+
+Input: s = "anagram", t = "nagaram"
+Output: true
+
+Example 2:
+
+Input: s = "rat", t = "car"
+Output: false
+
+Note:
+You may assume the string contains only lowercase alphabets.
+
+Follow up:
+
+What if the inputs contain unicode characters? How would you adapt your solution
+to such case?
+
 */
 
-namespace algoanagram
+namespace algo_anagram
 {
+  // Runtime: 72 ms, faster than 26.38% of C++ online submissions for Valid Anagram.
+  // Memory Usage: 7.2 MB, less than 91.63% of C++ online submissions for Valid Anagram.
   bool anagram_1(string one, string two)
   {
     // quick optimisation.
@@ -3005,6 +3031,7 @@ namespace algoanagram
     return one == two ? true : false;
   }
 
+  // fails and see below
   bool anagram_2(string one, string two)
   {
     // quick optimisation.
@@ -3025,6 +3052,8 @@ namespace algoanagram
     return true;
   }
 
+  // 2020.09. not make sense!
+  //
   // Necessary since don't seem to meeet "anagram" definition.
   // To pass when there are duplicates in the input:
   //  1. remove duplicates
@@ -3056,24 +3085,121 @@ namespace algoanagram
 
     return true;
   }
-} // namespace algoanagram
 
-TEST(AlgoAnagram, check_inputs)
+  // 2020.09 for leetcode
+  //
+  // Failed case: expected false
+  //
+  // "aacc"
+  // "ccac"
+
+  bool is_anagram_1(string s, string t)
+  {
+    if (s.size() != t.size())
+      return false;
+
+    // bool array is the best in performace. see cxx-bit. assumes ascii
+    bool table[256]{false};
+
+    for (const auto e : s)
+    {
+      table[(int)e] = true;
+    }
+
+    for (const auto e : t)
+    {
+      if (table[(int)e] == false)
+        return false;
+    }
+
+    return true;
+  }
+
+  // Runtime: 36 ms, faster than 46.79% of C++ online submissions for Valid Anagram.
+  // Memory Usage: 7.4 MB, less than 43.59% of C++ online submissions for Valid Anagram.
+
+  bool is_anagram_2(string s, string t)
+  {
+    if (s.size() != t.size())
+      return false;
+
+    std::map<char, int> map_s{};
+    std::map<char, int> map_t{};
+
+    for (const auto e : s)
+      map_s[e]++;
+
+    for (const auto e : t)
+      map_t[e]++;
+
+    return map_s == map_t;
+  }
+
+  // Runtime: 24 ms, faster than 64.64% of C++ online submissions for Valid Anagram.
+  // Memory Usage: 7.7 MB, less than 5.43% of C++ online submissions for Valid Anagram.
+
+  bool is_anagram_3(string s, string t)
+  {
+    if (s.size() != t.size())
+      return false;
+
+    std::unordered_map<char, int> map_s{};
+    std::unordered_map<char, int> map_t{};
+
+    for (const auto e : s)
+      map_s[e]++;
+
+    for (const auto e : t)
+      map_t[e]++;
+
+    return map_s == map_t;
+  }
+} // namespace algo_anagram
+
+TEST(AlgoAnagram, anagram)
 {
-  using namespace algoanagram;
+  using namespace algo_anagram;
 
   {
-    const std::vector<std::function<bool(std::string, std::string)>> imps{
-      anagram_1,
-      anagram_2};
+    // const std::vector<std::function<bool(std::string, std::string)>> imps{
+    //   anagram_1,
+    //   anagram_2};
 
-    for (const auto &f : imps)
-    {
-      EXPECT_THAT(f("PARK", "APRK"), true);
-      EXPECT_THAT(f("PARK", "APRKPARK"), false);
-      EXPECT_THAT(f("PARK", "CARK"), false);
-      EXPECT_THAT(f("PARK", "PAAA"), false);
-    }
+    auto f = anagram_1;
+
+    EXPECT_THAT(f("PARK", "APRK"), true);
+    EXPECT_THAT(f("PARK", "APRKPARK"), false);
+    EXPECT_THAT(f("PARK", "CARK"), false);
+    EXPECT_THAT(f("PARK", "PAAA"), false);
+    EXPECT_THAT(f("aacc", "ccac"), false);
+  }
+
+  {
+    auto f = anagram_2;
+
+    EXPECT_THAT(f("PARK", "APRK"), true);
+    EXPECT_THAT(f("PARK", "APRKPARK"), false);
+    EXPECT_THAT(f("PARK", "CARK"), false);
+
+    // fails
+    // EXPECT_THAT(f("PARK", "PAAA"), false);
+    // EXPECT_THAT(f("aacc", "ccac"), false);
+  }
+
+  {
+    auto f = is_anagram_1;
+
+    EXPECT_THAT(f("anagram", "nagaram"), true);
+    EXPECT_THAT(f("rat", "car"), false);
+    // EXPECT_THAT(f("aacc", "ccac"), false);
+  }
+
+  {
+    auto f = is_anagram_2;
+
+    EXPECT_THAT(f("anagram", "nagaram"), true);
+    EXPECT_THAT(f("rat", "car"), false);
+    EXPECT_THAT(f("aacc", "ccac"), false);
   }
 }
 
@@ -6482,7 +6608,7 @@ algo-bits-count-bits count same bits between two integers
 191. Number of 1 Bits, Easy
 
 Write a function that takes an unsigned integer and return the number of '1'
-bits it has (also known as the Hamming weight).
+bits it has (also known as the *Hamming weight*).
 
 Example 1:
 
@@ -6650,6 +6776,7 @@ namespace algo_bit
   }
 } // namespace algo_bit
 
+//={=========================================================================
 TEST(AlgoBit, check_hamming_weight)
 {
   using namespace algo_bit;
@@ -6702,7 +6829,82 @@ TEST(AlgoBit, check_hamming_weight)
 }
 
 /*
+//={=========================================================================
 
+231. Power of Two
+
+Given an integer n, write a function to determine if it is a power of two.
+
+Example 1:
+
+Input: n = 1
+Output: true
+Explanation: 2^0 = 1
+
+Example 2:
+
+Input: n = 16
+Output: true
+Explanation: 2^4 = 16
+
+Example 3:
+
+Input: n = 3
+Output: false
+
+Example 4:
+
+Input: n = 4
+Output: true
+
+Example 5:
+
+Input: n = 5
+Output: false
+
+Constraints:
+
+-231 <= n <= 231 - 1
+
+*/
+
+namespace algo_bit
+{
+  // https://leetcode.com/problems/power-of-two/discuss/836545/C%2B%2B-solution-or-Two-liner
+  // C++ solution | Two liner
+  // geekypandey
+  // September 8, 2020 4:43 PM
+  //
+  // If a number is power of 2 then it would have only one bit set in its binary
+  // representation.
+  //
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Power of Two.
+  // Memory Usage: 5.9 MB, less than 84.61% of C++ online submissions for Power of Two.
+
+  bool is_power_of_two(int n)
+  {
+    if (n < 0)
+      return false;
+
+    return __builtin_popcount(n) == 1;
+  }
+} // namespace algo_bit
+
+TEST(AlgoBit, power_of_two)
+{
+  using namespace algo_bit;
+
+  auto f = is_power_of_two;
+
+  EXPECT_THAT(f(1), true);
+  EXPECT_THAT(f(16), true);
+  EXPECT_THAT(f(3), false);
+  EXPECT_THAT(f(4), true);
+  EXPECT_THAT(f(5), false);
+}
+
+/*
+//={=========================================================================
 A = 35 = 10 0011
 B =  9 =    1001
 
@@ -6827,6 +7029,7 @@ namespace algo_bit
   }
 } // namespace algo_bit
 
+//={=========================================================================
 TEST(AlgoBit, check_common_bits)
 {
   using namespace algo_bit;

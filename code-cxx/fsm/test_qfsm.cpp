@@ -823,7 +823,8 @@ TEST_F(StateMachineTest, start_fsm_again_2)
 }
 
 // ={=========================================================================
-// starts fsm again. use start() only and fails
+// starts fsm again. use start() only and fails since didn't use stop or
+// setFinalstate to reset fsm state.
 TEST_F(StateMachineTest, start_fsm_again_3)
 {
   // state
@@ -869,7 +870,6 @@ TEST_F(StateMachineTest, start_fsm_again_3)
   // current state is s3
   EXPECT_THAT(fsm.getState(), s3);
 
-  // ok, try to start fsm again. Since used setFinalState(), no need to stop().
   // fsm.stop();
   enters.clear();
   exits.clear();
@@ -927,6 +927,75 @@ TEST_F(StateMachineTest, start_fsm_again_4)
 
   // current state is s3
   EXPECT_THAT(fsm.getState(), s3);
+
+  // states; 0 -> 1 -> 2
+  EXPECT_THAT(enters, ElementsAre(0, 1, 2));
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  // current state is s1
+  EXPECT_THAT(fsm.getState(), s1);
+
+  // states; 0 -> 1 -> 2 -> 0 -> 1 -> 2 -> 0
+  EXPECT_THAT(enters, ElementsAre(0, 1, 2, 0, 1, 2, 0));
+}
+
+// ={=========================================================================
+// starts fsm again. use start() only and no stop. use transition. what if call
+// start() again?
+TEST_F(StateMachineTest, start_fsm_again_5)
+{
+  // state
+  enum
+  {
+    s1,
+    s2,
+    s3
+  };
+
+  StateMachine fsm;
+  fsm.setName("machine");
+
+  EXPECT_TRUE(fsm.addState(s1));
+  EXPECT_TRUE(fsm.addState(s2));
+  EXPECT_TRUE(fsm.addState(s3));
+  EXPECT_TRUE(fsm.setInitialState(s1));
+
+  EXPECT_TRUE(fsm.addTransition(s1, 1, s2));
+  EXPECT_TRUE(fsm.addTransition(s2, 1, s3));
+
+  // add this
+  EXPECT_TRUE(fsm.addTransition(s3, 1, s1));
+
+  // use vector
+  std::vector<int> enters;
+  std::vector<int> exits;
+
+  auto entered = [&](int state) { enters.emplace_back(state); };
+
+  auto exited = [&](int state) { exits.emplace_back(state); };
+
+  EXPECT_THAT(fsm.connect(entered, exited), true);
+
+  EXPECT_THAT(fsm.start(), true);
+  EXPECT_THAT(fsm.isRunning(), true);
+
+  EXPECT_THAT(enters.size(), 1);
+  EXPECT_THAT(exits.size(), 0);
+
+  fsm.postEvent(1);
+  fsm.postEvent(1);
+
+  // current state is s3
+  EXPECT_THAT(fsm.getState(), s3);
+
+  // fsm.stop();
+
+  // ok? just return false and error log from fsm but still functioning.
+  fsm.start();
 
   // states; 0 -> 1 -> 2
   EXPECT_THAT(enters, ElementsAre(0, 1, 2));

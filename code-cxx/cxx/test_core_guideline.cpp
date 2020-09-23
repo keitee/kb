@@ -22,6 +22,158 @@ using namespace std::placeholders;
 using namespace testing;
 
 /*
+P: Philosophy
+
+P.9: Don't waste time or space
+https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#Rp-waste
+
+https://devblogs.microsoft.com/cppblog/new-safety-rules-in-c-core-check/?fbclid=IwAR2HJjPz8nTUnjEJyHHXyblk1m6b91tO60G863Z65OqB9nJ07AWL7IF_CrM#expensive-copy-with-the-auto-keyword
+
+Expensive copy with the auto keyword
+
+Here, the type of password resolves to std::string, even though the return type
+of getPassword() is a const-reference to a string. The resulting behavior is
+that the contents of PasswordManager::password get copied into the local
+variable password.
+
+This difference in behavior between assigning a reference and a pointer to a
+variable marked auto is non-obvious, resulting in potentially unwanted and
+unexpected copying.
+
+https://docs.microsoft.com/en-us/cpp/code-quality/c26820?view=vs-2019
+
+This check covers non-obvious and easy-to-miss behavior when assigning a
+reference to a variable marked auto. The type of the auto variable is resolved
+to a value rather than a reference, and an implicit copy is made.
+
+*/
+
+// copied from:
+// TEST(CxxReference, check_return_and_auto)
+
+namespace cxx_reference
+{
+  class Screen
+  {
+  private:
+    int move;
+    int set;
+
+  public:
+    Screen()
+        : move(0)
+        , set(0)
+    {}
+
+    Screen &set_move_1(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen &set_move_2(int val) { move = val; }
+
+    Screen set_move_3(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen set_move_4(int val) { move = val; }
+
+    void set_set(int val) { set = val; }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << "move " << move << ", set " << set;
+      return os.str();
+    }
+  };
+
+  class Foo
+  {
+  private:
+    std::string _name;
+
+  public:
+    std::string &get_name_1() { return _name; }
+
+    std::string &get_name_2()
+    {
+      std::string name{"get_name_2"};
+      return name;
+    }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << _name;
+      return os.str();
+    }
+  };
+} // namespace cxx_reference
+
+TEST(CxxCoreGuideline, p9_dont_waste)
+{
+  using namespace cxx_reference;
+
+  // set_move_1() returns reference and use "auto &"
+  {
+    Screen scr{};
+
+    auto &screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_1() returns reference and use "auto". *cxx-auto*
+  {
+    Screen scr{};
+
+    auto screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
+
+  // return string reference of private member
+  {
+    Foo foo;
+
+    std::string &ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(foo.print(), "get_name_1");
+  }
+
+  // return string reference of private member
+  {
+    Foo foo;
+
+    auto &ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(foo.print(), "get_name_1");
+  }
+
+  // return string copy of private member
+  {
+    Foo foo;
+
+    // *cxx-auto* NOTE WHY??
+    auto ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(ret, "get_name_1");
+
+    EXPECT_THAT(foo.print(), "");
+  }
+}
+
+/*
 // ={=========================================================================
 ES.71: Prefer a range-for-statement to a for-statement when there is a choice
 

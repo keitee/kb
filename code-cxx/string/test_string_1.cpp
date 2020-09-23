@@ -23,7 +23,7 @@ using testing::StrEq;
 // ={=========================================================================
 // *cxx-string-ctor*
 
-TEST(StringCtor, check_various_form)
+TEST(StringCtor, various_form)
 {
   {
     std::string coll{"12345"};
@@ -76,6 +76,15 @@ TEST(StringCtor, check_various_form)
     // error: invalid operands of types ‘const char [17]’ and ‘const char*’ to binary ‘operator+’
     // coll += "std::string and " + message;
     coll += "std::string and " + std::string(message);
+  }
+
+  {
+    std::string ids{"4096/1"};
+
+    const std::string url{"http://atlantis.epg.bskyb.com/as/services/" + ids};
+    const std::string expected{"http://atlantis.epg.bskyb.com/as/services/4096/1"};
+
+    EXPECT_THAT(url, expected);
   }
 }
 
@@ -368,6 +377,7 @@ namespace string_find
   }
 } // namespace string_find
 
+// ={=========================================================================
 TEST(StringOperation, check_find_char)
 {
   std::string coll{"There are two needles in this haystack with needles."};
@@ -804,28 +814,64 @@ TEST(CxxStringOperation, find_substring_3)
 // ={=========================================================================
 // cxx-string-substr
 // is to extract substring and use index
+//
+// basic_string substr( size_type pos = 0, size_type count = npos ) const; (until C++20)
+// constexpr basic_string substr( size_type pos = 0, size_type count = npos ) const; (since C++20)
+//
+// Returns a substring [pos, pos+count). If the requested substring extends past
+// the end of the string, or if count == npos, the returned substring is [pos,
+// size()).
+
 TEST(StringOperation, check_substr)
 {
-  std::string coll{"interchangeability"};
+  {
+    std::string coll{"interchangeability"};
 
-  // see `cxx-string-length` returns length which is [0, length)
-  EXPECT_THAT(coll.length(), 18);
+    // see `cxx-string-length` returns length which is [0, length)
+    EXPECT_THAT(coll.length(), 18);
 
-  // return whole string
-  EXPECT_THAT(coll.substr(), "interchangeability");
+    // return whole string
+    EXPECT_THAT(coll.substr(), "interchangeability");
 
-  // return whole string as find('x') returns string::npos
-  EXPECT_THAT(coll.substr(0, coll.find('x')), "interchangeability");
+    // return whole string as find('x') returns string::npos
+    EXPECT_THAT(coll.substr(0, coll.find('x')), "interchangeability");
 
-  EXPECT_THAT(coll.substr(coll.find('c')), "changeability");
+    EXPECT_THAT(coll.substr(coll.find('c')), "changeability");
 
-  // [11, end)
-  EXPECT_THAT(coll.substr(11), "ability");
+    // [11, end)
+    EXPECT_THAT(coll.substr(11), "ability");
 
-  // note that the second is `length`. (start, length)
-  EXPECT_THAT(coll.substr(5, 6), "change");
+    // note that the second is `length`. (start, length)
+    EXPECT_THAT(coll.substr(5, 6), "change");
 
-  EXPECT_THAT(coll.substr(0, 0), "");
+    EXPECT_THAT(coll.substr(0, 0), "");
+  }
+
+  // {"4096,1"}; gets id to make "4096/1"
+  {
+    const std::string coll{"4096,1"};
+
+    auto pos = coll.find_first_of(',');
+
+    // see not "pos-1"
+    auto id1 = coll.substr(0, pos);
+
+    // see "pos+1"
+    auto id2 = coll.substr(pos + 1, std::string::npos);
+
+    EXPECT_THAT(id1, "4096");
+    EXPECT_THAT(id2, "1");
+  }
+
+  {
+    std::string coll{"4096,1"};
+
+    auto pos = coll.find(',');
+
+    coll.replace(pos, 1, "/");
+
+    EXPECT_THAT(coll, "4096/1");
+  }
 }
 
 // ={=========================================================================
@@ -920,16 +966,27 @@ TEST(StringOperation, check_add_char)
 
 // ={=========================================================================
 // string-erase, string-replace
+//
+// basic_string& replace( size_type pos, size_type count, 
+//  const basic_string& str );
+//
+// str	-	string to use for replacement
+//
+// Replaces the part of the string indicated by either [pos, pos + count) or
+// [first, last) with a new string.
 
-TEST(StringOperation, EraseReplace)
+TEST(StringOperation, replace)
 {
   {
     std::string s = "i18n";
 
-    s.replace(1, 2, "nternationalizatio"); // change of size
+    // replace sub starting from 1 and length 2 with the new string. see "s"
+    // changes its size
+    s.replace(1, 2, "nternationalizatio");
     EXPECT_EQ(s, "internationalization");
 
-    s.erase(13); // s: international. note: from 13
+    // s: international. erase from 13 to end
+    s.erase(13);
     EXPECT_EQ(s, "international");
 
     s.erase(7, 5); // internaxxxxxl
@@ -947,9 +1004,18 @@ TEST(StringOperation, EraseReplace)
   }
 
   {
+    // the replacement string need not be the same size as the substring that
+    // it is replacing. cxx-string-replace
+
+    string s = "Niels Stroustrup";
+    s.replace(0, 5, "nicholas");
+    EXPECT_EQ(s, "nicholas Stroustrup");
+  }
+
+  {
     std::string s = "i18n";
 
-    s.replace(1, 2, "nternationalizatio"); // change of size
+    s.replace(1, 2, "nternationalizatio");
     EXPECT_EQ(s, "internationalization");
 
     // use iterator? No, all string find function returns index.
@@ -977,17 +1043,27 @@ TEST(StringOperation, EraseReplace)
     s.erase(5, 9);
     EXPECT_EQ(s, "interzation");
   }
+}
 
+TEST(StringOperation, replace_exception)
+{
   {
-    // the replacement string need not be the same size as the substring that
-    // it is replacing. cxx-string-replace
+    std::string coll{""};
 
-    string s = "Niels Stroustrup";
-    s.replace(0, 5, "nicholas");
-    EXPECT_EQ(s, "nicholas Stroustrup");
+    auto pos = coll.find(',');
+
+    // casue exception
+    // C++ exception with description "basic_string::replace: __pos (which is
+    // 18446744073709551615) > this->size() (which is 0)" thrown in the test
+    // body.
+
+    coll.replace(pos, 1, "/");
+
+    EXPECT_THAT(coll, "4096/1");
   }
 }
 
+// ={=========================================================================
 // cxx-string-assign
 
 TEST(CxxString, check_assign)
@@ -1024,6 +1100,7 @@ TEST(CxxString, check_assign)
   }
 }
 
+// ={=========================================================================
 // cxx-string-swap
 
 TEST(CxxString, Swap)
@@ -1046,6 +1123,7 @@ TEST(CxxString, Swap)
   }
 }
 
+// ={=========================================================================
 // string-compare
 //
 // int compare( const basic_string& str ) const; (until C++11)
@@ -1271,6 +1349,7 @@ namespace stringtraits
   };
 } // namespace stringtraits
 
+// ={=========================================================================
 TEST(StringCompare, check_traits)
 {
   {
@@ -1295,6 +1374,7 @@ TEST(StringCompare, check_traits)
   }
 }
 
+// ={=========================================================================
 // cxx-string-clear
 //
 // void clear(); (until C++11)
@@ -1365,6 +1445,7 @@ TEST(StringForC, check_null)
   }
 }
 
+// ={=========================================================================
 TEST(StringForC, check_cstring_1)
 {
   {
@@ -1423,6 +1504,7 @@ TEST(StringForC, check_cstring_1)
   }
 }
 
+// ={=========================================================================
 // when construct a string from array, it will copy up to null? yes
 TEST(StringForC, check_cstring_2)
 {
@@ -1518,6 +1600,7 @@ namespace stringcstring
   }
 } // namespace stringcstring
 
+// ={=========================================================================
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 // strend(this is first message, ssage) returns 1
@@ -3777,19 +3860,12 @@ TEST(StringLiteral, check_define_literal)
   EXPECT_THAT(name.size(), 12);
 }
 
-// outupt string:
-//
-// { "address": {
-//          "road":"Drury Ln",
-//          "city":"Fountain",
-//          "state":"CO",
-//          "country":"US" }}
-
-TEST(StringLiteral, check_raw)
+// ={=========================================================================
+TEST(StringLiteral, raw_string)
 {
   {
-    std::ostringstream os1;
-    std::ostringstream os2;
+    std::ostringstream os1{};
+    std::ostringstream os2{};
 
     const char message[] = "this is \
                            a multi-line message \
@@ -3799,10 +3875,23 @@ TEST(StringLiteral, check_raw)
     os2 << "this is                            a multi-line message            "
            "                and works";
 
-    EXPECT_THAT(os1.str(), os2.str());
+    const std::string expected{"this is                            a multi-line message                            and works"};
+
+    EXPECT_THAT(os1.str(), expected);
+    EXPECT_THAT(os2.str(), expected);
   }
 
-  // they are not the same since string-raw includes `space` as well.
+  // they are not the same since cxx-string-raw includes `space` as well.
+  // [ RUN      ] StringLiteral.raw_string
+  // 1
+  //
+  //     22
+  //
+  //     333
+  // 1
+  // 22
+  // 333
+  // [       OK ] StringLiteral.raw_string (0 ms)
   {
     std::string coll1{R"(1
 
@@ -3817,8 +3906,18 @@ TEST(StringLiteral, check_raw)
   }
 
   // string-raw works like extended-regex
+  //
+  // regex
+  //
+  // While `basic regular expressions require these to be escaped` if you want
+  // them `to behave as special characters`, when using extended regular
+  // expressions you must escape them if you want them to match a literal
+  // character. 
+
   {
+    // cannot use "double quote" in std::string
     std::string coll1("~Query(\"hair\")");
+
     std::string coll2(R"(~Query("hair"))");
 
     EXPECT_THAT(coll1, coll2);
@@ -3829,16 +3928,7 @@ TEST(StringLiteral, check_raw)
     std::ostringstream os1;
     std::ostringstream os2;
 
-    // different as do not include `spaces`
-    // { "address": {"road":"Drury Ln","city":"Fountain","state":"CO","country":"US" }}
-    // const char outx[] = "{ \"address\": {"
-    //         "\"road\":\"Drury Ln\","
-    //         "\"city\":\"Fountain\","
-    //         "\"state\":\"CO\","
-    //         "\"country\":\"US\" }}";
-    // std::cout << outx << std::endl;
-
-    // have to use `escape` like extended-regex and `newline` but note that it
+    // have to `escape` like basic regex and `newline` but note that it
     // includes `spaces`
 
     const char out[] = "{ \"address\": {\n\
@@ -3849,15 +3939,47 @@ TEST(StringLiteral, check_raw)
 
     os1 << out;
 
+    // std::cout << out << std::endl;
+
+    const char out2[] = "{ \"address\": {\n\
+         \"road\":\"Drury Ln\",\n\
+         \"city\":\"Fountain\",\n\
+         \"state\":\"CO\",\n\
+         \"country\":\"US\" }}";
+
+    os2 << out2;
+
+    // std::cout << out2 << std::endl;
+
     // raw-string is better
     const std::string s = R"({ "address": {
          "road":"Drury Ln",
          "city":"Fountain",
          "state":"CO",
          "country":"US" }})";
-    os2 << out;
 
-    EXPECT_THAT(os1.str(), os2.str());
+    // std::cout << s << std::endl;
+
+    // different due to spaces
+    EXPECT_THAT(os1.str(), Ne(os2.str()));
+
+    // when have same spces
+    EXPECT_THAT(os2.str(), s);
+  }
+
+  // new line also matters
+  {
+    const std::string raw1 = R"({address})";
+    const std::string expected1{"{address}"};
+
+    EXPECT_THAT(raw1, expected1);
+
+    const std::string raw2 = R"(
+    {address}
+    )";
+
+    const std::string expected2{"\n    {address}\n    "};
+    EXPECT_THAT(raw2, expected2);
   }
 
   {
@@ -3887,8 +4009,8 @@ TEST(StringLiteral, check_raw)
     // prefix(optional) R "delimiter( raw_characters )delimiter"	(6)	(since C++11)
     //
     // The use of ZZZ as a delimiter in the following lines solves the problem
-    // and allows you to embed double quotation marks and parenthesis in the raw
-    // literal string:
+    // and allows you to embed double quotation marks and *parenthesis* in the
+    // raw literal string:
     //
     // https://www.youtube.com/watch?v=DiZ-az_nJMM
 

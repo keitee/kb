@@ -204,6 +204,7 @@ IStream& operator>>(IStream& sin, Value& root) {
 
 */
 
+// ={=========================================================================
 // [ RUN      ] CxxJSON.ex1
 // book: Alice in Wonderland
 // year: 1865
@@ -224,7 +225,7 @@ IStream& operator>>(IStream& sin, Value& root) {
 // [       OK ] CxxJSON.ex1 (1 ms)
 
 // read json file
-TEST(CxxJSON, jsoncpp_ex1)
+TEST(CxxJSON, read_from_file)
 {
   {
     std::ifstream ifs("../alice.json");
@@ -316,9 +317,10 @@ TEST(CxxJSON, jsoncpp_ex1)
   }
 }
 
+// ={=========================================================================
 // read json file but use stringstream
 
-TEST(CxxJSON, jsoncpp_ex1_1)
+TEST(CxxJSON, read_from_file_and_use_stringstream)
 {
   {
     std::ifstream ifs("../alice.json");
@@ -376,6 +378,7 @@ TEST(CxxJSON, jsoncpp_ex1_1)
   }
 }
 
+// ={=========================================================================
 // what does `empty` mean?
 //
 // {
@@ -407,7 +410,8 @@ TEST(CxxJSON, jsoncpp_ex1_1)
 // characters: chapter: 7
 // [       OK ] CxxJSON.jsoncpp_ex1_1 (0 ms)
 
-TEST(CxxJSON, jsoncpp_ex1_2)
+// ={=========================================================================
+TEST(CxxJSON, check_empty_meaning)
 {
   {
     std::ifstream ifs("../alice_empty.json");
@@ -463,6 +467,7 @@ TEST(CxxJSON, jsoncpp_ex1_2)
   }
 }
 
+// ={=========================================================================
 // {
 //         "book" : "Alice in Wonderland",
 //         "characters" :
@@ -484,8 +489,200 @@ TEST(CxxJSON, jsoncpp_ex1_2)
 //         "year2" : "1865"
 // }
 
+namespace cxx_json
+{
+  const std::string build_json_expected = R"({
+   "book" : "Alice in Wonderland",
+   "characters" : [
+      {
+         "chapter" : 1,
+         "name" : "Jabberwock"
+      },
+      {
+         "chapter" : 6,
+         "name" : "Cheshire Cat"
+      },
+      {
+         "chapter" : 7,
+         "name" : "Mad Hatter"
+      }
+   ],
+   "year1" : 1865,
+   "year2" : "1865"
+}
+)";
+
+  const std::string build_json_expected_2 = R"({
+   "book" : "Alice in Wonderland",
+   "characters" : [
+      [
+         {
+            "chapter" : 1,
+            "name" : "Jabberwock"
+         },
+         {
+            "chapter" : 6,
+            "name" : "Cheshire Cat"
+         },
+         {
+            "chapter" : 7,
+            "name" : "Mad Hatter"
+         }
+      ]
+   ],
+   "year1" : 1865,
+   "year2" : "1865"
+}
+)";
+}
+
+// ={=========================================================================
 // construct json from code
-TEST(CxxJSON, jsoncpp_ex2)
+//
+// http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_value.html#a7e49ac977e4bcf59745a09d426669f75
+//
+// Value & Json::Value::append (const Value &value)
+// Append value to array at the end.
+// Equivalent to jsonvalue[jsonvalue.size()] = value;
+//
+// NOTE: So where does this difference come?
+//
+//    // create the characters array
+//    Json::Value ch;
+//
+//    ch[0]["name"]    = "Jabberwock";
+//    ch[0]["chapter"] = 1;
+//    ch[1]["name"]    = "Cheshire Cat";
+//    ch[1]["chapter"] = 6;
+//    ch[2]["name"]    = "Mad Hatter";
+//    ch[2]["chapter"] = 7;
+//
+// makes array *implicitly*
+//
+// Value & Json::Value::operator[] (int index)
+//
+// Access an array element (zero based index ).
+//
+// If the array contains less than index element, then null value are inserted
+// in the array so that its size is index+1. (You may need to say 'value[0u]' to
+// get your compiler to distinguish this from the operator[] which takes a
+// string.)
+
+TEST(CxxJSON, assign_and_append)
+{
+  {
+    using namespace cxx_json;
+
+    // create the characters array
+    Json::Value ch;
+
+    ch[0]["name"]    = "Jabberwock";
+    ch[0]["chapter"] = 1;
+    ch[1]["name"]    = "Cheshire Cat";
+    ch[1]["chapter"] = 6;
+    ch[2]["name"]    = "Mad Hatter";
+    ch[2]["chapter"] = 7;
+
+    EXPECT_THAT(ch.isArray(), true);
+
+    // create the main object
+    Json::Value val;
+
+    val["book"]       = "Alice in Wonderland";
+    val["year1"]      = 1865;
+    val["year2"]      = "1865";
+    val["characters"] = ch;
+
+    // std::cout << val << std::endl;
+
+    // use writer
+    Json::StyledWriter writer;
+    std::string response;
+
+    response.assign(writer.write(val));
+
+    EXPECT_THAT(response, build_json_expected);
+  }
+
+  // append() works on array implicitly
+  {
+    using namespace cxx_json;
+
+    // create the characters array
+    Json::Value ch;
+
+    ch[0]["name"]    = "Jabberwock";
+    ch[0]["chapter"] = 1;
+    ch[1]["name"]    = "Cheshire Cat";
+    ch[1]["chapter"] = 6;
+    ch[2]["name"]    = "Mad Hatter";
+    ch[2]["chapter"] = 7;
+
+    EXPECT_THAT(ch.isArray(), true);
+
+    // create the main object
+    Json::Value val;
+
+    val["book"]       = "Alice in Wonderland";
+    val["year1"]      = 1865;
+    val["year2"]      = "1865";
+
+    // val["characters"] = ch;
+
+    val["characters"].append(ch);
+
+    // std::cout << val << std::endl;
+
+    // use writer
+    Json::StyledWriter writer;
+    std::string response;
+
+    response.assign(writer.write(val));
+
+    EXPECT_THAT(response, build_json_expected_2);
+  }
+
+  // explicit way
+  {
+    using namespace cxx_json;
+
+    // create the characters array
+    Json::Value ch;
+
+    ch[0]["name"]    = "Jabberwock";
+    ch[0]["chapter"] = 1;
+    ch[1]["name"]    = "Cheshire Cat";
+    ch[1]["chapter"] = 6;
+    ch[2]["name"]    = "Mad Hatter";
+    ch[2]["chapter"] = 7;
+
+    EXPECT_THAT(ch.isArray(), true);
+
+    // create the main object
+    Json::Value val;
+
+    val["book"]       = "Alice in Wonderland";
+    val["year1"]      = 1865;
+    val["year2"]      = "1865";
+
+    val["characters"] = Json::Value(Json::arrayValue);
+    val["characters"].append(ch);
+
+    // std::cout << val << std::endl;
+
+    // use writer
+    Json::StyledWriter writer;
+    std::string response;
+
+    response.assign(writer.write(val));
+
+    EXPECT_THAT(response, build_json_expected_2);
+  }
+}
+
+// ={=========================================================================
+// does support "operator==()"?
+TEST(CxxJSON, check_operator_equal)
 {
   // create the characters array
   Json::Value ch;
@@ -498,24 +695,36 @@ TEST(CxxJSON, jsoncpp_ex2)
   ch[2]["chapter"] = 7;
 
   // create the main object
-  Json::Value val;
+  Json::Value val1;
 
-  val["book"]       = "Alice in Wonderland";
-  val["year1"]       = 1865;
-  val["year2"]       = "1865";
-  val["characters"] = ch;
+  val1["book"]       = "Alice in Wonderland";
+  val1["year1"]      = 1865;
+  val1["year2"]      = "1865";
+  val1["characters"] = ch;
 
-  std::cout << val << std::endl;
+  // create the main object
+  Json::Value val2;
+
+  val2["book"]       = "Alice in Wonderland";
+  val2["year1"]      = 1865;
+  val2["year2"]      = "1865";
+  val2["characters"] = ch;
+
+  // std::cout << val1 << std::endl;
+  // std::cout << val2 << std::endl;
+
+  EXPECT_THAT(val1 == val2, true);
 }
 
+// ={=========================================================================
 // "string" and number are different? how?
-TEST(CxxJSON, jsoncpp_check_type)
+TEST(CxxJSON, check_string_and_number)
 {
   // create the main object
   Json::Value val;
 
-  val["year1"]       = 1865;
-  val["year2"]       = "1865";
+  val["year1"] = 1865;
+  val["year2"] = "1865";
 
   // "year1" is number
   EXPECT_THAT(val["year1"].isString(), false);
@@ -523,7 +732,7 @@ TEST(CxxJSON, jsoncpp_check_type)
 
   // get type
   // std::cout << val["year1"].type() << std::endl;
-  EXPECT_THAT(val["year1"].type(), Json::intValue);     // 1
+  EXPECT_THAT(val["year1"].type(), Json::intValue); // 1
 
   // it can be converted to string as well
   std::cout << val["year1"].asString() << std::endl;
@@ -535,7 +744,7 @@ TEST(CxxJSON, jsoncpp_check_type)
 
   // get type
   // std::cout << val["year2"].type() << std::endl;
-  EXPECT_THAT(val["year2"].type(), Json::stringValue);  // 4
+  EXPECT_THAT(val["year2"].type(), Json::stringValue); // 4
 
   std::cout << val["year2"].asString() << std::endl;
 
@@ -543,8 +752,7 @@ TEST(CxxJSON, jsoncpp_check_type)
   try
   {
     std::cout << val["year2"].asInt() << std::endl;
-  }
-  catch(const exception &e)
+  } catch (const exception &e)
   {
     EXPECT_THAT(std::string(e.what()), "Value is not convertible to Int.");
   }
@@ -572,6 +780,8 @@ namespace
 // extern "C" const unsigned int gDrmConfigSize;
 
 /*
+// ={=========================================================================
+
 [ RUN      ] CxxJSON.jsoncpp_ex3
 ======================
 {
@@ -654,7 +864,8 @@ true if the document was successfully parsed, false if an error occurred.
 
 */
 
-TEST(CxxJSON, jsoncpp_ex3)
+// ={=========================================================================
+TEST(CxxJSON, read_from_array_1)
 {
   std::cout << "======================" << std::endl;
   // char array as reads
@@ -699,6 +910,7 @@ TEST(CxxJSON, jsoncpp_ex3)
   }
 }
 
+// ={=========================================================================
 /*
 more drm.json
 {
@@ -738,7 +950,7 @@ namespace
   INCBIN(NetflixConfig, "../netflix.json");
 } // namespace
 
-TEST(CxxJSON, jsoncpp_ex4)
+TEST(CxxJSON, read_from_array_2)
 {
   // (to make life easier) we want to support json with single quotes
   // rather than mandated double quotes, so we use the non-standard
@@ -856,8 +1068,6 @@ TEST(CxxJSON, jsoncpp_ex4)
   // std::cout << "urls: " << urls << std::endl;
 }
 
-// read directly from raw std::string
-
 namespace
 {
   const std::string ConfigJson = R"JSON(
@@ -887,9 +1097,37 @@ namespace
 }
 )JSON";
 
-} // namespace
+} // namespace cxx_json
 
-TEST(CxxJSON, jsoncpp_ex5) 
+/*
+// ={=========================================================================
+// read directly from raw std::string
+
+[ RUN      ] CxxJSON.read_from_string_1
+path   : /as/drm/status
+method : ws
+path   : /as/players/<vwid>/status
+method : ws
+path   : /as/players/<vwid>/action/watchpvr
+method : post
+path   : /as/players/<vwid>/action/watchbdl
+method : post
+[       OK ] CxxJSON.read_from_string_1 (0 ms)
+
+[ RUN      ] CxxJSON.read_from_string_2
+path   : /as/drm/status
+method : ws
+path   : /as/players/<vwid>/status
+method : ws
+path   : /as/players/<vwid>/action/watchpvr
+method : post
+path   : /as/players/<vwid>/action/watchbdl
+method : post
+[       OK ] CxxJSON.read_from_string_2 (0 ms)
+
+*/
+
+TEST(CxxJSON, read_from_string_1)
 {
   Json::Reader reader;
   Json::Value root;
@@ -937,7 +1175,7 @@ TEST(CxxJSON, jsoncpp_ex5)
     {
       for (const Json::Value &uri : uris)
       {
-        const Json::Value path = uri["path"];
+        const Json::Value path   = uri["path"];
         const Json::Value method = uri["method"];
 
         if (path.isString())
@@ -967,16 +1205,17 @@ TEST(CxxJSON, jsoncpp_ex5)
   }
 }
 
+// ={=========================================================================
 // do the same as above but use std::string directly
 //
 // http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_reader.html#af1da6c976ad1e96c742804c3853eef94
 //
 // bool Json::Reader::parse	(	const std::string & 	document,
 // Value & 	root,
-// bool 	collectComments = true 
-// )	
+// bool 	collectComments = true
+// )
 
-TEST(CxxJSON, jsoncpp_ex5_1) 
+TEST(CxxJSON, read_from_string_2)
 {
   Json::Reader reader;
   Json::Value root;
@@ -1022,7 +1261,7 @@ TEST(CxxJSON, jsoncpp_ex5_1)
     {
       for (const Json::Value &uri : uris)
       {
-        const Json::Value path = uri["path"];
+        const Json::Value path   = uri["path"];
         const Json::Value method = uri["method"];
 
         if (path.isString())
@@ -1052,26 +1291,54 @@ TEST(CxxJSON, jsoncpp_ex5_1)
   }
 }
 
+// ={=========================================================================
+// how to get number of itmes in a array? can loop over it but any function from
+// cppjson?
+
+TEST(CxxJSON, read_from_string_3)
+{
+  Json::Reader reader;
+  Json::Value root;
+
+  // parse the json
+  if (!reader.parse(ConfigJson, root))
+  {
+    std::cout << "failed to parse config json" << std::endl;
+    return;
+  }
+
+  if (!root.isObject())
+  {
+    std::cout << "invalid root config object" << std::endl;
+    return;
+  }
+
+  const Json::Value uris = root["uris"];
+
+  EXPECT_THAT(uris.isArray(), true);
+  EXPECT_THAT(uris.size(), 4);
+}
+
 //  {
-//    "dvbtriplet": "318.4.8583", 
+//    "dvbtriplet": "318.4.8583",
 //    "servicetypes": [
 //      "DTT"
-//    ], 
-//    "c": "21", 
-//    "t": "Rai 4", 
-//    "sid": "M13e-4-2187", 
-//    "sf": "sd", 
+//    ],
+//    "c": "21",
+//    "t": "Rai 4",
+//    "sid": "M13e-4-2187",
+//    "sf": "sd",
 //    "xsg": 8
-//  }, 
+//  },
 //  {
-//    "dvbtriplet": "318.4.8585", 
+//    "dvbtriplet": "318.4.8585",
 //    "servicetypes": [
 //      "DTT"
-//    ], 
-//    "c": "24", 
-//    "t": "Rai Movie", 
-//    "sid": "M13e-4-2189", 
-//    "sf": "sd", 
+//    ],
+//    "c": "24",
+//    "t": "Rai Movie",
+//    "sid": "M13e-4-2189",
+//    "sf": "sd",
 //    "xsg": 8
 //  },
 //
@@ -1100,38 +1367,102 @@ TEST(CxxJSON, jsoncpp_ex5_1)
 //    ],
 //    "version" : 1
 // }
-// 
+//
 // [       OK ] CxxJSON.jsoncpp_ex6 (0 ms)
 
-// construct and write ex
-TEST(CxxJSON, jsoncpp_ex6)
+namespace json_write
 {
+  const std::string expected = R"({
+   "documentId" : "1563970127340",
+   "services" : [
+      {
+         "c" : "21",
+         "dvbtriplet" : "318.4.8583",
+         "servicetypes" : [ "DTT", "OTT" ],
+         "sf" : "sd",
+         "sid" : "M13e-4-2187",
+         "t" : "Rai 4",
+         "xsg" : 8
+      },
+      {
+         "c" : "24",
+         "dvbtriplet" : "318.4.8585",
+         "servicetypes" : [ "DTT" ],
+         "sf" : "sd",
+         "sid" : "M13e-4-2189",
+         "t" : "Rai Movie",
+         "xsg" : 8
+      }
+   ],
+   "version" : 1
+}
+)";
+
+  const std::string expected_2 = R"({
+	"documentId" : "1563970127340",
+	"services" : 
+	[
+		{
+			"c" : "21",
+			"dvbtriplet" : "318.4.8583",
+			"servicetypes" : 
+			[
+				"DTT",
+				"OTT"
+			],
+			"sf" : "sd",
+			"sid" : "M13e-4-2187",
+			"t" : "Rai 4",
+			"xsg" : 8
+		},
+		{
+			"c" : "24",
+			"dvbtriplet" : "318.4.8585",
+			"servicetypes" : 
+			[
+				"DTT"
+			],
+			"sf" : "sd",
+			"sid" : "M13e-4-2189",
+			"t" : "Rai Movie",
+			"xsg" : 8
+		}
+	],
+	"version" : 1
+})";
+}
+
+// ={=========================================================================
+TEST(CxxJSON, write_to_json_using_writer)
+{
+  using namespace json_write;
+
   Json::Value servicelist;
 
   servicelist["documentId"] = "1563970127340";
-  servicelist["version"] = 1;
+  servicelist["version"]    = 1;
 
   Json::Value service1;
-  service1["dvbtriplet"] = "318.4.8583"; 
+  service1["dvbtriplet"] = "318.4.8583";
 
   service1["servicetypes"] = Json::Value(Json::arrayValue);
   service1["servicetypes"].append("DTT");
   service1["servicetypes"].append("OTT");
 
-  service1["c"] = "21";
-  service1["t"] = "Rai 4";
+  service1["c"]   = "21";
+  service1["t"]   = "Rai 4";
   service1["sid"] = "M13e-4-2187";
-  service1["sf"] = "sd";
+  service1["sf"]  = "sd";
   service1["xsg"] = 8;
 
   Json::Value service2;
-  service2["dvbtriplet"] = "318.4.8585"; 
+  service2["dvbtriplet"]   = "318.4.8585";
   service2["servicetypes"] = Json::Value(Json::arrayValue);
   service2["servicetypes"].append("DTT");
-  service2["c"] = "24";
-  service2["t"] = "Rai Movie";
+  service2["c"]   = "24";
+  service2["t"]   = "Rai Movie";
   service2["sid"] = "M13e-4-2189";
-  service2["sf"] = "sd";
+  service2["sf"]  = "sd";
   service2["xsg"] = 8;
 
   servicelist["services"] = Json::Value(Json::arrayValue);
@@ -1154,39 +1485,45 @@ TEST(CxxJSON, jsoncpp_ex6)
 
   response.assign(writer.write(servicelist));
 
-  std::cout << response << std::endl;
+  // std::cout << response << std::endl;
+  // std::cout << expected << std::endl;
+
+  EXPECT_THAT(response, expected);
 }
 
+// ={=========================================================================
 // use stringstream instead and see commment about deprecated list above
-
-TEST(CxxJSON, jsoncpp_ex6_1)
+TEST(CxxJSON, write_to_json_using_stringstream)
 {
+  // when use stringstream, it has "\t" instead of spaces
+  // const std::string expected = R"({\n\t\"documentId\" : \"1563970127340\",\n\t\"services\" : \n\t[\n\t\t{\n\t\t\t\"c\" : \"21\",\n\t\t\t\"dvbtriplet\" : \"318.4.8583\",\n\t\t\t\"servicetypes\" : \n\t\t\t[\n\t\t\t\t\"DTT\",\n\t\t\t\t\"OTT\"\n\t\t\t],\n\t\t\t\"sf\" : \"sd\",\n\t\t\t\"sid\" : \"M13e-4-2187\",\n\t\t\t\"t\" : \"Rai 4\",\n\t\t\t\"xsg\" : 8\n\t\t},\n\t\t{\n\t\t\t\"c\" : \"24\",\n\t\t\t\"dvbtriplet\" : \"318.4.8585\",\n\t\t\t\"servicetypes\" : \n\t\t\t[\n\t\t\t\t\"DTT\"\n\t\t\t],\n\t\t\t\"sf\" : \"sd\",\n\t\t\t\"sid\" : \"M13e-4-2189\",\n\t\t\t\"t\" : \"Rai Movie\",\n\t\t\t\"xsg\" : 8\n\t\t}\n\t],\n\t\"version\" : 1\n})";
+
   Json::Value servicelist;
 
   servicelist["documentId"] = "1563970127340";
-  servicelist["version"] = 1;
+  servicelist["version"]    = 1;
 
   Json::Value service1;
-  service1["dvbtriplet"] = "318.4.8583"; 
+  service1["dvbtriplet"] = "318.4.8583";
 
   service1["servicetypes"] = Json::Value(Json::arrayValue);
   service1["servicetypes"].append("DTT");
   service1["servicetypes"].append("OTT");
 
-  service1["c"] = "21";
-  service1["t"] = "Rai 4";
+  service1["c"]   = "21";
+  service1["t"]   = "Rai 4";
   service1["sid"] = "M13e-4-2187";
-  service1["sf"] = "sd";
+  service1["sf"]  = "sd";
   service1["xsg"] = 8;
 
   Json::Value service2;
-  service2["dvbtriplet"] = "318.4.8585"; 
+  service2["dvbtriplet"]   = "318.4.8585";
   service2["servicetypes"] = Json::Value(Json::arrayValue);
   service2["servicetypes"].append("DTT");
-  service2["c"] = "24";
-  service2["t"] = "Rai Movie";
+  service2["c"]   = "24";
+  service2["t"]   = "Rai Movie";
   service2["sid"] = "M13e-4-2189";
-  service2["sf"] = "sd";
+  service2["sf"]  = "sd";
   service2["xsg"] = 8;
 
   servicelist["services"] = Json::Value(Json::arrayValue);
@@ -1199,20 +1536,138 @@ TEST(CxxJSON, jsoncpp_ex6_1)
   oss << servicelist;
   response.assign(oss.str());
 
-  std::cout << response << std::endl;
+  // std::cout << response << std::endl;
 }
 
+// ={=========================================================================
+// use stringstream instead and see commment about deprecated list above
+TEST(CxxJSON, DISABLED_write_to_json_using_asstring)
+{
+  Json::Value servicelist;
+
+  servicelist["documentId"] = "1563970127340";
+  servicelist["version"]    = 1;
+
+  Json::Value service1;
+  service1["dvbtriplet"] = "318.4.8583";
+
+  service1["servicetypes"] = Json::Value(Json::arrayValue);
+  service1["servicetypes"].append("DTT");
+  service1["servicetypes"].append("OTT");
+
+  service1["c"]   = "21";
+  service1["t"]   = "Rai 4";
+  service1["sid"] = "M13e-4-2187";
+  service1["sf"]  = "sd";
+  service1["xsg"] = 8;
+
+  Json::Value service2;
+  service2["dvbtriplet"]   = "318.4.8585";
+  service2["servicetypes"] = Json::Value(Json::arrayValue);
+  service2["servicetypes"].append("DTT");
+  service2["c"]   = "24";
+  service2["t"]   = "Rai Movie";
+  service2["sid"] = "M13e-4-2189";
+  service2["sf"]  = "sd";
+  service2["xsg"] = 8;
+
+  servicelist["services"] = Json::Value(Json::arrayValue);
+  servicelist["services"].append(service1);
+  servicelist["services"].append(service2);
+
+  // // use
+  // std::string response;
+  // std::ostringstream oss;
+  // oss << servicelist;
+  // response.assign(oss.str());
+
+  // C++ exception with description "Type is not convertible to string" thrown in the test body.
+  std::cout << servicelist.asString() << std::endl;
+}
+
+// ={=========================================================================
+TEST(CxxJSON, write_json_to_file_and_read_back)
+{
+  Json::Value servicelist;
+
+  servicelist["documentId"] = "1563970127340";
+  servicelist["version"]    = 1;
+
+  Json::Value service1;
+  service1["dvbtriplet"] = "318.4.8583";
+
+  service1["servicetypes"] = Json::Value(Json::arrayValue);
+  service1["servicetypes"].append("DTT");
+  service1["servicetypes"].append("OTT");
+
+  service1["c"]   = "21";
+  service1["t"]   = "Rai 4";
+  service1["sid"] = "M13e-4-2187";
+  service1["sf"]  = "sd";
+  service1["xsg"] = 8;
+
+  Json::Value service2;
+  service2["dvbtriplet"]   = "318.4.8585";
+  service2["servicetypes"] = Json::Value(Json::arrayValue);
+  service2["servicetypes"].append("DTT");
+  service2["c"]   = "24";
+  service2["t"]   = "Rai Movie";
+  service2["sid"] = "M13e-4-2189";
+  service2["sf"]  = "sd";
+  service2["xsg"] = 8;
+
+  servicelist["services"] = Json::Value(Json::arrayValue);
+  servicelist["services"].append(service1);
+  servicelist["services"].append(service2);
+
+  {
+    // write to a file
+    std::ostringstream oss;
+    oss << servicelist;
+
+    std::ofstream ofs{"fsout.json"};
+
+    ofs << oss.str();
+  }
+
+  {
+    using namespace json_write;
+
+    // read from a file
+    std::ifstream ifs{"fsout.json"};
+
+    Json::Reader reader;
+    Json::Value root;
+
+    // use reader and get `root`
+    reader.parse(ifs, root);
+
+    // can print directly
+    // std::cout << root << std::endl;
+
+    std::string response;
+    std::ostringstream oss;
+    oss << root;
+    response.assign(oss.str());
+
+    EXPECT_THAT(response, expected_2);
+  }
+}
+
+// ={=========================================================================
 // std::string and std::string.c_str() differs? NO
 //
 // service1["dvbtriplet"] = "318.4.8583";
 // service1["dvbtriplet"] = dvb;
 // service1["dvbtriplet"] = dvb.c_str();
 
-TEST(CxxJSON, jsoncpp_ex6_2)
+TEST(CxxJSON, assign_value)
 {
   {
     Json::Value service1;
-    service1["dvbtriplet"] = "318.4.8583"; 
+
+    // use literal
+    service1["dvbtriplet"] = "318.4.8583";
 
     service1["servicetypes"] = Json::Value(Json::arrayValue);
     service1["servicetypes"].append("DTT");
@@ -1228,9 +1683,11 @@ TEST(CxxJSON, jsoncpp_ex6_2)
   }
 
   {
-    std::string dvb{"318.4.8583"}; 
+    std::string dvb{"318.4.8583"};
 
     Json::Value service1;
+
+    // use string
     service1["dvbtriplet"] = dvb;
 
     service1["servicetypes"] = Json::Value(Json::arrayValue);
@@ -1247,9 +1704,11 @@ TEST(CxxJSON, jsoncpp_ex6_2)
   }
 
   {
-    std::string dvb{"318.4.8583"}; 
+    std::string dvb{"318.4.8583"};
 
     Json::Value service1;
+
+    // use cstring
     service1["dvbtriplet"] = dvb.c_str();
 
     service1["servicetypes"] = Json::Value(Json::arrayValue);
@@ -1266,6 +1725,7 @@ TEST(CxxJSON, jsoncpp_ex6_2)
   }
 }
 
+// ={=========================================================================
 // string vs number
 //
 // {
@@ -1275,11 +1735,11 @@ TEST(CxxJSON, jsoncpp_ex6_2)
 //         "dvbtriplet" : 318
 // }
 
-TEST(CxxJSON, jsoncpp_ex6_3)
+TEST(CxxJSON, assign_string_and_value)
 {
   {
     Json::Value service1;
-    service1["dvbtriplet"] = "318"; 
+    service1["dvbtriplet"] = "318";
 
     // use
     std::string response;
@@ -1304,7 +1764,7 @@ TEST(CxxJSON, jsoncpp_ex6_3)
   }
 }
 
-// append() on array
+// ={=========================================================================
 //
 // "/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr/include/json/value.h" 3 4
 //
@@ -1325,7 +1785,7 @@ TEST(CxxJSON, jsoncpp_ex6_3)
 //        "uris" : "OTT"
 // }
 
-TEST(CxxJSON, jsoncpp_ex7)
+TEST(CxxJSON, append_on_array)
 {
   {
     Json::Value servicelist;

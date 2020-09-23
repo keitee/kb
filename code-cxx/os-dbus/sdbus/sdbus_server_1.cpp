@@ -64,6 +64,236 @@ x 5
 busctl --user call net.poettering.Calculator /net/poettering/Calculator net.poettering.Calculator Divide xx 99 0
 sorry, can't do that
 
+
+<case>
+
+# dbus-send --system --type=method_call --print-reply --dest='com.sky.as.player' / org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600287980.030992 sender=:1.89 -> destination=:1.180 serial=1815 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ <node name="com"/>
+</node>
+"
+
+static const sd_bus_vtable g_asServiceVTable[] =
+{
+    SD_BUS_VTABLE_START(0),
+
+    SD_BUS_METHOD("Config",                      nullptr,         "s",         &ASServicePrivate::config,                SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("Request",                     "usa{ss}a{ss}s", "(ua{ss}s)", &ASServicePrivate::request,               SD_BUS_VTABLE_UNPRIVILEGED),
+
+    SD_BUS_METHOD("GetDiagContexts",             nullptr,         "s",         &ASServicePrivate::GetDiagContexts,       SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("SetDiagContexts",             "s",             nullptr,     &ASServicePrivate::SetDiagContexts,       SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("GetEuid",                     nullptr,         "us",        &ASServicePrivate::getEuid,               SD_BUS_VTABLE_UNPRIVILEGED),
+
+    SD_BUS_METHOD("RegisterWebSocketListener",   "s",             nullptr,     &ASServicePrivate::registerWsListener,    SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("UnregisterWebSocketListener", "s",             nullptr,     &ASServicePrivate::unregisterWsListener,  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("WebSocketUpdate",             "ss",                                                                   0),
+
+    SD_BUS_METHOD("RegisterUpdatesListener",     "s",             nullptr,     &ASServicePrivate::registerHttpListener,  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("UnregisterUpdatesListener",   "s",             nullptr,     &ASServicePrivate::unregisterHttpListener,SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_SIGNAL("HttpUpdate",                  "sx",                                                                   0),
+
+    SD_BUS_VTABLE_END
+};
+
+    m_objectPath("/com/sky/as/service")
+    m_interface("com.sky.as.Service1")
+
+    // installs the object and handlers for the methods
+    int rc = sd_bus_add_object_vtable(m_dbusConn.handle(),
+                                      &m_slot,
+                                      m_objectPath.c_str(),
+                                      m_interface.c_str(),
+                                      g_asServiceVTable,
+                                      this);
+
+# dbus-send --system --type=method_call --print-reply --dest='com.sky.as.player' /com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600288276.608564 sender=:1.89 -> destination=:1.184 serial=2112 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ <interface name="com.sky.as.Service1">
+  <method name="Config">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Request">
+   <arg type="u" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="(ua{ss}s)" direction="out"/>
+  </method>
+  <method name="GetDiagContexts">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetDiagContexts">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="GetEuid">
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="RegisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="WebSocketUpdate">
+   <arg type="s"/>
+   <arg type="s"/>
+  </signal>
+  <method name="RegisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="HttpUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+ </interface>
+</node>
+"
+
+<ex>
+
+static const sd_bus_vtable g_asServiceVTable[] =
+{
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_METHOD("DBusProxyMethodCall",       "s",         "us",         &ASProxyService::proxyMethodCall,                SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_VTABLE_END
+};
+
+    mPath("/com/sky/as/service")
+    mInterface("com.sky.as.Service1")
+
+    // installs the object and handlers for the methods
+    int rc = sd_bus_add_object_vtable(mSDBus->handle(),
+                                      &m_slot,
+                                      mPath.c_str(),
+                                      mInterface.c_str(),
+                                      g_asServiceVTable,
+                                      this);
+
+dbus-send --system --type=method_call --print-reply --dest='com.sky.as.proxy' /com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=688 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ `<interface name="com.sky.as.Service1">`
+  <method name="DBusProxyMethodCall">
+   <arg type="s" direction="in"/>
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+ </interface>
+</node>
+"
+
 */
 
 #include <errno.h>

@@ -34,130 +34,109 @@ void PRINT_ELEMENTS(T &coll, const string optstr = "")
 }
 
 /*
+258. Add Digits, Easy
 
-219. Contains Duplicate II
+Given a non-negative integer num, repeatedly add all its digits until the result
+has only one digit.
 
-Given an array of integers and an integer k, find out whether there are two
-distinct indices i and j in the array such that nums[i] = nums[j] and the
-absolute difference between i and j is at most k.
+Example:
 
-Example 1:
+Input: 38
+Output: 2 
 
-Input: nums = [1,2,3,1], k = 3
-Output: true
+Explanation: The process is like: 3 + 8 = 11, 1 + 1 = 2. 
+             Since 2 has only one digit, return it.
 
-Example 2:
+Follow up:
+Could you do it without any loop/recursion in O(1) runtime?
 
-Input: nums = [1,0,1,1], k = 1
-Output: true
 
-Example 3:
+https://leetcode.com/problems/add-digits/solution/
 
-Input: nums = [1,2,3,1,2,3], k = 2
-Output: false
+The value we're asked to compute is the so-called Digital Root. Logarithmic time
+solution is easy to write, although the main question here is how to fit into a
+constant time.
+
+Approach 1: Mathematical: Digital Root
+
+Formula for the Digital Root
+
+There is a known formula to compute a digital root in a decimal numeral system
+
+dr(n)= 0, if n=0
+
+dr(n)= 9, if n=9k
+
+dr(n)= n mod 9, if n = 9k
+
+How to derive it? Probably, you already know the following proof from school,
+where it was used for a divisibility by 9: "The original number is divisible by
+9 if and only if the sum of its digits is divisible by 9". Let's revise it
+briefly.
+
+9 x 2 = 18 -> 9       17 (6), 18, 19(1)
+9 x 3 = 27 -> 9       26 (8), 27, 28(1)
+9 x 4 = 36 -> 9       35 (8), 36, 37(1)
+9 x 5 = 45 -> 9
+9 x 6 = 54 -> 9
+...
 
 */
 
-namespace leetcode_easy_219
+namespace leetcode_easy_258
 {
-  // fails on EXPECT_THAT(f({99, 99}, 2), true); since "at most"
-  bool contain_duplicates_1(const std::vector<int> &nums, int k)
+  // 2020.09
+  // use itoa() and recursion
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Add Digits.
+  // Memory Usage: 6 MB, less than 41.85% of C++ online submissions for Add Digits.
+
+  int add_digits_1(int num)
   {
-    int first = 0;
-    int last  = k;
+    // if num is < 10 then stop recursion.
+    if ((num / 10) == 0)
+      return num;
 
-    while (last < (int)nums.size())
+    int result{};
+
+    while (num)
     {
-      if (nums[first] == nums[last])
-        return true;
-
-      ++first;
-      last = first + k;
+      result += (num % 10);
+      num /= 10;
     }
 
-    return false;
+    return add_digits_1(result);
   }
 
-  // Time Limit Exceeded when the input is huge
-  bool contain_duplicates_2(const std::vector<int> &nums, int k)
+  // code from solution
+  int add_digits_2(int num)
   {
-    auto loop = nums.size();
+    if (num == 0)
+      return 0;
 
-    for (int run = 0; run < (int)loop; ++run)
-    {
-      for (int scan = run + 1; (scan < (int)loop) && ((scan - run) <= k);
-           ++scan)
-      {
-        if (nums[run] == nums[scan])
-          return true;
-      }
-    }
+    if ((num % 9) == 0)
+      return 9;
 
-    return false;
+    // else cases
+    return num % 9;
   }
 
-  // from the discussion.
-  // [Java] Linear Time Solution using HashMap
-  // https://leetcode.com/problems/contains-duplicate-ii/discuss/824527/Java-Linear-Time-Solution-using-HashMap
-  //
-  // class Solution {
-  //     public boolean containsNearbyDuplicate(int[] nums, int k) {
-  //         Map<Integer, Integer> map = new HashMap();
-  //         for(int i = 0; i < nums.length; i++) {
-  //             if(map.containsKey(nums[i]) && Math.abs(i - map.get(nums[i])) <= k)
-  //                 return true;
-  //             map.put(nums[i], i);
-  //         }
-  //         return false;
-  //     }
-  // }
-  //
-  // tried it in c++
-  //
-  // Runtime: 52 ms, faster than 75.15% of C++ online submissions for Contains Duplicate II.
-  // Memory Usage: 16.4 MB, less than 73.48% of C++ online submissions for Contains Duplicate II.
+} // namespace leetcode_easy_258
 
-  bool contain_duplicates_3(const std::vector<int> &nums, int k)
-  {
-    auto loop = nums.size();
-
-    // pair<value, index>
-    std::unordered_multimap<int, int> coll{};
-
-    for (int i = 0; i < (int)loop; ++i)
-    {
-      auto size  = coll.count(nums[i]);
-      auto first = coll.find(nums[i]);
-
-      // found and scan "equal_range"
-      for (int scan = 0; scan < (int)size; ++scan)
-      {
-        if (std::abs(first->second - i) <= k)
-          return true;
-
-        ++first;
-      }
-
-      // if not found, insert it
-      coll.insert(std::make_pair(nums[i], i));
-    }
-
-    return false;
-  }
-} // namespace leetcode_easy_219
-
-TEST(AlgoLeetCode, check_triangle)
+TEST(AlgoLeetCode, add_digits)
 {
-  using namespace leetcode_easy_219;
+  using namespace leetcode_easy_258;
 
-  // auto f = contain_duplicates_1;
-  auto f = contain_duplicates_3;
+  {
+    auto f = add_digits_1;
 
-  EXPECT_THAT(f({1, 2, 3, 1}, 3), true);
-  EXPECT_THAT(f({1, 0, 1, 1}, 1), true);
-  EXPECT_THAT(f({1, 2, 3, 1, 2, 3}, 2), false);
+    EXPECT_THAT(f(38), 2);
+  }
 
-  EXPECT_THAT(f({99, 99}, 2), true);
+  {
+    auto f = add_digits_2;
+
+    EXPECT_THAT(f(38), 2);
+  }
 }
 
 // ={=========================================================================

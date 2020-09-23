@@ -249,7 +249,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-string-find
 *kt_dev_cxx_0000* cxx-string-numeric-conversion cxx-boost-lexical-cast
 *kt_dev_cxx_0000* cxx-string-iterator
-*kt_dev_cxx_0000* cxx-string-raw
 *kt_dev_stl_075* stl-string: seg fault
 *kt_dev_cxx_0000* cxx-sp-raii cxx-raii
 *kt_dev_cxx_0000* cxx-sp-shared
@@ -13662,12 +13661,7 @@ on underlying object since a reference is another name.
 o `no-null-reference` and `must be initialized(binded)` 
 
 From MEC++01. Unlike pointer, `no need to check its validity` since always
-refers to an object.
-
-void printDouble( const double& rd )
-{ cout << rd; }
-
-vs.
+refers to an object. So efficient code.
 
 void printDouble( const double* pd )
 {
@@ -13675,56 +13669,76 @@ void printDouble( const double* pd )
     cout << *pd;
 }
 
-So efficient code.
+to
 
-* `bound-once`
+void printDouble( const double& rd )
+{ cout << rd; }
+
+
+o `bound-once`
 
 All operations on that reference are actually operations on the object to
 which the reference is bound. Reference is `bound-once` but for pointer, can
 change pointer itself and can point any other objects.
 
 
-* `no-reference-to-reference` 
+o `no-reference-to-reference` 
 
 There is no reference to a reference. but there's a pointer to a pointer. 
 
-note: 
 This do not mean it's a compile error but mean that don't have the same as
-pointer has. This refVal3 binds to iVal but not to refVal. No comile error for
-below cases.
+pointer has. This rrval binds to ivalue but not to rval.
 
-int &refVal = iVal;
-int &refVal3 = refVal;
+TEST(CxxReference, no_reference_to_reference)
+{
+  {
+    int ivalue{10};
 
-int &refVal = iVal;        // the same and no compile error
-int &refVal3 = iVal;
+    int &rval = ivalue;
+    int &rrval = rval;
+  }
+
+  {
+    int ivalue{10};
+
+    int &rval = ivalue;
+    int &rrval = ivalue;
+  }
+}
 
 
-* Reference should 'match' to type and cannot bind to a literal.
+o Reference should match to type and cannot bind to a literal.
 
 int &ref = 10;                        // error
 double dval = 3.14; int &ref = dval;  // error
 
 
-* `no-const-reference` whreas reference-to-const
+o `no-const-reference` whreas reference-to-const
  
 There is no const reference but there's a const pointer because a pointer is
-object. Like any other const object, const pointer must be initialized.
+object. Like any other const object, *cxx-const* pointer must be initialized.
 
 error: uninitialised const ‘pint’ [-fpermissive]
 
 CPR p50. A reference is not an object. object does not mean only object of
 class. A reference defines an `alternative-name` for an object. This is called
-binding hence 'must' be initialized.
+binding hence `must be initialized.`
 
 int *const cpi = &i;    // const-pointer
 
 
-* `no-address ?` No it's an example showing "no operator operates on a
-  reference"
+o A reference has no address. 
 
-A reference has no address. 
+[ RUN      ] CxxReference.no_address
+ival : 100
+iref : 100
+irref: 100
+ival : 0x7ffe9c457384
+iref : 0x7ffe9c457384
+irref: 0x7ffe9c457384
+[       OK ] CxxReference.no_address (0 ms)
 
+TEST(CxxReference, no_address)
 {
   int ival = 100;
   int &iref = ival;
@@ -13739,13 +13753,6 @@ A reference has no address.
   cout << "irref: " << &irref << endl;
 }
 
-ival : 100
-iref : 100
-irref: 100
-ival : 0xbfead4a4
-iref : 0xbfead4a4
-irref: 0xbfead4a4
-
 
 o `no-array-of-reference` no-pointer-to-reference
 
@@ -13757,9 +13764,9 @@ int& refs[10];    // error. no arrays of ref
 
 o no-null-reference
 
-C++PL p198. If you need a notion of "no value", pointers offer nullptr. There
-is no equivalent null reference, so if you need a no value using a pointer may
-be most appropriate.
+C++PL p198. If you need a notion of "no value", pointers offer nullptr. There is
+no equivalent null reference, so if you need a no value using a pointer may be
+most appropriate.
 
 
 <ex> EC++20
@@ -13805,7 +13812,7 @@ o The `const` is necessary since in pass-by-value case, the caller know that
   they are shielded from any changes the function might make. To have the same
   protection for pass-by-reference, need const. 
 
-o Can avoid `sliced-off` problem. For example:
+o Can avoid *cxx-sliced-off* problem. For example:
 
 class Window {
   public:
@@ -13875,106 +13882,6 @@ o Although passing string literals or raw arrays always can become a problem,
   All this will be discussed in detail in Chapter 7. For the moment inside the
   book we will usually pass arguments by value unless some functionality is
   only possible when using references.
-
-
-<ex>
-namespace cxx_reference
-{
-  void swap_by_value(int x, int y)
-  {
-    int temp;
-    temp = x;
-    x = y;
-    y = temp;
-  }
-
-  void swap_by_pointer(int *x, int *y)
-  {
-    int temp;
-    temp = *x;
-    *x = *y;
-    *y = temp;
-  }
-
-  void swap_by_reference(int &x, int &y)
-  {
-    int temp;
-    temp = x;
-    x = y;
-    y = temp;
-  }
-} // namespace
-
-TEST(Reference, Swap)
-{
-  using namespace cxx_reference;
-
-  // no swap
-  {
-    int x = 10, y = 20;
-    swap_by_value(x, y);
-    EXPECT_EQ(x, 10);
-    EXPECT_EQ(y, 20);
-  }
-
-  // swap
-  {
-    int x = 10, y = 20;
-    swap_by_pointer(&x, &y);
-    EXPECT_EQ(x, 20);
-    EXPECT_EQ(y, 10);
-  }
-
-  // swap, note: no need to pass its address
-  {
-    int x = 10, y = 20;
-    swap_by_reference(x, y);
-    EXPECT_EQ(x, 20);
-    EXPECT_EQ(y, 10);
-  }
-
-  // *cxx-swap* std-swap uses reference
-  {
-    int x = 10, y = 20;
-    swap(x, y);
-    EXPECT_EQ(x, 20);
-    EXPECT_EQ(y, 10);
-  }
-}
-
-
-<ex>
-*cxx-reference* is binds to `object` whereas pointer can points many.
-
-namespace use_reference_callby
-{
-  void fill_buffer_by_pointer(char *buffer)
-  {
-    sprintf(buffer, "is filled by pointer %d\n", 10);
-  }
-
-  // cxx.cpp: In function ‘void use_reference_callby::fill_buffer_by_reference(char&)’:
-  // cxx.cpp:826:52: error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
-  //      sprintf(buffer, "is filled by pointer %d\n", 10);
-  //                                                     ^
-
-  void fill_buffer_by_reference(char &buffer)
-  {
-    sprintf(buffer, "is filled by pointer %d\n", 10);
-  }
-
-} // namespace
-
-TEST(Reference, OnCFunctions)
-{
-  using namespace use_reference_callby;
-
-  {
-    char buffer[100];
-    fill_buffer_by_pointer(buffer);
-    cout << buffer << endl;
-  }
-}
 
 
 <ex> *cpp-ex-tree* *cpp-recursive*
@@ -14089,73 +13996,136 @@ See how using a reference can make a code simple and neat to implement pass by
 reference approach than using a pointer.
 
 
-{cxx-return-reference-vs-copy}
-Beware a func that returns copy or reference. QUIZ: maybe a quiz?
+*cxx-reference-return*
 
-class Screen {
-  public:
-    Screen() : move(0), set(0) {}
-    <01> Screen& set_move(int val) { move = val; return *this; }
-    <01> Screen& set_move(int val) { move = val; }
-    <02> Screen set_move(int val) { move = val; return *this; }
-    <02> Screen set_move(int val) { move = val; }
-    void set_set(int val) { set = val; }
-    void print() { cout << "Screen: move " << move << ", set: " << set << endl; }
-
+namespace cxx_reference
+{
+  class Screen
+  {
   private:
     int move;
     int set;
-};
 
-int main()
+  public:
+    Screen()
+        : move(0)
+        , set(0)
+    {}
+
+    Screen &set_move_1(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen &set_move_2(int val) { move = val; }
+
+    Screen set_move_3(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen set_move_4(int val) { move = val; }
+
+    void set_set(int val) { set = val; }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << "move " << move << ", set " << set;
+      return os.str();
+    }
+  };
+
+  class Foo
+  {
+  private:
+    std::string _name;
+
+  public:
+    std::string &get_name_1() { return _name; }
+
+    std::string &get_name_2()
+    {
+      std::string name{"get_name_2"};
+      return name;
+    }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << _name;
+      return os.str();
+    }
+  };
+} // namespace cxx_reference
+
+TEST(CxxReference, check_return)
 {
-  Screen myscreen;
+  using namespace cxx_reference;
 
-  // shows that the call and dot operator has the same precedence and left
-  // associative. so can use the result of a call to call a member of the
+  // shows that the call operator and dot operator has the same precedence and
+  // left associative. so can use the result of a call to call a member of the
   // resulting object.
 
-  myscreen.set_move(5).set_set(10);
-  myscreen.print();
+  // set_move_1() returns reference
+  {
+    Screen scr{};
+
+    scr.set_move_1(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_2() returns reference
+  {
+    Screen scr{};
+
+    scr.set_move_2(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_3() returns copy so set_set() do not change scr
+  {
+    Screen scr{};
+
+    scr.set_move_3(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
+
+  // set_move_4() returns copy
+  {
+    Screen scr{};
+
+    scr.set_move_4(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
 }
 
-<01> return reference
-5, 10
+// see difference when use "cxx-auto"
 
-<02> return copy
-5, 0
-
-Since <02> set_move returns a copy and set_set is called upon the copy, no
-changes on myscreen object.
-
-
-<ex>
-// where back() returns a reference
-auto &v = container.back();
-auto v = container.back();
-
-Which one of these use reference?
-
-void t_type_01()
+TEST(CxxReference, check_return_and_auto)
 {
-  Screen myscreen;
+  using namespace cxx_reference;
 
-  auto &rs = myscreen.set_move(5);
-  rs.set_set(10);
-  myscreen.print();
-  cout << "rs is: " << typeid(rs).name() << endl;
+  // set_move_1() returns reference and use "auto &"
+  {
+    Screen scr{};
 
-  auto cs = myscreen.set_move(5);
-  cs.set_set(10);
-  myscreen.print();
-  cout << "cs is: " << typeid(cs).name() << endl;
+    auto &screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_1() returns reference and use "auto". *cxx-auto*
+  {
+    Screen scr{};
+
+    auto screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
 }
-
-Screen: move 5, set: 10
-rs is: 6Screen
-Screen: move 5, set: 10
-cs is: 6Screen
-end of main
 
 
 <cxx-return-reference-cxx-access-private> cxx-operator-==
@@ -22526,6 +22496,7 @@ bool QueueFull(Queue* queue)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-bool-conversion-cxx-conversion-to-bool
 
+namespace cxx_code
 {
   // *cxx-conversion-op* *cxx-overload-call* *cxx-operator-bool*
   // operator T() const;     where T represents `type`
@@ -22546,8 +22517,8 @@ of user_class. there is no such thing like "bool operator!() {}"
     if (!user_class) return;
 
 
-The classes 'rarely' provide conversion operator but one important exception
-is convertion to bool.
+The classes rarely provide conversion operator but one important exception is
+convertion to bool.
 
 In earlier version of the library, the IO types defined a `conversion-to-void`
 to avoid the kind of problems above. Under the new standard, instead defines
@@ -22558,13 +22529,14 @@ condition such as:
 
 if, while, for and do statements. logical operators. conditional operators.
  
-Why? `conversion-to-bool` is 'intended' for use in conditions and hence
+because `conversion-to-bool` is intended for use in conditions and hence
 ordinarily should be defined as explicit to avoid problems in other uses:
 
 while(std::cin >> string)
 
-Reads input into value, 'return' cin, and cin converted to bool depending on
-cin state. This bool conversion is the typical use of conversion-op.
+Reads input into value, return cin, and cin converted to bool depending on
+cin state. This bool conversion is the typical use of *cxx-conversion-op*
+
 
 <ex> *cxx-stream*
 The issue is tht the code below starts to fail to build suddenly when upgrages
@@ -22578,8 +22550,8 @@ by the fact that gcc-4.9 (and below) still had operator void*() const.
 
 stringstream s;
 
-// operator>>() returns stream stream is implicitly converted to bool since
-// copy-init is used. now it is made exlpicit so failed to do so.
+operator>>() returns stream stream is implicitly converted to bool since
+copy-init is used. now it is made exlpicit so failed to do so.
 
 -    bool read_ok = s >> st;
 -    ASSERT_THAT(read_ok, Eq(true));
@@ -22589,7 +22561,7 @@ stringstream s;
 
 
 note: 
-Like cin, seems useful to have bool conversion when class has 'state'.
+Like cin, seems useful to have bool conversion when class has state.
 
 
 Two stream functions are defined for the use of streams in Boolean expressions
@@ -22599,10 +22571,6 @@ Returns whether the stream has not run into an error (corresponds to !fail())
 
 operator ! ()
 Returns whether the stream has run into an error (corresponds to fail())
-
-note: 
-Before C++11, the `cxx-operator-bool()` was declared as `operator-void*()`, which
-could cause problems such as those described in Section 15.10.1, page 805.
 
 fail() is stream member function:
 Returns true if an error has occurred (failbit or badbit is set)
@@ -22682,16 +22650,22 @@ if( pa == po ) ...
 
 
 <ex> problem when use old operator void*()
-Before C++11, a typical programming error when dealing with stringstreams was
-to forget to extract the string with the function str() and to write to the
-stream directly instead. This was, from a compiler's point of view, a possible
-and reasonable thing to do because there was an implicit conversion to void*. 
+
+Before C++11, the `cxx-operator-bool()` was declared as `operator-void*()`,
+which could cause problems such as those described in C++SL Section 15.10.1,
+page 805:
+
+a typical programming error when dealing with string streams was to forget to
+extract the string with the function str() and to write to the stream directly
+instead. This was, from a compiler's point of view, a possible and reasonable
+thing to do because there was an implicit conversion to void*. 
 
 ostringstream os;
 cout << os.str() << endl;       // right
 
-As a result, the issue is that instead of its value the state of the stream
-was written in the form of an address. 
+As a result, the issue is that instead of its value the state of the stream was
+written in the form of an address. 
+
 
 Section 15.3.3, page 756
 
@@ -22718,9 +22692,9 @@ It is even possible to read an address again with the input operator. However,
    printing and reading addresses may be programs that exchange addresses for
    object identification or programs that share memory.
 
-*cpp-remember*
+*cxx-remember*
 With C++11, this conversion was replaced by an explicit conversion to bool, so
-passing a stringstream to the output operator << 'without' calling str() is no
+passing a stringstream to the output operator << without calling str() is no
 longer possible.
 
 
@@ -22736,18 +22710,20 @@ class printer {
 };
 
 
-*cxx-stram-code-ios*
+*cxx-stream-code-ios*
 
-// 4.7.2/bits/basic_ios.h
-//
-// 27.4.5  Template class basic_ios
-/**
-*  @brief  Virtual base class for all stream classes.
-*  @ingroup io
-*
-*  Most of the member functions called dispatched on stream objects
-*  (e.g., @c std::cout.foo(bar);) are consolidated in this class.
-*/
+namespace cxx_code
+{
+  // 4.7.2/bits/basic_ios.h
+
+  // 27.4.5  Template class basic_ios
+  /**
+   *  @brief  Virtual base class for all stream classes.
+   *  @ingroup io
+   *
+   *  Most of the member functions called dispatched on stream objects
+   *  (e.g., @c std::cout.foo(bar);) are consolidated in this class.
+   */
 
   template<typename _CharT, typename _Traits>
     class basic_ios : public ios_base
@@ -22759,18 +22735,18 @@ class printer {
        *
        *  This allows you to write constructs such as
        *  "if (!a_stream) ..." and "while (a_stream) ..."
-      */
+       */
       operator void*() const
       { return this->fail() ? 0 : const_cast<basic_ios*>(this); }
 
       bool
-      operator!() const
-      { return this->fail(); }
+        operator!() const
+        { return this->fail(); }
       //@}
   }
 
-// iosfwd
-// ostream
+  // iosfwd
+  // ostream
 
   template<typename _CharT, typename _Traits>
     class basic_ostream : virtual public basic_ios<_CharT, _Traits>
@@ -22781,16 +22757,100 @@ class printer {
   typedef basic_ostream<char> 		ostream;
 
 
-// bits/shared_ptr_base.h
+  // bits/shared_ptr_base.h
 
   template<typename _Tp, _Lock_policy _Lp>
     class __shared_ptr
     {
-      ...
+      // ...
 
       `explicit` operator bool() const // never throws
       { return _m_ptr == 0 ? false : true; }
     }
+}
+
+<ex>
+if remove "insert for bool values", then both will use string version.
+Looks like it's to do with name resolution.
+
+but there is no bool conversion of string. Then how it uses bool version?
+
+NO. it turns out that's because there is implicit pointer to bool conversion and
+that's what's happening here.
+
+[ RUN      ] String.check_string_bool_1
+insert(std::string &&key, bool value)
+key: key1, value: 1
+insert(std::string &&key, std::string &&value)
+key: key2, value: value2
+[       OK ] String.check_string_bool_1 (0 ms)
+[ RUN      ] String.check_string_bool_2
+check_bool: 1
+[       OK ] String.check_string_bool_2 (0 ms)
+
+this "implicit pointer to bool conversion" explains how this works:
+
+
+see cxx-bool-conversion-cxx-conversion-to-bool
+
+same from SO:
+
+https://stackoverflow.com/questions/14770252/string-literal-matches-bool-overload-instead-of-stdstring
+
+"Hello World" is a string literal of type "array of 12 const char" which can be
+converted to a "pointer to const char" which can in turn be converted to a bool.
+That's precisely what is happening. The compiler prefers this to using
+std::string's conversion constructor.
+
+A conversion sequence involving a conversion constructor is known as a
+user-defined conversion sequence. The conversion from "Hello World" to a bool is
+a standard conversion sequence. The standard states that a standard conversion
+sequence is always better than a user-defined conversion sequence (§13.3.3.2/2):
+
+a standard conversion sequence (13.3.3.1.1) is a better conversion sequence than
+a user-defined conversion sequence or an ellipsis conversion sequence
+
+This "better conversion sequence" analysis is done for each argument of each
+viable function (and you only have one argument) and the better function is
+chosen by overload resolution.
+
+If you want to make sure the std::string version is called, you need to give it
+an std::string:
+
+namespace cxx_bool
+{
+  // // insert for bool values
+  void insert(const std::string &key, bool value)
+  {
+    std::cout << "insert(const std::string &key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, bool value)
+  {
+    std::cout << "insert(std::string &&key, bool value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  // insert for string values
+  void insert(const std::string &key, const std::string &value)
+  {
+    std::cout << "insert(const std::string &key, const std::string &value)"
+              << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void insert(std::string &&key, std::string &&value)
+  {
+    std::cout << "insert(std::string &&key, std::string &&value)" << std::endl;
+    std::cout << "key: " << key << ", value: " << value << std::endl;
+  }
+
+  void check_bool(bool value)
+  {
+    std::cout << "check_bool: " << value << std::endl;
+  }
+} // namespace cxxbool
 
 
 ={============================================================================
@@ -36123,23 +36183,37 @@ With examples like that, even experts easily become confused, and raw string
 // Are the five backslashes correct or not?
 "('(?:[^\\\\']|\\\\.)*'|\"(?:[^\\\\\"]|\\\\.)*\")|"     
 
-TEST(String, raw)
+TEST(StringLiteral, raw_string)
 {
   {
-    std::ostringstream os1;
-    std::ostringstream os2;
+    std::ostringstream os1{};
+    std::ostringstream os2{};
 
     const char message[] = "this is \
                            a multi-line message \
                            and works";
     os1 << message;
 
-    os2 << "this is                            a multi-line message                            and works";
+    os2 << "this is                            a multi-line message            "
+           "                and works";
 
-    EXPECT_THAT(os1.str(), os2.str());
+    const std::string expected{"this is                            a multi-line message                            and works"};
+
+    EXPECT_THAT(os1.str(), expected);
+    EXPECT_THAT(os2.str(), expected);
   }
 
-  // they are not the same since string-raw includes `space` as well.
+  // they are not the same since cxx-string-raw includes `space` as well.
+  // [ RUN      ] StringLiteral.raw_string
+  // 1
+  //
+  //     22
+  //
+  //     333
+  // 1
+  // 22
+  // 333
+  // [       OK ] StringLiteral.raw_string (0 ms)
   {
     std::string coll1{R"(1
 
@@ -36154,6 +36228,14 @@ TEST(String, raw)
   }
 
   // string-raw works like extended-regex
+  //
+  // regex
+  //
+  // While `basic regular expressions require these to be escaped` if you want
+  // them `to behave as special characters`, when using extended regular
+  // expressions you must escape them if you want them to match a literal
+  // character. 
+
   {
     std::string coll1("~Query(\"hair\")");
     std::string coll2(R"(~Query("hair"))");
@@ -36166,16 +36248,7 @@ TEST(String, raw)
     std::ostringstream os1;
     std::ostringstream os2;
 
-    // different as do not include `spaces`
-    // { "address": {"road":"Drury Ln","city":"Fountain","state":"CO","country":"US" }}
-    // const char outx[] = "{ \"address\": {"
-    //         "\"road\":\"Drury Ln\","
-    //         "\"city\":\"Fountain\","
-    //         "\"state\":\"CO\","
-    //         "\"country\":\"US\" }}";
-    // std::cout << outx << std::endl;
-
-    // have to use `escape` like extended-regex and `newline` but note that it
+    // have to `escape` like basic regex and `newline` but note that it
     // includes `spaces`
 
     const char out[] = "{ \"address\": {\n\
@@ -36186,15 +36259,32 @@ TEST(String, raw)
 
     os1 << out;
 
+    // std::cout << out << std::endl;
+
+    const char out2[] = "{ \"address\": {\n\
+         \"road\":\"Drury Ln\",\n\
+         \"city\":\"Fountain\",\n\
+         \"state\":\"CO\",\n\
+         \"country\":\"US\" }}";
+
+    os2 << out2;
+
+    // std::cout << out2 << std::endl;
+
     // raw-string is better
     const std::string s = R"({ "address": {
          "road":"Drury Ln",
          "city":"Fountain",
          "state":"CO",
          "country":"US" }})";
-    os2 << out;
 
-    EXPECT_THAT(os1.str(), os2.str());
+    // std::cout << s << std::endl;
+
+    // different due to spaces
+    EXPECT_THAT(os1.str(), Ne(os2.str()));
+
+    // when have same spces
+    EXPECT_THAT(os2.str(), s);
   }
 
   {
@@ -36224,8 +36314,8 @@ TEST(String, raw)
     // prefix(optional) R "delimiter( raw_characters )delimiter"	(6)	(since C++11)
     //
     // The use of ZZZ as a delimiter in the following lines solves the problem
-    // and allows you to embed double quotation marks and parenthesis in the raw
-    // literal string:
+    // and allows you to embed double quotation marks and *parenthesis* in the
+    // raw literal string:
     //
     // https://www.youtube.com/watch?v=DiZ-az_nJMM
 
@@ -36248,6 +36338,23 @@ TEST(String, raw)
         "Items":null,
         "Id":"6"
     })JSON";
+
+    // well, don't need to use `delimeter` for json since do not have
+    // parenthesis.
+
+    std::string json_content4 = R"(
+    {
+      "uris": [
+        {
+          "path": "/as/drm/status",
+          "method": "ws",
+          "thread": "AS_WS_DRM",
+          "content": {
+            "status": "UNAVAILABLE"
+          }
+        }
+      ]
+    })";
   }
 }
 
@@ -41419,7 +41526,7 @@ There are some differences between containers as to what to return from insert
 and erase and arguments. 
 
 
-{cxx-coll-insert-cxx-vector-insert-coll-erase-cxx-vector-erase} cxx-insert cxx-erase
+{cxx-vector-insert-cxx-vector-erase} cxx-insert cxx-erase
 
 `where, pos, beg, end are iterators`
 
@@ -41516,7 +41623,7 @@ c.erase(beg,end)    Removes all elements of the range [beg,end) and
 c.clear()           Removes all elements (empties the container)
 
 
-<cxx-set-insert-different-return> <cxx-map-insert>
+<cxx-set-insert-different-return> *cxx-map-insert*
 The return types of the inserting functions insert() and emplace() differ as
 follows:
 
@@ -41528,7 +41635,10 @@ o `cxx-set and cxx-map do not allow duplicates.` If they can’t insert the valu
   they `return the position of the new element and true.`
 
 pair<iterator,`bool`>  insert (const value_type& val);
+*cxx-insert* when key is unique
+
 iterator             insert (const_iterator posHint, const value_type& val);
+*cxx-insert* when key is not unique
 
 template <typename... Args> pair<iterator, `bool`> 
   emplace (Args&&... args);
@@ -45090,7 +45200,7 @@ TEST(Set, Search)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-coll-map cxx-map cxx-multimap cxx-size-t
 
-<cxx-size-t>
+*cxx-size-t*
 type `size_t` is a machine-specific `unsigned type` that is guaranteed to be
 large enough to hold the size of `any` object in memory.
 
@@ -45228,7 +45338,7 @@ the following two requirements:
 o Both key and value must be copyable or movable.
 
 o The key must be comparable with the sorting criterion. the default is `cxx-less`
-  As with unique_ptr *cxx-sp-delete*, use `typename` to set comp.
+  As with unique_ptr *cxx-sp-delete* use `typename` to set comp.
 
 As with set, key is `constant`. However, a direct modification of the value of
 the element is still possible, provided that the type of the value is not
@@ -45284,7 +45394,8 @@ T& map::operator at (const key_type& key)
 const T& map::operator at (const key_type& key) const
 
 
-<cxx-map-fetch> <associative-array> <cpp-map-default-value>
+*cxx-map-insert* <associative-array> <cpp-map-default-value>
+
 The both maps and unordered maps can also be thought of as an
 `associative-array`, an array whose index is not an integer value. As a
 consequence, both containers provide the subscript operator[].
@@ -45295,8 +45406,13 @@ new index (or key) is taken as a reason `to create and insert a new element`
 that has the index as the key. `Thus, you can't have an invalid index.`
 
 c[key] 
+
 Inserts an element with key, if it does not yet exist, and returns a reference
 to the value of the element with key (only for nonconstant maps)
+
+"Thus, to use this feature, you can't use a value type that has no default
+constructor." 
+
 
 c.at(key) *cxx-map-at*
 Returns a reference to the value of the element with key (since C++11)
@@ -45309,12 +45425,76 @@ coll.at("vat1") = 0.16;
 
 
 `The fecth only works for map` but not multimaps since there are multiple
-matches. Why not set? Since set has only key. Unlike other containers, [] op
-on map returns `mapped_type` but dereferencing of iterator returns
-`value_type`. 
+matches. Why not set? Since set has only key. Unlike other containers, [] op on
+map returns `mapped_type` but dereferencing of iterator returns `value_type`. 
 
-  "Thus, to use this feature, you can't use a value type that has no default
-  constructor." 
+
+<ex>
+
+word_count[word] = 1; 
+
+Happens 3 setps but step 3 could be extra
+
+o Search key and not found
+o Insert temp element pair{word, 0}. value init since default ctor is called
+o Assign it with 1
+
+When accessing map with key which is not exist, cause addition. Inserts a new
+element with key "ottto" and prints its value, which is 0 by default.
+
+std::cout << coll["ottto"];
+
+The real bug which meant to print out debug message but creates one elements
+which is not added before due to if and else logic in the code.
+
+NICKEL_TRACE("getSourceInformation: "
+        << "configuration: " << sourceInfo["CONFIGURATION"]
+        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
+
+TEST(CxxMap, fetch_can_insert)
+{
+  std::map<unsigned int, int> expected{{1, 0}, {2, 0}, {3, 0}};
+
+  // use insert()
+  {
+    std::map<unsigned int, int> coll;
+
+    coll.insert({1, 0});
+    coll.insert({2, 0});
+    coll.insert({3, 0});
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // do the same
+  {
+    std::map<unsigned int, int> coll;
+
+    coll[1];
+    coll[2];
+    coll[3];
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // do the same
+  {
+    std::map<unsigned int, int> _expected{{1, 1}, {2, 1}, {3, 1}};
+    std::map<unsigned int, int> coll;
+
+    coll[1]++;
+    coll[2]++;
+    coll[3]++;
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == _expected, true);
+  }
+}
 
 
 <ex>
@@ -45345,28 +45525,6 @@ while( cin >> word )
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
-
-
-<ex>
-word_count[word] = 1; 
-
-Happens 3 setps but 3) could be extra
-
-o Search key and not found
-o Insert temp element pair{word, 0}. value init since default ctor is called
-o Assign it with 1
-
-When accessing map with key which is not exist, cause addition. Inserts a new
-element with key "ottto" and prints its value, which is 0 by default.
-
-std::cout << coll["ottto"];
-
-The real bug which meant to print out debug message but creates one elements
-which is not added before due to if and else logic in the code.
-
-NICKEL_TRACE("getSourceInformation: "
-        << "configuration: " << sourceInfo["CONFIGURATION"]
-        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
 
 
 <ex>
@@ -53209,7 +53367,7 @@ individual characters. Thus, the standard string classes provide the container
 interface of the STL.
 
 
-{string-vs-vector}
+*cxx-string-vs-cxx-vector*
 This is no surprise because both are containers that are typically implemented
 as dynamic arrays. Thus, you could consider a string as a special kind of a
 vector that has characters as elements.
@@ -55799,27 +55957,6 @@ int main(int argc, char* argv[])
  ,?Haeehlloooruwy
 
 <Q> why still duplicates?
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-string-raw
-
-// { "address": {
-//          "road":"Drury Ln",
-//          "city":"Fountain",
-//          "state":"CO",
-//          "country":"US" }}
-
-TEST(CxxStringTest, UseRawString)
-{
-    const std::string s = R"({ "address": {
-         "road":"Drury Ln",
-         "city":"Fountain",
-         "state":"CO",
-         "country":"US" }})";
-
-    std::cout << s << std::endl;
-}
 
 
 ={============================================================================

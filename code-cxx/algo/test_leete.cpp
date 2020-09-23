@@ -2514,6 +2514,520 @@ TEST(AlgoLeetCode, check_triangle)
   }
 }
 
+/*
+={=========================================================================
+algo-leetcode-204
+
+204. Count Primes Easy
+
+Count the number of prime numbers less than a non-negative number, n.
+
+Example:
+
+Input: 10
+Output: 4
+
+Explanation: There are 4 prime numbers less than 10, they are 2, 3, 5, 7.
+
+
+In mathematics, the sieve of Eratosthenes is an ancient algorithm for finding
+all prime numbers up to any given limit.
+
+"sieve" means "filter" and it's elimination. that is, elemiate multiples of a
+prime numbers.
+ 
+*/
+
+namespace leetcode_easy_204
+{
+  // note on "less than n" in the description
+  int count_primes_1(int n)
+  {
+    if (n <= 1)
+      return 0;
+
+    // lookup table for prime numbers
+    std::vector<bool> table(n, true);
+
+    // 0 and 1 is not prime numbers
+    table[0] = table[1] = false;
+
+    for (int i = 2; i < n; ++i)
+    {
+      // if it's a prime, eleminate multiples
+      if (table[i])
+      {
+        for (int j = i * 2; j < n; j += i)
+        {
+          table[j] = false;
+        }
+      }
+    }
+
+    return std::count(table.cbegin(), table.cend(), true);
+  }
+
+  // same but different way to calc multiples
+  int count_primes_2(int n)
+  {
+    if (n <= 1)
+      return 0;
+
+    // lookup table for prime numbers
+    std::vector<bool> table(n, true);
+
+    // 0 and 1 is not prime numbers
+    table[0] = table[1] = false;
+
+    for (int i = 2; i < n; ++i)
+    {
+      // if it's a prime, eleminate multiples
+      if (table[i])
+      {
+        for (int j = i; i * j < n; ++j)
+        {
+          table[i * j] = false;
+        }
+      }
+    }
+
+    return std::count(table.cbegin(), table.cend(), true);
+  }
+
+  // if you write numbers and find primes, then can observe that elimination is
+  // repeated; eliminated by previous multiple of prime.
+  //
+  // also, number i covers "number < i * i". for example, when number 4, numbers
+  // which is < 16, don't need to loop on 4 to eleminate 4 multiples.
+  //
+  // Runtime: 240 ms, faster than 31.91% of C++ online submissions for Count Primes.
+  // Memory Usage: 6.4 MB, less than 83.73% of C++ online submissions for Count Primes.
+
+  int count_primes_3(int n)
+  {
+    if (n <= 1)
+      return 0;
+
+    // lookup table for prime numbers. all set "primes"
+    std::vector<bool> table(n, true);
+
+    // 0 and 1 is not prime numbers
+    table[0] = table[1] = false;
+
+    for (int i = 2; i * i < n; ++i)
+    {
+      if (table[i])
+      {
+        for (int j = i * 2; j < n; j += i)
+        {
+          table[j] = false;
+        }
+      }
+    }
+
+    return std::count(table.cbegin(), table.cend(), true);
+  }
+
+  // how we can make it faster?
+  //
+  // Runtime: 36 ms, faster than 79.05% of C++ online submissions for Count Primes.
+  // Memory Usage: 7.7 MB, less than 33.38% of C++ online submissions for Count Primes.
+  //
+  // WHY?
+  //
+  // [ RUN      ] CxxBit.check_performace_on_vector_bool
+  // [       OK ] CxxBit.check_performace_on_vector_bool (277 ms)
+  // [ RUN      ] CxxBit.check_performace_on_bitset
+  // [       OK ] CxxBit.check_performace_on_bitset (255 ms)
+  // [ RUN      ] CxxBit.check_performace_on_array_bit
+  // [       OK ] CxxBit.check_performace_on_array_bit (50 ms)
+  // [ RUN      ] CxxBit.check_performace_on_array_bool
+  // [       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
+  // array bool is fastest.
+
+  int count_primes_4(int n)
+  {
+    if (n <= 1)
+      return 0;
+
+    // lookup table for prime numbers. all set "primes"
+    // std::vector<bool> table(n, true);
+    int count{};
+    bool table[n];
+    std::fill_n(table, n, 1);
+
+    // 0 and 1 is not prime numbers
+    table[0] = table[1] = false;
+
+    for (int i = 2; i * i < n; ++i)
+    {
+      if (table[i])
+      {
+        for (int j = i * 2; j < n; j += i)
+        {
+          table[j] = false;
+        }
+      }
+    }
+
+    for (int i = 2; i < n; ++i)
+    {
+      if (table[i])
+        ++count;
+    }
+
+    return count;
+  }
+
+  // Runtime: 20 ms, faster than 88.51% of C++ online submissions for Count Primes.
+  // Memory Usage: 7.7 MB, less than 30.03% of C++ online submissions for Count Primes.
+
+  int count_primes_5(int n)
+  {
+    if (n <= 1)
+      return 0;
+
+    // lookup table for prime numbers. all set "primes"
+    int count{};
+    bool table[n];
+
+    // std::fill_n(table, n, 1);
+    std::memset((void *)table, 1, n);
+
+    // 0 and 1 is not prime numbers
+    table[0] = table[1] = false;
+
+    for (int i = 2; i * i < n; ++i)
+    {
+      if (table[i])
+      {
+        for (int j = i * 2; j < n; j += i)
+        {
+          table[j] = false;
+        }
+      }
+    }
+
+    for (int i = 2; i < n; ++i)
+    {
+      if (table[i])
+        ++count;
+    }
+
+    return count;
+  }
+} // namespace leetcode_easy_204
+
+TEST(AlgoLeetCode, count_primes)
+{
+  using namespace leetcode_easy_204;
+
+  auto imps = {count_primes_1,
+               count_primes_2,
+               count_primes_3,
+               count_primes_4,
+               count_primes_5};
+
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f(10), 4);
+    EXPECT_THAT(f(3), 1);
+    EXPECT_THAT(f(16), 6);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-205
+
+205. Isomorphic Strings Easy
+
+Given two strings s and t, determine if they are isomorphic.
+
+Two strings are isomorphic if the characters in s can be replaced to get t.
+
+All occurrences of a character must be replaced with another character while
+preserving the order of characters. No two characters may map to the same
+character but a character may map to itself.
+
+Example 1:
+Input: s = "egg", t = "add"
+Output: true
+
+Example 2:
+Input: s = "foo", t = "bar"
+Output: false
+
+Example 3:
+Input: s = "paper", t = "title"
+Output: true
+
+Note:
+You may assume both s and t have the same length.
+
+this is failed case when submitted _1 online but don't get why expects false.
+
+s = "ab", t = "aa"
+false
+
+May be "No two characters may map to the same character"? in both direction?
+ 
+*/
+
+namespace leetcode_easy_205
+{
+  // 2020.09
+  // 1. assume "a character" is ascii
+  // 2. if length is different, return false.
+  // 3. build table[pair<char, bool>] and pair<replaced char, replaced>. if
+  // replaced is false, update replaced char and set it true. if true, compare
+  // replaced char with the input.
+
+  bool isomorphic_string_1(const string &s, const string &t)
+  {
+    if (s.size() != t.size())
+      return false;
+
+    std::vector<std::pair<char, bool>> table(256);
+
+    auto loop = s.size();
+
+    for (size_t i = 0; i < loop; ++i)
+    {
+      auto &e = table[(int)s[i]];
+      // std::pair<char, bool> &e = table[((int)s[i])];
+
+      // not replaced and replace it.
+      if (e.second == false)
+      {
+        e.first  = t[i];
+        e.second = true;
+      }
+      else
+      {
+        if (e.first != t[i])
+          return false;
+      }
+    }
+
+    return true;
+  }
+
+  // from discussion
+  // https://leetcode.com/problems/isomorphic-strings/discuss/832424/simple-hashing-solution
+  // Runtime: 28 ms, faster than 32.63% of C++ online submissions for Isomorphic Strings.
+  // Memory Usage: 7.3 MB, less than 22.36% of C++ online submissions for Isomorphic Strings.
+
+  bool isomorphic_string_2(const string &s, const string &t)
+  {
+    std::map<char, char> mp;
+    std::map<char, int> mp2;
+
+    for (int i = 0; i < (int)s.size(); i++)
+    {
+      //
+      if (mp.find(s[i]) == mp.end())
+      {
+        if (mp2.find(t[i]) != mp2.end())
+          return false;
+
+        mp[s[i]] = t[i];
+        mp2[t[i]]++;
+      }
+      // found in the replace map, mp, and should match.
+      else
+      {
+        if (mp[s[i]] != t[i])
+          return false;
+      }
+    }
+
+    return true;
+  }
+
+  // rephrase _2
+  bool isomorphic_string_3(const string &s, const string &t)
+  {
+    std::map<char, char> map_for_s; // map for s
+    std::map<char, char> map_for_t; // map for t
+
+    for (int i = 0; i < (int)s.size(); i++)
+    {
+      // not found in the map s
+      if (map_for_s.find(s[i]) == map_for_s.end())
+      {
+        // note: this is bit that make it to pass for:
+        //
+        // s = "ab", t = "aa"
+        // false
+        //
+        // since not found in the map s, expects that map t do not have item for
+        // the same index.
+        if (map_for_t.find(t[i]) != map_for_t.end())
+          return false;
+
+        // add s item to map s
+        map_for_s[s[i]] = t[i];
+
+        // add t item to map t
+        map_for_t[t[i]];
+      }
+      // found in the maps so, this item is already known and should match.
+      else
+      {
+        if (map_for_s[s[i]] != t[i])
+          return false;
+      }
+    }
+
+    return true;
+  }
+} // namespace leetcode_easy_205
+
+TEST(AlgoLeetCode, isomorphic_string)
+{
+  using namespace leetcode_easy_205;
+
+  auto imps = {isomorphic_string_1};
+
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f("egg", "add"), true);
+    EXPECT_THAT(f("foo", "bar"), false);
+    EXPECT_THAT(f("paper", "title"), true);
+
+    // fails and false
+    // EXPECT_THAT(f("ab", "aa"), false);
+  }
+
+  {
+    auto f = isomorphic_string_2;
+
+    EXPECT_THAT(f("egg", "add"), true);
+    EXPECT_THAT(f("foo", "bar"), false);
+    EXPECT_THAT(f("paper", "title"), true);
+    EXPECT_THAT(f("ab", "aa"), false);
+  }
+
+  {
+    auto f = isomorphic_string_3;
+
+    EXPECT_THAT(f("egg", "add"), true);
+    EXPECT_THAT(f("foo", "bar"), false);
+    EXPECT_THAT(f("paper", "title"), true);
+    EXPECT_THAT(f("ab", "aa"), false);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-258
+
+258. Add Digits, Easy
+
+Given a non-negative integer num, repeatedly add all its digits until the result
+has only one digit.
+
+Example:
+
+Input: 38
+Output: 2 
+
+Explanation: The process is like: 3 + 8 = 11, 1 + 1 = 2. 
+             Since 2 has only one digit, return it.
+
+Follow up:
+Could you do it without any loop/recursion in O(1) runtime?
+
+
+https://leetcode.com/problems/add-digits/solution/
+
+The value we're asked to compute is the so-called Digital Root. Logarithmic time
+solution is easy to write, although the main question here is how to fit into a
+constant time.
+
+Approach 1: Mathematical: Digital Root
+
+Formula for the Digital Root
+
+There is a known formula to compute a digital root in a decimal numeral system
+
+dr(n)= 0, if n=0
+
+dr(n)= 9, if n=9k
+
+dr(n)= n mod 9, if n = 9k
+
+How to derive it? Probably, you already know the following proof from school,
+where it was used for a divisibility by 9: "The original number is divisible by
+9 if and only if the sum of its digits is divisible by 9". Let's revise it
+briefly.
+
+9 x 2 = 18 -> 9       17 (6), 18, 19(1)
+9 x 3 = 27 -> 9       26 (8), 27, 28(1)
+9 x 4 = 36 -> 9       35 (8), 36, 37(1)
+9 x 5 = 45 -> 9
+9 x 6 = 54 -> 9
+...
+ 
+*/
+
+namespace leetcode_easy_258
+{
+  // 2020.09
+  // use itoa() and recursion
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Add Digits.
+  // Memory Usage: 6 MB, less than 41.85% of C++ online submissions for Add Digits.
+
+  int add_digits_1(int num)
+  {
+    // if num is < 10 then stop recursion.
+    if ((num / 10) == 0)
+      return num;
+
+    int result{};
+
+    while (num)
+    {
+      result += (num % 10);
+      num /= 10;
+    }
+
+    return add_digits_1(result);
+  }
+
+  // code from solution
+  int add_digits_2(int num)
+  {
+    if (num == 0)
+      return 0;
+
+    if ((num % 9) == 0)
+      return 9;
+
+    // else cases
+    return num % 9;
+  }
+
+} // namespace leetcode_easy_258
+
+TEST(AlgoLeetCode, add_digits)
+{
+  using namespace leetcode_easy_258;
+
+  {
+    auto f = add_digits_1;
+
+    EXPECT_THAT(f(38), 2);
+  }
+
+  {
+    auto f = add_digits_2;
+
+    EXPECT_THAT(f(38), 2);
+  }
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

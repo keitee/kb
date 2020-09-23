@@ -639,6 +639,7 @@ namespace cxx_variant
   }; // struct
 } // namespace cxx_variant
 
+// ={=========================================================================
 TEST(CxxTypeVariant, check_custom_variant)
 {
   using namespace cxx_variant;
@@ -834,16 +835,8 @@ namespace cxxvariant
   };
 } // namespace cxxvariant
 
-// [ RUN      ] CxxType.type_variantMap
-// {key1:b}
-// {key2:b}
-// {key3:i}
-// {key4:i}
-// {key5:b}
-// {key6:b}
-// [       OK ] CxxType.type_variantMap (0 ms)
-
-TEST(CxxTypeVariant, check_custom_variant_map)
+// ={=========================================================================
+TEST(CxxTypeVariant, custom_variant_and_visitor)
 {
   using namespace cxxvariant;
 
@@ -885,11 +878,10 @@ TEST(CxxTypeVariant, check_custom_variant_map)
   vmap.insert("key3", 3);
   vmap.insert("key4", 4);
 
-  // see cxx-string
   // vmap.insert("key5", "variant1");
   // vmap.insert("key6", "variant2");
   //
-  // will have:
+  // will print: why? see cxx-bool-conversion-cxx-conversion-to-bool
   //
   // {key5:b}
   // {key6:b}
@@ -902,10 +894,18 @@ TEST(CxxTypeVariant, check_custom_variant_map)
 
   EXPECT_THAT(visitor.coll.size(), 6);
 
-  for (const auto e : visitor.coll)
-  {
-    cout << e << endl;
-  }
+  // for (const auto e : visitor.coll)
+  // {
+  //   cout << e << endl;
+  // }
+
+  EXPECT_THAT(visitor.coll,
+              ElementsAre("{key1:b}",
+                          "{key2:b}",
+                          "{key3:i}",
+                          "{key4:i}",
+                          "{key5:variant1}",
+                          "{key6:variant2}"));
 }
 
 // cxx-17
@@ -3842,6 +3842,7 @@ TEST(CxxSwap, check_difference)
   }
 }
 
+// ={=========================================================================
 // see how swap works on vector
 // void swap( vector& other ); (until C++17)
 TEST(CxxSwap, check_container)
@@ -3861,6 +3862,7 @@ TEST(CxxSwap, check_container)
   EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4));
 }
 
+// ={=========================================================================
 // how swap elements on vector?
 //
 // 9.3.4 iter_swap()
@@ -3947,56 +3949,315 @@ TEST(CxxSwap, check_elements)
   // }
 }
 
+/*
 // ={=========================================================================
-// cxx-???
+// cxx-reference
 
+There is no reference to a reference. but there's a pointer to a pointer. 
+
+This do not mean it's a compile error but mean that don't have the same as
+pointer has. This rrval binds to ivalue but not to rval.
+
+*/
+
+TEST(CxxReference, no_reference_to_reference)
+{
+  {
+    int ivalue{10};
+
+    int &rval  = ivalue;
+    int &rrval = rval;
+  }
+
+  {
+    int ivalue{10};
+
+    int &rval  = ivalue;
+    int &rrval = ivalue;
+  }
+}
+
+/*
+// ={=========================================================================
+[ RUN      ] CxxReference.no_address
+ival : 100
+iref : 100
+irref: 100
+ival : 0x7ffe9c457384
+iref : 0x7ffe9c457384
+irref: 0x7ffe9c457384
+[       OK ] CxxReference.no_address (0 ms)
+*/
+
+TEST(CxxReference, no_address)
+{
+  int ival   = 100;
+  int &iref  = ival;
+  int &irref = ival;
+
+  cout << "ival : " << ival << endl;
+  cout << "iref : " << iref << endl;
+  cout << "irref: " << irref << endl;
+
+  cout << "ival : " << &ival << endl;
+  cout << "iref : " << &iref << endl;
+  cout << "irref: " << &irref << endl;
+}
+
+// ={=========================================================================
 namespace cxx_reference
 {
-  void func_01(char *buffer)
-  {
-    sprintf(buffer, "is filled by pointer %d\n", 10);
-  }
+  void f1(char *buffer) { sprintf(buffer, "is filled by f1 %d\n", 10); }
 
-  void func_02(char *&buffer)
-  {
-    sprintf(buffer, "is filled by pointer %d\n", 10);
-  }
+  void f2(char *&buffer) { sprintf(buffer, "is filled by f2 %d\n", 10); }
 
-  // cxx.cpp: In function ‘void
-  // use_reference_callby::fill_buffer_by_reference(char&)’: cxx.cpp:826:52:
+  // regardless of whether or not uses f3, gets an error:
+  //
   // error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
   //      sprintf(buffer, "is filled by pointer %d\n", 10);
-  //                                                     ^
-
-  // void fill_buffer_by_reference(char &buffer)
-  // {
-  //   sprintf(buffer, "is filled by pointer %d\n", 10);
-  // }
+  //              ^^^^^^
+  // void f3(char &buffer)
+  // { sprintf(buffer, "is filled by pointer %d\n", 10); }
 
 } // namespace cxx_reference
 
-TEST(Reference, CString)
+TEST(CxxReference, check_example)
 {
   using namespace cxx_reference;
 
   {
     char buffer[100];
-    func_01(buffer);
 
-    // *cxx-array* the point is that name of array is "rvalue of char *".
+    f1(buffer);
+
+    // since *cxx-array* the point is that name of array is
+    // "rvalue of char *".
     //
-    // error: invalid initialization of non-const reference of type ‘char*&’
-    // from an rvalue of type ‘char*’
-    //      func_02(buffer);
+    // error: cannot bind non-const lvalue reference of type ‘char*&’
+    // to an rvalue of type ‘char*’
+    // f2(buffer);
+  }
+
+  // this works
+  {
+    char *buffer = new char[100];
+    f1(buffer);
+
+    std::string coll{buffer};
+    EXPECT_THAT(coll, "is filled by f1 10\n");
   }
 
   {
     char *buffer = new char[100];
+    f2(buffer);
 
-    // error: invalid initialization of reference of type ‘char&’ from
-    // expression of type ‘char*’
-    func_02(buffer);
-    func_01(buffer);
+    std::string coll{buffer};
+    EXPECT_THAT(coll, "is filled by f2 10\n");
+  }
+}
+
+// ={=========================================================================
+namespace cxx_reference
+{
+  class Screen
+  {
+  private:
+    int move;
+    int set;
+
+  public:
+    Screen()
+        : move(0)
+        , set(0)
+    {}
+
+    Screen &set_move_1(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen &set_move_2(int val) { move = val; }
+
+    Screen set_move_3(int val)
+    {
+      move = val;
+      return *this;
+    }
+
+    Screen set_move_4(int val) { move = val; }
+
+    void set_set(int val) { set = val; }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << "move " << move << ", set " << set;
+      return os.str();
+    }
+  };
+
+  class Foo
+  {
+  private:
+    std::string _name;
+
+  public:
+    std::string &get_name_1() { return _name; }
+
+    std::string &get_name_2()
+    {
+      std::string name{"get_name_2"};
+      return name;
+    }
+
+    std::string print()
+    {
+      std::ostringstream os{};
+      os << _name;
+      return os.str();
+    }
+  };
+} // namespace cxx_reference
+
+// ={=========================================================================
+TEST(CxxReference, check_return)
+{
+  using namespace cxx_reference;
+
+  // shows that the call operator and dot operator has the same precedence and
+  // left associative. so can use the result of a call to call a member of the
+  // resulting object.
+
+  // set_move_1() returns reference
+  {
+    Screen scr{};
+
+    scr.set_move_1(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_2() returns reference
+  {
+    Screen scr{};
+
+    scr.set_move_2(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_3() returns copy so set_set() do not change scr
+  {
+    Screen scr{};
+
+    scr.set_move_3(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
+
+  // set_move_4() returns copy
+  {
+    Screen scr{};
+
+    scr.set_move_4(5).set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
+}
+
+// ={=========================================================================
+// see difference when use "cxx-auto"
+//
+// https://devblogs.microsoft.com/cppblog/new-safety-rules-in-c-core-check/?fbclid=IwAR2HJjPz8nTUnjEJyHHXyblk1m6b91tO60G863Z65OqB9nJ07AWL7IF_CrM#expensive-copy-with-the-auto-keyword
+// Expensive copy with the auto keyword
+//
+// Here, the type of password resolves to std::string, even though the return
+// type of getPassword() is a const-reference to a string. The resulting
+// behavior is that the contents of PasswordManager::password get copied into
+// the local variable password.
+//
+// This difference in behavior between assigning a reference and a pointer to a
+// variable marked auto is non-obvious, resulting in potentially unwanted and
+// unexpected copying.
+
+TEST(CxxReference, check_return_and_auto)
+{
+  using namespace cxx_reference;
+
+  // set_move_1() returns reference and use "auto &"
+  {
+    Screen scr{};
+
+    auto &screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 10");
+  }
+
+  // set_move_1() returns reference and use "auto". *cxx-auto*
+  {
+    Screen scr{};
+
+    auto screen = scr.set_move_1(5);
+    screen.set_set(10);
+    EXPECT_THAT(scr.print(), "move 5, set 0");
+  }
+
+  // return string reference of private member
+  {
+    Foo foo;
+
+    std::string &ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(foo.print(), "get_name_1");
+  }
+
+  // return string reference of private member
+  {
+    Foo foo;
+
+    auto &ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(foo.print(), "get_name_1");
+  }
+
+  // return string copy of private member
+  {
+    Foo foo;
+
+    // *cxx-auto* NOTE WHY??
+    auto ret = foo.get_name_1();
+
+    ret.assign("get_name_1");
+
+    EXPECT_THAT(ret, "get_name_1");
+
+    EXPECT_THAT(foo.print(), "");
+  }
+}
+
+/*
+// ={=========================================================================
+1. as with *cxx-return-cxx-temporary* where having a reference of the returned
+  tempoary in caller site is valid and allowed. so the following should not
+  crash? NO since here return reference but cxx-return-cxx-temporary returns
+  temporaray full object.
+
+*/
+
+TEST(CxxReference, DISABLED_check_return_crash)
+{
+  using namespace cxx_reference;
+
+  // return string reference of tempory
+  {
+    Foo foo;
+
+    auto &ret = foo.get_name_2();
+
+    ret.assign("get_name_2");
+
+    EXPECT_THAT(foo.print(), "get_name_2");
   }
 }
 
@@ -9270,9 +9531,10 @@ TEST(CxxBool, check_usage)
   CHECK(100 != 100);
 }
 
-#if 0
+/*
+// ={=========================================================================
 
-NOTE: if remove "insert for bool values", then both will use string version.
+if remove "insert for bool values", then both will use string version.
 Looks like it's to do with name resolution.
 
 but there is no bool conversion of string. Then how it uses bool version?
@@ -9292,15 +9554,36 @@ check_bool: 1
 
 this "implicit pointer to bool conversion" explains how this works:
 
-Before C++11, the `cxx-operator-bool()` was declared as `operator-void*()`,
-which could cause problems such as those described in Section 15.10.1,
-page 805.
 
-#endif
+see cxx-bool-conversion-cxx-conversion-to-bool
 
-// (gdb) b String_check_string_resolution_Test::TestBody()
+same from SO:
 
-namespace cxxbool
+https://stackoverflow.com/questions/14770252/string-literal-matches-bool-overload-instead-of-stdstring
+
+"Hello World" is a string literal of type "array of 12 const char" which can be
+converted to a "pointer to const char" which can in turn be converted to a bool.
+That's precisely what is happening. The compiler prefers this to using
+std::string's conversion constructor.
+
+A conversion sequence involving a conversion constructor is known as a
+user-defined conversion sequence. The conversion from "Hello World" to a bool is
+a standard conversion sequence. The standard states that a standard conversion
+sequence is always better than a user-defined conversion sequence (§13.3.3.2/2):
+
+a standard conversion sequence (13.3.3.1.1) is a better conversion sequence than
+a user-defined conversion sequence or an ellipsis conversion sequence
+
+This "better conversion sequence" analysis is done for each argument of each
+viable function (and you only have one argument) and the better function is
+chosen by overload resolution.
+
+If you want to make sure the std::string version is called, you need to give it
+an std::string:
+
+*/
+
+namespace cxx_bool
 {
   // // insert for bool values
   void insert(const std::string &key, bool value)
@@ -9333,11 +9616,12 @@ namespace cxxbool
   {
     std::cout << "check_bool: " << value << std::endl;
   }
-} // namespace cxxbool
+} // namespace cxx_bool
 
-TEST(CxxBool, check_bool_conversion)
+// ={=========================================================================
+TEST(CxxBool, bool_conversion)
 {
-  using namespace cxxbool;
+  using namespace cxx_bool;
 
   {
     insert("key1", "value1");
@@ -9436,6 +9720,7 @@ TEST(CxxStream, check_stdio_input)
   }
 }
 
+// ={=========================================================================
 // how can get a whole line?
 
 TEST(CxxStream, check_std_getline)
@@ -9551,6 +9836,7 @@ TEST(CxxStream, check_std_getline)
 // clear(state)        Clears all and sets state flags
 // setstate(state)     Sets additional state flags
 
+// ={=========================================================================
 TEST(CxxStream, check_stdio_numbers)
 {
   int i1{}, i2{}, i3{}, i4{};
@@ -9615,6 +9901,7 @@ TEST(CxxStream, check_stdio_numbers)
   EXPECT_THAT(iss8.good(), true);
 }
 
+// ={=========================================================================
 // [ RUN      ]
 // date: 05/17/20
 // time: 08:24:17
@@ -9668,6 +9955,7 @@ TEST(CxxStream, check_manipulator_put_time)
 // as Koenig lookup), functions are looked up in the namespaces where their
 // arguments are defined if they are not found otherwise.
 
+// ={=========================================================================
 TEST(CxxStream, check_manipulators_work)
 {
   std::cout << "check how minipulators work";
@@ -9698,6 +9986,7 @@ namespace cxx_io
   // arguments.
 } // namespace cxx_io
 
+// ={=========================================================================
 TEST(CxxStream, check_manipulators_user_defined)
 {
   using namespace cxx_io;
@@ -9751,6 +10040,7 @@ TEST(CxxStream, check_manipulators_user_defined)
 //
 // Table 15.17. Manipulators for Adjustment
 
+// ={=========================================================================
 TEST(CxxStream, check_manipulators)
 {
   // showpos Forces writing a positive sign on positive numbers
@@ -9793,6 +10083,7 @@ TEST(CxxStream, check_manipulators)
 // *cxx-round*
 // In all cases, the remainder is not cut off `but rounded.`
 
+// ={=========================================================================
 TEST(CxxStream, check_manipulators_float)
 {
   double value = 8.809030;
@@ -9814,10 +10105,11 @@ TEST(CxxStream, check_manipulators_float)
 // automatically. Whether this attempt was successful is reflected in the
 // stream’s state. Thus, the state should be examined after construction
 
-TEST(CxxStream, check_fstream)
+// ={=========================================================================
+TEST(CxxStream, fstream_1)
 {
   {
-    std::ofstream file("charset.out");
+    std::ofstream file("charset_1.out");
 
     // file opened?
     if (!file)
@@ -9834,12 +10126,16 @@ TEST(CxxStream, check_fstream)
            << "char : " << static_cast<char>(i) << endl;
     }
   } // close file automatically
+}
 
+// ={=========================================================================
+TEST(CxxStream, fstream_2)
+{
   {
-    std::ofstream file("charset.out");
+    std::ofstream file("charset_2.out");
 
     // file opened?
-    if (file.is_open())
+    if (file.is_open() == false)
     {
       std::cerr << "can't open output file \""
                 << "charset.out" << std::endl;
@@ -9853,33 +10149,18 @@ TEST(CxxStream, check_fstream)
            << "char : " << static_cast<char>(i) << endl;
     }
   } // close file automatically
+}
 
-#if 0
-  {
-    std::ifstream file("charset.out");
-
-    // file opened?
-    if (!file)
-    {
-      std::cerr << "can't open output file \""
-                << "charset.out" << std::endl;
-      return;
-    }
-
-    char c{};
-    while (file.get(c))
-    {
-      std::cout.put(c);
-    }
-  } // close file automatically
-#endif
-
+// ={=========================================================================
+TEST(CxxStream, fstream_3)
+{
   // Instead of copying the file contents character by character, you could also
   // output the whole contents in one statement by passing a pointer to the
   // stream buffer of the file as an argument to operator <<:
 
   {
-    std::ifstream file("charset.out");
+    std::ifstream file("charset_2.out");
+    std::ofstream out("charset_3.out");
 
     // file opened?
     if (!file)
@@ -9889,19 +10170,23 @@ TEST(CxxStream, check_fstream)
       return;
     }
 
-    std::cout << file.rdbuf();
+    // OK
+    // std::cout << file.rdbuf();
+
+    out << file.rdbuf();
 
   } // close file automatically
 }
 
+// ={=========================================================================
 // this corresponds to the UNIX program cat
 
-TEST(CxxStream, check_fstream_members)
+TEST(CxxStream, fstream_member_operations)
 {
   {
     std::ifstream file{};
 
-    file.open("charset.out");
+    file.open("charset_1.out");
 
     // file opened?
     if (!file)
@@ -9953,7 +10238,7 @@ namespace cxx_io
 // $ cat input.txt
 // VOD.L 1 100 184.0 183.7 VOD.X 2 100 189.0 183.8 VOD.L 3 100 185.0 183.9
 
-TEST(CxxStream, check_fstream_and_istream)
+TEST(CxxStream, fstream_input)
 {
   using namespace cxx_io;
 
@@ -9971,6 +10256,136 @@ TEST(CxxStream, check_fstream_and_istream)
   EXPECT_THAT(result.str(), expected);
 }
 
+// ={=========================================================================
+//
+// 15.9.3 File Flags
+//
+// A set of flags is defined in the class ios_base for precise control over the
+// processing mode of a file
+//
+// in    Opens for reading (default for ifstream)
+// out   Opens for writing (default for ofstream)
+// trunc Removes the former file contents
+
+// Table 15.34 correlates the various combinations of flags with the strings
+// used in the interface of C’s function for opening files: fopen().
+//
+// ios_base Flags    Meaning                                                             C Mode
+// in                Reads (file must exist)                                             "r"
+// out               Empties and writes (creates if necessary)                           "w"
+// out|trunc         Empties and writes (creates if necessary)                           "w"
+// out|app           Appends (creates if necessary)                                      "a"
+// app               Appends (creates if necessary)                                      "a"
+// in|out            Reads and writes; initial position is the start (file must exist)   "r+"
+// in|out|trunc      Empties, reads, and writes (creates if necessary)                   "w+"
+// in|app            Updates at end (creates if necessary)                               "a+"
+// in|out|app        Updates at end (creates if necessary)                               "a+"
+//
+// Table 15.34. Meaning of Open Modes in C++
+
+TEST(CxxStream, fstream_flags)
+{
+  {
+    std::ofstream file("flags_1.out");
+
+    // file opened?
+    if (!file)
+    {
+      std::cerr << "can't open output file \""
+                << "charset.out" << std::endl;
+      return;
+    }
+
+    // write character set
+    for (int i = 32; i < 256; ++i)
+    {
+      file << "value : " << setw(3) << i << "   "
+           << "char : " << static_cast<char>(i) << endl;
+    }
+  } // close file automatically
+
+  // read check
+  {
+    std::ifstream file("flags_1.out");
+
+    std::string line{};
+    int count{};
+
+    while (std::getline(file, line))
+      ++count;
+
+    EXPECT_THAT(count, Ne(0));
+  }
+
+  // ok, empty it
+  {
+    std::ofstream file("flags_1.out");
+  }
+
+  // read check
+  {
+    std::ifstream file("flags_1.out");
+
+    std::string line{};
+    int count{};
+
+    while (std::getline(file, line))
+      ++count;
+
+    EXPECT_THAT(count, 0);
+  }
+}
+
+namespace fstream_write
+{
+  const std::string expected_2 = R"({
+	"documentId" : "1563970127340",
+	"services" : 
+	[
+		{
+			"c" : "21",
+			"dvbtriplet" : "318.4.8583",
+			"servicetypes" : 
+			[
+				"DTT",
+				"OTT"
+			],
+			"sf" : "sd",
+			"sid" : "M13e-4-2187",
+			"t" : "Rai 4",
+			"xsg" : 8
+		},
+		{
+			"c" : "24",
+			"dvbtriplet" : "318.4.8585",
+			"servicetypes" : 
+			[
+				"DTT"
+			],
+			"sf" : "sd",
+			"sid" : "M13e-4-2189",
+			"t" : "Rai Movie",
+			"xsg" : 8
+		}
+	],
+	"version" : 1
+})";
+}
+
+// ={=========================================================================
+
+TEST(CxxStream, fstream_write_string)
+{
+  using namespace fstream_write;
+
+  {
+    // NOTE: if use "fstream", no error and no file gets created.
+
+    std::ofstream ofs{"fstream_write_string.json"};
+    ofs << expected_2;
+  }
+}
+
 #if 0
 TEST(CxxStream, fstream_wildcard)
 {
@@ -9984,14 +10399,16 @@ TEST(CxxStream, fstream_wildcard)
 }
 #endif
 
+// ={=========================================================================
 // cxx-stringstream
+//
 // 806 Chapter 15: Input/Output Using Stream Classes
 // A string stream can be created with the flags for the file open modes (see
 // Section 15.9.3, page 796) and/or an existing string. With the flag ios::ate,
 // the characters written to a string stream can be appended to an existing
 // string:
 
-TEST(CxxStream, check_stringstream_1)
+TEST(CxxStream, stringstream_1)
 {
   {
     std::string s{"value: "};
@@ -10138,11 +10555,48 @@ TEST(CxxStream, check_streambuf)
 }
 
 // ={=========================================================================
+TEST(CxxMove, rvalue_and_lvalue)
+{
+  {
+    int x = 10;
+    int *pint;
+
+    pint = &(++x);
+
+    // *cxx-error* since & requires lvalue
+    // : error: lvalue required as unary ‘&’ operand
+    // pint = &(x++);
+  }
+
+  {
+    int i = 42;
+
+    int &r = i; // okay
+
+    // cxx-error, cannot bind  `lvalue(from)` to `rvalue-reference`
+    // : error: cannot bind ‘int’ lvalue to ‘int&&’
+    // int &&rr = i;
+
+    // cxx-error, cannot bind `rvalue(from)` to `lvalue-reference`
+    // i*42 is rvalue
+    // error: invalid initialization of non-const reference of type ‘int&’ from
+    // an rvalue of type ‘int’
+    // int &r2 = i*42;
+
+    // okay to bind `rvalue(from)` to `const-lvalue-reference`
+    const int &r3 = i * 42;
+
+    int &&r4 = i * 42;
+    (r4);
+  }
+}
+
+// ={=========================================================================
 // cxx-move
 
 namespace cxx_move
 {
-  // one which uses copy version
+  // supports move context but not on members, m_name. so use copy for m_name
   class Move1
   {
   private:
@@ -10199,9 +10653,10 @@ namespace cxx_move
 
     void setMembers2(std::string &&name, int &&value)
     {
-      // still need to move on std::string
+      // NOTE: still need to move on std::string
       m_name  = std::move(name);
       m_value = std::move(value);
+
       std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
     }
 
@@ -10225,7 +10680,7 @@ namespace cxx_move
     m.printMembers();
   }
 
-  // one which uses move version
+  // supports move context for members as well, m_name
   class Move2
   {
   private:
@@ -10286,42 +10741,7 @@ namespace cxx_move
   };
 } // namespace cxx_move
 
-TEST(CxxMove, move_binding)
-{
-  {
-    int x = 10;
-    int *pint;
-
-    pint = &(++x);
-
-    // *cxx-error* since & requires lvalue
-    // : error: lvalue required as unary ‘&’ operand
-    // pint = &(x++);
-  }
-
-  {
-    int i = 42;
-
-    int &r = i; // okay
-
-    // cxx-error, cannot bind  `lvalue(from)` to `rvalue-reference`
-    // : error: cannot bind ‘int’ lvalue to ‘int&&’
-    // int &&rr = i;
-
-    // cxx-error, cannot bind `rvalue(from)` to `lvalue-reference`
-    // i*42 is rvalue
-    // error: invalid initialization of non-const reference of type ‘int&’ from
-    // an rvalue of type ‘int’
-    // int &r2 = i*42;
-
-    // okay to bind `rvalue(from)` to `const-lvalue-reference`
-    const int &r3 = i * 42;
-
-    int &&r4 = i * 42;
-    (r4);
-  }
-}
-
+// ={=========================================================================
 // [ RUN      ] CxxMove.move_signal1
 // Move1(const Move &rhs)
 // Move1(const Move &rhs)
@@ -10332,8 +10752,8 @@ TEST(CxxMove, move_binding)
 // Move1 &operator=(const Move &rhs)
 // [       OK ] CxxMove.move_signal11 (0 ms)
 
-// uses copy
-TEST(CxxMove, move_signal1)
+// uses copy ctor
+TEST(CxxMove, copy_context_1)
 {
   using namespace cxx_move;
 
@@ -10350,7 +10770,9 @@ TEST(CxxMove, move_signal1)
   EXPECT_THAT(m2.isNameEmpty(), false);
 }
 
-TEST(CxxMove, move_signal11)
+// ={=========================================================================
+// uses copy assign
+TEST(CxxMove, copy_context_2)
 {
   using namespace cxx_move;
 
@@ -10370,6 +10792,7 @@ TEST(CxxMove, move_signal11)
   EXPECT_THAT(m2.isNameEmpty(), false);
 }
 
+// ={=========================================================================
 // [ RUN      ] CxxMove.move_signal2
 // Move1(Move1 &&rhs)
 // Move1(Move1 &&rhs)
@@ -10382,7 +10805,7 @@ TEST(CxxMove, move_signal11)
 
 // std::move() should signal move version? Yes for Move1 but not string member
 // since it's uses copy so wll not be empty
-TEST(CxxMove, move_signal2)
+TEST(CxxMove, copy_context_3)
 {
   using namespace cxx_move;
 
@@ -10399,7 +10822,8 @@ TEST(CxxMove, move_signal2)
   EXPECT_THAT(m2.isNameEmpty(), false);
 }
 
-TEST(CxxMove, move_signal22)
+// ={=========================================================================
+TEST(CxxMove, copy_context_4)
 {
   using namespace cxx_move;
 
@@ -10419,8 +10843,9 @@ TEST(CxxMove, move_signal22)
   EXPECT_THAT(m2.isNameEmpty(), false);
 }
 
+// ={=========================================================================
 // Ok, uses Move2 which has real move controls but here uses copy
-TEST(CxxMove, move_signal3)
+TEST(CxxMove, copy_context_5)
 {
   using namespace cxx_move;
 
@@ -10437,8 +10862,9 @@ TEST(CxxMove, move_signal3)
   EXPECT_THAT(m2.isNameEmpty(), false);
 }
 
+// ={=========================================================================
 // MOVE!
-TEST(CxxMove, move_signal4)
+TEST(CxxMove, move_context_1)
 {
   using namespace cxx_move;
 
@@ -10455,9 +10881,10 @@ TEST(CxxMove, move_signal4)
   EXPECT_THAT(m2.isNameEmpty(), true);
 }
 
+// ={=========================================================================
 // `std::move() doesn't itself do any moving`, but merely signal function
 // matching or resolution and trigger cxx-overload
-TEST(CxxMove, move_signal5)
+TEST(CxxMove, move_signal_1)
 {
   using namespace cxx_move;
 
@@ -10488,26 +10915,69 @@ TEST(CxxMove, move_signal5)
     m.setMembers2(std::move(name), std::move(value));
     EXPECT_THAT(name.empty(), true);
   }
+}
+
+/*
+// ={=========================================================================
+show cases where still need to use "std::move()" to signal move context
+
+1. example 1   
+
+{
+  template<typename _Container>
+    class insert_iterator
+    : public iterator<output_iterator_tag, void, void, void, void>
+    {
+      insert_iterator&
+        operator=(typename _Container::value_type&& __value)
+        {
+          iter = container->insert(iter, `std::move(__value)`);
+          ++iter;
+          return *this;
+        }
+    }
+}
+
+2. example 2
+
+void setMembers2(std::string &&name, int &&value)
+{
+  // NOTE: still need to move on std::string
+  m_name  = std::move(name);
+  m_value = std::move(value);
+}
+
+3.
+
+EventLoop::EventLoop(EventLoop &&other)
+    : m_private(std::move(other.m_private))
+{}
+
+*/
+
+TEST(CxxMove, move_signal_2)
+{
+  using namespace cxx_move;
 
   // which will be called? no copy or move controls are called
   //
-  // *cxx-reference-binding* Can bind `rvalue` to `const-lvalue-reference`
-  // assume that the moved is const and that means nothing will be changed so
-  // why bother to copy of it? so no copy or move.
+  // *cxx-reference-binding*
+  // Can bind `rvalue` to `const-lvalue-reference` assume that the moved is
+  // const and that means nothing will be changed so why bother to copy of it?
+  // so no copy or move.
+
   {
     Move1 m1{"m1", 10};
     Move1 m2{"m2", 20};
 
-    // bind `rvalue(moved-from)` to `const-lvalue-reference(moved-to)`
-    // void set_move1(const Move1 &m);
+    // set_move1(&&)
     set_move(std::move(m1));
+
+    // set_move1(const &)
     set_move(m2);
 
-    // void set_move2(Move1 &&m);
+    // set_move1(&&)
     set_move(std::move(m1));
-
-    // cxx-error: cannot bind ‘cxx_move::Move1’ lvalue to ‘cxx_move::Move1&&’
-    // set_move2(m2);
   }
 }
 
@@ -11427,21 +11897,13 @@ TEST(CxxBit, check_bitset_set)
   EXPECT_EQ(coll.to_string(), "0000000000001000");
 }
 
-// size:
-// vector bool size: 40
-// bitset      size: 128
-// array bit size  : 128
-// array bool size : 1000
-//
-// performance:
-// [ RUN      ] CxxBit.check_performace_on_vector_bool
-// [       OK ] CxxBit.check_performace_on_vector_bool (277 ms)
-// [ RUN      ] CxxBit.check_performace_on_bitset
-// [       OK ] CxxBit.check_performace_on_bitset (255 ms)
-// [ RUN      ] CxxBit.check_performace_on_array_bit
-// [       OK ] CxxBit.check_performace_on_array_bit (50 ms)
-// [ RUN      ] CxxBit.check_performace_on_array_bool
-// [       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
+/*
+// ={=========================================================================
+ vector bool size: 40
+ bitset      size: 128
+ array bit size  : 128
+ array bool size : 1000
+*/
 
 TEST(CxxBit, check_size_on_different_types)
 {
@@ -11576,6 +12038,22 @@ TEST(CxxBit, check_bit_array)
   // cout << endl;
 }
 
+/*
+// ={=========================================================================
+
+[ RUN      ] CxxBit.check_performace_on_vector_bool
+[       OK ] CxxBit.check_performace_on_vector_bool (277 ms)
+[ RUN      ] CxxBit.check_performace_on_bitset
+[       OK ] CxxBit.check_performace_on_bitset (255 ms)
+[ RUN      ] CxxBit.check_performace_on_array_bit
+[       OK ] CxxBit.check_performace_on_array_bit (50 ms)
+[ RUN      ] CxxBit.check_performace_on_array_bool
+[       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
+
+array bool is fastest.
+
+*/
+
 // same as uamespace cxx_bit_array
 namespace cxx_bit_performace
 {
@@ -11603,6 +12081,7 @@ namespace cxx_bit_performace
   }
 } // namespace cxx_bit_performace
 
+// ={=========================================================================
 TEST(CxxBit, check_performace_on_vector_bool)
 {
   using namespace cxx_bit_performace;
@@ -11619,6 +12098,7 @@ TEST(CxxBit, check_performace_on_vector_bool)
   }
 }
 
+// ={=========================================================================
 TEST(CxxBit, check_performace_on_bitset)
 {
   using namespace cxx_bit_performace;
@@ -11635,6 +12115,7 @@ TEST(CxxBit, check_performace_on_bitset)
   }
 }
 
+// ={=========================================================================
 TEST(CxxBit, check_performace_on_array_bit)
 {
   using namespace cxx_bit_performace;
@@ -11649,6 +12130,7 @@ TEST(CxxBit, check_performace_on_array_bit)
   }
 }
 
+// ={=========================================================================
 TEST(CxxBit, check_performace_on_array_bool)
 {
   using namespace cxx_bit_performace;
@@ -11665,6 +12147,19 @@ TEST(CxxBit, check_performace_on_array_bool)
   }
 }
 
+// ={=========================================================================
+TEST(CxxBit, check_size_on_array_bool)
+{
+  using namespace cxx_bit_performace;
+
+  bool coll[SIZE];
+
+  auto size = sizeof coll;
+
+  EXPECT_THAT(size, SIZE);
+}
+
+// ={=========================================================================
 TEST(CxxBit, bit_RightShift)
 {
   // fail
@@ -12207,6 +12702,7 @@ namespace cxx_template
   };
 } // namespace cxx_template
 
+// ={=========================================================================
 TEST(CxxTemplate, check_class)
 {
   using namespace cxx_template;
@@ -12937,6 +13433,7 @@ namespace templateforward
 // The problem is that usual reference, "T &" can take, can be deduced to,
 // rvalue reference.
 
+// ={=========================================================================
 TEST(CxxTemplate, check_forward_1)
 {
   using namespace templateforward;
@@ -13251,7 +13748,7 @@ namespace cxx_template
 } // namespace cxx_template
 
 // ={=========================================================================
-TEST(Template, ForwardEx)
+TEST(CxxTemplate, forward_1)
 {
   using namespace cxx_template;
 
@@ -13295,7 +13792,7 @@ namespace cxx_template_variadic
   }
 } // namespace cxx_template_variadic
 
-TEST(Template, VariadicSizeofOperator)
+TEST(CxxTemplate, variadic_sizeof_operator)
 {
   using namespace cxx_template_variadic;
 
@@ -13362,12 +13859,13 @@ namespace cxx_type_trait
 
 } // namespace cxx_type_trait
 
+// ={=========================================================================
 // [ RUN      ] Template.TypeTrait
 // foo() called for integral type
 // foo() called for floating type
 // [       OK ] Template.TypeTrait (1 ms)
 
-TEST(Template, TypeTrait)
+TEST(CxxTemplate, type_trait)
 {
   using namespace cxx_type_trait;
 
@@ -13384,6 +13882,54 @@ TEST(Template, TypeTrait)
     foo_overload(ivalue);
     foo_overload(dvalue);
   }
+}
+
+namespace cxx_template
+{
+  std::unordered_map<std::string, int> score1{
+    {"andy", 7}, {"al", 9}, {"bill", -3}, {"barbara", 12}};
+
+  // same type X, Y as above
+  std::map<std::string, int> score2{
+    {"andy", 7}, {"al", 9}, {"bill", -3}, {"barbara", 12}};
+
+  // different types. operator<<() still works
+  std::map<std::string, std::string> score3{
+    {"andy", "A7"}, {"al", "A9"}, {"bill", "-A3"}, {"barbara", "A12"}};
+
+  template <typename X, typename Y>
+  ostream &operator<<(ostream &os, const std::pair<X, Y> &p)
+  {
+    return os << '{' << p.first << ',' << p.second << '}';
+  }
+} // namespace cxx_template
+
+// ={=========================================================================
+// RUN      ] CxxTemplate.operator_output
+// unordered: {bill,-3}, {barbara,12}, {al,9}, {andy,7},
+// ordered: {al,9}, {andy,7}, {barbara,12}, {bill,-3},
+// [       OK ] CxxTemplate.operator_output (0 ms)
+
+TEST(CxxTemplate, operator_output)
+{
+  using namespace cxx_template;
+
+  std::cout << "unordered: ";
+
+  for (const auto &x : score1)
+    std::cout << x << ", ";
+
+  std::cout << "\nordered: ";
+
+  for (const auto &x : score2)
+    std::cout << x << ", ";
+
+  std::cout << "\nordered: ";
+
+  for (const auto &x : score3)
+    std::cout << x << ", ";
+
+  std::cout << '\n';
 }
 
 // ={=========================================================================

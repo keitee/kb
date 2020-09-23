@@ -131,6 +131,10 @@ target_link_libraries(test_string_view)
 add_executable(test_string_sso test_string_sso.cpp)
 target_link_libraries(test_string_sso)
 
+# string_pad
+add_executable(test_string_pad test_string_pad.cpp)
+target_link_libraries(test_string_pad gmock_main)
+
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

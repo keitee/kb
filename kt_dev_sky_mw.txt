@@ -55,10 +55,13 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* mw-rdk-build-bbfile
 *kt_dev_skymw_0000* mw-rdk-build-ci
 *kt_dev_skymw_0000* mw-rdk-as-proxy
+*kt_dev_skymw_0000* mw-rdk-as-voicesearch
+*kt_dev_skymw_0000* mw-rdk-as-network
+*kt_dev_skymw_0000* mw-rdk-as-system
+*kt_dev_skymw_0000* mw-rdk-as-player
 *kt_dev_skymw_0000* mw-rdk-dtt
 *kt_dev_skymw_0000* mw-rdk-dtt-hla
-*kt_dev_skymw_0000* mw-rdk-as-player
-*kt_dev_skymw_0000* mw-rdk-as-appmanager rdk-as-windowmanager
+*kt_dev_skymw_0000* mw-rdk-as-appservice rdk-as-windowmanager
 *kt_dev_skymw_0000* mw-rdk-drm
 *kt_dev_skymw_0000* mw-rdk-hdmi
 *kt_dev_skymw_0000* mw-jira-airplay
@@ -1097,6 +1100,8 @@ rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi
 rbt post --tracking-branch=origin/develop --branch=NGDEV-167550_AS_DTH_unit_test_compile_failure -r 1133
 
 rbt post --tracking-branch=origin/develop -r 1147 --branch=NGDEV-166495_AS_RDK_Migrate_DTT_in_AS_player_XiOne
+rbt post --tracking-branch=origin/develop -r 1183 --branch=NGDEV-168097_AS_RDK_DTT_Enable_DTT
+
 
 
 Review request #1010 posted.
@@ -1138,6 +1143,8 @@ curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.
 // from curl
 // PARAMETER timeout the timeout in seconds. Infinite if not specified
 curl -v -X POST http://192.168.0.103:9005/as/peripherals/btremotes/action/startsearching?timeout=30
+
+curl -v -X GET http://192.168.0.12:9005/as/system/deviceinformation
 
 // from asda
 peripherals/btremotes/action/startsearching?timeout=30
@@ -9568,7 +9575,7 @@ meta-rdk/recipes-core/images/sdk-common.inc
 bitbake -vDDD comcast-mediaclient-vbn-image |& tee broadcom-refsw-image
 bitbake comcast-mediaclient-vbn-image
 
-
+*bitbake-find-recipe* note that do not need full name
 bitbake -c listtasks comcast-mediaclient-vbn-image
 
 comcast-mediaclient-vbn-image-1.0-r0 do_listtasks: do_build                       Default task for a recipe - depends on all other normal tasks required to 'build' a recipe
@@ -11522,10 +11529,20 @@ https://jenkins.ccp.xcal.tv/jenkins/job/SKYXIONE-Yocto-DSpin-Release/146/s3/down
 
 NOTE: Port number for ssh or scp is 10022.
 
+// mediarite old
 scp -r -P 10022 ./SKXI11ADS_VBN_2006_sprint_20200909175133sdy.bin root@192.168.0.12:/tmp/data
 cd /tmp/data
 FlashApp ./SKXI11ADS_VBN_2006_sprint_20200909175133sdy.bin
 
+// mediarite new
+scp -r -P 10022 ./SKXI11ADS_VBN_2009_sprint_20200917160507sdy.bin root@192.168.0.12:/tmp/data
+cd /tmp/data
+FlashApp ./SKXI11ADS_VBN_2009_sprint_20200917160507sdy.bin
+
+
+scp -r -P 10022 ./SKXI11ADS_VBN_stable2_sky_20200922095953sdy.bin root@192.168.0.12:/tmp/data
+cd /tmp/data
+FlashApp ./SKXI11ADS_VBN_stable2_sky_20200922095953sdy.bin
 
 2. Copy the <image-name>.bin to USB.
 
@@ -11575,18 +11592,32 @@ Closing the FlashApp
 
 reboot a box with usb 
 
+
+keitee@kit-ubuntu:~$ ssh -p 10022 root@192.168.0.12
 root@skyxione:~# cat /version.txt
-imagename:SKXI11AIS_VBN_2006_sprint_20200730144515sdy
+imagename:SKXI11ADS_VBN_2006_sprint_20200909175133sdy
 YOCTO_VERSION=morty
-SDK_VERSION=1.1.4
+SDK_VERSION=1.1.6
 BRANCH=2006_sprint
-VERSION=000140.1.8.0
+VERSION=000140.7.2.0
 SPIN=0
-JENKINS_JOB=RDK_FULL_STACK_skyxione-de
-JENKINS_BUILD_NUMBER=188
-BUILD_TIME="2020-07-30 14:45:15"
-Generated on Thu Jul 30  14:45:15 UTC 2020
-root@skyxi
+JENKINS_JOB=RDK_FULL_STACK_skyxione-uk
+JENKINS_BUILD_NUMBER=105
+BUILD_TIME="2020-09-09 17:51:33"
+Generated on Wed Sep 09  17:51:33 UTC 2020
+
+
+root@skyxione:~# cat /version.txt
+imagename:SKXI11ADS_VBN_2009_sprint_20200917160507sdy
+YOCTO_VERSION=morty
+SDK_VERSION=1.1.6
+BRANCH=2009_sprint
+VERSION=000150.1.15.0
+SPIN=0
+JENKINS_JOB=RDK_FULL_STACK_skyxione-uk
+JENKINS_BUILD_NUMBER=117
+BUILD_TIME="2020-09-17 16:05:07"
+Generated on Thu Sep 17  16:05:07 UTC 2020
 
 
 *xi1-tool-reset*
@@ -11594,6 +11625,7 @@ root@skyxi
 
 
 *rdk-xi1-setup*
+gcc 6.4.0
 
 /media/keitee/ssd2/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi/arm-rdk-linux-gnueabi-gcc 
 0x12a28 0x12b40
@@ -11617,7 +11649,24 @@ ssh -p 10022 root@192.168.0.12
 cd /opt
 
 
-// as-proxy
+*as-mr* as-mediarite
+systemctl stop mediarite.service
+systemctl status mediarite.service
+
+journalctl -fu mediarite
+
+ssh -p 10022 root@192.168.0.12 "journalctl -u mediarite --since today" > mr.log
+
+ls -al /opt/persistent/mediarite/ 
+ls -al /media/app/mediarite/ 
+
+and power cycle. 
+
+// mr webui
+http://192.168.0.12:40660/ 
+
+
+*as-proxy*
 
 systemctl status sky-asproxy
 systemctl stop sky-asproxy
@@ -11628,24 +11677,22 @@ umount /usr/sbin/asproxy
 
 journalctl -fu sky-asproxy
 
+scp -r -P 10022 root@192.168.0.12:/opt/asproxy asproxy_box
 scp -r -P 10022 ./asproxy root@192.168.0.12:/opt
 scp -r -P 10022 ./asproxy root@192.168.0.12:/usr/sbin
 
 
-// as-player
+*as-player*
 
 systemctl status sky-asplayer
 systemctl start sky-asplayer
 systemctl stop sky-asplayer
 
-systemctl stop mediarite.service
+scp -r -P 10022 ./asrdkplayer root@192.168.0.12:/opt
+scp -r -P 10022 ./asrdkplayer root@192.168.0.12:/usr/sbin
 
 mount-copybind /opt/asrdkplayer /usr/sbin/asrdkplayer
 umount /usr/sbin/asrdkplayer
-
-
-scp -r -P 10022 ./asrdkplayer root@192.168.0.12:/opt
-scp -r -P 10022 ./asrdkplayer root@192.168.0.12:/usr/sbin
 
 journalctl -fu sky-asplayer --since today
 journalctl -fu sky-asplayer
@@ -11659,8 +11706,29 @@ ssh -p 10022 root@192.168.0.12 "journalctl -u sky-asplayer --since today" > play
 
 scp -P 10022 root@192.168.0.12:/opt/dbus.log .
 
-journalctl -fu mediarite
-ssh -p 10022 root@192.168.0.12 "journalctl -u mediarite --since today" > mr.log
+
+*as-system*
+
+systemctl status sky-assystem
+systemctl stop sky-assystem
+systemctl start sky-assystem
+
+scp -r -P 10022 ./ASSystemService root@192.168.0.12:/opt
+
+// note "bin"
+mount-copybind /opt/ASSystemService /usr/bin/ASSystemService
+umount /usr/bin/ASSystemService
+
+journalctl -fu sky-assystem
+
+
+*as-voicesearch*
+
+systemctl status sky-asvoicesearch
+systemctl stop sky-asvoicesearch
+systemctl start sky-asvoicesearch
+
+journalctl -fu sky-asvoicesearch
 
 
 *as-diag-as-logging*
@@ -11683,6 +11751,22 @@ curl -v -X GET http://192.168.0.12:9005/as/diag/AS_PLAYER/enableAll
 curl -v -X GET http://192.168.0.9:9005/as/diag/AAMP_PLAYER/enableAll
 curl -v -X GET http://192.168.0.12:9005/as/diag/AS_PROXY_SERVICES/enableAll
 curl -G http://localhost:9005/as/diag/fallback/enableAll?persist=true
+
+
+*as-get-box-on-vpn*
+Make the VPN accessible to a box in the local network
+
+# on stb 
+ip route add 10.0.0.0/8 via 192.168.0.8 dev eth0
+ 
+# Let the box know how to resolve Sky domain (wget https://pv-jen015.uk2.scp.bskyb.com/etc)
+# where 192.168.0.8
+
+cat /etc/resolv.conf
+nameserver 192.168.0.8
+
+# it's on tmpfs
+echo "nameserver 192.168.0.8" > /etc/resolv.conf
 
 
 *xi1-tool-logging*
@@ -11892,6 +11976,8 @@ https://git.bskyb.com/llama/asplayer
 git clone gitlab@git.bskyb.com:llama/ASServiceLib.git
 git clone gitlab@git.bskyb.com:llama/ASMockService.git
 git clone gitlab@git.bskyb.com:llama/asplayer.git
+git clone gitlab@git.bskyb.com:llama/asnetwork.git
+
 
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Building+BleRcuDaemon
 Checkout Code
@@ -12045,6 +12131,47 @@ git clone gitlab@git.bskyb.com:llama/asnetwork.git
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-as-proxy
 
+files not used
+
+1.
+ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/com.sky.as.service1.xml
+61:        <method name="GetSystemSetting">
+
+ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASSystemSettingMethodCall.cpp
+30:    Object that wraps the dbus method call com.sky.as.Service1.GetSystemSetting
+38:    : SDBusMethodCall(serviceName, objectPath, ASSERVICE1_INTERFACE, "GetSystemSetting")
+
+std::string ASServiceSDBus::getSystemSetting(const std::string &name)
+
+uses ASSystemSettingMethodCall
+
+Components/Rdk/ASProxy/Proxy/Services/source/SystemSettingsExecutor.cpp
+is not used in asproxy
+
+const std::string value = mService->getSystemSetting(mSettingName);
+
+2.
+
+ethan-as-source/Components/Rdk/ASVoiceSearch/asservice/asservice.cpp
+210:    SD_BUS_METHOD("GetSystemSetting",            "s",             "s",         &ASServicePrivate::getSystemSetting,      SD_BUS_VTABLE_UNPRIVILEGED),
+537:    Called by the sd-bus library when a 'com.sky.as.Service1.GetSystemSetting'
+
+as-system-service/asservice/asservice.cpp
+247:    SD_BUS_METHOD("GetSystemSetting",            "s",             "s",         &ASServicePrivate::getSystemSetting,      SD_BUS_VTABLE_UNPRIVILEGED),
+585:    Called by the sd-bus library when a 'com.sky.as.Service1.GetSystemSetting'
+
+as-system-service/System/settings/SystemSettings/SettingsVoiceSearchUri.cpp
+34:                                                                "GetSystemSetting"
+
+as-system-service/System/settings/SystemSettings/SettingsAppCatalougeUri.cpp
+34:                                                                "GetSystemSetting"
+
+ASServiceLib/asservice/asservice.cpp
+226:    SD_BUS_METHOD("GetSystemSetting",            "s",             "s",         &ASServicePrivate::getSystemSetting,      SD_BUS_VTABLE_UNPRIVILEGED),
+559:    Called by the sd-bus library when a 'com.sky.as.Service1.GetSystemSetting'
+ke
+
+
 *rdk-as-proxy*
 
 [Service]
@@ -12167,6 +12294,10 @@ RdkServicesController::RdkServicesController()
 
 `bool RdkServicesController::start()`
 {
+  *as-proxy-service*
+  mProxyService
+  = std::make_shared<ASProxyService>( mSDBus, (std::shared_ptr<RdkServicesController>)this );
+
   // get a list of all the services currently registered on the bus
   const std::list<std::string> services =
     mSDBus->registeredServiceNames(serviceNameFilter);
@@ -12185,10 +12316,156 @@ RdkServicesController::RdkServicesController()
 }
 
 
+*dbus-call-proxy*
+
+dbus-send --system --type=method_call --print-reply --dest='com.sky.as.proxy' /com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=688 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ `<interface name="com.sky.as.Service1">`
+  <method name="DBusProxyMethodCall">
+   <arg type="s" direction="in"/>
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+ </interface>
+</node>
+"
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASProxyService.cpp
+
+SD_BUS_METHOD("DBusProxyMethodCall",
+    "s",         "us",         
+    &ASProxyService::proxyMethodCall,
+    SD_BUS_VTABLE_UNPRIVILEGED),
+
+ASProxyService::ASProxyService(const std::shared_ptr<SDBusConnection> &connection)
+{}
+
+// Called by the sd-bus library when a 'com.sky.as.Service1.DBusProxyMethodCall'
+// method call arrives.
+
+int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus_error *retError )
+{
+  sd_bus_message_read( msg, "s", &msgArgs );
+  std::string dbusMessage( msgArgs );
+  self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
+}
+
+void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  mEventQueue.emplace_back(std::move(event));
+}
+
+void RdkServicesController::threadLoop()
+{
+  case Event::DbusMethodCall:
+    processDbusProxyMethodCall( event.dbusMsg, event.reply );
+    break;
+}
+
+void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
+{
+  std::shared_ptr<ASProxyMethodCall> proxyMsg 
+    = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
+
+  std::string domain;
+  std::string method;
+
+  proxyMsg->GetDomainAndMethod( domain, method );
+
+  mSDBus->call( proxyMsg );
+}
+
+bool SDBusConnection::call(const std::shared_ptr<SDBusMethodCall> &methodCall,
+                           int timeoutMSecs)
+{
+}
+
+// as-system, sender=:1.85, send a message to as-proxy and as-proxy relay it
+// to as-network
+
+method call time=1600290055.204008 sender=:1.85 -> destination=com.sky.as.proxy serial=626 path=/com/sky/as/service; interface=com.sky.as.Service1; member=DBusProxyMethodCall
+   string " {"domain":"/network","name":"PingRouter"} "
+method call time=1600290055.204395 sender=:1.4 -> destination=com.sky.as.network serial=943 path=/com/sky/as/service; interface=com.sky.as.Service1; member=PingRouter
+
+*as-network*
+
+const string NetworkService::m_configJson = R"JSON(
+{
+  "providesSystemStatus" : true,
+  "domain": "/network",
+  "uris": [
+    {
+      "path": "/as/network/wireless/scan/status",
+      "method": "ws",
+      "thread": "AS_WS_NTW_SCAN"
+    },
+    {
+      "path": "/as/network/action/enable",
+      "method": "post",
+      "expectsBody": false
+    },
+    ...
+    {
+      "path": "PingRouter",
+      `"method": "dbusmethod",`
+      "expectedOutputArgs": "us"
+    },
+  ]
+}
+)JSON";
+
+// as-network on executor (detached thread)
+// Network/Executors/source/NetworkMethodCallExecutor.cpp
+void NetworkMethodCallExecutor::execute(const std::shared_ptr<ASMethodCall> method)
+
+// Network/Controllers/source/NetworkController.cpp
+uint32_t NetworkController::PingRouter()
+
+
 void RdkServicesController::threadLoop()
 {
   case Event::ServiceAdded:
-    onServiceRegistered(event.serviceName);
+    onServiceRegistered(`event.serviceName`);
+
+  case Event::DbusMethodCall:
+    processDbusProxyMethodCall( event.dbusMsg, event.reply );
+    break;
 }
 
 
@@ -12198,6 +12475,8 @@ void RdkServicesController::threadLoop()
 // Here we `send a request to get the JSON config of the service added` and if
 // a valid reply is received we create an object to wrap the dbus service and
 // register it in the url map.
+//
+// so create ASServiceSDBus for each service
 
 void RdkServicesController::onServiceRegistered(const std::string &name)
 {
@@ -12205,22 +12484,17 @@ void RdkServicesController::onServiceRegistered(const std::string &name)
   std::shared_ptr<ASServiceSDBus> service =
     std::make_shared<ASServiceSDBus>(mSDBus, name);
 
-  *as-dbus-config*
+  *dbus-call-config*
   const std::string config = service->config();
 
   `AS_LOG_INFO("registering service");`
 
   // register the service (the manager will handle setting up processing the
   // service and setting up all the executors)
-  `mManager->registerService`( config, service, domainName, registeredDbusMethods );
+  `mManager->registerService`(config, 
+      `service`, domainName, registeredDbusMethods );
 }
 
-
-ASConfigMethodCall::ASConfigMethodCall(const std::string &serviceName,
-                                       const std::string &objectPath)
-    : SDBusMethodCall(serviceName, objectPath, ASSERVICE1_INTERFACE, "Config")
-{
-}
 
 // Blocking call to get the config JSON string of the service.  Returns the
 // JSON string on success, and an empty string on failure.
@@ -12245,50 +12519,16 @@ std::string ASServiceSDBus::config() const
   return msg->config();
 }
 
-
-*as-dbus-request*
-
-ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASRequestMethodCall.cpp
-
-// Blocking call to send a HTTP request to a remote service and return the
-// result.  If there was an error sending the message or with the reply then
-// an ASResponse object will be returned containing an approprate error
-// message.
-
-ASResponse ASServiceSDBus::request(int flags,
-                                   std::string &&url,
-                                   std::vector< std::pair<std::string, std::string> > &&requestHeaders,
-                                   std::vector< std::pair<std::string, std::string> > &&requestQueryParams,
-                                   std::string &&requestBody)
-{
-  // create the dbus method call message
-  std::shared_ptr<ASRequestMethodCall> msg =
-    std::make_shared<ASRequestMethodCall>(mServiceName, mObjectPath,
-        flags, std::move(url),
-        std::move(requestHeaders),
-        std::move(requestQueryParams),
-        std::move(requestBody));
-
-  // if failed to send just reply with a generic error
-  if (!mSDBus->call(msg))
-  {
-    AS_LOG_WARNING("failed to send dbus Request method call");
-
-    return ASResponse(500,
-        "{ \"errorCode\": 101,\n"
-        "  \"userMessage\": \"Generic failure\",\n"
-        "  \"developerMessage\": \"Failed to send IPC message\"\n}");
-  }
-
-  // get the converted response from the dbus message
-  return msg->response();
-}
+ASConfigMethodCall::ASConfigMethodCall(const std::string &serviceName,
+                                       const std::string &objectPath)
+    : SDBusMethodCall(serviceName, objectPath, 
+        `ASSERVICE1_INTERFACE, "Config"`)
+{}
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/`ServicesManager.cpp`
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/ProxyUrlMap.h
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-
 
 const std::string PlaybackService::mConfigJson = R"JSON(
 {
@@ -12309,6 +12549,16 @@ class ProxyUrlMap : public AS_WORKER::UrlMap
 
 const std::shared_ptr<AS_MAIN::`ProxyUrlMap`> mUrlMap;
 
+void ServicesManager::createBuiltinExecutors()
+{
+   // BAD REQUEST (fallback)
+	AS_WEB_SERVER::BadReqExecutorFactory *badreqExecutor = new AS_WEB_SERVER::BadReqExecutorFactory();
+
+    mUrlMap->RegisterUrl( REQ_METHOD_HTTP_GET, ( char * ) BAD_REQUEST, badreqExecutor );
+    mUrlMap->RegisterUrl( REQ_METHOD_HTTP_POST, ( char * ) BAD_REQUEST, badreqExecutor );
+    mUrlMap->RegisterUrl( REQ_METHOD_WS, ( char * ) BAD_REQUEST, badreqExecutor );
+}
+
 bool `ServicesManager::registerService`(const std::string &configJson)
 {
   ServiceConfig config;
@@ -12322,6 +12572,7 @@ bool `ServicesManager::registerService`(const std::string &configJson)
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/action/stoplistening'
   // M:ServicesManager.cpp F:registerService L:278 > registered service 'com.sky.as.player'
 
+  // NOTE: only for "ws" and 
   // register uri to factory which has the relevant service.
   `bindServiceMethods`(const std::vector<ServiceUrl> &urls,
                      const std::shared_ptr<IService> &service)
@@ -12330,6 +12581,9 @@ bool `ServicesManager::registerService`(const std::string &configJson)
     {
       AS_LOG_MIL("adding %s executor for '%s'",
       (method == REQ_METHOD_WS) ? "ws" : "http", url.path.c_str());
+
+      printf("======== KT: adding %s executor for '%s' '%s'\n",
+                 (method == REQ_METHOD_WS) ? "ws" : "http", url.path.c_str(), service->name().c_str() );
 
         if (method == REQ_METHOD_WS)
         {
@@ -12340,7 +12594,8 @@ bool `ServicesManager::registerService`(const std::string &configJson)
         }
         else if ((method == REQ_METHOD_HTTP_GET) || (method == REQ_METHOD_HTTP_POST))
         {
-          AS_WORKER::Factory *factory = new ServiceHttpExecutorFactory(mSecurity,
+          AS_WORKER::Factory *factory = 
+          new `ServiceHttpExecutorFactory`(mSecurity,
               allowedLevels,
               `service`,
               url.expectsBody);
@@ -12384,36 +12639,34 @@ bool `ServicesManager::registerService`(const std::string &configJson)
 
 // ethan-as-source/Components/AS/Worker/source/AS_WORKER_UrlMap.cpp
 // as-proxy-servicemanager
-MIL: < M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
+M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/services/scan/action/start'
 
-MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
+M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9001/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9005/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9006/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/scan/action/start 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/scan/action/start 
 
-MIL: < M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
-MIL: < M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
+M:ProxyUrlMap.cpp F:RegisterUrl L:181 > KT: register url /as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9001/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9002/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9003/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9004/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9006/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9007/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9008/as/services/favourites 
+M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:396 > KT: not register uri 9009/as/services/favourites 
 
 
 *as-map-validator*
 
 // Components/AS/Worker/source/AS_WORKER_ParamValidator.cpp
-// Components/AS/Worker/include/ExpectedParams_rdk.dat
-
 // Components/AS/Worker/include/ExpectedParams_rdk.dat
 
 static std::map<std::string, `TExpectedParams`> `expectedParamsList` = {
@@ -12683,7 +12936,7 @@ AS_WORKER::Executor *ProxyUrlMap::CreateExecutor( int method,
 AS_WORKER::Executor *ServiceHttpExecutorFactory::doCreateExecutor(AS_WORKER::Environment *env,
                                                                  AS_WORKER::Params *params)
 {
-  return new ServiceHttpExecutor(mService, mExpectsRequestBody, env, params);
+  return new ServiceHttpExecutor(`mService`, mExpectsRequestBody, env, params);
 }
 
 ServiceHttpExecutorFactory::ServiceHttpExecutorFactory(const std::shared_ptr<const ISecurityContext> &security,
@@ -12702,7 +12955,7 @@ int ServiceHttpExecutor::Exec()
     return execGetOrPost(IService::REQUEST_TYPE_POST);
 }
 
-*as-dbus-request*
+*dbus-call-request*
 int ServiceHttpExecutor::execGetOrPost(int requestType)
 {
   // send the request off to the remote process
@@ -12713,10 +12966,71 @@ int ServiceHttpExecutor::execGetOrPost(int requestType)
 }
 
 
-*as-proxy-from-http-to-request*
+*dbus-call-request*
 
+/ethan-as-source/Components
+/Rdk/ASProxy/Proxy/Services/source/rdk/ASRequestMethodCall.cpp
+
+// Blocking call to send a HTTP request to a remote service and return the
+// result.  If there was an error sending the message or with the reply then
+// an ASResponse object will be returned containing an approprate error
+// message.
+
+ASResponse ASServiceSDBus::request(int flags,
+                                   std::string &&url,
+                                   std::vector< std::pair<std::string, std::string> > &&requestHeaders,
+                                   std::vector< std::pair<std::string, std::string> > &&requestQueryParams,
+                                   std::string &&requestBody)
 {
-  SD_BUS_METHOD("Config", nullptr,         "s",         &ASServicePrivate::config,                SD_BUS_VTABLE_UNPRIVILEGED),
+  // create the dbus method call message
+  std::shared_ptr<ASRequestMethodCall> msg =
+    std::make_shared<ASRequestMethodCall>(mServiceName, mObjectPath,
+        flags, std::move(url),
+        std::move(requestHeaders),
+        std::move(requestQueryParams),
+        std::move(requestBody));
+
+  // if failed to send just reply with a generic error
+  if (!mSDBus->call(msg))
+  {
+    AS_LOG_WARNING("failed to send dbus Request method call");
+
+    return ASResponse(500,
+        "{ \"errorCode\": 101,\n"
+        "  \"userMessage\": \"Generic failure\",\n"
+        "  \"developerMessage\": \"Failed to send IPC message\"\n}");
+  }
+
+  // get the converted response from the dbus message
+  return msg->response();
+}
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASRequestMethodCall.cpp
+
+ASRequestMethodCall::ASRequestMethodCall(const std::string &serviceName,
+                                         const std::string &objectPath,
+                                         int flags, std::string &&url,
+                                         std::vector< std::pair<std::string, std::string> > &&requestHeaders,
+                                         std::vector< std::pair<std::string, std::string> > &&requestQueryParams,
+                                         std::string &&requestBody)
+        : SDBusMethodCall(serviceName, objectPath, 
+            `ASSERVICE1_INTERFACE, "Request"`)
+        , mFlags(flags)
+        , mUrlPath(std::move(url))
+        , mRequestHeaders(std::move(requestHeaders))
+        , mRequestQueryParams(std::move(requestQueryParams))
+        , mRequestBody(std::move(requestBody))
+{
+}
+
+
+
+*dbus-call*
+{
+  SD_BUS_METHOD("Config", nullptr,
+      "s",
+      &ASServicePrivate::config,
+      SD_BUS_VTABLE_UNPRIVILEGED),
 
   SD_BUS_METHOD("Request", 
       "usa{ss}a{ss}s", 
@@ -12725,10 +13039,10 @@ int ServiceHttpExecutor::execGetOrPost(int requestType)
       SD_BUS_VTABLE_UNPRIVILEGED),
 }
 
-input:
+request input:
 
 "us"
-uint32_t flags;                   // method flag
+uint32_t flags;                   // *dbus-call-method* flag
 const char *urlPath = nullptr;    // url path
 
 "a{ss}"                           // headers
@@ -12740,10 +13054,15 @@ map<string, string>
 "s"                               // body
 const char*
 
-return:
+request return:
+int ASRequestPrivate::marshallReply()
+
+"u"                               // code
+"a{ss}"                           // headers
+"s"                               // body
 
 
-*as-dbus-request*
+*dbus-call-request-receive*
 // service/asservice.cpp
 // Called by the sd-bus library when a 'com.sky.as.Service1.Request' method
 // call arrives.
@@ -12774,16 +13093,18 @@ int ASServicePrivate::request(sd_bus_message *msg, void *userData,
     return 1;
 }
 
+void PlaybackService::onRequest( const ASRequest &request )
+{
+}
 
-*as-watchstream*
+m_serviceHandlerMap["/as/players"] = std::make_shared<ASPlayerHandler>( this );
+
+void ASPlayerHandler::onRequest( const ASRequest &request )
+{
+}
+
+
 dbus-monitor --system --profile "interface=com.sky.as.Service1"
-
-mc      1584356869.382300       125     :1.127  com.sky.as.player       /com/sky/as/service     com.sky.as.Service1     Request
-mc      1584356871.977624       126     :1.127  com.sky.as.system       /com/sky/as/service     com.sky.as.Service1     Request
-mc      1584356871.978126       320     :1.73   com.sky.as.proxy        /com/sky/as/service     com.sky.as.Service1     DBusProxyMethodCall
-mc      1584356871.978857       127     :1.127  com.sky.as.network      /com/sky/as/service     com.sky.as.Service1     PingRouter
-
-
 dbus-monitor --system "interface=com.sky.as.Service1"
 
 // from epg
@@ -12860,7 +13181,7 @@ http://192.168.1.101:9005/as/players/2/action/watchstream?uri=http://skydvn-nowt
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
 com.sky.as.Service1.Request \
-uint32:2 \
+uint32:2 \                                    // uint32_t flags; *dbus-call-method* flag. GET(1)
 string:"/as/players/1/action/watchstream" \
 dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
 "Origin","http://build01.mw.ethan.bskyb.com",\
@@ -13107,79 +13428,895 @@ class ServicesFavouritesExecutor : public ASRequesthandler
   }
 }
 
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-as-voicesearch
+
+*dbus-call-system*
+
+dbus-send --system --type=method_call --print-reply --dest='com.sky.as.voicesearch' \
+/com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600337873.701435 sender=:1.22 -> destination=:1.528 serial=10 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ `<interface name="com.sky.as.Service1">`
+  <method name="Config">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Request">
+   <arg type="u" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="(ua{ss}s)" direction="out"/>
+  </method>
+  <method name="GetDiagContexts">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetDiagContexts">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="GetSystemInfo">
+   <arg type="a{sv}" direction="out"/>
+  </method>
+  <method name="GetSystemSetting">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetSystemSetting">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="GetTestPreference">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetTestPreference">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="i" direction="in"/>
+  </method>
+  <method name="RegisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="WebSocketUpdate">
+   <arg type="s"/>
+   <arg type="s"/>
+  </signal>
+  <method name="RegisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="HttpUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+ </interface>
+</node>
+"
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.voicesearch \
+/com/sky/as/service \
+com.sky.as.Service1.GetSystemSetting \
+string:"voiceSearchURI"
+
+root@skyxione:~# dbus-send --system --type=method_call --print-reply --dest=com.sky.as.voicesearch \
+> /com/sky/as/service \
+> com.sky.as.Service1.GetSystemSetting \
+> string:"voiceSearchURI"
+method return time=1600345850.340427 sender=:1.550 -> destination=:1.557 serial=12 reply_serial=2
+   string "ws://demo.vrex-sky.net/vrex-sky/speech/websocket"
 
 
-void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-as-network
+
+*dbus-call-system*
+
+dbus-send --system --type=method_call --print-reply --dest='com.sky.as.network' \
+/com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600336364.836967 sender=:1.81 -> destination=:1.524 serial=3364 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ `<interface name="com.sky.as.Service1">`
+  <method name="Config">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Request">
+   <arg type="u" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="(ua{ss}s)" direction="out"/>
+  </method>
+  <method name="GetDiagContexts">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetDiagContexts">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="RegisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="WebSocketUpdate">
+   <arg type="s"/>
+   <arg type="s"/>
+  </signal>
+  <method name="RegisterSysStatusListener">
+  </method>
+  <method name="UnregisterSysStatusListener">
+  </method>
+  <signal name="SysStatusUpdate">
+   <arg type="a(sa{sv})"/>
+  </signal>
+  <method name="RegisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="HttpUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+  <method name="PingRouter">
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="PingUrl">
+   <arg type="s" direction="in"/>
+   <arg type="u" direction="in"/>
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="GetSTBIpAddress">
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <signal name="IpAddressUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+ </interface>
+</node>
+
+
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-as-system
+
+*as-system-setting*
+
+/as/system/setting/<setting>
+/as/system/setting/system.bouquet
+
+curl -v -X GET http://192.168.0.12:9005/as/system/setting/system.bouquet
+
+$ curl -X GET http://192.168.0.12:9005/as/system/setting/system.bouquet
 {
-  mEventQueue.emplace_back(std::move(event));
+   "system.bouquet" : "4096,1"
 }
 
-
-// as-proxy-service
-
-SD_BUS_METHOD("DBusProxyMethodCall",       "s",         "us",         &ASProxyService::proxyMethodCall,                SD_BUS_VTABLE_UNPRIVILEGED),
-
-ASProxyService::ASProxyService(const std::shared_ptr<SDBusConnection> &connection)
-{}
-
-
-// Called by the sd-bus library when a 'com.sky.as.Service1.DBusProxyMethodCall'
-// method call arrives.
-
-int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus_error *retError )
+$ curl -X GET http://192.168.0.12:9005/as/system/deviceinformation
 {
-  sd_bus_message_read( msg, "s", &msgArgs );
-  std::string dbusMessage( msgArgs );
-  self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
+   "ASVersion" : "1.0.0",
+   "IPAddress" : "192.168.0.12",
+   "bouquet" : 4096,
+   "countryCode" : "GBR",
+   "gateway" : true,
+   "hardwareName" : "Xi1",
+   "householdToken" : "",
+   "modelNumber" : "SKXI11ADS_VBN_2006_sprint_20200909175133sdy",
+   "pipCapable" : false,
+   "serialNumber" : "00000000895",
+   "streamingCapable" : false,
+   "subbouquet" : 1,
+   "versionNumber" : "32E202"
 }
 
-void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
+method call time=1600344506.665907 sender=:1.4 -> destination=com.sky.as.system serial=11951 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
+   uint32 1
+   string "/as/system/deviceinformation"
+   array [
+      dict entry(
+         string "Host"
+         string "192.168.0.12:9005"
+      )
+      dict entry(
+         string "User-Agent"
+         string "curl/7.58.0"
+      )
+      dict entry(
+         string "Accept"
+         string "*/*"
+      )
+   ]
+   array [
+   ]
+   string ""
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.system \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:1 \
+string:"/as/system/deviceinformation" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string: \
+string:""
+
+
+// not since not exposed via config
+// $ curl -X GET http://192.168.0.12:9005/as/system/GetSystemSetting
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.system \
+/com/sky/as/service \
+com.sky.as.Service1.GetSystemSetting \
+string:"system.bouquet"
+
+root@skyxione:~# dbus-send --system --type=method_call --print-reply --dest=com.sky.as.system \
+> /com/sky/as/service \
+> com.sky.as.Service1.GetSystemSetting \
+> string:"system.bouquet"
+method return time=1600345989.663561 sender=:1.541 -> destination=:1.559 serial=306 reply_serial=2
+   string "4096,1"
+
+
+*as-system-status*
+
+void ServicesManager::createBuiltinExecutors()
+  
+ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/SystemStatusExecutor.cpp
+
+
+*dbus-call-as-system*
+
+dbus-send --system --type=method_call --print-reply --dest='com.sky.as.system' \
+/com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600336103.033675 sender=:1.85 -> destination=:1.523 serial=6806 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ `<interface name="com.sky.as.Service1">`
+  <method name="Config">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Request">
+   <arg type="u" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="(ua{ss}s)" direction="out"/>
+  </method>
+  <method name="GetSystemInfo">
+   <arg type="a{sv}" direction="out"/>
+  </method>
+  <method name="GetSystemSetting">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetSystemSetting">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="GetTestPreference">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetTestPreference">
+   <arg type="s" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="i" direction="in"/>
+  </method>
+  <method name="GetDiagContexts">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetDiagContexts">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="RegisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="WebSocketUpdate">
+   <arg type="s"/>
+   <arg type="s"/>
+  </signal>
+  <method name="RegisterSysStatusListener">
+  </method>
+  <method name="UnregisterSysStatusListener">
+  </method>
+  <signal name="SysStatusUpdate">
+   <arg type="a(sa{sv})"/>
+  </signal>
+  <method name="RegisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="HttpUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+ </interface>
+</node>
+"
+
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-as-player
+
+*dbus-as-player*
+
+# dbus-send --system --type=method_call --print-reply --dest='com.sky.as.player' /com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1600288276.608564 sender=:1.89 -> destination=:1.184 serial=2112 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ <interface name="com.sky.as.Service1">
+  <method name="Config">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="Request">
+   <arg type="u" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="a{ss}" direction="in"/>
+   <arg type="s" direction="in"/>
+   <arg type="(ua{ss}s)" direction="out"/>
+  </method>
+  <method name="GetDiagContexts">
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="SetDiagContexts">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="GetEuid">
+   <arg type="u" direction="out"/>
+   <arg type="s" direction="out"/>
+  </method>
+  <method name="RegisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterWebSocketListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="WebSocketUpdate">
+   <arg type="s"/>
+   <arg type="s"/>
+  </signal>
+  <method name="RegisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <method name="UnregisterUpdatesListener">
+   <arg type="s" direction="in"/>
+  </method>
+  <signal name="HttpUpdate">
+   <arg type="s"/>
+   <arg type="x"/>
+  </signal>
+ </interface>
+</node>
+"
+
+*as-player-aamp-log*
+
+ag "ASTEST|aamp url:|aamp:|AAMPGstPlayer|aamp_"
+ag "ASTEST|AAMP-PLAYER"
+
+Jun 16 11:18:47 skyxione com.sky.as.system[7066]: User Message, Id: ASTEST, Message: players_1_status_TEST_001_JsonValidateIdle  *** Started
+Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp url: http://rdmedia.bbc.co.uk/dash/ondemand/bbb/2/audio/160kbps/IS.mp4
+Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]AAMPGstPlayerPipeline NULL -> READY (pending PAUSED)
+Jun 16 11:17:51 skyxione asrdkplayer[7040]: [AAMP-PLAYER]Sending segment event for mediaType[1]. start 284160003662 stop 18446744073709551615 rate 1.000000 applied_rate 1.000000
+Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp: sending metadata event and duration update 572.520000
+Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp_Seek(542.000000) and seekToLive(0)
+Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]AAMPGstPlayer::Flush:3045 Pipeline is in PAUSED state position 0.000000
+
+
+<as-player-queue>
+
+size_t Queue::Send(uint32_t event, 
+    void *payload, 
+    size_t payloadSize, 
+    bool prioritySend);
+
+size_t Queue::Recv(uint32_t *event, 
+    void *payload, 
+    size_t *payloadSize)
 {
-  std::shared_ptr<ASProxyMethodCall> proxyMsg = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
-
-  std::string domain;
-  std::string method;
-
-  proxyMsg->GetDomainAndMethod( domain, method );
+  return m_private->recvTimeout( event, payload, payloadSize, -1 );
 }
 
-ASProxyMethodCall::ASProxyMethodCall( const std::string dBusMessage, sd_bus_message *reply )
-        : SDBusMethodCall( "/com/sky/as/service", ASSERVICE1_INTERFACE )
+size_t recvTimeout( uint32_t *event, void *payload, size_t *payloadSize, int timeout)
 {
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    mReplyCode = 500;
-    mReply = reply;
-    mSentReply = false;
-
-    SetDomainAndMethod( dBusMessage );
-
-    AS_LOG_EXIT( "%s", __func__ );
-}
-
-void ASProxyMethodCall::SetDomainAndMethod( const std::string dBusMessage )
-{
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    if ( dBusMessage.empty() == false )
-    {
-        mDbusMessage = dBusMessage;
-
-        AS_LOG_INFO( "mDbusMessage: %s", mDbusMessage.c_str() );
-
-        Json::Reader reader;
-        Json::Value root;
-        if ( reader.parse( mDbusMessage, root ) )
+  {
+    copied = header->payloadSize;
+    *event = header->event;
+    *payloadSize = header->payloadSize;
+    if ( payload ) {
+      memcpy(payload, header->payload, copied);
     }
+  }
+
+  return copied;
 }
+
+
+*as-player-build*
+// cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
+// cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=PROD -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
+
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK ..
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE ..
+cmake -DENABLE_DTT=ON -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK ..
+
+cat /lib/systemd/system/sky-asplayer.service
+
+# Copyright © 2020 Sky UK. All rights reserved.
+#
+# This file is systemd script for launching the AS player service
+# at boot time.
+#
+# Enable asplayer to start on boot:
+#         systemctl enable sky-asplayer.service
+#
+# Start asplayer immediately:
+#         systemctl start sky-asplayer.service
+#
+# Stop asplayer:
+#         systemctl stop sky-asplayer.service
+#
+# Status:
+#         systemctl status sky-asplayer.service
+
+[Unit]
+Description=Sky AS Player Service
+Wants=sky-asproxy.service
+Requires=sky-appsservice.service
+After=sky-appsservice.service
+
+[Service]
+Type=dbus
+BusName=com.sky.as.player
+Environment="XDG_RUNTIME_DIR=/tmp"
+Environment="WAYLAND_DISPLAY=westeros-asplayer"
+Environment="AAMP_ENABLE_WESTEROS_SINK=1"
+Environment="LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
+Environment="LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
+Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+Environment="ENABLE_AAMP_JS=FALSE"
+Environment="ENABLE_AAMP=TRUE"
+Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+Environment="GST_PLAYERSINKBIN_DELAY=800000000"
+Environment="GST_HWAVSYNC=0"
+WorkingDirectory=/tmp
+ExecStart=/usr/sbin/asrdkplayer
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+
+armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
+./gst-plugins-rdk-aamp/1.99+git999-r0/gst-plugins-rdk-aamp-1.99+git999/libgstaamp.so
+
+(gst-plugin-scanner:10723): GStreamer-WARNING **: Failed to load plugin '/usr/lib/gstreamer-1.0/libgstaamp.so': /usr/lib/libaampjsbindings.so: undefined symbol: JSObjectGetPrivate
+Inside playersinkbin_init :1654
+Inside gst_player_sinkbin_get_type :1624
+Inside gst_player_sinkbin_class_init :367
+Inside playersink_gst_resolution_get_type :94
+
+libaampjsbindings.so 
+
+// source
+/media/keitee/ssd2/llama/workspace2/generic/aamp-video-engine/aamp
+
+
+// stop player
+systemctl stop sky-asplayer
+// will crash appsservice
+systemctl stop sky-appsservice
+
+// move to ssh and set envs and run player
+
+cat /sys/module/amvdec_ports/parameters/multiplanar
+echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
+cat /sys/module/amvdec_ports/parameters/multiplanar
+
+
+// xi1
+export "XDG_RUNTIME_DIR=/tmp"
+export "WAYLAND_DISPLAY=westeros-asplayer"
+export "AAMP_ENABLE_WESTEROS_SINK=1"
+export "LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
+export "LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
+export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+export "ENABLE_AAMP_JS=FALSE"
+export "ENABLE_AAMP=TRUE"
+export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
+export "GST_PLAYERSINKBIN_DELAY=800000000"
+export "GST_HWAVSYNC=0"
+
+// run this on console where runs player
+// export XDG_RUNTIME_DIR=/tmp
+// export WAYLAND_DISPLAY=westeros-asplayer
+// export PLAYERSINKBIN_USE_WESTEROSSINK=1
+// export WESTEROS_GL_USE_BEST_MODE=1
+// export WESTEROS_SINK_USE_GFX=1
+// export LD_PRELOAD=/usr/lib/libwesteros_gl.so.0.0.0
+
+echo $XDG_RUNTIME_DIR
+echo $WAYLAND_DISPLAY
+echo $PLAYERSINKBIN_USE_WESTEROSSINK
+echo $WESTEROS_GL_USE_BEST_MODE
+echo $WESTEROS_SINK_USE_GFX
+
+asrdkplayer -v
+
+
+*aamp-player*
+sdk/sysroot/armv7ahf-neon-rdk-linux-gnueabi/usr/include/main_aamp.h
+
+class PlayerInstanceAAMP
+{
+public:
+	/**
+	 *   @brief PlayerInstanceAAMP Constructor.
+	 *
+	 *   @param  streamSink - custom stream sink, NULL for default.
+	 */
+	PlayerInstanceAAMP(StreamSink* streamSink = NULL, Playermode playermode = PLAYERMODE_JSPLAYER);
+
+	/**
+	 *   @brief PlayerInstanceAAMP Destructor.
+	 */
+	~PlayerInstanceAAMP();
+
+	/**
+	 *   @brief copy constructor
+	 *
+	 *   @param other object to copy
+	 */
+	PlayerInstanceAAMP(const PlayerInstanceAAMP& other) = delete;
+
+	/**
+	 *   @brief To overload = operator for copying
+	 *
+	 *   @param other object to copy
+	 */
+	PlayerInstanceAAMP& operator=(const PlayerInstanceAAMP& other) = delete;
+
+	/**
+	 *   @brief Tune to a URL.
+	 *
+	 *   @param[in]  url - HTTP/HTTPS url to be played.
+	 *   @param[in]  contentType - Content type of the asset
+	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
+	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
+	 *   @return void
+	 */
+	void Tune(const char *mainManifestUrl, 
+       const char *contentType = NULL, 
+       bool bFirstAttempt = true, 
+       bool bFinalAttempt = false,
+       const char *traceUUID = NULL,
+       bool audioDecoderStreamSync = true);
+
+    // // request the player tune to the given url
+    // return m_thread->tune(url.c_str(), std::string(), true, false, audioDecoderStreamSync );
+
+	/**
+	 *   @brief Tune to a URL.
+	 *      DEPRECATED!  This is included for backwards compatibility with current Sky AS integration
+	 *      audioDecoderStreamSync is a broadcom-specific hack (for original xi6 POC build) - this doesn't belong in Tune API.
+	 *
+	 *   @param[in]  url - HTTP/HTTPS url to be played.
+	 *   @param[in]  contentType - Content type of the asset
+	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
+	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
+	 *   @return void
+	 */
+	void Tune(const char *mainManifestUrl, const char *contentType, bool bFirstAttempt, bool bFinalAttempt,const char *traceUUID,bool audioDecoderStreamSync);
+
+	/**
+	 *   @brief Tune to a URL.
+	 *
+	 *   @param[in]  url - HTTP/HTTPS url to be played.
+	 *   @param[in]  autoPlay - Start playback immediately or not
+	 *   @param[in]  contentType - Content type of the asset
+	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
+	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
+	 *   @return void
+	 */
+	void Tune(const char *mainManifestUrl, bool autoPlay = true, const char *contentType = NULL, bool bFirstAttempt = true, bool bFinalAttempt = false,const char *traceUUID = NULL,bool audioDecoderStreamSync = true);
+
+	/**
+	 *   @brief Stop playback and release resources.
+	 *   @param[in]  sendStateChangeEvent - true if state change events need to be sent for Stop operation
+	 *   @return void
+	 */
+	void Stop(bool sendStateChangeEvent = true);
+};
+
+
+*as-player-genres*
+
+curl -v -X GET http://192.168.0.12:9005/as/services/genres
+
+
+*as-player-setting*
+
+curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
+curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
+
+method call time=1597328569.868368 sender=:1.2 -> destination=com.sky.as.player serial=404 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
+   uint32 2
+   string "/as/players/setting/audioLanguage"
+   array [
+      dict entry(
+         string "Accept-Encoding"
+         string "identity"
+      )
+      dict entry(
+         string "Content-Length"
+         string "34"
+      )
+      dict entry(
+         string "Host"
+         string "192.168.0.12:9005"
+      )
+      dict entry(
+         string "Content-Type"
+         string "application/json"
+      )
+      dict entry(
+         string "Connection"
+         string "close"
+      )
+      dict entry(
+         string "User-Agent"
+         string "SKY AmsTestSuite"
+      )
+   ]
+   array [
+   ]
+   string "{"audioLanguage": "INVALID_VALUE"}"
+
+
+*as-player-setting-get*
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:1 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:""
+
+
+method return time=1597330744.722706 sender=:1.86 -> destination=:1.178 serial=93 reply_serial=2
+   struct {
+      uint32 200
+      array [
+      ]
+      string "{
+   "audioLanguage" : "Deutsch"
+}
+"
+   }
+
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:1 \
+string:"/as/players/setting/Auto60fpsMode" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:""
+
+
+*as-player-setting-post*
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:'{"audioLanguage" : "Deutsch"}'
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/players/setting/audioLanguage" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string:"" \
+string:'{"audioLanguage" : "INVALID_VALUE"}'
 
 
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-dtt
 
-cd /usr/share/mediarite/lib
-find . -name libFutarqueBasic.so
-libFutarqueBasic.so
+// for SDK path
+keitee@kit-ubuntu:/media/keitee/ssd2/rdk/2.0/sysroots$ 
+ls -al ./sysroots/armv7ahf-neon-rdk-linux-gnueabi/usr/lib/mediarite/
+
+// for box
+root@skyxione:~# ls -al /usr/lib/mediarite/
+ls -al /usr/lib/mediarite/
+
 
 export "LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek:/usr/share/mediarite/lib"
 
@@ -13403,6 +14540,25 @@ dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 com.sky.as.Service1.Request \
 uint32:2 \
 string:"/as/services/scan/action/abort" \
+dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
+"Origin","http://build01.mw.ethan.bskyb.com",\
+"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
+"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
+"Accept-Encoding","gzip, deflate",\
+"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
+dict:string:string: \
+string:""
+
+*as-dtt-scan-commit*
+
+// NOK
+curl -v -X POST http://192.168.0.12:9005/as/services/scan/action/commit
+
+dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
+/com/sky/as/service \
+com.sky.as.Service1.Request \
+uint32:2 \
+string:"/as/services/scan/action/commit" \
 dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
 "Origin","http://build01.mw.ethan.bskyb.com",\
 "User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
@@ -14090,12 +15246,34 @@ string:''
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-dtt-hla
 
-// mr webui
-http://192.168.0.12:40660/ 
+*as-dtt-scan-list*
 
-journalctl -fu mediarite
+https://www.stb.bskyb.com/confluence/display/2016/Hybrid+Service+List+HLA
 
-*as-dtt-list*
+ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_ServiceListContainer.cpp
+
+void ServiceListController::BuildServiceListSuccessDocument()
+{
+  Json::StyledWriter writer;
+
+  m_serviceList->SetDocId( m_serviceLongListCreationTime );
+}
+
+void ServiceListController::SetServiceJsonDefault()
+{
+  SYSTEMTIME_TIMEDATE creationTime;
+
+  SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
+  if ( status == GUIDE_API_STATUS_OK )
+  {
+    AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
+
+    // Update the creation time
+    m_serviceLongListCreationTime = creationTime;
+    m_lastModificationTime = creationTime;
+  }
+}
+
 
 GET(1)
 http://192.168.0.12:9005/as/services/0/0
@@ -14181,34 +15359,91 @@ servicetypes = [DTT]                            // ok
 [schedule = true]
 [schedulesid = "<sk>"] (if schedule == true)
 
-
 sk service key used to reference a service
 
-https://www.stb.bskyb.com/confluence/display/2016/Hybrid+Service+List+HLA
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=Hybrid+Service+List+HLA
 
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=IP+Linear+Metadata+HLA
 
-ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_ServiceListContainer.cpp
+https://www.stb.bskyb.com/confluence/display/2016/OVP+HLA
 
-void ServiceListController::BuildServiceListSuccessDocument()
+UK service list:  
+curl 
+-H "X-SkyOTT-Provider: SKY" 
+-H "X-SkyOTT-Proposition: SKYQ" 
+-H "X-SkyOTT-Territory: GB" 
+
+http://atlantis.epg.bskyb.com/as/services/4101/1
+
+here "4101/1"
+
 {
-  Json::StyledWriter writer;
-
-  m_serviceList->SetDocId( m_serviceLongListCreationTime );
-}
-
-void ServiceListController::SetServiceJsonDefault()
-{
-  SYSTEMTIME_TIMEDATE creationTime;
-
-  SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
-  if ( status == GUIDE_API_STATUS_OK )
-  {
-    AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
-
-    // Update the creation time
-    m_serviceLongListCreationTime = creationTime;
-    m_lastModificationTime = creationTime;
-  }
+	"documentId" : "1600085171264",
+	"services" : 
+	[
+		{
+			"adult" : false,
+			"c" : "101",
+			"dvbtriplet" : "",
+			"local" : false,
+			"schedule" : true,
+			"servicetype" : "OTT",
+			"servicetypes" : 
+			[
+				"DSAT"
+			],
+			"sf" : "sd",
+			"sg" : 3,
+			"sid" : "2002",
+			"sk" : 2002,
+			"startover" : null,
+			"startoverents" : false,
+			"t" : "BBC One Lon",
+			"timeshifted" : false,
+			"xsg" : 3
+		},
+		{
+			"adult" : false,
+			"c" : "102",
+			"dvbtriplet" : "",
+			"local" : false,
+			"schedule" : true,
+			"servicetype" : "OTT",
+			"servicetypes" : 
+			[
+				"DSAT"
+			],
+			"sf" : "sd",
+			"sg" : 3,
+			"sid" : "2006",
+			"sk" : 2006,
+			"startover" : null,
+			"startoverents" : false,
+			"t" : "BBC Two",
+			"timeshifted" : false,
+			"xsg" : 3
+		},
+		{
+			"adult" : false,
+			"c" : "103",
+			"dvbtriplet" : "",
+			"local" : false,
+			"schedule" : true,
+			"servicetype" : "OTT",
+			"servicetypes" : 
+			[
+				"DSAT"
+			],
+			"sf" : "sd",
+			"sg" : 3,
+			"sid" : "6000",
+			"sk" : 6000,
+			"startover" : null,
+			"startoverents" : false,
+			"t" : "ITV",
+			"timeshifted" : false,
+			"xsg" : 3
+		},
 }
 
 
@@ -14488,6 +15723,37 @@ sh[2525]: <9018,4164,4352>
 // 2. service lists are not persist over reboots
 // https://www.stb.bskyb.com/jira/browse/NGDEV-168919
 
+asplayer/services/Executors/ServicesScanExecutor/ServicesScanStartExecutor.cpp
+add this:
+
+      LOG_INFO("starting channel search");
+
+      SettingsManagerRpcHelper *settingsManager =
+        m_connection->getSettingsManager();
+      if (!settingsManager)
+      {
+        sendGenericFailure_("failed to get settings manager");
+        return;
+      }
+
+      const char *language = "GBR";
+
+      try
+      {
+        bool success = settingsManager->setRegionWithDefaults(language);
+        if (!success)
+        {
+          sendGenericFailure_("failed to setRegionWithDefaults");
+          return;
+        }
+
+        settingsManager->markSetupDone();
+      } catch (FutarqueRpcException &e)
+      {
+        sendGenericFailure_("failed to setup done");
+        return;
+      }
+
 
 3. TODO
 
@@ -14526,27 +15792,32 @@ http://192.168.0.12:9005/as/services/scan/action/start?scantype=DTT-FULL&channel
 7. mrp
 remove checking on dirty in updateState()
 
+
 8. check
-/services/<b>/<sb>
-/services/status
-/services/changes
-/services/<b>/<sb>/default
-/services/details
+
+o /services/<b>/<sb>
+o /services/status
+o /services/scan/action/start
+o /services/scan/action/abort
+o /services/scan/status
+o /services/changes (w Andy for clarification on version before and after scan)
+o /services/details (w Andy for fields to support)
+o /services/<b>/<sb>/default (w Andy)
+o /services/genres (w andy. if it's for UK and IT?)
+o /services/favourites (implemented)
+
+
 /services/sid
 /services/manual
-/services/genres
 /services/scan/action/reject
-/services/scan/action/start
-/services/scan/action/abort
 /services/scan/action/commit
-/services/scan/status
 /services/scan/action/resume
 /services/scan/conflicts
 /services/scan/action/resolveconflict
 /services/scan/action/move
-/services/scan/changes
 /services/scan/changes/action/reset
-/services/favourites
+Resets the number of DTT channels added during the periodic update scan, as reported
+by /services/scan/changes
 /services/<b>/<sb>/favourites/default
 
 
@@ -14554,7 +15825,7 @@ remove checking on dirty in updateState()
 
 DTT section has LCN range 5001 – 5999
 
-KT: AS do +5000 for increment but MR will do in the end. and said it's already
+AS do +5000 for increment but MR will do in the end. and said it's already
 implemented.
 
 Jan Pedersen (Sky Labs Aalborg)  10:49
@@ -14565,365 +15836,54 @@ Jan Pedersen (Sky Labs Aalborg)  10:49
 
 documentId document unique identifier (e.g. timestamp at version 0)
 
+from HLA
+AS gets IP service list from a web service, based on bouquet/sub-bouquet
+AS runs DTT scan with Mediarite
 
-={============================================================================
-*kt_dev_skymw_0000* mw-rdk-as-player
+does it mean use version docid from the online list?
 
-*as-player-aamp-log*
+11. service list
 
-ag "ASTEST|aamp url:|aamp:|AAMPGstPlayer|aamp_"
-ag "ASTEST|AAMP-PLAYER"
+UK service list:  
+curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" -H "X-SkyOTT-Territory: GB" -H "X-SkyOTT-Device: IPSETTOPBOX" -H "X-SkyOTT-Platform: SKYQ-RDK" http://atlantis.epg.bskyb.com/as/services/4096/1
 
-Jun 16 11:18:47 skyxione com.sky.as.system[7066]: User Message, Id: ASTEST, Message: players_1_status_TEST_001_JsonValidateIdle  *** Started
-Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp url: http://rdmedia.bbc.co.uk/dash/ondemand/bbb/2/audio/160kbps/IS.mp4
-Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]AAMPGstPlayerPipeline NULL -> READY (pending PAUSED)
-Jun 16 11:17:51 skyxione asrdkplayer[7040]: [AAMP-PLAYER]Sending segment event for mediaType[1]. start 284160003662 stop 18446744073709551615 rate 1.000000 applied_rate 1.000000
-Jun 16 11:17:30 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp: sending metadata event and duration update 572.520000
-Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]aamp_Seek(542.000000) and seekToLive(0)
-Jun 16 11:18:02 skyxione asrdkplayer[7040]: [AAMP-PLAYER]AAMPGstPlayer::Flush:3045 Pipeline is in PAUSED state position 0.000000
+IT service list:  curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" -H "X-SkyOTT-Territory: IT" http://atlantis.epg.bskyb.com/as/services/25175/8
+IT	Xi1	SKY	SKYQ	IT	IPSETTOPBOX	SKYQ-RDK
 
+UK service list:  
+curl 
+-H "X-SkyOTT-Provider: SKY" 
+-H "X-SkyOTT-Proposition: SKYQ" 
+-H "X-SkyOTT-Territory: GB" 
+http://atlantis.epg.bskyb.com/as/services/4101/1
 
-<as-player-queue>
-
-size_t Queue::Send(uint32_t event, 
-    void *payload, 
-    size_t payloadSize, 
-    bool prioritySend);
-
-size_t Queue::Recv(uint32_t *event, 
-    void *payload, 
-    size_t *payloadSize)
-{
-  return m_private->recvTimeout( event, payload, payloadSize, -1 );
-}
-
-size_t recvTimeout( uint32_t *event, void *payload, size_t *payloadSize, int timeout)
-{
-  {
-    copied = header->payloadSize;
-    *event = header->event;
-    *payloadSize = header->payloadSize;
-    if ( payload ) {
-      memcpy(payload, header->payload, copied);
-    }
-  }
-
-  return copied;
-}
+from EPG: here "4101/1"
 
 
-*as-player-build*
-// cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
-// cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=PROD -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
-cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK ..
-cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE ..
+12.
 
-cat /lib/systemd/system/sky-asplayer.service
+http://atlantis.epg.bskyb.com/as/services/4101/1
 
-# Copyright © 2020 Sky UK. All rights reserved.
-#
-# This file is systemd script for launching the AS player service
-# at boot time.
-#
-# Enable asplayer to start on boot:
-#         systemctl enable sky-asplayer.service
-#
-# Start asplayer immediately:
-#         systemctl start sky-asplayer.service
-#
-# Stop asplayer:
-#         systemctl stop sky-asplayer.service
-#
-# Status:
-#         systemctl status sky-asplayer.service
+"4101/1" are b and sb
 
-[Unit]
-Description=Sky AS Player Service
-Wants=sky-asproxy.service
-Requires=sky-appsservice.service
-After=sky-appsservice.service
+b bouquet in which this request is being made Mandatory
+sb subbouquet in which this request is being made
 
-[Service]
-Type=dbus
-BusName=com.sky.as.player
-Environment="XDG_RUNTIME_DIR=/tmp"
-Environment="WAYLAND_DISPLAY=westeros-asplayer"
-Environment="AAMP_ENABLE_WESTEROS_SINK=1"
-Environment="LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
-Environment="LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
-Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
-Environment="ENABLE_AAMP_JS=FALSE"
-Environment="ENABLE_AAMP=TRUE"
-Environment="AAMP_ENABLE_OPT_OVERRIDE=TRUE"
-Environment="GST_PLAYERSINKBIN_DELAY=800000000"
-Environment="GST_HWAVSYNC=0"
-WorkingDirectory=/tmp
-ExecStart=/usr/sbin/asrdkplayer
-Restart=on-failure
+are they fixed?
 
-[Install]
-WantedBy=multi-user.target
+13. 
+when scan is done, notify /service/status ws from scan executor. save online
+list.
 
-
-armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
-./gst-plugins-rdk-aamp/1.99+git999-r0/gst-plugins-rdk-aamp-1.99+git999/libgstaamp.so
-
-(gst-plugin-scanner:10723): GStreamer-WARNING **: Failed to load plugin '/usr/lib/gstreamer-1.0/libgstaamp.so': /usr/lib/libaampjsbindings.so: undefined symbol: JSObjectGetPrivate
-Inside playersinkbin_init :1654
-Inside gst_player_sinkbin_get_type :1624
-Inside gst_player_sinkbin_class_init :367
-Inside playersink_gst_resolution_get_type :94
-
-libaampjsbindings.so 
-
-// source
-/media/keitee/ssd2/llama/workspace2/generic/aamp-video-engine/aamp
-
-
-// stop player
-systemctl stop sky-asplayer
-// will crash appsservice
-systemctl stop sky-appsservice
-
-// move to ssh and set envs and run player
-
-cat /sys/module/amvdec_ports/parameters/multiplanar
-echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
-cat /sys/module/amvdec_ports/parameters/multiplanar
-
-
-// xi1
-export "XDG_RUNTIME_DIR=/tmp"
-export "WAYLAND_DISPLAY=westeros-asplayer"
-export "AAMP_ENABLE_WESTEROS_SINK=1"
-export "LD_LIBRARY_PATH=/lib:/usr/lib:/usr/lib/realtek"
-export "LD_PRELOAD=/usr/lib/realtek/libdtcpipsik.so:/usr/lib/realtek/libVOutWrapper.so:/usr/lib/realtek/libjpu.so:/usr/lib/realtek/libvpu.so"
-export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
-export "ENABLE_AAMP_JS=FALSE"
-export "ENABLE_AAMP=TRUE"
-export "AAMP_ENABLE_OPT_OVERRIDE=TRUE"
-export "GST_PLAYERSINKBIN_DELAY=800000000"
-export "GST_HWAVSYNC=0"
-
-// run this on console where runs player
-// export XDG_RUNTIME_DIR=/tmp
-// export WAYLAND_DISPLAY=westeros-asplayer
-// export PLAYERSINKBIN_USE_WESTEROSSINK=1
-// export WESTEROS_GL_USE_BEST_MODE=1
-// export WESTEROS_SINK_USE_GFX=1
-// export LD_PRELOAD=/usr/lib/libwesteros_gl.so.0.0.0
-
-echo $XDG_RUNTIME_DIR
-echo $WAYLAND_DISPLAY
-echo $PLAYERSINKBIN_USE_WESTEROSSINK
-echo $WESTEROS_GL_USE_BEST_MODE
-echo $WESTEROS_SINK_USE_GFX
-
-asrdkplayer -v
-
-
-*aamp-player*
-sdk/sysroot/armv7ahf-neon-rdk-linux-gnueabi/usr/include/main_aamp.h
-
-class PlayerInstanceAAMP
-{
-public:
-	/**
-	 *   @brief PlayerInstanceAAMP Constructor.
-	 *
-	 *   @param  streamSink - custom stream sink, NULL for default.
-	 */
-	PlayerInstanceAAMP(StreamSink* streamSink = NULL, Playermode playermode = PLAYERMODE_JSPLAYER);
-
-	/**
-	 *   @brief PlayerInstanceAAMP Destructor.
-	 */
-	~PlayerInstanceAAMP();
-
-	/**
-	 *   @brief copy constructor
-	 *
-	 *   @param other object to copy
-	 */
-	PlayerInstanceAAMP(const PlayerInstanceAAMP& other) = delete;
-
-	/**
-	 *   @brief To overload = operator for copying
-	 *
-	 *   @param other object to copy
-	 */
-	PlayerInstanceAAMP& operator=(const PlayerInstanceAAMP& other) = delete;
-
-	/**
-	 *   @brief Tune to a URL.
-	 *
-	 *   @param[in]  url - HTTP/HTTPS url to be played.
-	 *   @param[in]  contentType - Content type of the asset
-	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
-	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
-	 *   @return void
-	 */
-	void Tune(const char *mainManifestUrl, 
-       const char *contentType = NULL, 
-       bool bFirstAttempt = true, 
-       bool bFinalAttempt = false,
-       const char *traceUUID = NULL,
-       bool audioDecoderStreamSync = true);
-
-    // // request the player tune to the given url
-    // return m_thread->tune(url.c_str(), std::string(), true, false, audioDecoderStreamSync );
-
-	/**
-	 *   @brief Tune to a URL.
-	 *      DEPRECATED!  This is included for backwards compatibility with current Sky AS integration
-	 *      audioDecoderStreamSync is a broadcom-specific hack (for original xi6 POC build) - this doesn't belong in Tune API.
-	 *
-	 *   @param[in]  url - HTTP/HTTPS url to be played.
-	 *   @param[in]  contentType - Content type of the asset
-	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
-	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
-	 *   @return void
-	 */
-	void Tune(const char *mainManifestUrl, const char *contentType, bool bFirstAttempt, bool bFinalAttempt,const char *traceUUID,bool audioDecoderStreamSync);
-
-	/**
-	 *   @brief Tune to a URL.
-	 *
-	 *   @param[in]  url - HTTP/HTTPS url to be played.
-	 *   @param[in]  autoPlay - Start playback immediately or not
-	 *   @param[in]  contentType - Content type of the asset
-	 *   @param[in]  audioDecoderStreamSync - Enable or disable audio decoder stream sync,
-	 *                set to 'false' if audio fragments come with additional padding at the end (BCOM-4203)
-	 *   @return void
-	 */
-	void Tune(const char *mainManifestUrl, bool autoPlay = true, const char *contentType = NULL, bool bFirstAttempt = true, bool bFinalAttempt = false,const char *traceUUID = NULL,bool audioDecoderStreamSync = true);
-
-	/**
-	 *   @brief Stop playback and release resources.
-	 *   @param[in]  sendStateChangeEvent - true if state change events need to be sent for Stop operation
-	 *   @return void
-	 */
-	void Stop(bool sendStateChangeEvent = true);
-};
-
-
-*as-player-setting*
-
-curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
-curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
-
-method call time=1597328569.868368 sender=:1.2 -> destination=com.sky.as.player serial=404 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
-   uint32 2
-   string "/as/players/setting/audioLanguage"
-   array [
-      dict entry(
-         string "Accept-Encoding"
-         string "identity"
-      )
-      dict entry(
-         string "Content-Length"
-         string "34"
-      )
-      dict entry(
-         string "Host"
-         string "192.168.0.12:9005"
-      )
-      dict entry(
-         string "Content-Type"
-         string "application/json"
-      )
-      dict entry(
-         string "Connection"
-         string "close"
-      )
-      dict entry(
-         string "User-Agent"
-         string "SKY AmsTestSuite"
-      )
-   ]
-   array [
-   ]
-   string "{"audioLanguage": "INVALID_VALUE"}"
-
-
-*as-player-setting-get*
-dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
-/com/sky/as/service \
-com.sky.as.Service1.Request \
-uint32:1 \
-string:"/as/players/setting/audioLanguage" \
-dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
-"Origin","http://build01.mw.ethan.bskyb.com",\
-"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
-"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
-"Accept-Encoding","gzip, deflate",\
-"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
-dict:string:string:"" \
-string:""
-
-
-method return time=1597330744.722706 sender=:1.86 -> destination=:1.178 serial=93 reply_serial=2
-   struct {
-      uint32 200
-      array [
-      ]
-      string "{
-   "audioLanguage" : "Deutsch"
-}
-"
-   }
-
-
-dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
-/com/sky/as/service \
-com.sky.as.Service1.Request \
-uint32:1 \
-string:"/as/players/setting/Auto60fpsMode" \
-dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
-"Origin","http://build01.mw.ethan.bskyb.com",\
-"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
-"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
-"Accept-Encoding","gzip, deflate",\
-"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
-dict:string:string:"" \
-string:""
-
-
-*as-player-setting-post*
-
-dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
-/com/sky/as/service \
-com.sky.as.Service1.Request \
-uint32:2 \
-string:"/as/players/setting/audioLanguage" \
-dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
-"Origin","http://build01.mw.ethan.bskyb.com",\
-"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
-"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
-"Accept-Encoding","gzip, deflate",\
-"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
-dict:string:string:"" \
-string:'{"audioLanguage" : "Deutsch"}'
-
-dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
-/com/sky/as/service \
-com.sky.as.Service1.Request \
-uint32:2 \
-string:"/as/players/setting/audioLanguage" \
-dict:string:string:"Host","192.168.0.100:9005","Connection","keep-alive","Content-Length","0","Accept","*/*",\
-"Origin","http://build01.mw.ethan.bskyb.com",\
-"User-Agent","Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.146 Whale/2.6.90.16 Safari/537.36",\
-"Referer","http://build01.mw.ethan.bskyb.com/asda/?",\
-"Accept-Encoding","gzip, deflate",\
-"Accept-Language","en-GB,en-US;q=0.9,en;q=0.8" \
-dict:string:string:"" \
-string:'{"audioLanguage" : "INVALID_VALUE"}'
+when list is requested, combine them and build service list and assign
+document id.
+ 
+but need to notify ws with docid? when scan is done, save id to controller and
+when make a list, get that id from controller. 
 
 
 ={============================================================================
-*kt_dev_skymw_0000* mw-rdk-as-appmanager rdk-as-windowmanager
-
-*rdk-as-appsserviced*
+*kt_dev_skymw_0000* mw-rdk-as-appservice rdk-as-windowmanager
 
 /llama/workspace2/build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/
   asappsserviced/git-r0/git/RDK/AppManager
@@ -18454,12 +19414,15 @@ https://www.stb.bskyb.com/confluence/display/2016/AMS+Test+Suite
 
 // // without clone. do not use this one and use cloned one
 // cd ethan-as-source/Components/MiddlewareServices/AMSTestSuite
-//
-// will get "AMSTestSuite"
-// /media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite
+
+to get "AMSTestSuite"
 
 Clone the git repo
 git clone gitlab@git.bskyb.com:sky-mw/mwintegrationtestsuits.git -b develop
+
+to run tests:
+
+cd /media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite
 
 /media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite/test_horizontalPlayback_TEST_009_HlsVODPlayback_Pos
 
@@ -18737,6 +19700,12 @@ android_dtt.py
 
 AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-de --disable-drm-check  --disable-preboot-check' \
 python -m framework services.scan.action.android_dtt.dtt_TEST_002_scan_dtt_full_channel_all
+
+
+// /media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite/services/scan/action/dtt.py
+
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005  --all --platform xi1-uk --disable-drm-check --disable-preboot-check' \
+python -m framework suite.integration.ip_skit.dtt_suite.dtt_TEST_001_dtt_scan_complete
 
 
 #{============================================================================

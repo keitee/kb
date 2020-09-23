@@ -505,7 +505,7 @@ TEST(CxxIterator, array)
   }
 
   {
-    int values[] = { 33, 67, -4, 13, 5, 2 };
+    int values[] = {33, 67, -4, 13, 5, 2};
     vector<int> vec(begin(values), end(values));
 
     copy(vec.begin(), vec.end(), ostream_iterator<int>(cout, " "));
@@ -762,7 +762,7 @@ TEST(CxxIterator, adaptor_stream)
   // as gets from std::cin, use iterator
   {
     std::istringstream is{"1 2 3 4 5 6"};
-    sdt::vector<int> coll;
+    std::vector<int> coll;
 
     std::istream_iterator<int> isi(is), eof;
 
@@ -789,7 +789,8 @@ TEST(CxxIterator, adaptor_stream)
   {
     std::istringstream is{"1 2 3 4 5 6"};
 
-    std::vector<int> coll((std::istream_iterator<int>(is)), std::istream_iterator<int>());
+    std::vector<int> coll((std::istream_iterator<int>(is)),
+                          std::istream_iterator<int>());
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
@@ -2478,6 +2479,7 @@ TEST(CxxMap, check_begin_return)
   }
 }
 
+// ={=========================================================================
 TEST(CxxMap, check_compare)
 {
   {
@@ -2493,6 +2495,7 @@ TEST(CxxMap, check_compare)
   }
 }
 
+// ={=========================================================================
 TEST(CxxMap, check_find)
 {
   {
@@ -2544,7 +2547,125 @@ TEST(CxxMap, check_find)
   }
 }
 
-TEST(CxxMap, check_insert_and_emplace)
+/*
+// ={=========================================================================
+ 
+The both maps and unordered maps can also be thought of as an
+`associative-array`, an array whose index is not an integer value. As a
+consequence, both containers provide the subscript operator[].
+
+However, that the subscript operator does not behave like the usual subscript
+operator for arrays: `Not having an element for an index is 'not' an error.` A
+new index (or key) is taken as a reason `to create and insert a new element`
+that has the index as the key. `Thus, you can't have an invalid index.`
+
+c[key] 
+
+Inserts an element with key, if it does not yet exist, and returns a reference
+to the value of the element with key (only for nonconstant maps)
+
+"Thus, to use this feature, you can't use a value type that has no default
+constructor." 
+
+
+c.at(key) *cxx-map-at*
+Returns a reference to the value of the element with key (since C++11)
+
+Returns a reference to the mapped value of the element with key equivalent to
+key. If no such element exists, an exception of type `std::out_of_range` is
+thrown.
+
+coll.at("vat1") = 0.16;
+
+
+`The fecth only works for map` but not multimaps since there are multiple
+matches. Why not set? Since set has only key. Unlike other containers, [] op on
+map returns `mapped_type` but dereferencing of iterator returns `value_type`. 
+
+
+<ex>
+
+word_count[word] = 1; 
+
+Happens 3 setps but step 3 could be extra
+
+o Search key and not found
+o Insert temp element pair{word, 0}. value init since default ctor is called
+o Assign it with 1
+
+When accessing map with key which is not exist, cause addition. Inserts a new
+element with key "ottto" and prints its value, which is 0 by default.
+
+std::cout << coll["ottto"];
+
+The real bug which meant to print out debug message but creates one elements
+which is not added before due to if and else logic in the code.
+
+NICKEL_TRACE("getSourceInformation: "
+        << "configuration: " << sourceInfo["CONFIGURATION"]
+        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
+
+*/
+
+TEST(CxxMap, fetch_can_insert)
+{
+  std::map<unsigned int, int> expected{{1, 0}, {2, 0}, {3, 0}};
+
+  // use insert()
+  {
+    std::map<unsigned int, int> coll;
+
+    coll.insert({1, 0});
+    coll.insert({2, 0});
+    coll.insert({3, 0});
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // do the same
+  {
+    std::map<unsigned int, int> coll;
+
+    coll[1];
+    coll[2];
+    coll[3];
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // do the same
+  {
+    std::map<unsigned int, int> _expected{{1, 1}, {2, 1}, {3, 1}};
+    std::map<unsigned int, int> coll;
+
+    coll[1]++;
+    coll[2]++;
+    coll[3]++;
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == _expected, true);
+  }
+
+  // so how can prevent "accidently" adding an item? check if it's already in
+  // the coll and then add it.
+  //
+  // {
+  //    auto q = coll.find("seal");
+  //
+  //    if (q == coll.end())
+  //    {
+  //      coll.emplace("seal");
+  //    }
+  // }
+}
+
+// ={=========================================================================
+TEST(CxxMap, insert_and_emplace)
 {
   std::map<unsigned int, std::string> coll{{1, "one"},
                                            {2, "two"},
@@ -2574,6 +2695,7 @@ TEST(CxxMap, check_insert_and_emplace)
   }
 }
 
+// ={=========================================================================
 TEST(CxxMap, check_access_on_const)
 {
   // cannot be a const map since operator[] is for non-const
@@ -2626,6 +2748,7 @@ TEST(CxxMap, check_access_on_const)
   }
 }
 
+// ={=========================================================================
 TEST(CxxMap, check_sorted)
 {
   {
@@ -2709,6 +2832,7 @@ TEST(CxxMap, check_sorted)
   }
 }
 
+// ={=========================================================================
 TEST(CxxMap, check_sorted_custom_compare)
 {
   // use cxx-less by default on string
@@ -2848,6 +2972,7 @@ TEST(CxxMap, check_sorted_custom_compare)
   }
 }
 
+// ={=========================================================================
 // Q: what if:
 //
 // o string key which used to find an item in a map.
@@ -2898,7 +3023,8 @@ TEST(CxxMap, map_Copy)
   }
 }
 
-TEST(StlMapMulti, check_equal_range_1)
+// ={=========================================================================
+TEST(CxxMapMulti, equal_range_1)
 {
   // when found, returns iterator to the first item.
   {
@@ -2914,6 +3040,7 @@ TEST(StlMapMulti, check_equal_range_1)
     EXPECT_THAT(it->second, "Sot-Weed Factor");
   }
 
+  // the order is maintained in the equal range
   {
     std::multimap<std::string, std::string> authors;
 
@@ -2949,7 +3076,7 @@ TEST(StlMapMulti, check_equal_range_1)
 
     // use _bound() calls
     {
-      vector<string> result{};
+      std::vector<string> result{};
 
       for (auto begin = authors.lower_bound(search_item),
                 end   = authors.upper_bound(search_item);
@@ -2969,10 +3096,9 @@ TEST(StlMapMulti, check_equal_range_1)
     // return pair of iter in range [first, off-the-end). Like above, if not found
     // return the same.
     {
-      vector<string> result{};
-      auto iter = authors.find(search_item); // first entry
+      std::vector<string> result{};
 
-      for (auto rpos = authors.equal_range(iter->first);
+      for (auto rpos = authors.equal_range(search_item);
            rpos.first != rpos.second;
            ++rpos.first)
       {
@@ -2984,10 +3110,22 @@ TEST(StlMapMulti, check_equal_range_1)
                               "Lost in the Funhouse",
                               "A way to success"));
     }
+
+    // equal_range returns a pair
+    {
+      auto range = authors.equal_range(search_item);
+
+      auto bound_begin = authors.lower_bound(search_item);
+      auto bound_end   = authors.upper_bound(search_item);
+
+      EXPECT_THAT(range.first, bound_begin);
+      EXPECT_THAT(range.second, bound_end);
+    }
   }
 }
 
-TEST(StlMapMulti, check_equal_range_2)
+// ={=========================================================================
+TEST(CxxMapMulti, equal_range_2)
 {
   // build occurance multi-map<count, pair<value,count>>
   std::multimap<int, std::pair<int, int>> omap{};
@@ -3844,27 +3982,29 @@ TEST(Predicate, ValueAndReference)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-algo-copy
-//
-// [ RUN      ] AlgoCopy.Error
-// /usr/include/c++/6/bits/stl_algobase.h:452:
-// Error: function requires a valid iterator range [__first, __last).
-//
-// Objects involved in the operation:
-//     iterator "__first" @ 0x0x7ffe7bb56d60 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
-//       state = past-the-end;
-//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
-//     }
-//     iterator "__last" @ 0x0x7ffe7bb56d30 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
-//       state = dereferenceable;
-//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
-//     }
-// Aborted
+// cxx-copy
 
-TEST(DISABLED_AlgoCopy, Error)
+[ RUN      ] AlgoCopy.Error
+/usr/include/c++/6/bits/stl_algobase.h:452:
+Error: function requires a valid iterator range [__first, __last).
+
+Objects involved in the operation:
+    iterator "__first" @ 0x0x7ffe7bb56d60 {
+      type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+      state = past-the-end;
+      references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
+    }
+    iterator "__last" @ 0x0x7ffe7bb56d30 {
+      type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+      state = dereferenceable;
+      references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
+    }
+Aborted
+
+*/
+TEST(AlgoCopy, DISABLED_invalid_range)
 {
   {
     std::vector<int> coll;
@@ -3885,6 +4025,7 @@ TEST(DISABLED_AlgoCopy, Error)
   }
 }
 
+// ={=========================================================================
 // *cxx-algo-copy-if*
 // OutputIterator
 // copy_if (InputIterator sourceBeg, InputIterator sourceEnd,
@@ -3910,6 +4051,7 @@ TEST(AlgoCopy, CopyIf)
   EXPECT_THAT(coll2, ElementsAre(0, 2, 4, 6));
 }
 
+// ={=========================================================================
 TEST(AlgoCopy, UseOnDifferentCollections)
 {
   {
@@ -3921,6 +4063,15 @@ TEST(AlgoCopy, UseOnDifferentCollections)
     std::copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
     EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6));
   }
+}
+
+// ={=========================================================================
+// cxx-count
+TEST(AlgoCount, count)
+{
+  std::vector coll{1, 0, 1, 0, 1, 1, 0, 1};
+
+  EXPECT_THAT(std::count(coll.cbegin(), coll.cend(), 1), 5);
 }
 
 /*
