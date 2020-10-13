@@ -11331,7 +11331,7 @@ dtor, default-ctor,
 *cxx-copy-control* : copy ctor and assign, move ctor and assign *cxx-11*
 
 
-<cxx-deleted>
+*cxx-deleted*
 However, not always possible since there are cases when compiler cannot:
 
 o When a class has reference or cxx-const member.
@@ -11339,7 +11339,7 @@ o When there's a class member that don't have default ctor.
 o When base class have private on any of synthesized default-operations.
 
 
-{cxx-ctor-default} default-initialization
+*cxx-ctor-default* default-initialization
 The `default-ctor` is a special constructor which takes `no-arguments`.
 
 The recommendation on initialization is to avoid syn-version and do it
@@ -11366,39 +11366,42 @@ o `If defines any other ctor for the class, the compiler do not generates`
 
 
 <ex>
-class ConstructionNoDefault
+
 {
+  class Base1
+  {
   public:
-    ConstructionNoDefault(const std::string &name) 
-    {
-      (void)name;
-    }
+    Base1(const std::string &name) { (void)name; }
 
   private:
     int value_;
-};
+  };
+}
 
-// cause compile error
-// cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
-// cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
-//      ConstructionWitNoCtorInitList() {}
+TEST(CxxCtor, show_default_ctor_is_necessary)
+{
+  // cause compile error
+  // error: no matching function for call to ‘cxx_ctor::Base1::Base1()’
+  //      Base1 o;
+  // 
+  // since:
+  //
+  // `If defines any other ctor for the class, the compiler do not generates`
+  // default ctor. So if a class requires control to init an object in one case,
+  // then the class is likely to require control in all cases.
+  //
+  // {
+  //   using namespace cxx_ctor;
+  //   Base1 o;
+  // }
 
-// class ConstructionWitNoCtorInitList
-// {
-//   public:
-//     ConstructionWitNoCtorInitList() {}
-
-//   private:
-//     ConstructionNoDefault member;
-// };
-
-// TEST(Ctor, CtorInitList)
-// {
-//   ConstructionWitNoCtorInitList cwo;
-// }
+  {
+    using namespace cxx_ctor;
+    Base1 o("another ctor");
+  }
+}
 
 That's why `default-ctor` is almost nearly required.
-
 
 To see when syn versions are useful. see {make-base-class-for-reference-counting}
 
@@ -11459,7 +11462,7 @@ Tried copy-ctor and compile error:
 :38:31: error: constructors may not be cv-qualified
 
 
-{cxx-init-in-class-init} *cxx-11* CPR 73
+*cxx-init-inclass-init* *cxx-11* CPR 73 *cxx-default-arg*
 in-class-init are `restricted as to the form`: must either be enclosed inside
 curly braces or follow an = sign. May not specify an inclass-init inside
 parentheses.
@@ -11500,7 +11503,7 @@ class T {
   double revenue = 0.0;
 };
 
-The `cxx-in-class-init` do like `default-arg` because:
+The `cxx-in-class-init` do like `cxx-default-arg` because:
 
 T(const string &s) : bookNo(s) {}
 
@@ -11508,46 +11511,53 @@ is equivalent to:
 
 T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
 
-note that `cxx-in-class-init` do like `cxx-default-arg` but not the same:
+However, `cxx-in-class-init` is not the same as `cxx-default-arg`
 
 T(const string &s, unsigned units = 0, double revenue = 0.0) 
   : bookNo(s), units_sole(units), revenue(revenue) {}
+
+since cannot set "units, and revenue" as default argument
 
 
 namespace cxx_ctor
 {
   class CtorUseDefaultArgument
   {
-    public:
-      CtorUseDefaultArgument(std::string const &bookNo, unsigned sold = 10, unsigned revenue = 20)
-        :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
-      {}
+  public:
+    CtorUseDefaultArgument(std::string const &bookNo,
+                           unsigned sold    = 10,
+                           unsigned revenue = 20)
+        : bookNo_(bookNo)
+        , units_sold_(sold)
+        , revenue_(revenue)
+    {}
 
-      // to make it easy to check values
-      std::string bookNo_;
-      unsigned units_sold_;
-      unsigned revenue_;
+    // to make it easy to check values
+    std::string bookNo_;
+    unsigned units_sold_;
+    unsigned revenue_;
   };
 
   class CtorUseInClassInit
   {
-    public:
-      // CtorUseInClassInit(std::string const &bookNo, unsigned sold, unsigned revenue)
-      //   :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
-      // {}
+  public:
+    // CtorUseInClassInit(std::string const &bookNo, unsigned sold, unsigned
+    // revenue)
+    //   :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
+    // {}
 
-      CtorUseInClassInit(std::string const &bookNo)
-        :bookNo_(bookNo)
-      {}
+    CtorUseInClassInit(std::string const &bookNo)
+        : bookNo_(bookNo)
+    {}
 
-      std::string bookNo_;
-      unsigned units_sold_ = 10;
-      unsigned revenue_ = 20;
+    std::string bookNo_;
+    unsigned units_sold_{10};
+    unsigned revenue_{20};
+    unsigned value_{};
   };
+} // namespace cxx_ctor
 
-} // namespace
-
-TEST(Ctor, CtorDefaultArgAndInClassInit)
+TEST(CxxCtor, default_argument)
 {
   using namespace cxx_ctor;
 
@@ -11575,13 +11585,11 @@ TEST(Ctor, CtorDefaultArgAndInClassInit)
     EXPECT_THAT(o.revenue_, 40);
   }
 
-  // the problem is that have to define all ctors if want to use it like one 
-  // using default arguments. that is, `in-class init` is used to initialise 
-  // members out of ctor but default arguments is not. 
-  // `cxx-default-argument` can be problematic.
+  // error since there is no such ctor. so if want to do the same as default
+  // argument case, have to `define all ctors` to cover cases default ctor do.
   //
   // {
-  //   // error: no matching function for call to 
+  //   // error: no matching function for call to
   //   // ‘cxx_ctor::CtorUseInClassInit::CtorUseInClassInit(const char [5])’
   //
   //   CtorUseInClassInit o("ctor");
@@ -11591,13 +11599,16 @@ TEST(Ctor, CtorDefaultArgAndInClassInit)
   //   EXPECT_THAT(o.revenue_, 20);
   // }
 
-  // now works when changes ctor
+  // works now when changes ctor. so note that cxx-inclass-init has the same
+  // effect as cxx-default-argument.
+
   {
     CtorUseInClassInit o("ctor");
 
     EXPECT_THAT(o.bookNo_, "ctor");
     EXPECT_THAT(o.units_sold_, 10);
     EXPECT_THAT(o.revenue_, 20);
+    EXPECT_THAT(o.value_, 0);
   }
 }
 
@@ -12009,7 +12020,7 @@ ABEntry::ABEntry(...)
 {}
 
 
-// temporary
+// *cxx-temporary* *cxx-value-init*
 void doSomething(B bObject);
 doSomething(B(28));           // T(val). converting ctor
 
@@ -26096,27 +26107,27 @@ try {
 {cxx-except-standard}
 Exception classes are defined in four headers.
 
-  o #include <exceptio>
-    The C++ Standard library provides a 'base' class specifically designed to
+  o #include <exception>
+    The C++ Standard library provides a `base class` specifically designed to
     declare objects to be thrown as exceptions. It is called std::exception
     and is defined in the exception header. This class has a virtual member
     function called what() that returns a null-terminated character sequence
     and that can be overwritten in derived classes to contain some sort of
     description of the exception. 
 
-  * stdexcept header
-    The 'stdexcept' header defines several general purpose exception classes
+  o #include <stdexcept> 
+    The stdexcept header defines several `general purpose exception classes`
     which are derived from std::exception.
 
-  * new header
+  o #include <new>
     Defines bad_alloc exception type.
 
-  * typeinfo header
+  o #include <typeinfo>
     Defines the bad_cast exception type. 
 
 namespace cxx_code
 {
-  // <exception>
+  // o #include <exception>
   /**
    *  @brief Base class for all library exceptions.
    *
@@ -26136,10 +26147,7 @@ namespace cxx_code
       virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
   };
 
-  // note:
-  // what() returns "std::exception" when use "throw exception()"
-
-  // <stdexcept>
+  // o #include <stdexcept> 
   // exception takes message in ctor
 
   class logic_error : public exception;
@@ -26171,67 +26179,6 @@ namespace cxx_code
       what() const _GLIBCXX_USE_NOEXCEPT;
   };
 } // namespace
-
-<ex>
-
-namespace cxx_except 
-{
-  class my_exception : public exception
-  {
-    virtual const char *what() const throw()
-    {
-      return "my exception happened";
-    }
-  };
-
-  my_exception myex;
-
-} // namespace
-
-
-TEST(Exception, OwnException)
-{
-  using namespace cxx_except;
-
-  try
-  {
-    throw myex;
-  }
-  catch (exception &e)
-  {
-    EXPECT_THAT(e.what(), "my exception happened");
-  }
-
-  try
-  {
-    throw myex;
-  }
-  catch (exception &e)
-  {
-    ostringstream os;
-    os << "my exception happened";
-    EXPECT_THAT(os.str(), "my exception happened");
-  }
-
-  try
-  {
-    throw myex;
-  }
-  catch (...)
-  {
-    ostringstream os;
-    os << "my exception happened";
-    EXPECT_THAT(os.str(), "my exception happened");
-  }
-
-  try
-  {
-    throw myex;
-  }
-  catch (...)
-  {
-  }
-}
 
 
 All exceptions thrown by components of the C++ Standard library derived from
@@ -26727,43 +26674,24 @@ exception gets thrown: Specifying noexcept without condition is a short form
 of specifying `noexcept(true)` which means exception is not allowed
 
 <ex>
+/*
+CLR 3.1.7 Keyword noexcept
+
+Here, inside noexcept(...), you can specify a boolean condition under which no
+exception gets thrown: Specifying noexcept without condition is a short form of
+specifying `noexcept(true)` which means exception is not allowed
+
 ~TemplateDispatcher()
 {}
 
 is same as:
 
 ~TemplateDispatcher() noexcept(true)
+{}
 
-namespace cxx_except 
-{
-  class Foo
-  {
-    public:
-      ~Foo()
-      {
-      }
-  };
+*/
 
-  class FooNoAbort
-  {
-    public:
-      ~FooNoAbort() noexcept(false)
-      {
-        throw std::runtime_error("noexcept(false) so expects no abort");
-      }
-  };
-
-  class FooAbort
-  {
-    public:
-      ~FooAbort()
-      {
-        throw std::runtime_error("noexcept(true) so expects abort");
-      }
-  };
-} // namespace
-
-TEST(Exception, Noexcept)
+TEST(CxxException, noexcept_condition_1)
 {
   using namespace cxx_except;
 
@@ -26775,30 +26703,35 @@ TEST(Exception, Noexcept)
     EXPECT_THAT(value, 1);
   }
 
+  // FooNoAbort dtor is allowed to throw so no abort happens
   {
     int value{1};
 
     try
     {
       FooNoAbort foo;
-    }
-    catch(exception &e)
+    } catch (std::exception &e)
     {
-      // why fails???
+      // fails since what() returns "const char*"
       // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
-      
-      std::ostringstream os;
-      os << e.what(); 
-      EXPECT_THAT(os.str(), "noexcept(false) so expects no abort");
+
+      EXPECT_THAT(std::string(e.what()), "noexcept(false) so expects no abort");
     }
 
     EXPECT_THAT(value, 1);
   }
+}
 
-  // [ RUN      ] Exception.Noexcept
-  // terminate called after throwing an instance of 'std::runtime_error'
-  //   what():  noexcept(true) so expects abort
-  // Aborted
+// "noexcept(true)" but throw so violates promise. abort happens.
+//
+// [ RUN      ] Exception.Noexcept
+// terminate called after throwing an instance of 'std::runtime_error'
+//   what():  noexcept(true) so expects abort
+// Aborted
+
+TEST(CxxException, DISABLED_noexcept_condition_2)
+{
+  using namespace cxx_except;
 
   {
     int value{1};
@@ -26806,8 +26739,7 @@ TEST(Exception, Noexcept)
     try
     {
       FooAbort foo;
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::cout << e.what() << std::endl;
     }
@@ -37116,15 +37048,14 @@ ct = fi.count();              // via an object
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-template-type-member
-
-{cxx-template-type-members} <cxx-type-member> <cxx-typename>
+*kt_dev_cxx_0000* cxx-template-type-member cxx-type-member
 
 *cxx-static-access*
 
-Uses scope operator(::) to access both *cxx-static* member and type members. For
-example, string::size_type. In non-template code, the compiler has access to
-the class definition and knows whether a name accessed through the scope
+Uses scope operator(::) to access both *cxx-static* member and cxx-type-members. 
+
+For example, string::size_type. In non-template code, the compiler has access
+to the class definition and knows whether a name accessed through the scope
 operator is a type or static member.
 
 `However, in template code,` when see code such as T::mem, won't know whether
@@ -37147,19 +37078,15 @@ typename T::value_type top( const T& c )
   if( !c.empty() )
     return c.book();
   else
-    return `typename` T::value_type();  // "typename T::value_type" is a type
+    return `typename` T::value_type();
 }
 
-EC++42. This is called `dependant type names` since it depends on the template
-parameter. This causes parsing difficulty and this is why must tell it to
-compiler and use typename but not class.
+"typename T::value_type" is a type an do *cxx-value-init*
 
-// template<typename T>
-// void print2nd( const T& container )
-// {
-//   T::const_iterator iter( container.begin() );  // iter is dependant name
-//   ...
-// }
+
+EC++42. This is called `dependant type names` since it depends on the template
+parameter. This causes `parsing difficulty` and this is why must tell it to
+compiler and use typename but not class.
 
 template<typename T>
 void print2nd(const T& container)
@@ -37230,25 +37157,26 @@ namespace cxx_code
 } // namespace
 
 <ex>
+{
   // error 
   typedef std::list<bucket_value>::iterator bucket_iterator;
 
   // okay
   typedef typename std::list<bucket_value>::iterator bucket_iterator;
 
-ccon.cpp:306:17: error: need ‘typename’ before ‘std::__debug::list<std::pair<_T1, _T2> >::iterator’ 
+: error: need ‘typename’ before ‘std::__debug::list<std::pair<_T1, _T2> >::iterator’ 
   because ‘std::__debug::list<std::pair<_T1, _T2> >’ is a dependent scope
          typedef std::list<bucket_value>::iterator bucket_iterator;
                  ^
+}
+
 <ex>
 template<typename Policy_T>
 struct ConstrainedValue
 {
   public:
 
-    // error
-    //
-    // t_ex.cpp:435:22: error: expected nested-name-specifier before ‘Policy_T’
+    // error: expected nested-name-specifier before ‘Policy_T’
     //      typedef typename Policy_T policy_type;
     //                       ^
     // typedef typename Policy_T policy_type;
@@ -37322,7 +37250,7 @@ type of a callable objects. `default type`
 namespace cxx_template_default
 {
   // `This shows how function-object is useful` *cxx-functor*
-  // default template argument, the 'type' of callable
+  // default template argument, the type of callable
   // default function argument, F()
 
   template <typename T, typename F = less<T>>
@@ -37401,6 +37329,18 @@ bool compareIsbn( const Sales_data &lhs, const Sales_data &rhs )
 bool j = compare( item1, item2, compareIsbn );
 
 
+<ex> class template
+
+template <typename T = int>
+class Numbers
+{
+  ...
+}
+
+Numbers<long double> lots_of_precision;
+Numbers<> average_precision;  // empty <> says we want the default type, int;
+
+
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-member
 
@@ -37408,60 +37348,61 @@ Either an ordinary class or class template may have a member function that is
 itself a template; `member template function.` See this word ordering since it
 summarise that it is member function and function template.
 
-  " member template `may not be virtual` "
+"member template `may not be virtual` "
 
 <with-nontemplate-class>
 The member template of ordinary class from CPR 672. This example is similar to
-the default deleter in unique_ptr since overloads operator(). Unlike default
-deleter, support debug print and any type, use template.
+the default deleter in unique_ptr *cxx-sp-delete* since overloads operator().
+Like default deleter, support any type and use *cxx-template-member*
 
 
-namespace cxx_template_member 
+namespace cxx_template
 {
   class DebugDelete
   {
-    public:
-      DebugDelete(ostream &os = cerr) : os_(os) {}
+  public:
+    DebugDelete(std::ostream &os = std::cerr)
+        : os_(os)
+    {}
 
-      // *cxx-functor*
-      template <typename T>
-      void operator() (T *p) const
-      {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
-        delete p;
-      }
+    // *cxx-functor*
+    // as with any function template, T is deduced by the compiler
 
-    private:
-      // *cxx-reference-member*
-      ostream &os_;
+    template <typename T>
+    void operator()(T *p) const
+    {
+      os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+      delete p;
+    }
+
+  private:
+    // *cxx-reference-member
+    std::ostream &os_;
   };
+} // namespace cxx_template
 
-} // namespace
-
-TEST(Template, MemberTemplate)
+TEST(CxxTemplate, memeber_template)
 {
-  using namespace cxx_template_member; 
+  using namespace cxx_template;
 
-  // output:
   // deleting Pd, p = 0x9be7008
   // deleting Pi, p = 0x9be7018
-
   {
     double *pd = new double();
-    int *pi = new int();
+    int *pi    = new int();
     DebugDelete d;
     d(pd);
     d(pi);
   }
 
-  // *cxx-sp-delete*
-  // output:
+  // see TEST(CxxSmartPointer, check_deleter);
+  //
   // deleting PSs, p = 0x1d5e830
   // deleting Pi, p = 0x1d5e850
-
   {
-    unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
-    unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+    std::unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
+    std::unique_ptr<std::string, DebugDelete> ps(new std::string,
+                                                 DebugDelete());
   }
 }
 
@@ -37477,15 +37418,20 @@ class Blob {
   ...
 };
 
+when define a member template outside of class template:
+
 template <typename T>
 template <typename It>
-   Blob<T>::Blob(It b, It e): data(std::make_shared<std::vector<T>>(b,e)) {}
+  Blob<T>::Blob(It b, It e): data(std::make_shared<std::vector<T>>(b,e)) {}
 
 To instantiate:
 
-Blob<int> a1( begin(iarray), end(iarray));
-Blob<int> a1( ivec.begin(), ivec.end());
-Blob<string> a1( svec.begin(), svec.end());
+// Blob<int>::Blob(int *, int *);
+Blob<int> a1(begin(iarray), end(iarray));
+
+Blob<int> a1(ivec.begin(), ivec.end());
+
+Blob<string> a1(svec.begin(), svec.end());
 
 As with "with-nontemplate-class", function parameter types are deduced as it
 is function template.
@@ -37494,7 +37440,7 @@ is function template.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-explicit-instantiation
 
-{cxx-template-control-instantiation} *cxx-code-bloat*
+*cxx-code-bloat*
 The fact that instantiations are generated when a template is used means that
 the same instantiation may appear in multiple object files. This overhead can
 become significant in large systems. 
@@ -37515,8 +37461,11 @@ When the compiler sees an "extern template declaration", will not generate
 code for that instantiation `in that file` and it is to say there will be
 nonextern use of that elsewhere in the program. 
 
-Must be one definition for that particular instantiation and appear before any
-code that use it.
+o There may be several extern declarations for a given instantiation but there
+  `must be exactly one definition for that particular instantiation` 
+
+o since compiler automatically instantiates a template when use it, extern
+  declaration must appear before any code that use it.
 
 // `file1.cc`
 // "instantiation declaration"
@@ -37526,7 +37475,7 @@ extern template int compare( const int&, const int& );
 // Blob<string> instantiation will appear elsewhere
 Blob<string> sa1, sa2;
 
-// Blob<int>, initializer_list ctor, and copy ctor instantiated in this file.
+// Blob<int>, its initializer_list ctor, and copy ctor are instantiated in this file.
 Blob<int> a1 = { 0, 1, 2, 3, 4 };
 Blob<int> a2(a1);
 
@@ -37536,15 +37485,15 @@ int i = compare( a1[0], a2[0] );
 
 // `file2.cc` *cxx-template-instantiate-all*
 // compiler generate `all members` including inline members when see
-// "instantiation definition" and must link file1.o with file2.o.
+// `instantiation definition` and must link file1.o with file2.o.
 
-template class Blob<string>;
+template class Blob<std::string>;
 template int compare( const int&, const int& );
 
 
 *cxx-template-instantiate-all*
 The instantiation definition `generates all the members of that template`
-including inline member function even if do not use a member since the
+including inline member function even if we do not use a member since the
 compiler cannot know which member the program uses.
 
 Can be used only for types that can be used with every member function of a
@@ -37578,7 +37527,7 @@ DBusMessage & DBusMessage::operator>>(T &arg)
 
 // see
 
-template DBusMessage & DBusMessage::operator>> <bool>(bool&);
+template DBusMessage & DBusMessage::operator>> <bool>(bool&); 
 template DBusMessage & DBusMessage::operator>> <int>(int&);
 template DBusMessage & DBusMessage::operator>> <unsigned>(unsigned&);
 template DBusMessage & DBusMessage::operator>> <double>(double&);
@@ -37597,7 +37546,7 @@ http://stackoverflow.com/questions/2351148/explicit-instantiation-when-is-it-use
 
 For instance, libstdc++ contains the explicit instantiation of
 
-namespace cxx-code
+namespace cxx-code *cxx-string*
 {
   // bits/stringfwd.h
   //
@@ -37605,16 +37554,38 @@ namespace cxx-code
   {
     template <typename charT,
     typename traits = char_traits<charT>,
-    typename Allocator = allocator<charT> >
+    typename Allocator = allocator<charT> > 
       class basic_string;
 
     typedef basic_string<char> string;
   }
 } // namespace
 
+
+namespace cxx-code *cxx-string*
+{
+  // gcc/libstdc++-v3/src/c++11/string-inst.cc
+
+  // Instantiation configuration.
+  #ifndef C
+  # define C char
+  #endif
+
+  namespace std _GLIBCXX_VISIBILITY(default)
+  {
+  _GLIBCXX_BEGIN_NAMESPACE_VERSION
+
+    typedef basic_string<C> S;
+
+    template class basic_string<C>;
+    ...
+  }
+}
+
 so every time you use functions of std::string, the same function code doesn't
 need to be copied to objects. The compiler only need to refer (link) those to
 libstdc++
+
 
 https://msdn.microsoft.com/en-us/library/by56e477%28VS.80%29.aspx
 Explicit Instantiation Visual Studio 2005 Other Versions
@@ -37622,7 +37593,7 @@ Explicit Instantiation Visual Studio 2005 Other Versions
 Explicit instantiation lets you create an instantiation of a templated class
 or function without actually using it in your code. Because this is useful
 `when you are creating library files` that use templates for distribution,
-  uninstantiated template definitions are not put into object (.obj) files.
+uninstantiated template definitions are not put into object (.obj) files.
 
   // libstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007efe7d4aa000)
   //
@@ -57803,7 +57774,7 @@ namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
       explicit operator bool() const noexcept
       { return get() == pointer() ? false : true; }
 
-      // Destructor.
+      // Destructor. *cxx-sp-deleter*
       ~unique_ptr() noexcept
       {
         // get first of tuple which is pointer and 
@@ -58318,12 +58289,19 @@ void f()
 o the passed deleter is not allowed to throw exceptions.
 
 o the key difference:
+  can easily override the deleter of a shared_ptr by passing a callable object
+  when create or reset. In contrast, the type of the deleter is part of the
+  type of unique_ptr. As a result, it is more complidated for unique_ptr to
+  provide own deleter.
+
   unique_ptr uses template and typename. shared_ptr uses object for deleter and
   template function.
 
 namespace cxx_code *cxx-sp-code*
 {
   // /usr/include/c++/4.9/bits/unique_ptr.h
+
+  // *cxx-sp-default-delete*
 
   template <typename _Tp, `typename _Dp = default_delete<_Tp>`>
     class unique_ptr
@@ -58363,7 +58341,7 @@ namespace cxx_code *cxx-sp-code*
    *  it is destroyed or reset.
    */
   template<typename _Tp>
-    class shared_ptr : public __shared_ptr<_Tp>
+    class shared_ptr : public __shared_ptr<_Tp> 
   {
     *cxx-template-member*
       /**
@@ -58383,7 +58361,6 @@ namespace cxx_code *cxx-sp-code*
       shared_ptr(_Tp1* __p, _Deleter __d)
       : __shared_ptr<_Tp>(__p, __d) { }
   };
-
 } // namespace
 
 

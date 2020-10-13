@@ -109,3 +109,13 @@ endif()
 get_filename_component(CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 message("CMAKE_CURRENT_LIST_FILE:" ${CMAKE_CURRENT_LIST_FILE})
 message("CMAKE_DIR: ${CMAKE_DIR}")
+
+
+option(ENABLE_OPTION "test option" ON)
+# option(ENABLE_OPTION "test option" OFF)
+
+if (ENABLE_OPTION)
+  message("ENABLE_OPTION is ON")
+else()
+  message("ENABLE_OPTION is OFF")
+endif()

@@ -1,4 +1,5 @@
 #include "gmock/gmock.h"
+#include <chrono>
 #include <fstream>
 #include <incbin.h>
 #include <iostream>
@@ -1819,6 +1820,169 @@ TEST(CxxJSON, append_on_array)
     servicelist["uris"] = Json::Value("OTT");
 
     std::cout << "servicelist3: " << servicelist << std::endl;
+  }
+}
+
+// ={=========================================================================
+// [ RUN      ] CxxJSON.time_output
+// current utc      : 1601563661
+// current utc in ms: 1601563661000
+// current utc in ms: 1601563661000
+// current utc in ms: 1601563661000
+//
+// 1. servicelist: {
+//         "time1" : 1601563661,
+//         "time2" : -459140408,
+//         "time3" : -459140408,
+//         "time4" : -459140408
+// }
+//
+// 2. servicelist: {
+//         "time1" : 1601563661,
+//         "time2" : 1601563661000,
+//         "time3" : 1601563661000,
+//         "time4" : 1601563661000
+// }
+//
+// 3. servicelist: {
+//         "time3" : 1601562347722
+// }
+//
+// casted to "unsigned"
+//
+// 4. servicelist: {
+//         "time1" : 1601563661,
+//         "time2" : 3835826888,
+//         "time3" : 3835826888,
+//         "time4" : 3835826888
+// }
+//
+// [       OK ] CxxJSON.time_output (0 ms)
+
+TEST(CxxJSON, time_output)
+{
+  auto now = std::time(0);
+  std::cout << "current utc      : " << now << std::endl;
+  std::cout << "sizeof  utc      : " << sizeof now << std::endl;
+
+  auto now_to_ms_1 = now * 1000;
+  std::cout << "current utc in ms: " << now_to_ms_1 << std::endl;
+  std::cout << "sizeof  utc in ms: " << sizeof now_to_ms_1 << std::endl;
+
+  uint64_t now_to_ms_2 = static_cast<uint64_t>(now * 1000);
+  std::cout << "current utc in ms: " << now_to_ms_2 << std::endl;
+  std::cout << "sizeof  utc in ms: " << sizeof now_to_ms_2 << std::endl;
+
+  uint64_t now_to_ms_3 = now*1000;
+  std::cout << "current utc in ms: " << now_to_ms_3 << std::endl;
+
+  // error: conversion from ‘long int’ to ‘Json::Value’ is ambiguous
+  //      servicelist["time1"] = now;
+  //                             ^~~
+  // error: conversion from ‘uint64_t {aka long unsigned int}’ to ‘Json::Value’ is ambiguous
+  //      servicelist["time4"] = now_to_ms_3;
+  //                             ^~~~~~~~~~~
+  // same for the rest
+
+  // {
+  //   Json::Value servicelist;
+  //
+  //   // set a array
+  //   servicelist["time1"] = now;
+  //   servicelist["time2"] = now_to_ms_1;
+  //   servicelist["time3"] = now_to_ms_2;
+  //   servicelist["time4"] = now_to_ms_3;
+  //
+  //   std::cout << "servicelist1: " << servicelist << std::endl;
+  // }
+
+  // avoids errors via static_cast but json output is wrong
+
+  {
+    Json::Value servicelist;
+
+    // set a array
+    servicelist["time1"] = static_cast<int>(now);
+    servicelist["time2"] = static_cast<int>(now_to_ms_1);
+    servicelist["time3"] = static_cast<int>(now_to_ms_2);
+    servicelist["time4"] = static_cast<int>(now_to_ms_3);
+
+    std::cout << "1. servicelist: " << servicelist << std::endl;
+  }
+
+  // ok
+  {
+    Json::Value servicelist;
+
+    // set a array
+    servicelist["time1"] = static_cast<unsigned int>(now);
+    servicelist["time2"] = static_cast<Json::UInt64>(now_to_ms_1);
+    servicelist["time3"] = static_cast<Json::UInt64>(now_to_ms_2);
+    servicelist["time4"] = static_cast<Json::UInt64>(now_to_ms_3);
+
+    std::cout << "2. servicelist: " << servicelist << std::endl;
+  }
+
+  // error on define JSONCPP_VERSION_STRING "1.7.7"
+  // but not error on  1.7.4-3 on PC
+  //
+  // error: conversion from ‘uint64_t {aka long unsigned int}’ to ‘Json::Value’ is ambiguous
+  //     servicelist["time4"] = static_cast<uint64_t>(now_to_ms_3);
+  //
+  // /usr/include/jsoncpp/json/value.h:312:3: note: candidate: Json::Value::Value(bool)
+  //    Value(bool value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:289:3: note: candidate: Json::Value::Value(double)
+  //    Value(double value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:287:3: note: candidate: Json::Value::Value(Json::Value::UInt64)
+  //    Value(UInt64 value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:286:3: note: candidate: Json::Value::Value(Json::Value::Int64)
+  //    Value(Int64 value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:284:3: note: candidate: Json::Value::Value(Json::Value::UInt)
+  //    Value(UInt value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:283:3: note: candidate: Json::Value::Value(Json::Value::Int)
+  //    Value(Int value);
+  //    ^~~~~
+  // /usr/include/jsoncpp/json/value.h:323:10: note:   initializing argument 1 of ‘Json::Value& Json::Value::operator=(Json::Value)’
+  //    Value& operator=(Value other);
+  //           ^~~~~~~~
+
+  // {
+  //   Json::Value servicelist;
+  //
+  //   servicelist["time3"] = static_cast<uint64_t>(now_to_ms_2);
+  //   servicelist["time4"] = static_cast<uint64_t>(now_to_ms_3);
+  //
+  //   std::cout << "3. servicelist: " << servicelist << std::endl;
+  // }
+  //
+  // value is bigger than int::max so use uint64_t but still see the same error
+  //
+  // {
+  //   Json::Value servicelist;
+  //
+  //   uint64_t now{1601562347722};
+  //
+  //   // set a array
+  //   servicelist["time3"] = static_cast<uint64_t>(now);
+  //
+  //   std::cout << "3. servicelist: " << servicelist << std::endl;
+  // }
+
+  // no error and works
+  {
+    Json::Value servicelist;
+
+    double now{1601562347722};
+
+    // set a array
+    servicelist["time3"] = now;
+
+    std::cout << "3. servicelist: " << servicelist << std::endl;
   }
 }
 

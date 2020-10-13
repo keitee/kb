@@ -22,6 +22,8 @@ TEST(CxxCoredump, check_vaarg_issue)
   printf("value (%ld)\n", value);
 }
 
+No it do not crash itself and the real problem is about using diag macro. TODO:
+
 */
 
 #include <functional>

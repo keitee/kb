@@ -1095,7 +1095,6 @@ TEST(OsGlibc, glibc_getpid)
 
 namespace sanitizer_syscall
 {
-
   // NAME
   //        stat, fstat, lstat, fstatat - get file status
   //
@@ -1265,9 +1264,9 @@ TEST(OsGlibc, glibc_SanitizerSyscallExternal)
 {
   using namespace sanitizer_syscall;
 
-  for (int i = 0; i < (1 << 24); ++i)
+  for (int i = 0; i < (1 << 2); ++i)
   {
-    EXPECT_TRUE(FileExistsExternal("syscall.cpp"));
+    EXPECT_TRUE(FileExistsExternal("test_os"));
   }
 }
 

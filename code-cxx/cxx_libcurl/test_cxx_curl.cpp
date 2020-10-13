@@ -252,6 +252,26 @@ code. See the --write-out section.
 // -{-------------------------------------------------------------------------
 libcurl basics
 
+Global initialization
+
+Before you do anything libcurl related in your program, you should do a global
+libcurl initialize call with curl_global_init(). This is necessary because some
+underlying libraries that libcurl might be using need a call ahead to get setup
+and initialized properly.
+
+curl_global_init() is, unfortunately, not thread safe, so you must ensure that
+you only do it once and never simultaneously with another call. It initializes
+global state so you should only call it once, and once your program is
+completely done using libcurl you can call curl_global_cleanup() to free and
+clean up the associated global resources the init call allocated.
+
+libcurl is built to handle the situation where you skip the curl_global_init()
+call, but it does so by calling it itself instead (if you did not do it before
+any actual file transfer starts) and it then uses its own defaults. But beware
+that it is still not thread safe even then, so it might cause some "interesting"
+side effects for you. It is much better to call curl_global_init() yourself in a
+controlled manner.
+
 
 Drive with easy
 
@@ -805,7 +825,48 @@ TEST(CxxCurl, case_1)
   curl_global_cleanup();
 }
 
+/*
 // ={=========================================================================
+
+this gets error for some urls. is it url problem? 
+
+curl_easy_perform() failed: {Error}
+HTTP GET response is 200
+
+added to get more error context
+
+char error[CURL_ERROR_SIZE]; // needs to be at least this big
+curl_easy_setopt(curl_handle, CURLOPT_ERRORBUFFER, error);
+
+and gets:
+
+curl_easy_perform() failed: {Error}
+HTTP GET request http://atlantis.epgsky.com/as/services/4096/1 {Failed writing body (1434 != 497)} and response is 200
+
+
+SO says:
+https://stackoverflow.com/questions/9311782/failed-writing-body-in-libcurl
+It means your write callback didn't return the same number of bytes as was passed into it!
+
+so added debug on write_data:
+
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 5437} return {5437}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 2868} return {2868}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 2868} return {2868}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 2868} return {2868}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 497} return {1434}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: curl_easy_perform() failed: {Error}
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: HTTP GET request http://atlantis.epgsky.com/as/services/4096/1 {Failed writing body (1434 != 497)} and response is 200
+ 
+*/
+
 namespace curl_case
 {
   // output from the command line run and use to check the result

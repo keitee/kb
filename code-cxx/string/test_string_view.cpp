@@ -44,7 +44,6 @@ false
 --------------------
 false
 
-
 #include <cassert>
 #include <experimental/string_view>
 #include <iostream>
@@ -94,12 +93,14 @@ sometimes string is
 #include <experimental/string_view>
 #include <iostream>
 
-void* operator new(std::size_t count) {
+void *operator new(std::size_t count)
+{
   std::cout << count << " bytes allocates " << std::endl;
   return malloc(count);
 }
 
-int main() {
+int main()
+{
   std::cout << "string -----" << std::endl;
   std::string s = "sometimes string is very slow";
   std::cout << "--------------------" << std::endl;

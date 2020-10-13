@@ -342,7 +342,7 @@ TEST(CxxIterator, next)
   // succeeds.
   //
   // To make your code portable, the utility function next() is provided since
-  // C++11 (see Sec- tion 9.3.2, page 443), so you can write:
+  // C++11 (see Section 9.3.2, page 443), so you can write:
 
   {
     std::vector<int> coll{2, 4, 1, 5, 6};
@@ -358,23 +358,6 @@ TEST(CxxIterator, next)
     std::sort(std::next(coll.begin()), coll.end());
 
     EXPECT_THAT(coll, ElementsAre(2, 1, 4, 5, 6));
-  }
-
-  // since next() uses copy, do not change "pos"
-  {
-    std::vector<int> coll{1, 2, 3, 4, 5};
-
-    auto pos = coll.begin();
-    EXPECT_EQ(*pos, 1);
-
-    ++pos;
-
-    EXPECT_EQ(*pos, 2);
-
-    auto next_pos = std::next(pos);
-
-    EXPECT_EQ(*pos, 2);
-    EXPECT_EQ(*next_pos, 3);
   }
 
   // 9.3.2 next() and prev()
@@ -407,9 +390,52 @@ TEST(CxxIterator, next)
 }
 
 // ={=========================================================================
+// since next(pos) uses copy, do not change "pos"
+TEST(CxxIterator, next_do_not_change_pos)
+{
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+
+    auto pos = coll.begin();
+    EXPECT_EQ(*pos, 1);
+
+    ++pos;
+
+    EXPECT_EQ(*pos, 2);
+
+    auto next_pos = std::next(pos);
+
+    // pos is not changed
+    EXPECT_EQ(*pos, 2);
+
+    EXPECT_EQ(*next_pos, 3);
+  }
+
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+
+    auto pos = coll.begin();
+
+    std::next(pos);
+
+    // expect to see the next element? NO. have to update pos.
+    EXPECT_THAT(*pos, Ne(2));
+
+    EXPECT_THAT(*pos, 1);
+  }
+}
+
+// ={=========================================================================
 TEST(CxxIterator, distance)
 {
   // cxx-distance which returns positive/negative
+
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5};
+
+    EXPECT_THAT(std::distance(coll.begin(), coll.end()), coll.size());
+  }
+
   {
     std::vector<int> coll{1, 2, 3, 4, 5};
 
@@ -1776,12 +1802,20 @@ TEST(CxxVector, check_vector_bool)
 // can create arrays with and without elements for initialization. The default
 // constructor default initializes the elements, which means that the value of
 // fundamental types is undefined.
+//
+// template<typename _Tp, std::size_t _Nm>
+//   struct array
+//   {
+//     // ...
+//   }
 
 TEST(CxxArray, check_ctors)
 {
   // all fundamental types are initialised.
   {
     std::array<int, 8> coll = {};
+
+    EXPECT_THAT(coll.size(), 8);
 
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0, 0, 0, 0));
   }
@@ -3173,7 +3207,7 @@ TEST(CxxMapMulti, equal_range_2)
 // The only guarantee is that duplicates, which are possible because a multiset
 // is used, are grouped together in the order of their insertion.
 
-TEST(CxxUnordered, check_duplicates)
+TEST(CxxUnordered, duplicates)
 {
   std::unordered_multiset<string> cities{"Braunschweig",
                                          "Hanover",
@@ -3226,6 +3260,7 @@ TEST(CxxUnordered, check_duplicates)
   }
 }
 
+// ={=========================================================================
 TEST(CxxUnordered, search)
 {
   {
@@ -3283,6 +3318,7 @@ TEST(CxxUnordered, search)
   }
 }
 
+// ={=========================================================================
 TEST(CxxUnordered, insert)
 {
   // do not have duplicates
@@ -3365,6 +3401,7 @@ namespace std
   };
 } // namespace std
 
+// ={=========================================================================
 TEST(CxxUnordered, check_user_type)
 {
   using namespace collunordered;

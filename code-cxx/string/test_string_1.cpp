@@ -3,6 +3,7 @@
 #include <boost/cast.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
+#include <cstdarg>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -23,8 +24,70 @@ using testing::StrEq;
 // ={=========================================================================
 // *cxx-string-ctor*
 
-TEST(StringCtor, various_form)
+TEST(String, ctors)
 {
+  // 1)
+  // basic_string();
+
+  // 2) Constructs the string with count copies of character ch.
+  // basic_string( size_type count,
+  //               CharT ch,
+  //               const Allocator& alloc = Allocator() );
+  {
+    std::string s(5, 'c');
+    EXPECT_THAT(s, ElementsAre('c', 'c', 'c', 'c', 'c'));
+    EXPECT_THAT(s, "ccccc");
+  }
+
+  // 3) Constructs the string with a substring [pos, pos+count) of other. If
+  // count == npos, if count is not specified, or if the requested substring
+  // lasts past the end of the string, the resulting substring is [pos,
+  // other.size()).
+  //
+  // basic_string( const basic_string& other,
+  //               size_type pos,
+  //               const Allocator& alloc = Allocator() );
+  {
+    std::string other{"string is container which grows"};
+    std::string coll{other, 10};
+    EXPECT_THAT(coll, "container which grows");
+  }
+
+  // 4) Constructs the string with the first count characters of character
+  // string pointed to by s. s can contain null characters.
+  // basic_string( const CharT* s,
+  //               size_type count,
+  //               const Allocator& alloc = Allocator() );
+
+  // 5) Constructs the string with the contents initialized with a copy of the
+  // null-terminated character string pointed to by s. The length of the string
+  // is determined by the first null character. The behavior is undefined if [s,
+  // s + Traits::length(s)) is not a valid range (for example, if s is a null
+  // pointer). This constructor is not used for class template argument
+  // deduction if the Allocator type that would be deduced does not qualify as
+  // an allocator. (since C++17)
+  //
+  // basic_string( const CharT* s,
+  //              const Allocator& alloc = Allocator() );
+  {
+    std::string s("nico");
+    EXPECT_THAT(s.length(), 4);
+  }
+
+  // 6)
+  // template< class InputIt >
+  // basic_string( InputIt first, InputIt last,
+  //               const Allocator& alloc = Allocator() );
+
+  // 7)
+  // basic_string( const basic_string& other );
+
+  // 8)
+  // basic_string( basic_string&& other ) noexcept;
+
+  // 9) Constructs the string with the contents of the initializer list ilist.
+  // basic_string( std::initializer_list<CharT> ilist,
+  //               const Allocator& alloc = Allocator() );
   {
     std::string coll{"12345"};
 
@@ -35,11 +98,7 @@ TEST(StringCtor, various_form)
     // EXPECT_EQ(coll.end(), 5);
 
     EXPECT_EQ(*coll.end(), '\0');
-  }
-
-  {
-    std::string s("nico");
-    EXPECT_THAT(s.length(), 4);
+    EXPECT_EQ(coll, "12345");
   }
 
   // ascii code 48 is '0'
@@ -48,48 +107,10 @@ TEST(StringCtor, various_form)
     EXPECT_THAT(s.size(), 1);
     EXPECT_THAT(s, ElementsAre('0'));
   }
-
-  {
-    std::string s(5, 'c');
-    EXPECT_THAT(s, ElementsAre('c', 'c', 'c', 'c', 'c'));
-  }
-
-  {
-    std::string s(5, 'c');
-    EXPECT_THAT(s, "ccccc");
-  }
-
-  {
-    std::string s{"zoo"};
-    EXPECT_EQ(s, "zoo");
-  }
-
-  {
-    std::string s("zoo");
-    EXPECT_EQ(s, "zoo");
-  }
-
-  {
-    std::string coll{};
-    const char *message = "this is message";
-
-    // error: invalid operands of types ‘const char [17]’ and ‘const char*’ to binary ‘operator+’
-    // coll += "std::string and " + message;
-    coll += "std::string and " + std::string(message);
-  }
-
-  {
-    std::string ids{"4096/1"};
-
-    const std::string url{"http://atlantis.epg.bskyb.com/as/services/" + ids};
-    const std::string expected{"http://atlantis.epg.bskyb.com/as/services/4096/1"};
-
-    EXPECT_THAT(url, expected);
-  }
 }
 
 // ={=========================================================================
-TEST(StringCtor, check_const)
+TEST(String, ctros_const)
 {
   {
     // /** *cxx-cstring*
@@ -222,7 +243,7 @@ WOW.
 #endif
 
 // ={=========================================================================
-TEST(StringCtor, check_crash)
+TEST(String, ctors_crash)
 {
   std::string s = 0;
 }
@@ -967,7 +988,7 @@ TEST(StringOperation, check_add_char)
 // ={=========================================================================
 // string-erase, string-replace
 //
-// basic_string& replace( size_type pos, size_type count, 
+// basic_string& replace( size_type pos, size_type count,
 //  const basic_string& str );
 //
 // str	-	string to use for replacement
@@ -1064,9 +1085,123 @@ TEST(StringOperation, replace_exception)
 }
 
 // ={=========================================================================
+// cxx-string-append
+
+TEST(StringOperation, append)
+{
+  // std::operator+(std::basic_string) has many overloads
+  {
+    std::string coll{};
+    const char *message = "this is message";
+
+    // error: invalid operands of types ‘const char [17]’ and ‘const char*’ to binary ‘operator+’
+    // coll += "std::string and " + message;
+    coll += "std::string and " + std::string(message);
+  }
+
+  // (2)
+  // template< class CharT, class Traits, class Alloc >
+  //     std::basic_string<CharT,Traits,Alloc>
+  //         operator+( const std::basic_string<CharT,Traits,Alloc>& lhs,
+  //                    const CharT* rhs );
+  //
+  // (4)
+  // template< class CharT, class Traits, class Alloc >
+  //     std::basic_string<CharT,Traits,Alloc>
+  //         operator+( const CharT* lhs,
+  //                    const std::basic_string<CharT,Traits,Alloc>& rhs );
+  {
+    std::string ids{"4096/1"};
+
+    const std::string url{"http://atlantis.epg.bskyb.com/as/services/" + ids};
+    const std::string expected{
+      "http://atlantis.epg.bskyb.com/as/services/4096/1"};
+
+    EXPECT_THAT(url, expected);
+  }
+
+  // the case problem is when use libcurl to get file from online, set data
+  // callback to get data and uses std::string to get data like:
+  //
+  // static size_t writeData_(void *ptr, size_t size, size_t nmemb, void *stream)
+  // {
+  //   std::string coll{(char *)ptr};
+  //
+  //   // "response" is static std::string
+  //   response.append(coll);
+  //
+  //   return coll.size();
+  // }
+  //
+  // this fuction should return the size that this function get to handshake
+  // with libcurl. works well but not for some urls. it turns out that the
+  // return size value is bigger than gets from the input and causes libcurl
+  // error. so added some debug code:
+  //
+  // static size_t writeData_(void *ptr, size_t size, size_t nmemb, void *stream)
+  // {
+  //   std::string coll{(char *)ptr};
+  //
+  //   std::string x{};
+  //   x.append((char*)ptr, (size*nmemb));
+  //
+  //   response.append(coll);
+  //
+  //   LOG_ERROR("input {%ld, %ld} return {%ld, %ld}", size, nmemb,
+  //       coll.size(), x.size());
+  //
+  //   return coll.size();
+  // }
+  //
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1135} return {1135, 1135}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 2868} return {2868, 2868}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 2868} return {2868, 2868}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 2868} return {2868, 2868}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 1434} return {1434, 1434}
+  // Sep 28 20:52:36 skyxione com.sky.as.player[9880]: input {1, 497} return {2868, 497}
+  //
+  // as you can see the last line is wrong.
+  //
+  // 5) Constructs the string with the contents initialized with a copy of the
+  // null-terminated character string pointed to by s. The length of the string
+  // is determined by the first null character. The behavior is undefined if [s,
+  // s + Traits::length(s)) is not a valid range (for example, if s is a null
+  // pointer). This constructor is not used for class template argument
+  // deduction if the Allocator type that would be deduced does not qualify as
+  // an allocator. (since C++17)
+  //
+  // basic_string( const CharT* s,
+  //              const Allocator& alloc = Allocator() );
+  //
+  // so there is somehow a problem to get length when use ctor.
+  //
+  // 4) Appends characters in the range [s, s + count).
+  // This range can contain null characters.
+  //
+  // basic_string& append( const CharT* s, size_type count );
+
+  {
+    std::string coll{"string "};
+
+    coll.append("is container which grows", 12);
+
+    EXPECT_THAT(coll, "string is container");
+  }
+}
+
+// ={=========================================================================
 // cxx-string-assign
 
-TEST(CxxString, check_assign)
+TEST(StringOperation, assign)
 {
   {
     std::string coll;
@@ -1103,7 +1238,7 @@ TEST(CxxString, check_assign)
 // ={=========================================================================
 // cxx-string-swap
 
-TEST(CxxString, Swap)
+TEST(StringOperation, swap)
 {
   {
     std::string coll{"othello"};
@@ -1627,6 +1762,8 @@ string-conversion
 
 Defined in header <string>
 
+Interprets a signed integer value in the string str.
+
 int       stoi( const std::string& str, std::size_t* pos = 0, int base = 10 );
 int       stoi( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
 (1)	(since C++11)
@@ -1639,9 +1776,18 @@ long long stoll( const std::string& str, std::size_t* pos = 0, int base = 10 );
 long long stoll( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
 (3)	(since C++11)
 
+
+Interprets an unsigned integer value in the string str.
+
+unsigned long      stoul( const std::string& str, std::size_t* pos = 0, int base = 10 );
+unsigned long      stoul( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
+
+unsigned long long stoull( const std::string& str, std::size_t* pos = 0, int base = 10 );
+unsigned long long stoull( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
+
 */
 
-TEST(StringConverison, check_functions)
+TEST(StringConversion, string_to_number_functions)
 {
   // std::string to_string( int value );
   // std::string to_string( long value ); ...
@@ -1650,7 +1796,7 @@ TEST(StringConverison, check_functions)
     EXPECT_THAT(std::to_string(3301), "3301");
   }
 
-  // to string in hex
+  // to hex
   {
     char buf[10];
     int value{16};
@@ -1658,7 +1804,7 @@ TEST(StringConverison, check_functions)
     EXPECT_THAT(std::string(buf), "0x10");
   }
 
-  // from string to x
+  // to int
   {
     // stl functions
     EXPECT_EQ(std::stoi("  77"), 77);
@@ -1673,9 +1819,17 @@ TEST(StringConverison, check_functions)
     EXPECT_EQ(std::stoi("  42 is the truth", &idx), 42);
     // idx of first unprocessed char
     EXPECT_EQ(idx, 4);
+  }
 
+  // to hex
+  {
     // use base 16 and 8. 0x42 = 66
     EXPECT_EQ(std::stoi("  42", nullptr, 16), 66) << endl;
+  }
+
+  // to octal
+  {
+    size_t idx{};
 
     // std::stol("789", &idx, 8) parses only the first character of the string
     // because 8 is not a valid character for octal numbers.
@@ -1683,7 +1837,9 @@ TEST(StringConverison, check_functions)
     EXPECT_EQ(std::stoi("789", &idx, 8), 7);
     // idx of first unprocessed char
     EXPECT_EQ(idx, 1);
+  }
 
+  {
     // man strtol()
     //
     // #include <stdlib.h>
@@ -1719,12 +1875,14 @@ TEST(StringConverison, check_functions)
 
 // ={=========================================================================
 // cxx-stringstream
-TEST(StringConversion, check_stringstream)
+// handles "type" automatically
+
+TEST(StringConversion, stringstream)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.
   // *cxx-string-convert-to-string*
 
-  // to string
+  // to string. overwrite and move write point
   {
     std::ostringstream os;
 
@@ -1738,31 +1896,14 @@ TEST(StringConversion, check_stringstream)
       "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
 
     os.seekp(0);
+
     os << "octal : " << oct << 15;
     EXPECT_EQ(
       os.str(),
       "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
   }
 
-  // to string in hex
-  {
-    std::ostringstream os;
-    // os << "0x" << hex << 16;
-    os << std::hex << 16;
-    EXPECT_THAT(os.str(), "10");
-  }
-
-  // input integer to hex string
-  {
-    std::string input{"15056"};
-    uint32_t value = std::stoi(input.c_str());
-
-    std::ostringstream os;
-    os << hex << value;
-    EXPECT_THAT(os.str(), "3ad0");
-  }
-
-  // input integer and add some. to string
+  // to string. input integer and add some
   {
     std::string input{"15056"};
     uint32_t value = std::stoi(input.c_str());
@@ -1770,6 +1911,16 @@ TEST(StringConversion, check_stringstream)
     std::ostringstream os;
     os << 5000 + value;
     EXPECT_THAT(os.str(), "20056");
+  }
+
+  // to string. big value
+  {
+    long long value{16060300000001};
+    std::ostringstream os;
+
+    os << value;
+
+    EXPECT_THAT(os.str(), "16060300000001");
   }
 
   // to string
@@ -1788,7 +1939,7 @@ TEST(StringConversion, check_stringstream)
                 ElementsAre("player 0", "player 1", "player 2", "player 3"));
   }
 
-  // convert string to number
+  // to number
   {
     // The following lines read the integer x with the value 3 and the
     // floating-point f with the value 0.7 from the stringstream:
@@ -1798,6 +1949,8 @@ TEST(StringConversion, check_stringstream)
 
     std::istringstream is{"3.7"};
 
+    // ways to set stringstream.
+    //
     // or
     // string input{"3.7"};
     // stringstream is(input);
@@ -1813,7 +1966,7 @@ TEST(StringConversion, check_stringstream)
     ASSERT_THAT(f, FloatEq(0.7));
   }
 
-  // leading spaces?
+  // to number. leading spaces?
   {
     {
       // fail since int is too small
@@ -1876,50 +2029,117 @@ TEST(StringConversion, check_stringstream)
 
     is >> setw(2) >> value;
 
-    // actually was 1234
-    // EXPECT_THAT(value, 12);
-  }
-
-  // to number
-  {
-    string coll{"10101"};
-    string token = coll.substr(0, 1);
-    EXPECT_EQ(stoi(token), 1);
-  }
-
-  // to number
-  {
-    string coll{"10101"};
-    stringstream is{coll.substr(0, 1)};
-    int value{};
-    is >> value;
-    EXPECT_EQ(value, 1);
-  }
-
-  // to number(hex)
-  {
-    stringstream is{"fabc"};
-    int value{};
-
-    is >> hex >> value;
-
-    EXPECT_THAT(value, 64188);
+    EXPECT_THAT(value, 1234);
   }
 }
 
 // ={=========================================================================
-TEST(StringConversion, check_boost_lexicalcast)
+TEST(StringConversion, stringstream_to_hex)
+{
+  {
+    // 21c is hex and 540 as int
+    std::string last{"21c"};
+
+    std::stringstream ss;
+
+    ss << last;
+
+    EXPECT_THAT(ss.str(), "21c");
+
+    unsigned int value;
+
+    ss >> value;
+
+    // why?
+    EXPECT_THAT(value, Ne(540));
+
+    EXPECT_THAT(value, 21);
+
+    auto expected = std::stoul(last, nullptr, 16);
+    EXPECT_THAT(expected, 540);
+  }
+
+  // interesting. used "std::hex" but str() is the same. but conversion is
+  // different from the above.
+  {
+    // 21c is hex and 540 as int
+    std::string last{"21c"};
+
+    std::stringstream ss;
+
+    ss << std::hex << last;
+
+    EXPECT_THAT(ss.str(), "21c");
+
+    unsigned int value;
+
+    ss >> value;
+
+    EXPECT_THAT(value, 540);
+  }
+}
+
+namespace string_conversion
+{
+  /**
+   * A conversion from int types to string.
+   *
+   * @note This is only defined for int types. Specifically it's not defined for enums.
+   */
+  //
+  template<class T>
+    inline typename std::enable_if<std::is_integral<T>::value, std::string>::type
+    to_string_1(const T& val)
+    {
+      std::ostringstream str;
+      str << val;
+      return str.str();
+    }
+
+  static inline std::string to_string_2(uint32_t i)
+  {
+    std::ostringstream ss;
+    ss << i;
+    return ss.str();
+  }
+}
+
+// ={=========================================================================
+TEST(StringConversion, string_to_number)
+{
+  using namespace string_conversion;
+
+  {
+    EXPECT_THAT(to_string_1(100), "100");
+    EXPECT_THAT(to_string_2(100), "100");
+  }
+
+  // what's difference between two function?
+
+  {
+    // compile error
+    // error: no matching function for call to ‘to_string_1(double)’
+    // EXPECT_THAT(to_string_1(100.0), "100");
+
+    EXPECT_THAT(to_string_2(100.0), "100");
+  }
+}
+
+// ={=========================================================================
+TEST(StringConversion, boost_lexicalcast)
 {
   EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
   EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
   EXPECT_THAT(boost::lexical_cast<std::string>(0x10), "16");
+  EXPECT_THAT(boost::lexical_cast<std::string>(16060300000001), "16060300000001");
 
   EXPECT_THAT(boost::lexical_cast<int>("11"), 11);
   EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
+  EXPECT_THAT(boost::lexical_cast<long long>("16060300000001"), 16060300000001);
 }
 
 // ={=========================================================================
-TEST(StringConversion, check_narrow_conversion)
+TEST(StringConversion, narrow_conversion)
 {
   // warning/error
   // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’
@@ -1944,7 +2164,7 @@ TEST(StringConversion, check_narrow_conversion)
 }
 
 // ={=========================================================================
-TEST(StringConversion, check_case)
+TEST(StringConversion, lowercase)
 {
   // use cxx-transform
   {
@@ -1965,6 +2185,213 @@ TEST(StringConversion, check_case)
 
     EXPECT_THAT(coll, "conversion");
   }
+}
+
+/*
+// ={=========================================================================
+
+5.25 Attribute Syntax
+
+This section describes the syntax with which __attribute__ may be used, and
+the constructs to which attribute specifiers bind, for the C language. Some
+details may vary for C++ and Objective-C. Because of infelicities in the
+grammar for attributes, some forms described here may not be successfully
+parsed in all cases.
+
+There are some problems with the semantics of attributes in C++. For example,
+there are no manglings for attributes, although they may affect code generation,
+so problems may arise when attributed types are used in conjunction with
+templates or overloading. Similarly, typeid does not distinguish between types
+with different attributes. Support for attributes in C++ may be restricted in
+future to attributes on declarations only, but not on nested declarators.
+
+See Function Attributes, for details of the semantics of attributes applying to
+functions. 
+
+https://gcc.gnu.org/onlinedocs/gcc-4.1.2/gcc/Function-Attributes.html
+
+5.24 Declaring Attributes of Functions
+
+In GNU C, you declare certain things about functions which help the compiler
+optimize function calls and check your code more carefully.
+
+The keyword __attribute__ allows you to specify special attributes when making a
+declaration. This keyword is followed by an attribute specification inside
+`double parentheses` The following attributes are currently defined for
+functions on all targets: 
+
+noreturn, returns_twice, noinline, always_inline, flatten, pure, const, nothrow,
+sentinel, format, format_arg, no_instrument_function, section, constructor,
+destructor, used, unused, deprecated, `weak`, malloc, `alias`,
+warn_unused_result, nonnull and externally_visible. 
+  
+Several other attributes are defined for functions on particular target systems.
+
+
+format (archetype, string-index, first-to-check)
+
+The format attribute specifies that a function takes printf, scanf, strftime or
+strfmon style arguments which should be "type-checked" against a format string.
+For example, the declaration:
+
+          extern int
+          my_printf (void *my_object, const char *my_format, ...)
+                __attribute__ ((format (printf, 2, 3)));
+     
+causes the compiler to check the arguments in calls to my_printf for consistency
+with the printf style format string argument my_format.
+
+The parameter `archetype` determines how the format string is interpreted, and
+should be printf, scanf, strftime or strfmon. (You can also use __printf__,
+__scanf__, __strftime__ or __strfmon__.) 
+
+The parameter string-index specifies which argument is the format string
+argument (starting from 1), while first-to-check is the number of the first
+argument to check against the format string. 
+
+For functions where the arguments are not available to be checked (such as
+vprintf), specify the third parameter as zero. In this case the compiler only
+checks the format string for consistency. For strftime formats, the third
+parameter is required to be zero. Since non-static C++ methods have an implicit
+this argument, the arguments of such methods should be counted from two, not
+one, when giving values for string-index and first-to-check.
+
+In the example above, the format string (my_format) is the second argument of
+the function my_print, and the arguments to check start with the third argument,
+so the correct parameters for the format attribute are 2 and 3.
+
+<ex>
+#define FORMAT(f, a)  __attribute__((format(printf, f, a)))
+
+FORMAT(1,2)
+void Report(const char *format, ...)
+{
+  va_list args;
+  va_start(arg, format);
+  SharedPrintCode(true, format, args);
+  va_end(args);
+}
+
+
+The format attribute allows you to identify your own functions which take format
+strings as arguments, "so that GCC can check" the calls to these functions for
+errors. 
+
+The compiler always (unless -ffreestanding or -fno-builtin is used) checks
+formats for the standard library functions printf, fprintf, sprintf, scanf,
+        fscanf, sscanf, strftime, vprintf, vfprintf and vsprintf whenever such
+        warnings are requested (using -Wformat), so there is no need to modify
+        the header file stdio.h. In C99 mode, the functions snprintf, vsnprintf,
+        vscanf, vfscanf and vsscanf are also checked. Except in strictly
+        conforming C standard modes, the X/Open function strfmon is also checked
+        as are printf_unlocked and fprintf_unlocked. See Options Controlling C
+        Dialect.
+
+The target may provide additional types of format checks. See Format Checks
+Specific to Particular Target Machines. 
+
+*/
+
+namespace string_conversion
+{
+  // from case
+  // takes a printf style format string and args. returns std::string
+  static inline std::string __attribute__((format(printf, 1, 2)))
+  string_formatter(const char *fmt, ...)
+  {
+    va_list ap;
+    va_start(ap, fmt);
+
+    char *s{nullptr};
+
+    // DESCRIPTION
+    //
+    // The  functions asprintf() and vasprintf() are analogs of sprintf(3)
+    // and vsprintf(3), except that they allocate a string large enough to
+    // hold the output including the terminating null byte ('\0'), and
+    // return a pointer to it via the first argument.  This pointer should
+    // be passed to free(3) to release the allocated storage when it is no
+    // longer needed.
+
+    int n = vasprintf(&s, fmt, ap);
+    va_end(ap);
+
+    std::string str{};
+
+    if (nullptr != s)
+    {
+      if (n > 0)
+        str.assign(s, n);
+
+      free(s);
+    }
+
+    return str;
+  }
+
+  static inline std::string string_formatter_2(const char *fmt, ...)
+  {
+    va_list ap;
+    va_start(ap, fmt);
+
+    char *s{nullptr};
+
+    // DESCRIPTION
+    //
+    // The  functions asprintf() and vasprintf() are analogs of sprintf(3)
+    // and vsprintf(3), except that they allocate a string large enough to
+    // hold the output including the terminating null byte ('\0'), and
+    // return a pointer to it via the first argument.  This pointer should
+    // be passed to free(3) to release the allocated storage when it is no
+    // longer needed.
+
+    int n = vasprintf(&s, fmt, ap);
+    va_end(ap);
+
+    std::string str{};
+
+    if (nullptr != s)
+    {
+      if (n > 0)
+        str.assign(s, n);
+
+      free(s);
+    }
+
+    return str;
+  }
+} // namespace string_conversion
+
+// ={=========================================================================
+TEST(StringConversion, formatter)
+{
+  using namespace string_conversion;
+
+  int value{100};
+
+  const std::string expected{"variable value has value in dec 100, hex 0x64"};
+
+  EXPECT_THAT(string_formatter("variable %s has value in dec %d, hex 0x%x",
+                               "value",
+                               value,
+                               value),
+              expected);
+
+  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 3 has type ‘int’ [-Wformat=]
+  //                                 value),
+ 
+  EXPECT_THAT(string_formatter("variable %s has value in dec %lld, hex 0x%x",
+                               "value",
+                               value,
+                               value),
+              expected);
+
+  // note: no warning
+  EXPECT_THAT(string_formatter_2("variable %s has value in dec %lld, hex 0x%x",
+                                 "value",
+                                 value,
+                                 value),
+              expected);
 }
 
 // ={=========================================================================
@@ -2229,7 +2656,7 @@ TEST(StringTrim, 2018_11)
 // CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
 // make the original example short.
 
-TEST(StringParse, GetExtension)
+TEST(StringSplit, get_extension)
 {
   const string suffix{"tmp"};
   vector<string> coll1{"prog.dat", "mydir", "hello.", "opps.tmp", "end.dat"};
@@ -2267,12 +2694,13 @@ TEST(StringParse, GetExtension)
     ElementsAre("prog.tmp", "mydir.tmp", "hello.tmp", "opps.xxx", "end.tmp"));
 }
 
+// 2018.10
 // split input string by delimeter and put them into vector
 // void split(const string &s, char delim, vector<string> &coll);
 //
 // note that substr(idx, `length`); but not substr(idx, idx);
 
-namespace stringsplit_2018_10
+namespace stringsplit
 {
   // note:
   // this has *undefined* behaviour; sometimes works and sometimes infinite loop
@@ -2295,7 +2723,7 @@ namespace stringsplit_2018_10
   //   }
   // }
 
-  void split_text(const string &s, char delim, vector<string> &coll)
+  void split_1(const string &s, char delim, vector<string> &coll)
   {
     string::size_type i     = 0;
     string::size_type found = s.find(delim);
@@ -2317,7 +2745,7 @@ namespace stringsplit_2018_10
     }
   }
 
-  void split_revised(const string &input, char delim, vector<string> &coll)
+  void split_2(const string &input, char delim, vector<string> &coll)
   {
     string::size_type i{};
     string::size_type found = input.find(delim, i);
@@ -2330,36 +2758,112 @@ namespace stringsplit_2018_10
     }
 
     if (found == string::npos)
-      coll.push_back(input.substr(i, found - i));
+      coll.push_back(input.substr(i, found));
   }
-} // namespace stringsplit_2018_10
 
-TEST(StringSplit, ByDelimeter_201810)
+  // 2018.11.14
+  void split_3(const string &s, const char delim, vector<string> &coll)
+  {
+    string token{};
+    size_t start{}, end{};
+
+    end = s.find(delim, start);
+    for (; end < string::npos;)
+    {
+      coll.push_back(s.substr(start, end - start));
+      start = end + 1;
+      end   = s.find(delim, start);
+    }
+
+    coll.push_back(s.substr(start, end - start));
+  }
+
+  // use cxx-getline
+  void split_4(const string &s, const char delim, vector<string> &coll)
+  {
+    std::istringstream ss{s};
+    std::string token{};
+
+    while (std::getline(ss, token, delim))
+    {
+      coll.emplace_back(std::move(token));
+    }
+  }
+} // namespace stringsplit
+
+// ={=========================================================================
+TEST(StringSplit, use_delimeter)
 {
-  using namespace stringsplit_2018_10;
+  using namespace stringsplit;
 
   {
     std::vector<std::string> coll;
-    split_text("Smith, Bill, 5/1/2002, Active", ',', coll);
+    split_1("Smith, Bill, 5/1/2002, Active", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
   }
 
+  // fails on this case since expects "Smith"
   {
-    // fails:
     std::vector<std::string> coll;
-    split_text("Smith", ',', coll);
+    split_1("Smith", ',', coll);
     EXPECT_THAT(coll, ElementsAre());
   }
 
   {
+    auto imps = {split_2, split_3, split_4};
+
+    for (const auto &f : imps)
+    {
+      {
+        std::vector<std::string> coll;
+
+        //      5      11
+        f("Smith, Bill, 5/1/2002, Active", ',', coll);
+        EXPECT_THAT(coll,
+                    ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
+
+        coll.clear();
+
+        // when not found
+        f("Smith", ',', coll);
+        EXPECT_THAT(coll, ElementsAre("Smith"));
+      }
+
+      {
+        std::vector<std::string> coll;
+        f("192.169.1.20", '.', coll);
+        EXPECT_THAT(coll, ElementsAre("192", "169", "1", "20"));
+      }
+
+      {
+        std::vector<std::string> coll;
+        f("Name|Address|Phone", '|', coll);
+        EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+      }
+
+      {
+        // same as how boost works
+        vector<string> coll;
+        f("||Name", '|', coll);
+        EXPECT_THAT(coll, ElementsAre("", "", "Name"));
+      }
+
+      // {
+      //   // same as how boost works
+      //   vector<string> coll;
+      //   f("||", '|', coll);
+      //   EXPECT_THAT(coll, ElementsAre("", "", ""));
+      // }
+    }
+  }
+
+  // split_4 is different on this case
+  {
+    auto f = split_4;
+
     std::vector<std::string> coll;
-
-    split_revised("Smith, Bill, 5/1/2002, Active", ',', coll);
-    EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
-
-    coll.clear();
-    split_revised("Smith", ',', coll);
-    EXPECT_THAT(coll, ElementsAre("Smith"));
+    f("||", '|', coll);
+    EXPECT_THAT(coll, ElementsAre("", ""));
   }
 }
 
@@ -2368,7 +2872,7 @@ TEST(StringSplit, ByDelimeter_201810)
 // is_any_of. This is a function template that returns a predicate
 // function object that can be used by the trim_if-style functions.
 
-TEST(StringSplit, ByBoost)
+TEST(StringSplit, use_boost)
 {
   {
     vector<string> coll;
@@ -2425,94 +2929,6 @@ TEST(StringSplit, ByBoost)
     EXPECT_THAT(coll, ElementsAre("", "", ""));
   }
 }
-
-namespace stringsplit_2018_11
-{
-
-  // 2018.11.14
-
-  void split(const string &s, const char delim, vector<string> &coll)
-  {
-    string token{};
-    size_t start{}, end{};
-
-    end = s.find(delim, start);
-    for (; end < string::npos;)
-    {
-      coll.push_back(s.substr(start, end - start));
-      start = end + 1;
-      end   = s.find(delim, start);
-    }
-
-    coll.push_back(s.substr(start, end - start));
-  }
-
-} // namespace stringsplit_2018_11
-
-TEST(StringSplit, ByDelimeter_2018_11)
-{
-  using namespace stringsplit_2018_11;
-
-  {
-    std::vector<std::string> coll;
-
-    //         5      11
-    split("Smith, Bill, 5/1/2002, Active", ',', coll);
-    EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
-
-    coll.clear();
-
-    // when not found
-    split("Smith", ',', coll);
-    EXPECT_THAT(coll, ElementsAre("Smith"));
-  }
-
-  {
-    std::vector<std::string> coll;
-    split("192.169.1.20", '.', coll);
-    EXPECT_THAT(coll, ElementsAre("192", "169", "1", "20"));
-  }
-
-  {
-    std::vector<std::string> coll;
-    split("Name|Address|Phone", '|', coll);
-    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
-  }
-
-  {
-    // same as how boost works
-    vector<string> coll;
-    split("||Name", '|', coll);
-
-    EXPECT_THAT(coll, ElementsAre("", "", "Name"));
-  }
-
-  {
-    // same as how boost works
-    vector<string> coll;
-    split("||", '|', coll);
-
-    EXPECT_THAT(coll, ElementsAre("", "", ""));
-  }
-}
-
-namespace string_split_2018_11
-{
-
-  // copied from TEST(Stdio, GetLine)
-
-  // {
-  //   string s{};
-  //   stringstream iss("one|two|three");
-  //   vector<string> coll{};
-
-  //   while (getline(iss , s, '|'))
-  //     coll.push_back(s);
-
-  //   EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
-  // }
-
-} // namespace string_split_2018_11
 
 // ={=========================================================================
 // string-token
@@ -3875,7 +4291,9 @@ TEST(StringLiteral, raw_string)
     os2 << "this is                            a multi-line message            "
            "                and works";
 
-    const std::string expected{"this is                            a multi-line message                            and works"};
+    const std::string expected{
+      "this is                            a multi-line message                 "
+      "           and works"};
 
     EXPECT_THAT(os1.str(), expected);
     EXPECT_THAT(os2.str(), expected);
@@ -3912,7 +4330,7 @@ TEST(StringLiteral, raw_string)
   // While `basic regular expressions require these to be escaped` if you want
   // them `to behave as special characters`, when using extended regular
   // expressions you must escape them if you want them to match a literal
-  // character. 
+  // character.
 
   {
     // cannot use "double quote" in std::string
@@ -4607,7 +5025,7 @@ TEST(String, AutoCorrectField)
 
 void loadCSV(ifstream &ifs, vector<vector<string> *> &data)
 {
-  using namespace stringsplit_2018_10;
+  using namespace stringsplit;
 
   string line{};
 
@@ -4617,7 +5035,7 @@ void loadCSV(ifstream &ifs, vector<vector<string> *> &data)
 
     auto coll = new vector<string>();
 
-    split_revised(line, ',', *coll);
+    split_2(line, ',', *coll);
 
     data.push_back(coll);
 

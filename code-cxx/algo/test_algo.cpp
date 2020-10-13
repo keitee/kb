@@ -8587,7 +8587,7 @@ TEST(AlgoMinMax, check_own_imps)
 
 /*
 ={=========================================================================
-algo-find-missing
+algo-find-missing-1
 
 codility, find missing element. PermMissingElem
 
@@ -8626,6 +8626,7 @@ counting the storage required for input arguments).
 
 Elements of input arrays can be modified.
 
+
 fails when N=0.
 
 score: 90 of 100
@@ -8653,8 +8654,27 @@ note on "different integers" so no duplicates on the input
 
 namespace algo_find_missing
 {
-  // removes one loop
+  // use two loops. O(2n)
   int find_missing_element_1(const std::vector<int> &A)
+  {
+    auto num = A.size();
+    long long expected{}, input{};
+
+    for (size_t i = 1; i <= num + 1; ++i)
+    {
+      expected += i;
+    }
+
+    for (size_t i = 0; i < num; ++i)
+    {
+      input += A[i];
+    }
+
+    return expected - input;
+  }
+
+  // removes one loop by using the sum fomula
+  int find_missing_element_2(const std::vector<int> &A)
   {
     auto num = A.size();
     long long expected{}, input{};
@@ -8674,26 +8694,11 @@ namespace algo_find_missing
     return expected - input;
   }
 
-  int find_missing_element_2(const std::vector<int> &A)
-  {
-    auto num = A.size();
-    long long expected{}, input{};
+  // use "sum". so no extra space and O(n) time
 
-    for (size_t i = 1; i <= num + 1; ++i)
-    {
-      expected += i;
-    }
-
-    for (size_t i = 0; i < num; ++i)
-    {
-      input += A[i];
-    }
-
-    return expected - input;
-  }
 } // namespace algo_find_missing
 
-TEST(AlgoFindMissing, check_find_missing)
+TEST(AlgoFind, missing_element_1)
 {
   using namespace algo_find_missing;
 
@@ -8707,6 +8712,273 @@ TEST(AlgoFindMissing, check_find_missing)
       EXPECT_THAT(f({2, 3, 4, 5}), 1);
       EXPECT_THAT(f({1, 3, 4, 5}), 2);
       EXPECT_THAT(f({}), 1);
+    }
+  }
+}
+
+/*
+={=========================================================================
+algo-find-missing-2
+
+algo-leetcode-263
+
+268. Missing Number, Easy
+
+Given an array containing n distinct numbers taken from 0, 1, 2, ..., n, find
+the one that is missing from the array.
+
+Example 1:
+
+Input: [3,0,1]
+Output: 2
+
+Example 2:
+
+Input: [9,6,4,2,3,5,7,0,1]
+Output: 8
+
+Note:
+Your algorithm should run in linear runtime complexity. Could you implement it
+using only constant extra space complexity?
+ 
+
+Note:
+Initially, thought they are different since algo-find-missing-2 has "value 0"
+case but algo-find-missing-1 and 2 are the same
+
+[0,1,2,3], four numbers, N = 4 then:
+  number range [0, N-1] if starts from 0, N numbers
+  number range [1, N] if starts from 1, N numbers
+  number rnage [1, N+1], that is N+1 numbers
+
+that's why algo-find-missing-1 has one missing number.
+
+Likewise, algo-find-missing-2
+
+[0,1,2,3], four numbers, N = 4 then:
+  number range [0, N-1] if starts from 0, N numbers
+but array has [0,1,2], 3 elements. so 1 missing.
+
+*/
+
+namespace algo_find_missing
+{
+  // 2020.09
+  // fails on "input {0}, that is N=2 and expects 1"
+
+  int missing_number_0(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+
+    bool table[size]{false};
+
+    for (auto e : nums)
+      table[e] = true;
+
+    for (int i = 0; i < (int)size; ++i)
+    {
+      if (table[i] == false)
+        return i;
+    }
+
+    // error
+    return -1;
+  }
+
+  // so +1
+  // time is O(n) so that's ok but O(1) space is possible?
+
+  int missing_number_1(std::vector<int> &nums)
+  {
+    auto size = nums.size() + 1;
+
+    bool table[size]{false};
+
+    for (auto e : nums)
+      table[e] = true;
+
+    for (int i = 0; i < (int)size; ++i)
+    {
+      if (table[i] == false)
+        return i;
+    }
+
+    // error
+    return -1;
+  }
+
+  // if VLA causes an error
+  // Runtime: 44 ms, faster than 61.80% of C++ online submissions for Missing Number.
+  // Memory Usage: 18.4 MB, less than 7.24% of C++ online submissions for Missing Number.
+  //
+  // so while the description do not say it's one missing number in the
+  // sequence, it turns out that's the case.
+  int missing_number_2(std::vector<int> &nums)
+  {
+    auto size = nums.size() + 1;
+
+    std::vector<bool> table(size, false);
+
+    for (auto e : nums)
+      table[e] = true;
+
+    for (int i = 0; i < (int)size; ++i)
+    {
+      if (table[i] == false)
+        return i;
+    }
+
+    // error
+    return -1;
+  }
+
+  // use hash table. slower than _2.
+  int missing_number_3(std::vector<int> &nums)
+  {
+    auto size = nums.size() + 1;
+
+    std::unordered_map<int, bool> table{};
+
+    for (auto e : nums)
+      table[e] = true;
+
+    for (int i = 0; i < (int)size; ++i)
+    {
+      if (table[i] == false)
+        return i;
+    }
+
+    // error
+    return -1;
+  }
+
+  // Runtime: 36 ms, faster than 94.07% of C++ online submissions for Missing Number.
+  // Memory Usage: 18.2 MB, less than 21.87% of C++ online submissions for Missing Number.
+  int missing_number_4(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+    size_t expected{}, sum{};
+
+    for (int i = 0; i < (int)size + 1; ++i)
+      expected += i;
+
+    for (int i = 0; i < (int)size; ++i)
+      sum += nums[i];
+
+    return expected - sum;
+  }
+
+  // Like one from discussion, uses observation that index is values as well.
+  // [0, 1, 2, 3]
+  //  0  1  2  3
+  //
+  // so whatever is missing, input length + sum of index = expected.
+  // [x, x, x]
+  //  0  1  2  3
+  //
+  // use this but not much differnce
+
+  int missing_number_5(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+    size_t expected{size}, sum{};
+
+    for (int i = 0; i < (int)size; ++i)
+      expected += i;
+
+    for (int i = 0; i < (int)size; ++i)
+      sum += nums[i];
+
+    return expected - sum;
+  }
+
+  // Like int find_missing_element_2() and the solution, use gauss fomular,
+  // Approach #4 Gauss' Formula [Accepted]
+  // but use "size" but not "size+1" since
+  //
+  // 0          0(1)/2 = 0
+  // 0, 1       1(2)/2 = 1
+  // 0, 1, 2    2(3)/2 = 3
+  // ...
+
+  int missing_number_6(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+    size_t expected{}, sum{};
+
+    {
+      auto n   = size;
+      expected = (n * (n + 1)) / 2;
+    }
+
+    for (int i = 0; i < (int)size; ++i)
+      sum += nums[i];
+
+    return expected - sum;
+  }
+
+  // from solution and use cxx-xor
+  // Like missing_number_5(), use the same observation; index and value are
+  // same.
+  //
+  // so if there are all elements
+  // [0, 1, 2, 3]
+  //  0  1  2  3
+  //  (0^0)^(1^1)^(2^2)^(3^3) = 0
+  //
+  // if any element is missing, for example 3 then
+  // [0, 1, 2]
+  //  0  1  2  3
+  //  (0^0)^(1^1)^(2^2)^(3) = 3
+  //
+  // [0, 1, 3]
+  //  0  1  2  3
+  //  (0^0)^(1^1)^(2^3)^(3) = 2
+  //
+  //  after all, it becomes
+  //  "algo-occurance find a number which is seen odd times cxx-xor"
+  //
+  // Time complexity : O(n)
+  // Assuming that XOR is a constant-time operation, this algorithm does
+  // constant work on nn iterations, so the runtime is overall linear.
+  //
+  // Space complexity : O(1)
+  // This algorithm allocates only constant additional space.
+
+  int missing_number_7(std::vector<int> &nums)
+  {
+    int size    = nums.size();
+    int missing = size;
+
+    for (int i = 0; i < size; ++i)
+    {
+      missing = missing ^ i ^ nums[i];
+    }
+
+    return missing;
+  }
+} // namespace algo_find_missing
+
+TEST(AlgoFind, missing_element_2)
+{
+  using namespace algo_find_missing;
+
+  auto f = missing_number_6;
+
+  {
+    {
+      std::vector<int> coll({3, 0, 1});
+      EXPECT_THAT(f(coll), 2);
+    }
+
+    {
+      std::vector<int> coll({9, 6, 4, 2, 3, 5, 7, 0, 1});
+      EXPECT_THAT(f(coll), 8);
+    }
+
+    {
+      std::vector<int> coll({0});
+      EXPECT_THAT(f(coll), 1);
     }
   }
 }
@@ -8822,12 +9094,13 @@ namespace algo_find_missing_integer
   // have bool vector. how to solve?
   //
   // The key is whatever the input value is the aim to find the minimum positive
-  // value which is missed. So have bool vector(N) and only consider inputs in 0 <
-  // x <= N. Since even if there is no input in the specificed range then it
-  // simply means that it misses the whole value of the range and need to get the
-  // first false in the bool vector.
+  // value which is missed. So have bool vector(N) and only consider inputs in 0
+  // < x <= N. Since even if there is no input in the specificed range then it
+  // simply means that it misses the whole value of the range and need to get
+  // the first false in the bool vector.
   //
   // If bool vector has all set then return N+1. ????
+
   int find_missing_integer_2(const vector<int> &A)
   {
     // input check
@@ -8855,7 +9128,7 @@ namespace algo_find_missing_integer
 
 } // namespace algo_find_missing_integer
 
-TEST(AlgoFindMissingInteger, check_find_missing_integer)
+TEST(AlgoFind, find_missing_integer)
 {
   using namespace algo_find_missing_integer;
 
@@ -12766,8 +13039,9 @@ algo-partition algo-sort-insert
 
 algo-partition which uses the same grouping trick as algo-sort-insert
 
-Re-arrange the portfolio between (begin, end)  in such a way that all the stocks
-with quantity <= maxQuantity precede all those with quantity > maxQuantity
+Re-arrange the portfolio between (begin, end)  in such a way that 
+all the stocks with quantity <= maxQuantity precede 
+all those with quantity > maxQuantity
 
 Return the iterator to the first element with quantity > maxQuantity
 
@@ -12848,8 +13122,9 @@ namespace algo_partition
     copy(coll.begin(), coll.end(), begin);
 
     // *cxx-vector-reallocation* *cxx-iter-invalidated*
-    // *cxx-iter-singular* means invalidated iterator since there is no guarantee
-    // that current is valid after second pass push_back due to relocation
+    // *cxx-iter-singular* means invalidated iterator
+    // since there is no guarantee that current is valid
+    // after second pass push_back due to relocation
     //
     // /usr/include/c++/6/debug/safe_iterator.h:298:
     // Error: attempt to increment a singular iterator.
@@ -12954,8 +13229,9 @@ namespace algo_partition
     return begin;
   }
 
-  // since it do swap for elements that are already matched and are not needed
-  // to swap, std::partition seems better.
+  // since it do swap for elements that are already matched and
+  // are not needed to swap, std::partition seems better.
+
   PortfolioIterator my_partition_x(PortfolioIterator begin,
                                    PortfolioIterator end,
                                    unsigned int max)
@@ -12974,11 +13250,16 @@ namespace algo_partition
   }
 } // namespace algo_partition
 
-TEST(AlgoPartition, check_partition)
+/*
+={=========================================================================
+[ matched group/partition][ nonmatched group/partition]
+
+*/
+
+TEST(AlgoPartition, partition)
 {
   using namespace algo_partition;
 
-  // [ groups where f() returns true][ groups where f() returns false]
   {
     std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
     auto pos1 = std::partition(coll.begin(), coll.end(), [](int e) {
@@ -13004,6 +13285,20 @@ TEST(AlgoPartition, check_partition)
     EXPECT_THAT(std::distance(coll.begin(), pos1), 4);
   }
 
+  // use the same way as std::partition() but result different?
+  // see the order of the matched is kept.
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto pos1 = my_partition_3(coll.begin(), coll.end(), [](int e) {
+      return e % 2 == 0;
+    });
+
+    EXPECT_THAT(coll, ElementsAre(2, 4, 6, 8, 5, 3, 7, 1, 9));
+
+    // there are four even numbers
+    EXPECT_THAT(std::distance(coll.begin(), pos1), 4);
+  }
+
   // use std::partition and the order do not kept.
   {
     std::vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
@@ -13022,17 +13317,14 @@ TEST(AlgoPartition, check_partition)
   // the order of the unmatched group is different but the distance should be
   // the same. so use std::distance().
   {
-    auto imps = {my_partition_x};
+    auto f = my_partition_x;
 
-    for (const auto &f : imps)
-    {
-      vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
-                                48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
+    vector<unsigned int> coll{43, 6,  11, 42, 29, 23, 21, 19, 34, 37,
+                              48, 24, 15, 20, 13, 26, 41, 30, 6,  23};
 
-      auto ret = f(coll.begin(), coll.end(), 25);
+    auto ret = f(coll.begin(), coll.end(), 25);
 
-      EXPECT_THAT(std::distance(coll.begin(), ret), 11);
-    }
+    EXPECT_THAT(std::distance(coll.begin(), ret), 11);
   }
 
   {
@@ -13049,13 +13341,172 @@ TEST(AlgoPartition, check_partition)
 
 /*
 ={=========================================================================
+algo-leetcode-278
+
+283. Move Zeroes, Easy
+
+Given an array nums, write a function to move all 0's to the end of it while
+maintaining the relative order of the non-zero elements.
+
+Example:
+
+Input: [0,1,0,3,12]
+Output: [1,3,12,0,0]
+
+Note:
+You must do this in-place without making a copy of the array.
+Minimize the total number of operations.
+
+*/
+
+namespace leetcode_easy_283
+{
+  // 2020.09
+  // uses "partition" way but fails on case:
+  // {
+  //   std::vector<int> i{2, 1};
+  //   std::vector<int> o{2, 1};
+  //   std::vector<int> wrong{1, 2};
+  //   EXPECT_THAT(i, wrong);
+  // }
+
+  void move_zeroes_1(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+
+    for (size_t part = 0, run = 1; run < size; ++run)
+    {
+      if (0 != nums[run])
+      {
+        std::swap(nums[part], nums[run]);
+        ++part;
+      }
+    }
+  }
+
+  // so added code to find the starting point; the first 0.
+  // note: this is not optional since without it, it fails on cases like [1,2]
+  // as shown below. same for std::partition since here uses the same approach.
+  //
+  // Runtime: 4 ms, faster than 99.55% of C++ online submissions for Move Zeroes.
+  // Memory Usage: 9.2 MB, less than 20.02% of C++ online submissions for Move Zeroes.
+
+  void move_zeroes_2(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+
+    size_t part{}, run{};
+
+    for (part = 0; part < size; ++part)
+      if (nums[part] == 0)
+        break;
+
+    for (run = part + 1; run < size; ++run)
+    {
+      if (0 != nums[run])
+      {
+        std::swap(nums[part], nums[run]);
+        ++part;
+      }
+    }
+  }
+
+  // to use same comp as std::partition()
+
+  void move_zeroes_3(std::vector<int> &nums)
+  {
+    auto size = nums.size();
+
+    size_t part{}, run{};
+
+    while (0 != nums[part])
+      if (++part >= size)
+        return;
+
+    for (run = part + 1; run < size; ++run)
+    {
+      if (0 != nums[run])
+      {
+        std::swap(nums[part], nums[run]);
+        ++part;
+      }
+    }
+  }
+
+  // simply replace "0" with "value". as see at below, move_zeros is more of
+  // "remove" problem.
+
+  void remove_1(std::vector<int> &nums, int value)
+  {
+    auto size = nums.size();
+
+    size_t part{}, run{};
+
+    while (value != nums[part])
+      if (++part >= size)
+        return;
+
+    for (run = part + 1; run < size; ++run)
+    {
+      if (value != nums[run])
+      {
+        std::swap(nums[part], nums[run]);
+        ++part;
+      }
+    }
+  }
+} // namespace leetcode_easy_283
+
+// ={=========================================================================
+TEST(AlgoPartition, move_zeros)
+{
+  using namespace leetcode_easy_283;
+
+  {
+    auto f = move_zeroes_3;
+
+    {
+      std::vector<int> i{0, 1, 0, 3, 12};
+      std::vector<int> o{1, 3, 12, 0, 0};
+
+      f(i);
+
+      EXPECT_THAT(i, o);
+    }
+
+    {
+      std::vector<int> i{2, 1};
+      std::vector<int> o{2, 1};
+      std::vector<int> wrong{1, 2};
+
+      f(i);
+
+      EXPECT_THAT(i, o);
+    }
+  }
+
+  // same input and result as remove example
+  {
+    auto f = remove_1;
+
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+
+    f(coll, 2);
+
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 2, 2, 2}));
+  }
+}
+
+/*
+={=========================================================================
 algo-partition algo-remove
+
+same as std::partition() but [unmatched][matched]
+
 */
 
 namespace algo_remove
 {
-  // same as std::partition() but [unmatched][matched]
-
   namespace algo_code
   {
     // /usr/include/c++/4.9/bits/predefined_ops.h
@@ -13249,59 +13700,55 @@ namespace algo_remove
   }
 } // namespace algo_remove
 
-TEST(AlgoRemove, check_remove)
+//={=========================================================================
+TEST(AlgoPartition, remove)
 {
   using namespace algo_remove;
 
   {
-    auto imps = {my_remove_1};
+    auto f = my_remove_1;
 
-    for (const auto &f : imps)
-    {
-      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-      auto end = f(coll.begin(), coll.end(), 2);
+    auto end = f(coll.begin(), coll.end(), 2);
 
-      EXPECT_THAT(std::distance(end, coll.end()), 4);
+    EXPECT_THAT(std::distance(end, coll.end()), 4);
 
-      // use std::swap so different order
-      EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 2, 2, 2}));
+    // use std::swap so different order
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 2, 2, 2}));
 
-      coll.erase(end, coll.end());
-      EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
-    }
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 
   {
-    auto imps = {my_remove_2};
+    auto f = my_remove_2;
 
-    for (const auto &f : imps)
-    {
-      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-      auto end = f(coll.begin(), coll.end(), 2);
+    auto end = f(coll.begin(), coll.end(), 2);
 
-      EXPECT_THAT(std::distance(end, coll.end()), 4);
+    EXPECT_THAT(std::distance(end, coll.end()), 4);
 
-      // use "="
-      EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
+    // use "="
+    EXPECT_THAT(coll, ElementsAreArray({1, 3, 4, 5, 6, 7, 8, 9, 2, 8, 2, 9}));
 
-      coll.erase(end, coll.end());
-      EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
-    }
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1, 3, 4, 5, 6, 7, 8, 9));
   }
 
   {
-    {
-      std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
+    // cannot use this since it a template function
+    // auto f = my_remove_3;
 
-      auto end = my_remove_3(coll.begin(), coll.end(), 2);
+    std::vector<int> coll{1, 2, 3, 4, 5, 6, 2, 7, 2, 8, 2, 9};
 
-      EXPECT_THAT(std::distance(end, coll.end()), 4);
+    auto end = my_remove_3(coll.begin(), coll.end(), 2);
 
-      coll.erase(end, coll.end());
-      EXPECT_THAT(coll, ElementsAreArray({1, 9, 3, 4, 5, 6, 8, 7}));
-    }
+    EXPECT_THAT(std::distance(end, coll.end()), 4);
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 9, 3, 4, 5, 6, 8, 7}));
   }
 }
 
@@ -13318,7 +13765,7 @@ use the dest which is the end of the matched group
 1. std::unique() is not perferct
 
 The first form removes from the range [beg,end) all elements that are equal
-to `the previous elements.`
+to "the previous elements."
 
 Thus, only when the elements in the sequence are *sorted*, or at least when
 all elements of the same value are adjacent, it remove all duplicates.
@@ -13406,9 +13853,16 @@ namespace algo_unique
   //
   // _Iterator run_{begin+1};
   // return unique_end_+1;
+  //
+  // 2020.09
+  // this cause core on empty input
+  //
+  // // when size is 1
+  // if (std::next(begin) == end)
+  //   return end;
 
   template <typename _Iterator>
-  _Iterator my_unique_x(_Iterator begin, _Iterator end)
+  _Iterator my_unique_3(_Iterator begin, _Iterator end)
   {
     // when size is 1
     if (std::next(begin) == end)
@@ -13425,9 +13879,54 @@ namespace algo_unique
 
     return std::next(unique_end_);
   }
+
+  // fixed
+  template <typename _Iterator>
+  _Iterator my_unique_4(_Iterator begin, _Iterator end)
+  {
+    // when size is 0 and 1
+    if (std::distance(begin, end) < 2)
+      return end;
+
+    _Iterator unique_end_{begin};
+    _Iterator run_{std::next(begin)};
+
+    for (; run_ != end; ++run_)
+    {
+      if (*unique_end_ != *run_)
+        *(++unique_end_) = *run_;
+    }
+
+    return std::next(unique_end_);
+  }
+
+  // 2020.09
+  // full use of std::next
+  template <typename _Iterator>
+  _Iterator my_unique_5(_Iterator begin, _Iterator end)
+  {
+    _Iterator unique_end{begin};
+    _Iterator run{begin};
+
+    run = std::next(run);
+
+    while (run != end)
+    {
+      if (*unique_end != *run)
+      {
+        unique_end  = std::next(unique_end);
+        *unique_end = *run;
+      }
+
+      run = std::next(run);
+    }
+
+    return std::next(unique_end);
+  }
 } // namespace algo_unique
 
-TEST(AlgoUnique, check_unique)
+//={=========================================================================
+TEST(AlgoPartition, unique)
 {
   using namespace algo_unique;
 
@@ -13435,7 +13934,7 @@ TEST(AlgoUnique, check_unique)
   {
     std::vector<int> coll{1, 4, 4, 6};
 
-    auto pos = my_unique_x(coll.begin(), coll.end());
+    auto pos = my_unique_3(coll.begin(), coll.end());
 
     EXPECT_THAT(std::distance(pos, coll.end()), 1);
 
@@ -13461,7 +13960,7 @@ TEST(AlgoUnique, check_unique)
     std::list<int>
       coll{1, 2, 3, 1, 2, 3, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 4, 4};
 
-    auto pos = my_unique_x(coll.begin(), coll.end());
+    auto pos = my_unique_3(coll.begin(), coll.end());
     EXPECT_THAT(coll,
                 ElementsAreArray(
                   {1, 2, 3, 1, 2, 3, 4, 6, 1, 2, 3, 1, 6, 4, 6, 6, 6, 4, 4}));
@@ -15292,6 +15791,12 @@ TEST(AlgoSort, MergeSortedList)
 /*
 ={=========================================================================
 algo-search-binary-search
+
+Time complexity : O(logn). The search space is halved each time, so the time
+complexity is O(\log n)O(logn).
+
+Space complexity : O(1)O(1).
+
 */
 
 namespace algo_binary_search
@@ -15417,7 +15922,7 @@ namespace algo_binary_search
     return first;
   }
 
-  // GT(Greater) version, use index, return *bool*.
+  // NOTE: GT(Greater) version, use index, return *bool*.
   template <typename _T>
   bool my_binary_search_1_4(vector<_T> &coll, const _T value)
   {
@@ -15453,16 +15958,53 @@ namespace algo_binary_search
   //
   // note:
   //
-  // *cxx-undefined* since can be negative
-  // size_t low{}; size_t high{}; size_t mid{};
-  //
-  // it can cause `overflow` when mid gets minus value
-  // mid = (high-low)/2 + low;
-  //
   // it has the same as distance() in iterator version or can use
   // length approach as stl version.
 
   // EQ(Equality) version, use index, return index
+  //
+  // note that when not found, return index to insert to maintain the sorted
+  // input.
+
+  // *cxx-undefined* when use size_t since can be negative on this case:
+  //
+  // EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
+  //
+  // when mid is 0, "high = mid -1" becomes -1 when int but big number when
+  // size_t
+  //
+  // this may cause overflow when high and low are both big number in additon.
+  //
+  // mid = (low + high) / 2;
+  //
+  // see *cxx-overflow*
+
+  int my_binary_search_2_1_error(vector<int> &coll, int key)
+  {
+    size_t low{};
+    size_t high{};
+    size_t mid{};
+
+    low  = 0;
+    high = coll.size() - 1;
+
+    while (low <= high)
+    {
+      mid = (low + high) / 2;
+
+      if (key == coll[mid])
+        return mid;
+      else if (key < coll[mid])
+        high = mid - 1;
+      else
+        low = mid + 1;
+    }
+
+    // to return index. see above when not found.
+    return low;
+  }
+
+  // NOTE: SELECTED. equality version
   int my_binary_search_2_1(vector<int> &coll, int key)
   {
     int low{};
@@ -15484,10 +16026,11 @@ namespace algo_binary_search
         low = mid + 1;
     }
 
-    // to return index
+    // to return index. see above when not found.
     return low;
   }
 
+  // return bool
   int my_binary_search_2_2(vector<int> &coll, int key)
   {
     int low{};
@@ -15577,7 +16120,7 @@ namespace algo_binary_search
 
 } // namespace algo_binary_search
 
-TEST(AlgoSearchBinarySearch, check_binary_search)
+TEST(AlgoSearch, compare_binary_search)
 {
   using namespace algo_binary_search;
 
@@ -15654,6 +16197,9 @@ TEST(AlgoSearchBinarySearch, check_binary_search)
 
   // EQ(Equality) version, use index, return index
   {
+    //                    0  1  2  3
+    std::vector<int> coll{1, 3, 5, 6};
+
     EXPECT_THAT(my_binary_search_2_1(coll, 5), 2);
     EXPECT_THAT(my_binary_search_2_1(coll, 2), 1);
     EXPECT_THAT(my_binary_search_2_1(coll, 7), 4);
@@ -15765,14 +16311,14 @@ namespace algo_binary_search
     return __my_lower_bound(__first, __last, __val);
   }
 
+  // NOTE: GT version. SELECTED. not equality version
   // if implements binary search using lower_bound() way
   template <typename _Iterator, typename _T>
-  _T my_binary_search_3(_Iterator first, _Iterator last, _T const value)
+  _T my_binary_search_3(_Iterator first, _Iterator last, const _T value)
   {
     auto _saved_first{first};
     auto _length = std::distance(first, last);
 
-    // _length is "distance between two elements"; (b,e)
     while (_length > 0)
     {
       decltype(_length) _half = _length >> 1;
@@ -15783,14 +16329,21 @@ namespace algo_binary_search
       {
         first = _middle;
         ++first;
+        // why -1? since length is 0 when there is one element like index 0.
         _length = _length - _half - 1;
       }
       else
       {
+        // since this case has "==value" as well.
         _length = _half;
       }
     }
 
+    // stl code
+    // return first;
+
+    // ues T instead but T is type of element.
+    // this is why need _saved_first;
     // return found index or index to insert
     return std::distance(_saved_first, first);
   }
@@ -15809,8 +16362,10 @@ namespace algo_binary_search
   //     return __i != __last && !(__val < *__i);
   //   }
 
-  // since __my_lower_bound() can return `end`. so if found, then it should be
-  // in [begin, end). also `iterator for element >= value. so two checks.
+  // since __my_lower_bound() can return `end` when not found.
+  //
+  // so if found, then it should be in [begin, end).
+  // also *iterator for element >= value for insert pos. so two checks.
   //
   // return __i != __last && !(__val < *__i);
 
@@ -15825,7 +16380,7 @@ namespace algo_binary_search
   }
 } // namespace algo_binary_search
 
-TEST(AlgoSearch, check_binary_search_stl_version)
+TEST(AlgoSearch, binary_search_stl_version)
 {
   //  0  1  2  3  4  5  6  7  8  9  0  1  2
   // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
@@ -15935,6 +16490,95 @@ TEST(AlgoSearch, check_binary_search_stl_version)
   }
 
   // NOTE: stl version looks better.
+}
+
+/*
+={=========================================================================
+algo-search-binary-search algo-leetcode-278
+
+278. First Bad Version, Easy
+
+You are a product manager and currently leading a team to develop a new product.
+Unfortunately, the latest version of your product fails the quality check. Since
+each version is developed based on the previous version, all the versions after
+a bad version are also bad.
+
+Suppose you have n versions [1, 2, ..., n] and you want to find out the first
+bad one, which causes all the following ones to be bad.
+
+You are given an API bool isBadVersion(version) which will return whether
+version is bad. Implement a function to find the first bad version. You should
+minimize the number of calls to the API.
+
+Example:
+
+Given n = 5, and version = 4 is the first bad version.
+
+call isBadVersion(3) -> false
+call isBadVersion(5) -> true
+call isBadVersion(4) -> true
+
+Then 4 is the first bad version. 
+
+int firstBadVersion(int n);
+
+*/
+
+namespace leetcode_easy_278
+{
+  // provided by the test. use "bad" to emulate
+  bool isBadVersion(int value, const int bad)
+  {
+    if (value >= bad)
+      return true;
+    else
+      return false;
+  }
+
+  int first_bad_version(int n, const int bad)
+  {
+    int first{1};
+    int last{n};
+    int middle{};
+
+    while (first < last)
+    {
+      middle = (last - first) / 2 + first;
+
+      // not bad version, like GT()
+      if (false == isBadVersion(middle, bad))
+      {
+        first = ++middle;
+      }
+      // bad version
+      // The only scenario left is where isBadVersion(mid) return true. 
+      //
+      // G G G G G G G B B B B B B B
+      //
+      // This tells us that mid "may or may not" be the first bad version, but
+      // we can tell for sure that all versions after midmid can be discarded.
+      // Therefore we set right = mid as the new search space of interval
+      // [left,mid] (inclusive).
+      else
+      {
+        last = middle;
+      }
+    }
+
+    return first;
+  }
+} // namespace leetcode_easy_283
+
+TEST(AlgoSearch, binary_search_first_bad_version)
+{
+  using namespace leetcode_easy_278;
+
+  {
+    auto f = first_bad_version;
+
+    EXPECT_THAT(f(5, 4), 4);
+    EXPECT_THAT(f(3, 2), 2);
+  }
 }
 
 /*
@@ -16183,7 +16827,7 @@ namespace leetcode_easy_017
   }
 } // namespace leetcode_easy_017
 
-TEST(AlgoSearchBinarySearch, check_sqrt)
+TEST(AlgoSearch, binary_search_sqrt)
 {
   using namespace leetcode_easy_017;
 
@@ -16237,7 +16881,7 @@ TEST(AlgoSearchBinarySearch, check_sqrt)
 // really see performance difference between them? not really from simple run
 // below. maybe we need to have random to simulate
 
-TEST(AlgoSearchBinarySearch, check_sqrt_performance_1)
+TEST(AlgoSearch, binary_search_sqrt_performance_1)
 {
   using namespace leetcode_easy_017;
 
@@ -16250,7 +16894,7 @@ TEST(AlgoSearchBinarySearch, check_sqrt_performance_1)
   }
 }
 
-TEST(AlgoSearchBinarySearch, check_sqrt_performance_2)
+TEST(AlgoSearch, binary_search_sqrt_performance_2)
 {
   using namespace leetcode_easy_017;
 

@@ -108,10 +108,6 @@ using namespace testing;
 7306:TEST(Bit, BitSet)
 7384:TEST(Bit, Overflow)
 7395:TEST(MinMax, Order)
-7424:TEST(IntegerDivision, FahrenheitCelsius)
-7457:TEST(IntegerDivision, FahrenheitCelsius_Float)
-7506:TEST(IntegerDivision, Percentage)
-7535:TEST(IntegerDivision, Shift)
 7603:// TEST(Operator, MinMax)
 7616:TEST(Operator, PrefixPostfix)
 7646:TEST(Template, Function)
@@ -251,41 +247,154 @@ TEST(CxxMemoryModel, check_allocator)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-size cxx-sizeof
+cxx-size cxx-sizeof
 
-// LP64
-// __x86_64__
-// size of (int) is                : 4
-// size of (unsigned int) is       : 4
-// size of (long) is               : 8
-// size of (unsigned long) is      : 8
-// size of (long int) is           : 8
-// size of (unsigned long int) is  : 8
-// size of (long long) is          : 8
-// size of (unsigned long long) is : 8
-// size of (* int) is              : 8
-// size of (* unsigned int) is     : 8
-// size of (size_t) is             : 8
-// size of (uint32_t) is           : 4
-// size of (uint64_t) is           : 8
-//
-//
-// LP32
-// __x86_32__
-// size of (int) is                : 4
-// size of (unsigned int) is       : 4
-// size of (long) is               : 4
-// size of (unsigned long) is      : 4
-// size of (long int) is           : 4
-// size of (unsigned long int) is  : 4
-// size of (long long) is          : 8
-// size of (unsigned long long) is : 8
-// size of (* int) is              : 4
-// size of (* unsigned int) is     : 4
-// size of (size_t) is             : 4
-// size of (uint32_t) is           : 4
-// size of (uint64_t) is           : 8
+LP64
+__x86_64__
+size of (enum) is               : 4
+size of (unsigned short) is     : 2
+size of (int) is                : 4
+size of (unsigned int) is       : 4
+size of (unsigned) is           : 4
+size of (long) is               : 8
+size of (unsigned long) is      : 8
+size of (long int) is           : 8
+size of (unsigned long int) is  : 8
+size of (long long) is          : 8
+size of (unsigned long long) is : 8
+size of (* int) is              : 8
+size of (* unsigned int) is     : 8
+size of (size_t) is             : 8
+size of (uint8_t) is            : 1
+size of (uint16_t) is           : 2
+size of (uint32_t) is           : 4
+size of (uint64_t) is           : 8
+
+LP32
+__x86_32__
+size of (int) is                : 4
+size of (unsigned int) is       : 4
+size of (long) is               : 4
+size of (unsigned long) is      : 4
+size of (long int) is           : 4
+size of (unsigned long int) is  : 4
+size of (long long) is          : 8
+size of (unsigned long long) is : 8
+size of (* int) is              : 4
+size of (* unsigned int) is     : 4
+size of (size_t) is             : 4
+
+size of (uint32_t) is           : 4
+size of (uint64_t) is           : 8
+
+LP32 (arm embedded)
+size of (int) is                : 4
+size of (unsigned int) is       : 4
+size of (long) is               : *4
+size of (unsigned long) is      : *4
+size of (long int) is           : *4
+size of (unsigned long int) is  : *4
+size of (long long) is          : 8
+size of (unsigned long long) is : 8
+size of (* int) is              : *4
+size of (* unsigned int) is     : *4
+size of (size_t) is             : *4
+size of (uint8_t) is            : 1
+size of (uint16_t) is           : 2
+size of (uint32_t) is           : 4
+size of (uint64_t) is           : 8
+
+
+case:
+the problem is when run the same code, converting ints to json, gets different
+json output in the end. found out that type size is different and math output
+are different for the same code between embedded and PC.
+
+code
+
+{
+  auto now = std::time(0);
+  std::cout << "current utc      : " << now << std::endl;
+  std::cout << "sizeof  utc      : " << sizeof now << std::endl;
+
+  auto now_to_ms_1 = now * 1000;
+  std::cout << "current utc in ms: " << now_to_ms_1 << std::endl;
+  std::cout << "sizeof  utc in ms: " << sizeof now_to_ms_1 << std::endl;
+
+  uint64_t now_to_ms_2 = static_cast<uint64_t>(now * 1000);
+  std::cout << "current utc in ms: " << now_to_ms_2 << std::endl;
+  std::cout << "sizeof  utc in ms: " << sizeof now_to_ms_2 << std::endl;
+
+  uint64_t now_to_ms_3 = now*1000;
+  std::cout << "current utc in ms: " << now_to_ms_3 << std::endl;
+}
+
+Linux skyxione 4.9.119 #1 SMP PREEMPT Wed Sep 30 22:03:33 UTC 2020 armv7l GNU/Linux
+
+current utc      : 1601566641
+sizeof  utc      : 4
+current utc in ms: -456160408
+sizeof  utc in ms: 4
+current utc in ms: 18446744073253391208
+sizeof  utc in ms: 8
+current utc in ms: 18446744073253391208
+
+Linux kit-ubuntu 5.4.0-48-generic #52~18.04.1-Ubuntu SMP Thu Sep 10 12:50:22 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux
+
+current utc      : 1601566595
+sizeof  utc      : 8
+current utc in ms: 1601566595000
+sizeof  utc in ms: 8
+current utc in ms: 1601566595000
+sizeof  utc in ms: 8
+current utc in ms: 1601566595000
+
+NOTE:
+Why "std::time(0) * 1000" is different on embedded? Use ms time from chrono and
+use division from it to get ms. this shows right value
+
+{
+  std::chrono::milliseconds milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>( std::chrono::system_clock::now().time_since_epoch() );
+  uint64_t chrono_ms_count = milliseconds.count();
+
+  auto chrono_sec_count = chrono_ms_count / 1000;
+}
+
+current chrono utc in ms : 1601567967363
+current chrono utc in sec: 1601567967
+
+so use this approach.
+
+*cxx-auto*
+
+the problem is that "auto now = std::time(0);" selects "int" which is 4 on
+embedded platform. Then "now * 1000" causes overflow and then caues a big value
+when casted to uint64_t later.
+
+when "explicityl" say uint64_t to use big enough type, all goes well:
+
+{
+  // from:
+  auto now = std::time(0);
+
+  // to:
+  uint64_t now = std::time(0);
+}
+
+current utc      : 1601580428
+sizeof  utc      : 8
+current utc in ms: 1601580428000
+sizeof  utc in ms: 8
+current utc in ms: 1601580428000
+sizeof  utc in ms: 8
+current utc in ms: 1601580428000
+current chrono utc in ms : 1601580428052
+current chrono utc in sec: 1601580428
+1
+
+*/
 
 namespace
 {
@@ -304,7 +413,8 @@ namespace
 // NOTE that "enum to int" has no compile error but "int to enum" causes compile
 // error see cxx-static-cast
 
-TEST(CxxType, check_size)
+// ={=========================================================================
+TEST(CxxType, sizes)
 {
 #if defined(__LP64__) || defined(_LP64)
   std::cout << "LP64" << std::endl;
@@ -321,8 +431,14 @@ TEST(CxxType, check_size)
   std::cout << "size of (enum) is               : " << sizeof(State)
             << std::endl;
 
+  std::cout << "size of (unsigned short) is     : " << sizeof(unsigned short)
+            << std::endl;
+
   std::cout << "size of (int) is                : " << sizeof(int) << std::endl;
   std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int)
+            << std::endl;
+
+  std::cout << "size of (unsigned) is           : " << sizeof(unsigned)
             << std::endl;
 
   std::cout << "size of (long) is               : " << sizeof(long)
@@ -352,15 +468,40 @@ TEST(CxxType, check_size)
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
 
-// [ RUN      ] CxxType.check_limits
-// uint  max: 4294967295
-// uint  min: 0
-//  int  max: 2147483647
-//  int  min: -2147483648
-// [       OK ] CxxType.check_limits (0 ms)
+// ={=========================================================================
+// ushort max   : 65535
+// ushort min   : 0
+// short  max   : 32767
+// short  min   : -32768
+// u     max    : 4294967295
+// u     min    : 0
+// uint   max   : 4294967295
+// uint   min   : 0
+//  int   max   : 2147483647
+//  int   min   : -2147483648
+// long long max: 9223372036854775807
+// long long min: -9223372036854775808
+// int64 max    : 9223372036854775807
+// int64 min    : -9223372036854775808
+// uint64 max   : 18446744073709551615
+// uint64 min   : 0
 
-TEST(CxxType, check_limits)
+TEST(CxxType, limits)
 {
+  std::cout << "ushort max: " << std::numeric_limits<unsigned short>::max()
+            << std::endl;
+  std::cout << "ushort min: " << std::numeric_limits<unsigned short>::min()
+            << std::endl;
+
+  std::cout << "short  max: " << std::numeric_limits<short>::max()
+            << std::endl;
+  std::cout << "short  min: " << std::numeric_limits<short>::min() << std::endl;
+
+  std::cout << "u     max: " << std::numeric_limits<unsigned>::max()
+            << std::endl;
+  std::cout << "u     min: " << std::numeric_limits<unsigned>::min()
+            << std::endl;
+
   std::cout << "uint  max: " << std::numeric_limits<unsigned int>::max()
             << std::endl;
   std::cout << "uint  min: " << std::numeric_limits<unsigned int>::min()
@@ -368,9 +509,160 @@ TEST(CxxType, check_limits)
 
   std::cout << " int  max: " << std::numeric_limits<int>::max() << std::endl;
   std::cout << " int  min: " << std::numeric_limits<int>::min() << std::endl;
+
+  std::cout << "long long max: " << std::numeric_limits<long long>::max()
+            << std::endl;
+  std::cout << "long long min: " << std::numeric_limits<long long>::min()
+            << std::endl;
+
+  std::cout << " int64 max: " << std::numeric_limits<int64_t>::max()
+            << std::endl;
+  std::cout << " int64 min: " << std::numeric_limits<int64_t>::min()
+            << std::endl;
+
+  std::cout << "uint64 max: " << std::numeric_limits<uint64_t>::max()
+            << std::endl;
+  std::cout << "uint64 min: " << std::numeric_limits<uint64_t>::min()
+            << std::endl;
 }
 
-TEST(CxxType, check_null)
+/*
+// ={=========================================================================
+cxx-overflow see TEST(CxxCoreEs)
+
+int       : -1
+int       : -1
+int       : i
+
+long long : -1
+long long : -2
+long long : x
+
+auto      : -2
+auto      : i
+
+so addition is "integer addition"
+
+auto      : 9223372036854775807
+auto      : l
+
+*/
+
+TEST(CxxType, overflow)
+{
+  // long long max: 9223372036854775807
+  auto value0{9223372036854775807};
+
+  //  int   max: 2147483647
+  int value1{2147483647};
+
+  //  int   max: 2147483647
+  int value2{2147483647};
+
+  {
+    (value1 + value2);
+
+    (value1 + value2) / 2;
+
+    std::cout << "int       : " << (value1 + value2) / 2 << std::endl;
+
+    int value3{};
+
+    value3 = (value1 + value2) / 2;
+
+    std::cout << "int       : " << value3 << std::endl;
+    std::cout << "int       : " << typeid(value3).name() << std::endl;
+  }
+
+  // https://gcc.gnu.org/onlinedocs/gcc/Integer-Overflow-Builtins.html
+  //
+  // Built-in Function: bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
+  // Built-in Function: bool __builtin_sadd_overflow (int a, int b, int *res)
+  //
+  // If the stored result is equal to the infinite precision result, the
+  // built-in functions return false, otherwise they return true.
+  //
+  // false : not overflow
+
+  {
+    int result{};
+
+    EXPECT_THAT(__builtin_add_overflow(value1, value2, &result), true);
+    EXPECT_THAT(__builtin_sadd_overflow(value1, value2, &result), true);
+
+    std::cout << "result       : " << result << std::endl;
+
+    EXPECT_THAT(__builtin_add_overflow_p (value1, 1, (int) 0), true);
+  }
+
+  // The following built-in functions allow checking if simple arithmetic
+  // operation would overflow.
+  //
+  // Built-in Function: bool __builtin_add_overflow_p (type1 a, type2 b, type3 c)
+  // Built-in Function: bool __builtin_sub_overflow_p (type1 a, type2 b, type3 c)
+  // Built-in Function: bool __builtin_mul_overflow_p (type1 a, type2 b, type3 c)
+  //
+  // These built-in functions are similar to __builtin_add_overflow,
+  // __builtin_sub_overflow, or __builtin_mul_overflow, except that they don’t
+  // store the result of the arithmetic operation anywhere and the last argument
+  // is not a pointer, but some expression with integral type other than
+  // enumerated or boolean type.
+
+  // The built-in functions promote the first two operands into infinite
+  // precision signed type and perform addition on those promoted operands.
+  //
+  // The result is then cast to "the type of the third argument."
+  //
+  // If the cast result is equal to the infinite precision result, the built-in
+  // functions return false, otherwise they return true.
+  //
+  // false : not overflow
+
+  // "The value" of the third argument is ignored, just the side effects in the
+  // third argument are evaluated, and no integral argument promotions are
+  // performed on the last argument. If the third argument is a bit-field, the
+  // type used for the result cast has the precision and signedness of the given
+  // bit-field, rather than precision and signedness of the underlying type.
+
+  // For example, the following macro can be used to portably check, at compile-time, whether or not adding two constant integers will overflow, and perform the addition only when it is known to be safe and not to trigger a -Woverflow warning.
+  //  
+  // #define INT_ADD_OVERFLOW_P(a, b) \
+  //    __builtin_add_overflow_p (a, b, (__typeof__ ((a) + (b))) 0)
+  // 
+  // enum {
+  //     A = INT_MAX, B = 3,
+  //     C = INT_ADD_OVERFLOW_P (A, B) ? 0 : A + B,
+  //     D = __builtin_add_overflow_p (1, SCHAR_MAX, (signed char) 0)
+  // };
+
+  {
+    long long value4{};
+
+    value4 = (value1 + value2) / 2;
+
+    std::cout << "long long : " << value4 << std::endl;
+
+    long long value5{};
+
+    value5 = (value1 + value2);
+
+    std::cout << "long long : " << (value5) << std::endl;
+    std::cout << "long long : " << typeid(value5).name() << std::endl;
+  }
+
+  {
+    auto value6 = (value1 + value2);
+
+    std::cout << "auto      : " << (value6) << std::endl;
+    std::cout << "auto      : " << typeid(value6).name() << std::endl;
+
+    std::cout << "auto      : " << value0 << std::endl;
+    std::cout << "auto      : " << typeid(value0).name() << std::endl;
+  }
+}
+
+// ={=========================================================================
+TEST(CxxType, null)
 {
   // check null char, '\0', which is actually integer 0.
   {
@@ -1218,29 +1510,8 @@ TEST(CxxTypeOptional, check_optional)
 }
 
 // ={=========================================================================
-// cxx-array cxx-sizeof
-
-namespace cxxarray
-{
-  struct nlist
-  {
-    struct nlist *next;
-    char *name;
-    char *defn;
-  };
-
-  int getArray(const int size)
-  {
-    int arr[size];
-
-    // std::cout << "arr size: " << sizeof(arr) << std::endl;
-
-    return sizeof(arr);
-  }
-} // namespace cxxarray
-
-// *cxx-init*
-TEST(CxxArray, check_init_form)
+// cxx-array cxx-sizeof *cxx-init*
+TEST(CxxArray, init_form)
 {
   {
     int arr_1[10]{};
@@ -1282,26 +1553,81 @@ TEST(CxxArray, check_init_form)
   }
 }
 
-// Also note that in C99 or C11 standards, there is feature called “flexible
-// array members”, which works same as the above.
-//
-// But C++ standard (till C++11) doesn’t support variable sized arrays. The
-// C++11 standard mentions array size as a constant-expression See (See 8.3.4 on
-// page 179 of N3337). So the above program may not be a valid C++ program. The
-// program may work in GCC compiler, because GCC compiler provides an extension
-// to support them.
+/*
+// ={=========================================================================
 
-TEST(CxxArray, check_variable_size)
+Also note that in C99 or C11 standards, there is feature called “flexible array
+members”, which works same as the above.
+
+But C++ standard (till C++11) doesn’t support variable sized arrays. The C++11
+standard mentions array size as a constant-expression See (See 8.3.4 on page 179
+of N3337). So the above program may not be a valid C++ program. The program may
+work in GCC compiler, because GCC compiler provides an extension to support
+them.
+
+https://stackoverflow.com/questions/52363783/c-variable-sized-object-may-not-be-initialized
+
+The problem here is that you're using not one but two extensions.
+
+The first extension, as noted already, is that you're using C99 VLA's in C++.
+That's a documented GCC extension.
+
+https://gcc.gnu.org/onlinedocs/gcc/Variable-Length.html
+
+6.20 Arrays of Variable Length
+
+Variable-length automatic arrays are allowed in ISO C99, and as an extension GCC
+accepts them in C90 mode and in C++. These arrays are declared like any other
+automatic arrays, but with a length that is not a constant expression. The
+storage is allocated at the point of declaration and deallocated when the block
+scope containing the declaration exits. For example:
+
+*/
+
+TEST(CxxArray, variable_length_automatic_array)
 {
-  using namespace cxxarray;
+  // constant size
+  {
+    int table[100]{0};
 
-  EXPECT_THAT(getArray(10), 10 * 4);
-  EXPECT_THAT(getArray(20), 20 * 4);
+    EXPECT_THAT(sizeof table / sizeof(int), 100);
+  }
+
+  // vairable size. However, some compilers emits error:
+  // error: variable-sized object ‘arr’ may not be initialized.
+  // see above on why.
+  {
+    int size{100};
+
+    int table[size]{0};
+
+    EXPECT_THAT(sizeof table / sizeof(int), 100);
+  }
+
+  // std::vector may be alternative
+  {
+    int size{100};
+
+    std::vector<int> table(size, 0);
+
+    EXPECT_THAT(table.size(), 100);
+  }
 }
 
-TEST(CxxArray, check_size)
+namespace cxx_array
 {
-  using namespace cxxarray;
+  struct nlist
+  {
+    struct nlist *next;
+    char *name;
+    char *defn;
+  };
+} // namespace cxx_array
+
+// ={=========================================================================
+TEST(CxxArray, size)
+{
+  using namespace cxx_array;
 
   // array, sizeof, strlen and valid index:
   //
@@ -1402,8 +1728,9 @@ TEST(CxxArray, check_size)
   }
 }
 
+// ={=========================================================================
 // cxx-pointer
-TEST(CxxArray, check_access)
+TEST(CxxArray, access)
 {
   int coll[] = {10, 11, 12, 13, 14, 15, 16};
 
@@ -1960,10 +2287,6 @@ TEST(CxxCtor, Private)
 }
 #endif
 
-  // `If defines any other ctor for the class, the compiler do not generates`
-  // default ctor. So if a class requires control to init an object in one case,
-  // then the class is likely to require control in all cases.
-
   class Base1
   {
   public:
@@ -1993,6 +2316,12 @@ TEST(CxxCtor, show_default_ctor_is_necessary)
   // cause compile error
   // error: no matching function for call to ‘cxx_ctor::Base1::Base1()’
   //      Base1 o;
+  //
+  // since:
+  //
+  // `If defines any other ctor for the class, the compiler do not generates`
+  // default ctor. So if a class requires control to init an object in one case,
+  // then the class is likely to require control in all cases.
   //
   // {
   //   using namespace cxx_ctor;
@@ -2088,7 +2417,7 @@ namespace cxx_ctor
 } // namespace cxx_ctor
 
 // ={=========================================================================
-TEST(CxxCtor, check_delegating_ctor)
+TEST(CxxCtor, delegating_ctor)
 {
   using namespace cxx_ctor;
 
@@ -2137,11 +2466,10 @@ namespace cxx_ctor
     unsigned revenue_{20};
     unsigned value_{};
   };
-
 } // namespace cxx_ctor
 
 // ={=========================================================================
-TEST(CxxCtor, CtorDefaultArgAndInClassInit)
+TEST(CxxCtor, default_argument)
 {
   using namespace cxx_ctor;
 
@@ -2169,8 +2497,7 @@ TEST(CxxCtor, CtorDefaultArgAndInClassInit)
     EXPECT_THAT(o.revenue_, 40);
   }
 
-  // so have to define all ctors if want to use it like one using default
-  // arguments
+  // error since there is no such ctor
   //
   // {
   //   // error: no matching function for call to
@@ -2183,7 +2510,9 @@ TEST(CxxCtor, CtorDefaultArgAndInClassInit)
   //   EXPECT_THAT(o.revenue_, 20);
   // }
 
-  // now works when changes ctor
+  // works now when changes ctor. so note that cxx-inclass-init has the same
+  // effect as cxx-default-argument.
+
   {
     CtorUseInClassInit o("ctor");
 
@@ -2943,6 +3272,7 @@ namespace cxx_ctor_access
 
 } // namespace cxx_ctor_access
 
+// ={=========================================================================
 TEST(Ctor, Access)
 {
   using namespace cxx_ctor_access;
@@ -4332,7 +4662,7 @@ TEST(Reference, AccessOnReference)
 // ={=========================================================================
 // cxx-time
 
-TEST(CxxTime, check_ratio)
+TEST(CxxTime, ratio)
 {
   // typedef std::ratio<5, 3> 5/3, FiveThirds;
   using FiveThirds = std::ratio<5, 3>;
@@ -4361,7 +4691,7 @@ TEST(CxxTime, check_ratio)
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(CxxTime, check_system_call)
+TEST(CxxTime, system_call)
 {
   // #include <time.h>
   // time_t time(time_t *timep);
@@ -4396,6 +4726,22 @@ TEST(CxxTime, check_system_call)
   {
     cout << "The UTC date and time is: " << std::asctime(gmtm);
   }
+}
+
+TEST(CxxTime, conversion)
+{
+  auto now = std::time(0);
+
+  std::cout << "current utc      : " << now << std::endl;
+
+  auto now_to_ms_1 = now * 1000;
+  std::cout << "current utc in ms: " << now_to_ms_1 << std::endl;
+
+  uint64_t now_to_ms_2 = static_cast<uint64_t>(now * 1000);
+  std::cout << "current utc in ms: " << now_to_ms_2 << std::endl;
+
+  uint64_t now_to_ms_3 = now * 1000;
+  std::cout << "current utc in ms: " << now_to_ms_3 << std::endl;
 }
 
 // ={=========================================================================
@@ -9723,7 +10069,7 @@ TEST(CxxStream, check_stdio_input)
 // ={=========================================================================
 // how can get a whole line?
 
-TEST(CxxStream, check_std_getline)
+TEST(CxxStream, std_getline)
 {
   {
     int i{};
@@ -9781,6 +10127,10 @@ TEST(CxxStream, check_std_getline)
   }
 
   // set `separator`
+  // template< class CharT, class Traits, class Allocator >
+  // std::basic_istream<CharT,Traits>& getline( std::basic_istream<CharT,Traits>&& input,
+  //                                            std::basic_string<CharT,Traits,Allocator>& str,
+  //                                            CharT delim );
   {
     std::string s{};
     std::stringstream iss("one|two|three");
@@ -10404,40 +10754,34 @@ TEST(CxxStream, fstream_wildcard)
 //
 // 806 Chapter 15: Input/Output Using Stream Classes
 // A string stream can be created with the flags for the file open modes (see
-// Section 15.9.3, page 796) and/or an existing string. With the flag ios::ate,
-// the characters written to a string stream can be appended to an existing
-// string:
+// Section 15.9.3, page 796) and/or an existing string.
 
 TEST(CxxStream, stringstream_1)
 {
+  // With the flag ios::ate, the characters written to a string stream can be
+  // appended to an existing string:
+
   {
     std::string s{"value: "};
     std::stringstream os{s, std::ios::out | std::ios::ate};
 
+    EXPECT_THAT(os.str(), "value: ");
+
     os << "is unknown";
 
+    // appended
     EXPECT_THAT(os.str(), "value: is unknown");
 
     // The string s itself is not modified.
     EXPECT_THAT(s, "value: ");
   }
 
+  // not appended
   {
     std::string s{"value: "};
     std::stringstream os{s};
 
-    os << "is unknown";
-
-    EXPECT_THAT(os.str(), "is unknown");
-
-    // The string s itself is not modified.
-    EXPECT_THAT(s, "value: ");
-  }
-
-  // don't need flags for ostringstream
-  {
-    std::string s{"value: "};
-    std::ostringstream os{s};
+    EXPECT_THAT(os.str(), "value: ");
 
     os << "is unknown";
 
@@ -10446,9 +10790,23 @@ TEST(CxxStream, stringstream_1)
     // The string s itself is not modified.
     EXPECT_THAT(s, "value: ");
   }
+
+  // ??
+  // // don't need flags for ostringstream
+  // {
+  //   std::string s{"value: "};
+  //   std::ostringstream os{s};
+  //   os << "is unknown";
+  //   EXPECT_THAT(os.str(), "is unknown");
+  //   // The string s itself is not modified.
+  //   EXPECT_THAT(s, "value: ");
+  // }
+
+  // so initial value is reset when do "<<"
 }
 
-TEST(CxxStream, check_stringstream_2)
+// ={=========================================================================
+TEST(CxxStream, stringstream_2)
 {
   {
     std::stringstream os{};
@@ -10488,7 +10846,8 @@ namespace cxx_io
   }
 } // namespace cxx_io
 
-TEST(CxxStream, check_stringstream_move)
+// ={=========================================================================
+TEST(CxxStream, stringstream_move)
 {
   using namespace cxx_io;
 
@@ -10533,6 +10892,7 @@ namespace cxx_io
   } // does NOT close buffer
 } // namespace cxx_io
 
+// ={=========================================================================
 TEST(CxxStream, check_streambuf)
 {
   using namespace cxx_io;
@@ -12438,7 +12798,7 @@ TEST(CxxMinMax, check_difference)
 // Since `integer-division` truncates; any fractional part is discarded so 5/9
 // would be trancated to zero.
 
-TEST(IntegerDivision, FahrenheitCelsius)
+TEST(CxxIntegerDivision, fahrenheit_celsius)
 {
   int fah{}, cel{};
   int high{100}, step{20};
@@ -12471,9 +12831,10 @@ TEST(IntegerDivision, FahrenheitCelsius)
 // fah: 80.000000 cel: 15.555555
 // fah: 100.000000 cel: 26.666666
 
-TEST(IntegerDivision, FahrenheitCelsius_Float)
+// ={=========================================================================
+TEST(CxxIntegerDivision, fahrenheit_celsius_use_float)
 {
-  float fah{}, cel{};
+  float fah{}, cel{}; // see
   int high{100}, step{20};
 
   // no warnings
@@ -12493,71 +12854,84 @@ TEST(IntegerDivision, FahrenheitCelsius_Float)
   }
 }
 
-// value:  10 perce: 6000
-// value:  40 perce: 1500
-// value: 100 perce: 600
-// value: 200 perce: 300
-// value: 250 perce: 200
-// value: 356 perce: 100
-// value: 450 perce: 100
-// value: 600 perce: 100
+// value
+// ----- x 100
+// total
 //
-// value:  10 perce:   1
-// value:  40 perce:   6
-// value: 100 perce:  16
-// value: 200 perce:  33
-// value: 250 perce:  41
-// value: 356 perce:  59
-// value: 450 perce:  75
-// value: 600 perce: 100
+// [ RUN      ] CxxIntegerDivision.percentage
+//  value:  10, %   :   0
+//  value:  40, %   :   0
+//  value: 100, %   :   0
+//  value: 200, %   :   0
+//  value: 250, %   :   0
+//  value: 356, %   :   0
+//  value: 450, %   :   0
+//  value: 600, %   : 100
 //
-// value:  10 perce:   0
-// value:  40 perce:   0
-// value: 100 perce:   0
-// value: 200 perce:   0
-// value: 250 perce:   0
-// value: 356 perce:   0
-// value: 450 perce:   0
-// value: 600 perce: 100
+//  value:  10, %   :   1
+//  value:  40, %   :   6
+//  value: 100, %   :  16
+//  value: 200, %   :  33
+//  value: 250, %   :  41
+//  value: 356, %   :  59
+//  value: 450, %   :  75
+//  value: 600, %   : 100
+//
+//  value:  10, %   :   0
+//  value:  40, %   :   0
+//  value: 100, %   :   0
+//  value: 200, %   :   0
+//  value: 250, %   :   0
+//  value: 356, %   :   0
+//  value: 450, %   :   0
+//  value: 600, %   : 100
+// [       OK ] CxxIntegerDivision.percentage (0 ms)
 
-TEST(IntegerDivision, Percentage)
+// ={=========================================================================
+TEST(CxxIntegerDivision, percentage)
 {
   int total{600}, perce{};
   vector<int> values{10, 40, 100, 200, 250, 356, 450, 600};
 
+  // wrong
   for (auto value : values)
   {
-    perce = total / value * 100;
+    perce = value / total * 100;
     cout << " value: " << setw(3) << setfill(' ') << value
-         << " perce: " << setw(3) << setfill(' ') << perce << endl;
+         << ", %   : " << setw(3) << setfill(' ') << perce << endl;
   }
 
+  // right
   for (auto value : values)
   {
     perce = (value * 100) / total;
     cout << " value: " << setw(3) << setfill(' ') << value
-         << " perce: " << setw(3) << setfill(' ') << perce << endl;
+         << ", %   : " << setw(3) << setfill(' ') << perce << endl;
   }
 
+  // wrong
   for (auto value : values)
   {
     perce = (value / total) * 100;
     cout << " value: " << setw(3) << setfill(' ') << value
-         << " perce: " << setw(3) << setfill(' ') << perce << endl;
+         << ", %   : " << setw(3) << setfill(' ') << perce << endl;
   }
 }
 
-TEST(CxxIntegerDivision, check_on_minus)
+// ={=========================================================================
+TEST(CxxIntegerDivision, on_minus_value)
 {
   EXPECT_THAT(((60 - 50) / 10), 1);
   EXPECT_THAT(((50 - 50) / 10), 0);
+
   EXPECT_THAT(((40 - 50) / 10), -1);
   EXPECT_THAT(((34 - 50) / 10), -1);
 }
 
+// ={=========================================================================
 // cxx-shift cxx-floor cxx-ceil
 
-TEST(IntegerDivision, Shift)
+TEST(CxxIntegerDivision, shift_operation)
 {
   int value = 9;
 
@@ -12668,7 +13042,7 @@ namespace cxx_template
   }
 } // namespace cxx_template
 
-TEST(CxxTemplate, check_function)
+TEST(CxxTemplate, function)
 {
   using namespace cxx_template;
 
@@ -12703,7 +13077,7 @@ namespace cxx_template
 } // namespace cxx_template
 
 // ={=========================================================================
-TEST(CxxTemplate, check_class)
+TEST(CxxTemplate, class)
 {
   using namespace cxx_template;
 
@@ -12774,7 +13148,7 @@ namespace cxx_template
 } // namespace cxx_template
 
 // ={=========================================================================
-TEST(CxxTemplate, check_specialisation)
+TEST(CxxTemplate, specialisation)
 {
   using namespace cxx_template;
 
@@ -12814,15 +13188,23 @@ TEST(CxxTemplate, check_specialisation)
   }
 }
 
-// can use value also as a type but non-type template parameters are limited:
+// can use value also as a type but nontype template parameters are limited:
 //
 // https://en.cppreference.com/w/cpp/language/template_parameters
 // A non-type template parameter must have a structural type, which is one of
 // the following types (optionally cv-qualified, the qualifiers are ignored):
 //
-// case stl example:
+// std::array example:
 //
 // std::array<int, 8> coll = {};
+//
+// EXPECT_THAT(coll.size(), 8);
+//
+// template<typename _Tp, std::size_t _Nm>
+//   struct array
+//   {
+//     // ...
+//   }
 
 namespace cxx_template
 {
@@ -12831,13 +13213,121 @@ namespace cxx_template
   {
     return t + num;
   }
+
+  enum class Mode
+  {
+    throw_,
+    terminate_,
+    ignore_
+  };
+
+  // can come from build env
+  // constexpr Mode current_mode = CURRENT_MODE;
+  constexpr Mode current_mode = Mode::throw_;
+
+  // constexpr int current_level = CURRENT_LEVEL;
+  constexpr int current_level = 1;
+
+  constexpr int default_level = 1;
+
+  constexpr bool level(int n) { return n <= current_level; }
+
+  struct Error : std::runtime_error
+  {
+    Error(const std::string &p)
+        : runtime_error(p)
+    {}
+  };
+
+  std::string compose(const char *file, int line, const std::string &message)
+  {
+    std::ostringstream os{"("};
+    os << file << ", " << line << "):" << message;
+    return os.str();
+  }
+
+  // original code. C++ PL 361
+  template <bool condition = level(default_level), typename E = Error>
+  void dynamic1(bool assertion,
+                const string &message = "Assert::dynamic failed")
+  {
+    std::cout << "assertion: " << assertion << ", condition: " << condition
+              << "\n";
+
+    // like assert(A), if A is true, do nothing.
+    if (assertion)
+    {
+      std::cout << "assertion is true\n";
+      return;
+    }
+
+    // if A is false, do action as to mode
+
+    if (current_mode == Mode::throw_)
+    {
+      // throw E(message);
+      std::cout << "throw E{" << message << "}\n";
+    }
+
+    if (current_mode == Mode::terminate_)
+    {
+      // std::terminate();
+      std::cout << "std::terminate\n";
+    }
+  }
+
+#if 0
+  // specialisation and do nothing
+  template<>
+    void dynamic1<false, Error>(bool, const string &)
+    {}
+
+  // default (current) action
+  void dynamic1(bool A, const string &message)
+  {
+    dynamic1<true, Error>(A, message);
+  }
+
+  // default (current) action and default message
+  void dynamic1(bool A) { dynamic1<true, Error>(A); }
+#endif
+
+  // original code is for having leven and action selection at runtime. so added
+  // condifion in if check.
+  template <bool condition = level(default_level), typename E = Error>
+  void dynamic2(bool assertion,
+                const string &message = "Assert::dynamic failed")
+  {
+    std::cout << "assertion: " << assertion << ", condition: " << condition
+              << "\n";
+
+    // like assert(A), if A is true, do nothing.
+    if (condition && assertion)
+    {
+      std::cout << "assertion is true\n";
+      return;
+    }
+
+    // if A is false, do action as to mode
+
+    if (current_mode == Mode::throw_)
+    {
+      // throw E(message);
+      std::cout << "throw E{" << message << "}\n";
+    }
+
+    if (current_mode == Mode::terminate_)
+    {
+      // std::terminate();
+      std::cout << "std::terminate\n";
+    }
+  }
 } // namespace cxx_template
 
 // ={=========================================================================
-TEST(CxxTemplate, check_non_type_argument)
+TEST(CxxTemplate, use_non_type_argument_1)
 {
   using namespace cxx_template;
-
   // parse error
   // EXPECT_THAT(add_num<int, 5>(10), 15);
 
@@ -12846,6 +13336,99 @@ TEST(CxxTemplate, check_non_type_argument)
 
   ret = add_num<int, 15>(10);
   EXPECT_THAT(ret, 25);
+}
+
+/*
+// ={=========================================================================
+
+when there are overloads
+
+[ RUN      ] CxxTemplate.use_non_type_argument_2
+
+assertion: 1, condition: 1
+assertion is true
+
+assertion: 1, condition: 1
+assertion is true
+
+[       OK ] CxxTemplate.use_non_type_argument_2 (0 ms)
+
+
+when there are no overloads
+
+[ RUN      ] CxxTemplate.use_non_type_argument_2
+
+assertion: 1, condition: 0
+assertion is true
+
+assertion: 0, condition: 0
+throw E{/home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp, 13044):range problem}
+
+assertion: 1, condition: 1
+assertion is true
+
+assertion: 1, condition: 1
+assertion is true
+
+[       OK ] CxxTemplate.use_non_type_argument_2 (0 ms)
+*/
+
+TEST(CxxTemplate, use_non_type_argument_2)
+{
+  using namespace cxx_template;
+
+  int value1{11};
+
+  dynamic1<level(2), Error>((1 < value1 && value1 < 20),
+                            compose(__FILE__, __LINE__, "range problem"));
+
+  int value2{21};
+
+  dynamic1<level(2), Error>((1 < value2 && value2 < 20),
+                            compose(__FILE__, __LINE__, "range problem"));
+
+  dynamic1((1 < value1 && value1 < 20),
+           compose(__FILE__, __LINE__, "range problem"));
+
+  dynamic1((1 < value1 && value1 < 20));
+}
+
+/*
+// ={=========================================================================
+
+[ RUN      ] CxxTemplate.use_non_type_argument_3
+assertion: 1, condition: 0
+assertion is true
+assertion: 0, condition: 0
+throw E{/home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp, 12999):range problem}
+
+
+condition is false but not return on first if check?
+
+assertion: 1, condition: 0
+throw E{/home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp, 13006):range problem}
+
+assertion is false but how get throw?
+
+assertion: 0, condition: 0
+throw E{/home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp, 13011):range problem}
+[       OK ] CxxTemplate.use_non_type_argument_3 (0 ms)
+
+*/
+
+TEST(CxxTemplate, use_non_type_argument_3)
+{
+  using namespace cxx_template;
+
+  int value1{11};
+
+  dynamic2<level(2), Error>((1 < value1 && value1 < 20),
+                            compose(__FILE__, __LINE__, "range problem"));
+
+  int value2{21};
+
+  dynamic2<level(2), Error>((1 < value2 && value2 < 20),
+                            compose(__FILE__, __LINE__, "range problem"));
 }
 
 namespace cxx_template_default
@@ -12897,29 +13480,56 @@ namespace cxx_template_default
 
     T value_;
   };
-
-  class DebugDelete
-  {
-  public:
-    DebugDelete(ostream &os = cerr)
-        : os_(os)
-    {}
-
-    template <typename T>
-    void operator()(T *p) const
-    {
-      os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
-      delete p;
-    }
-
-  private:
-    // *cxx-reference-member
-    ostream &os_;
-  };
 } // namespace cxx_template_default
 
+/*
 // ={=========================================================================
-TEST(CxxTemplate, check_default_type_argument)
+Primer Plus 16.1 666
+
+o can define "typedef" to that "instantiated class":
+
+  typedef std::vector<std::string> coll;
+
+o *cxx-11* let us define "type alias" for class template:
+
+*/
+namespace cxx_template
+{
+  template <typename T>
+  using twin = std::pair<T, T>;
+
+  // can fix one or more of parameters
+  template <typename T>
+  using partNo = std::pair<T, unsigned>;
+} // namespace cxx_template
+
+TEST(CxxTemplate, type_alias)
+{
+  using namespace cxx_template;
+
+  {
+    twin<std::string> author{"book", "name"};
+    EXPECT_THAT(author.first, "book");
+    EXPECT_THAT(author.second, "name");
+
+    twin<int> value{10, 100};
+    EXPECT_THAT(value.first, 10);
+    EXPECT_THAT(value.second, 100);
+  }
+
+  {
+    partNo<std::string> books{"book", 1000};
+    EXPECT_THAT(books.first, "book");
+    EXPECT_THAT(books.second, 1000);
+
+    partNo<int> code{3301, 1000};
+    EXPECT_THAT(code.first, 3301);
+    EXPECT_THAT(code.second, 1000);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTemplate, default_type_argument)
 {
   using namespace cxx_template_default;
 
@@ -12992,6 +13602,37 @@ TEST(CxxTemplate, check_default_type_argument)
   //   Numbers<std::string> o2("value");
   //   EXPECT_THAT(o1.value_, o2.value_);
   // }
+}
+
+namespace cxx_template
+{
+  class DebugDelete
+  {
+  public:
+    DebugDelete(std::ostream &os = std::cerr)
+        : os_(os)
+    {}
+
+    // *cxx-functor*
+    // as with any function template, T is deduced by the compiler
+
+    template <typename T>
+    void operator()(T *p) const
+    {
+      os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+      delete p;
+    }
+
+  private:
+    // *cxx-reference-member
+    std::ostream &os_;
+  };
+} // namespace cxx_template
+
+// ={=========================================================================
+TEST(CxxTemplate, memeber_template)
+{
+  using namespace cxx_template;
 
   // deleting Pd, p = 0x9be7008
   // deleting Pi, p = 0x9be7018
@@ -13008,8 +13649,9 @@ TEST(CxxTemplate, check_default_type_argument)
   // deleting PSs, p = 0x1d5e830
   // deleting Pi, p = 0x1d5e850
   {
-    unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
-    unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+    std::unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
+    std::unique_ptr<std::string, DebugDelete> ps(new std::string,
+                                                 DebugDelete());
   }
 }
 
@@ -14365,7 +15007,7 @@ TEST(CxxAuto, auto_const)
 
 namespace cxx_except
 {
-  class my_exception : public exception
+  class my_exception : public std::exception
   {
     virtual const char *what() const throw() { return "my exception happened"; }
   };
@@ -14373,24 +15015,33 @@ namespace cxx_except
   my_exception myex;
 
   void throw_exception() { throw myex; }
+
+  struct Error : std::runtime_error
+  {
+    Error(const std::string &p)
+        : runtime_error(p)
+    {}
+  };
 } // namespace cxx_except
 
-TEST(CxxException, check_own)
+// ={=========================================================================
+TEST(CxxException, drived_from_exception)
 {
   using namespace cxx_except;
 
   try
   {
     throw myex;
-  } catch (exception &e)
+  } catch (std::exception &e)
   {
+    // ? why not error here?
     EXPECT_THAT(e.what(), "my exception happened");
   }
 
   try
   {
     throw myex;
-  } catch (exception &e)
+  } catch (std::exception &e)
   {
     ostringstream os;
     os << "my exception happened";
@@ -14414,7 +15065,24 @@ TEST(CxxException, check_own)
   {}
 }
 
-TEST(CxxException, check_when_do_catch)
+// ={=========================================================================
+// see can driver from std::runtime_error
+TEST(CxxException, drived_from_stdexcept)
+{
+  using namespace cxx_except;
+
+  try
+  {
+    throw Error("this is runtime error");
+  } catch (std::exception &e)
+  {
+    EXPECT_THAT(std::string(e.what()), "this is runtime error");
+  }
+}
+
+// ={=========================================================================
+//  see what happends when catch it but ignore it
+TEST(CxxException, see_when_do_catch)
 {
   using namespace cxx_except;
 
@@ -14425,7 +15093,14 @@ TEST(CxxException, check_when_do_catch)
   {}
 }
 
-TEST(CxxException, check_when_do_not_catch)
+// ={=========================================================================
+//  see what happends when do not catch
+// [ RUN      ] CxxException.see_when_do_not_catch
+// unknown file: Failure
+// C++ exception with description "my exception happened" thrown in the test body.
+// [  FAILED  ] CxxException.see_when_do_not_catch (0 ms)
+
+TEST(CxxException, DISABLED_see_when_do_not_catch)
 {
   using namespace cxx_except;
 
@@ -14449,20 +15124,43 @@ namespace cxx_except
     }
   };
 
-  class FooAbort
-  {
-  public:
-    // warning: throw will always call terminate() [-Wterminate]
-    // without "noexcept(false)"
-
-    ~FooAbort() noexcept(false)
-    {
-      throw std::runtime_error("noexcept(true) so expects abort");
-    }
-  };
+  // class FooAbort
+  // {
+  // public:
+  //
+  //   // complile warning
+  //   // warning: throw will always call terminate() [-Wterminate]
+  //   //        throw std::runtime_error("noexcept(true) so expects abort");
+  //   //                                                                  ^
+  //   // note: in C++11 destructors default to noexcept
+  //
+  //   ~FooAbort() noexcept(true)
+  //   {
+  //     throw std::runtime_error("noexcept(true) so expects abort");
+  //   }
+  // };
 } // namespace cxx_except
 
-TEST(Exception, Noexcept)
+/*
+// ={=========================================================================
+
+CLR 3.1.7 Keyword noexcept
+
+Here, inside noexcept(...), you can specify a boolean condition under which no
+exception gets thrown: Specifying noexcept without condition is a short form of
+specifying `noexcept(true)` which means exception is not allowed
+
+~TemplateDispatcher()
+{}
+
+is same as:
+
+~TemplateDispatcher() noexcept(true)
+{}
+
+*/
+
+TEST(CxxException, noexcept_condition_1)
 {
   using namespace cxx_except;
 
@@ -14474,44 +15172,52 @@ TEST(Exception, Noexcept)
     EXPECT_THAT(value, 1);
   }
 
+  // FooNoAbort dtor is allowed to throw so no abort happens
   {
     int value{1};
 
     try
     {
       FooNoAbort foo;
-    } catch (exception &e)
+    } catch (std::exception &e)
     {
-      // why fails???
+      // fails since what() returns "const char*"
       // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
 
-      std::ostringstream os;
-      os << e.what();
-      EXPECT_THAT(os.str(), "noexcept(false) so expects no abort");
-    }
-
-    EXPECT_THAT(value, 1);
-  }
-
-  // [ RUN      ] Exception.Noexcept
-  // terminate called after throwing an instance of 'std::runtime_error'
-  //   what():  noexcept(true) so expects abort
-  // Aborted
-
-  {
-    int value{1};
-
-    try
-    {
-      FooAbort foo;
-    } catch (exception &e)
-    {
-      std::cout << e.what() << std::endl;
+      EXPECT_THAT(std::string(e.what()), "noexcept(false) so expects no abort");
     }
 
     EXPECT_THAT(value, 1);
   }
 }
+
+// ={=========================================================================
+// "noexcept(true)" but throw so violates promise. abort happens.
+//
+// [ RUN      ] Exception.Noexcept
+// terminate called after throwing an instance of 'std::runtime_error'
+//   what():  noexcept(true) so expects abort
+// Aborted
+//
+// DISABLED but still compile it. so comment out
+// TEST(CxxException, DISABLED_noexcept_condition_2)
+// {
+//   using namespace cxx_except;
+
+//   {
+//     int value{1};
+
+//     try
+//     {
+//       FooAbort foo;
+//     } catch (exception &e)
+//     {
+//       std::cout << e.what() << std::endl;
+//     }
+
+//     EXPECT_THAT(value, 1);
+//   }
+// }
 
 // ={=========================================================================
 // cxx-printf

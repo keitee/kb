@@ -3002,6 +3002,7 @@ namespace leetcode_easy_258
     if (num == 0)
       return 0;
 
+    // when divisiable by 9
     if ((num % 9) == 0)
       return 9;
 
@@ -3027,6 +3028,217 @@ TEST(AlgoLeetCode, add_digits)
     EXPECT_THAT(f(38), 2);
   }
 }
+
+/*
+={=========================================================================
+algo-leetcode-263
+
+263. Ugly Number, Easy
+
+Write a program to check whether a given number is an ugly number.
+
+Ugly numbers are positive numbers whose prime factors only include 2, 3, 5.
+
+Example 1:
+
+Input: 6
+Output: true
+Explanation: 6 = 2 × 3
+
+Example 2:
+
+Input: 8
+Output: true
+Explanation: 8 = 2 × 2 × 2
+
+Example 3:
+
+Input: 14
+Output: false 
+
+Explanation: 14 is not ugly since it includes another prime factor 7.
+Note:
+
+1 is typically treated as an ugly number.
+Input is within the 32-bit signed integer range: [−231,  231 − 1].
+
+*/
+
+namespace leetcode_easy_263
+{
+  // 2020.09
+  // from discusstion but failed from run on:
+  // EXPECT_THAT(f(0), false);
+  // ? since description do not say about 0.
+
+  bool is_ugly_1(int num)
+  {
+    // since only for positive
+    if (num < 0)
+      return false;
+
+    // to cover when num is 1, use "num > 1" then "num > 0"
+    while (num > 1)
+    {
+      if (0 == (num % 2))
+        num /= 2;
+      else if (0 == (num % 3))
+        num /= 3;
+      else if (0 == (num % 5))
+        num /= 5;
+      else
+        return false;
+    }
+
+    return true;
+  }
+
+  bool is_ugly_2(int num)
+  {
+    // since only for positive and for 0
+    if (num <= 0)
+      return false;
+
+    // to cover when num is 1, use "num > 1" then "num > 0"
+    while (num > 1)
+    {
+      if (0 == (num % 2))
+        num /= 2;
+      else if (0 == (num % 3))
+        num /= 3;
+      else if (0 == (num % 5))
+        num /= 5;
+      else
+        return false;
+    }
+
+    return true;
+  }
+} // namespace leetcode_easy_263
+
+TEST(AlgoLeetCode, ugly_number)
+{
+  using namespace leetcode_easy_263;
+
+  {
+    auto f = is_ugly_1;
+
+    EXPECT_THAT(f(6), true);
+    EXPECT_THAT(f(8), true);
+    EXPECT_THAT(f(14), false);
+    EXPECT_THAT(f(1), true);
+    // EXPECT_THAT(f(0), false);
+  }
+
+  {
+    auto f = is_ugly_2;
+
+    EXPECT_THAT(f(6), true);
+    EXPECT_THAT(f(8), true);
+    EXPECT_THAT(f(14), false);
+    EXPECT_THAT(f(1), true);
+    EXPECT_THAT(f(0), false);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-292. Nim Game, Easy
+
+You are playing the following Nim Game with your friend:
+
+o Initially, there is a heap of stones on the table.
+o You and your friend will alternate taking turns, and you go first.
+o On each turn, the person whose turn it is will remove 1 to 3 stones from the
+  heap.
+o The one who removes the last stone is the winner.
+
+Given n, the number of stones in the heap, return true if you can win the game
+assuming both you and your friend play optimally, otherwise return false.
+
+Example 1:
+
+Input: n = 4
+Output: false
+
+Explanation: These are the possible outcomes:
+
+1. You remove 1 stone. Your friend removes 3 stones, including the last stone.
+Your friend wins.
+
+2. You remove 2 stones. Your friend removes 2 stones, including the last stone.
+Your friend wins.
+
+3. You remove 3 stones. Your friend removes the last stone. Your friend wins.
+
+In all outcomes, your friend wins.
+
+Example 2:
+Input: n = 1
+Output: true
+
+Example 3:
+Input: n = 2
+Output: true
+ 
+
+Constraints:
+1 <= n <= 231 - 1
+
+
+Solution
+
+You can always win a Nim game if the number of stones nn in the pile is not
+divisible by 4.
+
+Reasoning
+
+Let us think of the small cases. It is clear that if there are only one, two, or
+three stones in the pile, and it is your turn, you can win the game by taking
+all of them. Like the problem description says, if there are exactly four stones
+in the pile, you will lose. Because no matter how many you take, you will leave
+some stones behind for your opponent to take and win the game. So in order to
+win, you have to ensure that you never reach the situation where there are
+exactly four stones on the pile on your turn.
+
+Similarly, if there are five, six, or seven stones you can win by taking just
+enough to leave four stones for your opponent so that they lose. But if there
+are eight stones on the pile, you will inevitably lose, because regardless
+whether you pick one, two or three stones from the pile, your opponent can pick
+three, two or one stone to ensure that, again, four stones will be left to you
+on your turn.
+
+It is obvious that the same pattern repeats itself for
+n=4,8,12,16,..., basically all multiples of 4.
+
+Java
+
+public boolean canWinNim(int n) {
+    return (n % 4 != 0);
+}
+
+Complexity Analysis
+
+Time complexity is O(1), since only one check is performed. No additional
+space is used, so space complexity is also O(1).
+
+References
+Lecture on Nim Games from University of Maryland: MATH 199: Math, Game Theory
+and the Theory of Games, Summer 2006.
+
+Analysis written by: @noran
+
+NOTE:
+does it mean that I lose for "all multiples of 4" in all cases?
+
+n = 8:
+1/3/ (4 left) so lose like n = 4
+1/2/ (5 left) 1/3/1 win.
+
+note on "play optimally" so all plays to leave "4" to win. so cannot win for
+"all multiples of 4".
+
+*/
 
 // ={=========================================================================
 int main(int argc, char **argv)

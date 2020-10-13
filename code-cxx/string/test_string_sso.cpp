@@ -32,7 +32,7 @@ void *operator new(std::size_t count)
   return malloc(count);
 }
 
-int main() 
+int main()
 {
   std::cout << "create s1" << std::endl;
   std::string s1{"this is a pretty long sentence"};
