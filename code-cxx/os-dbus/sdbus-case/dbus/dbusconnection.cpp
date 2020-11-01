@@ -25,7 +25,7 @@ DBusConnectionPrivate::DBusConnectionPrivate(const EventLoop &eventloop,
 
 DBusConnectionPrivate::~DBusConnectionPrivate()
 {
-  // TODO: temporary fix
+  // TODO: temporary fix to the original code
   // m_eventloop.flush();
 
   // free the bus
@@ -48,7 +48,7 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
     assert(m_eventloop.onEventLoopThread());
 
     // construct sd_bus_message and get unique_ptr<sd_bus_messsage>
-    auto msg = messageData->toMessage(m_bus);
+    auto msg = messageData->toMessage_(m_bus);
     if (!msg)
       return false;
 
@@ -152,7 +152,7 @@ int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
 
 // 1. the first use case.
 // used from ::call() when it's called from other than event loop thread. the
-// suppliced callback has code to release `sem` and to move reply message.
+// supplied callable that has code to release `sem` and to move reply message.
 //
 // so send the `call` to eventloop if sd_message is constructed from the input
 // messge without errors. If errors occur while constructing, run the supplied
@@ -175,16 +175,19 @@ bool DBusConnectionPrivate::callWithCallback(
 
   std::function<void(DBusMessage &&)> errorCallback;
 
-  // TODO: necessary? is there any case when it's called on eventloop thread?
+  // TODO: "if" check is necessary since it's already on the path 
+  // for non-event loop thread?
+  // is there any case when it's called on eventloop thread?
   if (!m_eventloop.onEventLoopThread())
     errorCallback = callback;
 
-  // take the message data
-  // need reset()? since DBusMessagePrivate do not have move-assign, so move it
-  // manually
+  // move the message data
+  // need reset()? since DBusMessagePrivate do not have move-assign, so do move
+  // context manually by setting null to sp
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
 
+  // {
   auto call = [this, messageData, callback, errorCallback, timeout]() {
     // must be true since it's called on the other thread
     assert(m_eventloop.onEventLoopThread());
@@ -192,7 +195,7 @@ bool DBusConnectionPrivate::callWithCallback(
     logWarning("callWithCallback::call() called on the event loop thread");
 
     // construct the request sd_bus_message
-    auto msg = messageData->toMessage(m_bus);
+    auto msg = messageData->toMessage_(m_bus);
     if (!msg)
     {
       if (errorCallback)
@@ -210,6 +213,12 @@ bool DBusConnectionPrivate::callWithCallback(
     //  sd_bus_message_handler_t callback,
     //  void *userdata,
     //  uint64_t usec);
+    //
+    // sd_bus_call_async() is like sd_bus_call() but works asynchronously. The
+    // callback indicates the function to call when the response arrives. The
+    // userdata pointer will be passed to the callback function, and may be
+    // chosen freely by the caller.
+
     int r = sd_bus_call_async(m_bus,
                               nullptr,
                               msg.get(),
@@ -236,11 +245,14 @@ bool DBusConnectionPrivate::callWithCallback(
       return false;
     }
 
-    // save the supplied callback
+    // save the supplied callable 
     m_callbacks.emplace(cookie, callback);
 
     return true;
-  }; // call
+  }; 
+  // }
+
+  // ok, post f to eventloop
 
   // NOTE: really support this case??
   // if (m_eventloop.onEventLoopThread())
@@ -394,34 +406,73 @@ bool DBusConnection::registerName(const std::string &name)
   return true;
 }
 
-// sends the message over this connection and `blocks`, waiting for a reply, for
-// at most msTimeout ms or default value.
-//
-// this function is suitable for method calls only. it returns the reply message
-// as its return value, which will be either of type DBusMessage::ReplyMessage
-// or DBusMessage::ErrorMessage.
-//
-// if no reply is received within timeout, an automatic error will be delivered
-// indicating the expiration of the call. The default timeout is -1, which will
-// be replaced with an implementation-defined value that is suitable for
-// inter-process communications. that is 25 seconds now.
-//
-// it is safe to call this from any thread. If called from the event loop thread
-// it will block the event loop until complete
-//
-// otherwise it will post a message to the event loop and send the dbus
-// message within that. 
-//
-// o create f1 which do sem_post and send it to Private::callWithCallback
-// o Private::callWithCallback create f2 which send a message over dbus and
-//   add pair<cookie, f1>
-// o wait on sem in f1
-// o eventloop thread runs f2 and when reply is ready, registered handler,
-//   methodCallCallback_ gets called and find f1 from reply cookie which release
-//   sem and relay replay.
-//
-// use input message to make a call and return newly created message from reply
-// to the call.
+/*
+sends the message over this connection and `blocks`, waiting for a reply, for
+at most msTimeout ms or default value.
+
+this function is suitable for method calls only. it returns the reply message
+as its return value, which will be either of type DBusMessage::ReplyMessage
+or DBusMessage::ErrorMessage.
+
+if no reply is received within timeout, an automatic error will be delivered
+indicating the expiration of the call. The default timeout is -1, which will
+be replaced with an implementation-defined value that is suitable for
+inter-process communications. that is 25 seconds now.
+
+it is safe to call this from any thread. If called from the event loop thread
+it will block the event loop until complete
+
+otherwise it will post a message to the event loop and send the dbus
+message within that. 
+
+the async case:
+
+o create f1 which do sem_post and copy "reply" from a dbus call. 
+  send it to Private::callWithCallback
+
+o Private::callWithCallback create f2 which send a input message over dbus 
+  and add pair<cookie, f1>
+
+o wait on sem in call()
+
+o eventloop thread runs f2 and when reply is ready, registered handler,
+  methodCallCallback_ gets called and find f1 using the saved cookie which 
+  release sem and relay(copy back) the returned replay.
+
+o return the reply
+
+use input message to make a call and return newly created message from reply
+to the call.
+
+https://freedesktop.org/software/systemd/man/sd_bus_call_method_async.html
+
+NOTE: sync and async?
+
+sd_bus_call_method() is a convenience function for initializing a bus message
+object and calling the corresponding D-Bus method. It combines the
+sd_bus_message_new_method_call(3), sd_bus_message_append(3) and sd_bus_call(3)
+functions into a single function call.
+
+sd_bus_call_method_async() is a convenience function for initializing a bus
+message object and calling the corresponding D-Bus method asynchronously. It
+combines the sd_bus_message_new_method_call(3), sd_bus_message_append(3) and
+sd_bus_call_async(3) functions into a single function call.
+
+int sd_bus_call(
+  sd_bus *bus,
+  sd_bus_message *m,
+  uint64_t usec,
+  sd_bus_error *ret_error,
+  sd_bus_message **reply);
+
+sd_bus_call() takes a complete bus message object and calls the corresponding
+D-Bus method. On success, the response is stored in reply. usec indicates the
+timeout in microseconds. If ret_error is not NULL and sd_bus_call() fails
+(either because of an internal error or because it received a D-Bus error
+reply), ret_error is initialized to an instance of sd_bus_error describing the
+error.
+
+*/
 
 DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 {
@@ -454,7 +505,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     // construct `request` sd_bus_message from the given message and returns
     // unique_ptr
 
-    auto msg = message.m_private->toMessage(priv->m_bus);
+    auto msg = message.m_private->toMessage_(priv->m_bus);
     if (!msg)
     {
       logWarning("failed to make sd_bus message from DBusMessage");

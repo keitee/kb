@@ -2870,13 +2870,14 @@ namespace algoreverse
     return std::string{input.crbegin(), input.crend()};
   }
 
+  // cxx-reverse
   void reverse_string_4(std::string &input)
   {
     std::reverse(input.begin(), input.end());
   }
 } // namespace algoreverse
 
-TEST(AlgoReverse, check_string)
+TEST(AlgoReverse, string)
 {
   using namespace algoreverse;
 
@@ -2949,7 +2950,7 @@ namespace algoreverse
   }
 } // namespace algoreverse
 
-TEST(AlgoReverse, check_string_no_duplicates)
+TEST(AlgoReverse, string_but_no_duplicates)
 {
   using namespace algoreverse;
 
@@ -6830,8 +6831,7 @@ TEST(AlgoBit, check_hamming_weight)
 
 /*
 //={=========================================================================
-
-231. Power of Two
+algo-bit algo-leetcode-231. Power of Two
 
 Given an integer n, write a function to determine if it is a power of two.
 
@@ -6881,12 +6881,21 @@ namespace algo_bit
   // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Power of Two.
   // Memory Usage: 5.9 MB, less than 84.61% of C++ online submissions for Power of Two.
 
-  bool is_power_of_two(int n)
+  bool is_power_of_two_1(int n)
   {
     if (n < 0)
       return false;
 
     return __builtin_popcount(n) == 1;
+  }
+
+  // from bit representation, or n and n-1 yields 0 when 2^x.
+  bool is_power_of_two_2(int n)
+  {
+    if (n < 0)
+      return false;
+
+    return (n & (n-1)) == 0;
   }
 } // namespace algo_bit
 
@@ -6894,13 +6903,16 @@ TEST(AlgoBit, power_of_two)
 {
   using namespace algo_bit;
 
-  auto f = is_power_of_two;
+  auto imps = {is_power_of_two_1, is_power_of_two_2};
 
-  EXPECT_THAT(f(1), true);
-  EXPECT_THAT(f(16), true);
-  EXPECT_THAT(f(3), false);
-  EXPECT_THAT(f(4), true);
-  EXPECT_THAT(f(5), false);
+  for (const auto &f : imps)
+  {
+    EXPECT_THAT(f(1), true);
+    EXPECT_THAT(f(16), true);
+    EXPECT_THAT(f(3), false);
+    EXPECT_THAT(f(4), true);
+    EXPECT_THAT(f(5), false);
+  }
 }
 
 /*
@@ -9882,7 +9894,7 @@ Prefix sums
 
 There is a simple yet powerful technique that allows for the fast calculation of
 `sums of elements` in given slice (`contiguous` segments of array). Its main
-idea uses prefix sums which are defined as the consecutive totals of the first
+idea uses prefix sums which are defined as "the consecutive totals" of the first
 0, 1, 2, . . . , n elements of an array.
 
         a0            a1              a2                ...   an−1
@@ -9914,6 +9926,7 @@ values.
 namespace prefix_sum
 {
   // build prefix sum, O(n)
+  //
   //   (1, 2, 3, 4, 5, 6)
   // (0,1, 3, 6,10,15,21)
   //
@@ -9936,6 +9949,10 @@ namespace prefix_sum
   }
 
   // no +1 and use the same size since p0 is always 0.
+  //
+  // a0            a1              a2                ...   an−1
+  // p0 = a0       p1 = p0 + a1    p2 = p1 + a2      ...   pn-1 = a0 + a1 + ... + an−1
+
   std::vector<int> build_prefix_sum_2(const vector<int> &coll)
   {
     int size = coll.size();
@@ -9944,16 +9961,15 @@ namespace prefix_sum
 
     for (int i = 1; i < size; ++i)
     {
+      // since coll is copied to sum already, use sum instead.
       sum[i] += sum[i - 1];
     }
 
     return sum;
   }
-
-  // int find_max_sub_array_1(std::vector<int> &nums) {}
 } // namespace prefix_sum
 
-TEST(AlgoPrefixSum, check_prefix_sum)
+TEST(AlgoPrefixSum, build_prefix_sum)
 {
   using namespace prefix_sum;
 
@@ -10007,34 +10023,160 @@ slice[2,4]
 
 namespace prefix_sum
 {
-  //    0  1  2  3  4  5
-  // p0 1  2  3  4  5  6
-  //   {1, 2, 3, 4, 5, 6}
-  // (0,1, 3,[6,10,15],21)
-  //
-  // 15-3 = 12
+  // two variatins depending on how the prefix sum is made
 
-  int get_slice_sum(const vector<int> &sum, int first, int last)
+  int get_slice_sum_1(const vector<int> &sum, int first, int last)
   {
     return sum[last + 1] - sum[first];
   }
+
+  // plus check to avoid sum[-1] case
+  int get_slice_sum_2(const vector<int> &sum, int first, int last)
+  {
+    if (first > 0)
+      return sum[last] - sum[first - 1];
+    else
+      return sum[last];
+  }
 } // namespace prefix_sum
 
-TEST(AlgoPrefixSum, check_sum_slice)
+TEST(AlgoPrefixSum, slice_sum)
 {
   using namespace prefix_sum;
 
-  EXPECT_THAT(get_slice_sum(build_prefix_sum_1({1, 2, 3, 4, 5, 6}), 2, 4), 12);
+  {
+    //    0  1  2  3  4  5
+    // p0 1  2  3  4  5  6
+    //   {1, 2, 3, 4, 5, 6}
+    // (0,1, 3,[6,10,15],21)
+    //
+    // 15-3 = 12
 
-  // (0,2,5,[12,17,18],21,30)
-  // 18-5 = 13
+    EXPECT_THAT(get_slice_sum_1(build_prefix_sum_1({1, 2, 3, 4, 5, 6}), 2, 4),
+                12);
 
-  EXPECT_THAT(get_slice_sum(build_prefix_sum_1({2, 3, 7, 5, 1, 3, 9}), 2, 4),
-              13);
+    EXPECT_THAT(get_slice_sum_1(build_prefix_sum_1({1, 2, 3, 4, 5, 6}), 0, 3),
+                10);
+
+    // (0,2,5,[12,17,18],21,30)
+    // 18-5 = 13
+
+    EXPECT_THAT(
+      get_slice_sum_1(build_prefix_sum_1({2, 3, 7, 5, 1, 3, 9}), 2, 4),
+      13);
+  }
+
+  {
+    //  0  1  2  3   4   5
+    // (1, 3, [6, 10, 15], 21)
+    EXPECT_THAT(get_slice_sum_2(build_prefix_sum_2({1, 2, 3, 4, 5, 6}), 2, 4),
+                12);
+
+    EXPECT_THAT(get_slice_sum_2(build_prefix_sum_2({1, 2, 3, 4, 5, 6}), 0, 3),
+                10);
+
+    EXPECT_THAT(
+      get_slice_sum_2(build_prefix_sum_2({2, 3, 7, 5, 1, 3, 9}), 2, 4),
+      13);
+  }
+
+  {
+    EXPECT_THAT(build_prefix_sum_1({-2, 0, 3, -5, 2, -1}),
+                ElementsAre(0, -2, -2, 1, -4, 2, 1));
+  }
 }
 
 /*
-5.1. Exercise
+={=========================================================================
+algo-perfix-sum, leetcode-303. Range Sum Query - Immutable, Easy
+
+Given an integer array nums, find the sum of the elements between indices i and
+j (i ≤ j), inclusive.
+
+Implement the NumArray class:
+
+NumArray(int[] nums) 
+Initializes the object with the integer array nums.
+
+int sumRange(int i, int j) 
+Return the sum of the elements of the nums array in the range [i, j] inclusive
+(i.e., sum(nums[i], nums[i + 1], ... , nums[j]))
+ 
+Example 1:
+
+Input
+["NumArray", "sumRange", "sumRange", "sumRange"]
+[[[-2, 0, 3, -5, 2, -1]], [0, 2], [2, 5], [0, 5]]
+Output
+[null, 1, -1, -3]
+
+Explanation
+NumArray numArray = new NumArray([-2, 0, 3, -5, 2, -1]);
+numArray.sumRange(0, 2); // return 1 ((-2) + 0 + 3)
+numArray.sumRange(2, 5); // return -1 (3 + (-5) + 2 + (-1)) 
+numArray.sumRange(0, 5); // return -3 ((-2) + 0 + 3 + (-5) + 2 + (-1))
+ 
+
+Constraints:
+
+0 <= nums.length <= 104
+-105 <= nums[i] <= 105
+0 <= i <= j < nums.length
+At most 104 calls will be made to sumRange.
+*/
+
+namespace leetcode_easy_303
+{
+  // NumArray(vector<int>& nums);
+  std::vector<int> build_prefix_sum_1(const vector<int> &nums)
+  {
+    auto size = nums.size();
+
+    // prefix sum
+    std::vector<int> sum(size + 1);
+
+    for (int i = 1; i < (int)size + 1; ++i)
+    {
+      sum[i] = sum[i - 1] + nums[i - 1];
+    }
+
+    return sum;
+  }
+
+  // int sumRange(int i, int j);
+  int get_slice_sum_1(const std::vector<int> &sum, int first, int last)
+  {
+    return sum[last+1] - sum[first];
+  }
+}
+
+// Time complexity : O(1) time per query, O(n) time pre-computation.  Since the
+// cumulative sum is cached, each sumRange query can be calculated in O(1) time.
+//
+// Space complexity : O(n)O(n).
+//
+// Runtime: 36 ms, faster than 90.79% of C++ online submissions for Range Sum
+// Query - Immutable.
+//
+// Memory Usage: 17.5 MB, less than 15.94% of C++ online submissions for Range
+// Sum Query - Immutable.
+
+TEST(AlgoPrefixSum, range_sum)
+{
+  using namespace leetcode_easy_303;
+
+  auto sum = build_prefix_sum_1({-2, 0, 3, -5, 2, -1});
+
+  EXPECT_THAT(sum, ElementsAre(0, -2, -2, 1, -4, -2, -3));
+
+  EXPECT_THAT(get_slice_sum_1(sum, 0, 2), 1);
+  EXPECT_THAT(get_slice_sum_1(sum, 2, 5), -1);
+  EXPECT_THAT(get_slice_sum_1(sum, 0, 5), -3);
+}
+
+/*
+={=========================================================================
+algo-perfix-sum 5.1. Exercise
 
 Problem: 
 
@@ -10182,7 +10324,7 @@ namespace prefix_sum
       int right_pos = min(max_input_index, max_on_possible_right_pos);
 
       // collect mushroon only once? count_total use range and counts only once.
-      auto xresult = get_slice_sum(prefix_sum, left_pos, right_pos);
+      auto xresult = get_slice_sum_1(prefix_sum, left_pos, right_pos);
       result       = max(result, xresult);
 
       // cout << "loop(" << prefix_index << ", " << loop_max << ")"
@@ -10211,7 +10353,7 @@ namespace prefix_sum
       // max? cannot not less than 0
       int left_pos = max(0, min_on_possible_left_pos);
 
-      auto xresult = get_slice_sum(prefix_sum, left_pos, right_pos);
+      auto xresult = get_slice_sum_1(prefix_sum, left_pos, right_pos);
       result       = max(result, xresult);
 
       // cout << "loop(" << prefix_index << ", " << loop_max << ")"
@@ -10249,7 +10391,7 @@ namespace prefix_sum
       int right_end_calculated = max(start, right_contained);
 
       int prefix_sum_result =
-        get_slice_sum(prefix_sum, left_end, right_end_calculated);
+        get_slice_sum_1(prefix_sum, left_end, right_end_calculated);
       result = max(prefix_sum_result, result);
     }
 
@@ -10268,7 +10410,7 @@ namespace prefix_sum
       int left_end_calculated = min(start, left_end_contained);
 
       int prefix_sum_result =
-        get_slice_sum(prefix_sum, left_end_calculated, right_end);
+        get_slice_sum_1(prefix_sum, left_end_calculated, right_end);
       result = max(prefix_sum_result, result);
     }
 
@@ -10316,7 +10458,7 @@ namespace prefix_sum
 
       // cout << "slice {" << slice.first << ", " << slice.second << "}\n";
 
-      auto slice_sum = get_slice_sum(sum, slice.first, slice.second);
+      auto slice_sum = get_slice_sum_1(sum, slice.first, slice.second);
 
       if (slice_sum > result)
         result = slice_sum;
@@ -16551,7 +16693,7 @@ namespace leetcode_easy_278
         first = ++middle;
       }
       // bad version
-      // The only scenario left is where isBadVersion(mid) return true. 
+      // The only scenario left is where isBadVersion(mid) return true.
       //
       // G G G G G G G B B B B B B B
       //
@@ -16567,7 +16709,7 @@ namespace leetcode_easy_278
 
     return first;
   }
-} // namespace leetcode_easy_283
+} // namespace leetcode_easy_278
 
 TEST(AlgoSearch, binary_search_first_bad_version)
 {

@@ -953,87 +953,79 @@ TEST(CxxVector, check_capacity)
   cout << " capacity(): " << sentence.capacity() << endl;
 }
 
-class VectorCtorsTest
+namespace cxx_vector
 {
-public:
-  VectorCtorsTest(int size, int value = 10)
-      : icoll(size, value)
-  {}
-  int size() { return icoll.size(); }
-  void print() { PRINT_ELEMENTS(icoll, "clsss : "); }
+  class VectorFoo
+  {
+  public:
+    VectorFoo(int size, int value = 10)
+        : coll_(size, value)
+    {}
+    int size() { return coll_.size(); }
 
-private:
-  vector<int> icoll;
-};
+  private:
+    std::vector<int> coll_;
+  };
+} // namespace cxx_vector
 
 // ={=========================================================================
-TEST(CxxVector, check_ctor)
+TEST(CxxVector, ctors)
 {
-  // see TEST(CxxCtor, check_init_list_3)
+  using namespace cxx_vector;
+
+  // see TEST(CxxCtor, init_list_3)
   // for difference between coll{} and coll()
 
+  // 10)
+  // vector( std::initializer_list<T> init, const Allocator& alloc = Allocator() );
+  // (since C++11)
   {
     std::vector<int> coll{5};
     ASSERT_THAT(coll.size(), Eq(1));
     EXPECT_THAT(coll, ElementsAre(5));
   }
+  {
+    std::vector<int> coll{1,2,3,4,5};
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
+  }
 
+  // 3)
+  // explicit vector( size_type count,
+  //                  const T& value = T(),
+  //                  const Allocator& alloc = Allocator());
+  // (until C++11)
+  //          vector( size_type count,
+  //                  const T& value,
+  //                  const Allocator& alloc = Allocator());
+  // (since C++11)
+  //
+  // 4)
+  // explicit vector( size_type count );
   {
     std::vector<int> coll(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }
-
-  // *cxx-vector-resize*
-  {
-    std::vector<int> coll;
-    coll.resize(5);
-    ASSERT_THAT(coll.size(), Eq(5));
-    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
-  }
-
   {
     std::vector<int> coll(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10, 10, 10, 10, 10));
   }
 
-  // *cxx-vector-resize*
-  // so vector-resize() do the same as ctor(n, e)
-
   {
-    std::vector<int> coll;
-    coll.resize(5, 10);
-    ASSERT_THAT(coll.size(), Eq(5));
-    EXPECT_THAT(coll, ElementsAre(10, 10, 10, 10, 10));
-  }
-
-  {
-    VectorCtorsTest coll(10, 100);
-    // icoll3.print();
+    VectorFoo coll{10, 100};
     ASSERT_THAT(coll.size(), Eq(10));
   }
 
-  // initializer_list
-  // unlike vecor(n), vector{n} creates single element.
+  // 5) iterator
+  // template< class InputIt >
+  // vector( InputIt first, InputIt last,
+  //         const Allocator& alloc = Allocator() );
   {
-    std::vector<int> coll1{1, 2, 3, 4, 5, 6};
-    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6));
+    std::istringstream is{"1 2 3 4 5 6"};
 
-    std::vector<int> coll2{1};
-    ASSERT_THAT(coll2.size(), Eq(1));
-    EXPECT_THAT(coll2, ElementsAre(1));
-
-    std::vector<int> coll3{2};
-    ASSERT_THAT(coll3.size(), Eq(1));
-    EXPECT_THAT(coll3, ElementsAre(2));
-  }
-
-  // iterator
-  {
-    istringstream is{"1 2 3 4 5 6"};
-
-    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+    std::vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
 
     // *cxx-error* without additional (). WHY?
     // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
@@ -1041,27 +1033,46 @@ TEST(CxxVector, check_ctor)
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
-  // see that cxx-array can be created with the value, size() and this is
-  // dynamic.
-
+  // as TEST(CxxArray, variable_length_automatic_array)
   {
     std::vector<int> coll(20, 1);
-
     EXPECT_THAT(coll.size(), 20);
 
-    // okay as well
-    // int value;
-    // cin >> value;
-    // vector<bool> table1(value);
+    std::vector<int> coll2(coll.size());
+    EXPECT_THAT(coll2.size(), 20);
+  }
+}
 
-    vector<bool> table1(coll.size());
-    vector<bool> table2(10);
+/*
+={=========================================================================
+cxx-vector-resize
 
-    int arr[coll.size()];
+void resize( size_type count );
+void resize( size_type count, const value_type& value );
 
-    EXPECT_THAT(table1.size(), 20);
-    EXPECT_THAT(table2.size(), 10);
-    EXPECT_THAT(sizeof(arr) / sizeof(arr[0]), 20);
+*/
+
+TEST(CxxVector, resize)
+{
+  {
+    std::vector<int> coll{};
+    coll.resize(5);
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
+  }
+
+  {
+    std::vector<int> coll{};
+    coll.resize(5, 0);
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
+  }
+
+  // ctor do the same
+  {
+    std::vector<int> coll(5, 0);
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0, 0, 0, 0, 0));
   }
 }
 
@@ -2499,7 +2510,7 @@ TEST(CxxSet, check_merge)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxMap, check_begin_return)
+TEST(CxxMap, begin_return)
 {
   {
     std::map<int, int>
@@ -2530,11 +2541,17 @@ TEST(CxxMap, check_compare)
 }
 
 // ={=========================================================================
-TEST(CxxMap, check_find)
+TEST(CxxMap, find)
 {
   {
     std::map<float, float>
       coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
+
+    // return end() when not found
+    {
+      auto it = coll.find(8);
+      EXPECT_THAT(it, coll.end());
+    }
 
     // find() returns a pair
     {
@@ -2713,6 +2730,18 @@ TEST(CxxMap, insert_and_emplace)
     coll_1.insert({2, "two"});
     coll_1.insert({3, "three"});
     coll_1.insert({4, "four"});
+
+    EXPECT_THAT(coll == coll_1, true);
+  }
+
+  // (7) cxx-map-insert
+  // template< class InputIt >
+  // void insert( InputIt first, InputIt last );
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.insert(coll.cbegin(), coll.cend());
 
     EXPECT_THAT(coll == coll_1, true);
   }

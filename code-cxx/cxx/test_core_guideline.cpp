@@ -807,18 +807,20 @@ so infinite loop
 TEST(CxxCoreEs, 106_infinite_loop)
 {
   {
-    unsigned max = 100000;    // "accidental typo", I mean to say 10'000
+    unsigned max     = 100000; // "accidental typo", I mean to say 10'000
     unsigned short x = 100;
-    while (x < max) x += 100; // infinite loop
+    while (x < max)
+      x += 100; // infinite loop
   }
 
   // warning: comparison between signed and unsigned integer expressions [-Wsign-compare]
   // while (x < max) x += 100; // infinite loop
 
   {
-    unsigned max = 100000;    // "accidental typo", I mean to say 10'000
+    unsigned max   = 100000; // "accidental typo", I mean to say 10'000
     signed short x = 100;
-    while (x < max) x += 100; // infinite loop
+    while (x < max)
+      x += 100; // infinite loop
   }
 }
 

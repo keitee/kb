@@ -11,11 +11,20 @@
 
 #include "dbusfiledescriptor.h"
 
-// this class is to encapsulate sd_bus_error or sd_bus_message which are all
-// dbus message after all.
-//
-// it provides conversion from or to them but limited to support types that are
-// in Arguments. For example, array type is not supported
+/*
+this class is to encapsulate creating sd_bus_message; sd_bus_error or
+sd_bus_message which are all dbus message after all.
+
+it provides conversion from or to them but limited to support types that are
+in Arguments. For example, array type is not supported (added)
+
+creates DBusMessage whenever needs a message
+
+not easy to test DBusMessage itself. for example, it requires sd_bus* to use
+sd_bus_message_dump but no way to pass via public interfaces. DBusConnection can
+do since it's friend to access privates calls.
+
+*/
 
 // NOTE: can use forward declaration for friendship.
 // #include "dbusconnection_p.h"
@@ -46,6 +55,8 @@ private:
 
 private:
   DBusMessage::MessageType getMessageType_(sd_bus_message *message);
+
+  // it was bool demarshallArgs(sd_bus_message *reply);
   bool fromMessage_(sd_bus_message *message);
 
   // to use unique_ptr with deleter
@@ -56,7 +67,7 @@ private:
 
   // NOTE: was public but make it private and is used by others directrly. shall
   // be used through DBusMessage?
-  sd_bus_message_ptr toMessage(sd_bus *bus) const;
+  sd_bus_message_ptr toMessage_(sd_bus *bus) const;
 
 private:
   struct Argument

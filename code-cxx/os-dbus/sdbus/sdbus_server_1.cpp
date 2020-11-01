@@ -15,6 +15,13 @@ $lsdbus
 18132 net.poettering.Calculator./a.out
 18233 :1.91                    gvim lsdbus.sh
 
+
+       tree [SERVICE...]
+           Shows an object tree of one or more services. If SERVICE is
+           specified, show object tree of the specified services only.
+           Otherwise, show all object trees of all services on the bus that
+           acquired at least one well-known name.
+
 $ busctl --user tree net.poettering.Calculator
 └─/net
   └─/net/poettering
@@ -25,12 +32,77 @@ surprising, given that our code above only registered one. Let's see the
 interfaces and the members this object exposes:
 
 
-$ busctl --user introspect net.poettering.Calculator /net/poettering/Calculator
+dbus-send --session --type=method_call --print-reply --dest='net.poettering.Calculator' / org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1603105453.441741 sender=:1.4291 -> destination=:1.4294 serial=5 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+ <interface name="org.freedesktop.DBus.Peer">
+  <method name="Ping"/>
+  <method name="GetMachineId">
+   <arg type="s" name="machine_uuid" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Introspectable">
+  <method name="Introspect">
+   <arg name="data" type="s" direction="out"/>
+  </method>
+ </interface>
+ <interface name="org.freedesktop.DBus.Properties">
+  <method name="Get">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="out" type="v"/>
+  </method>
+  <method name="GetAll">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="properties" direction="out" type="a{sv}"/>
+  </method>
+  <method name="Set">
+   <arg name="interface" direction="in" type="s"/>
+   <arg name="property" direction="in" type="s"/>
+   <arg name="value" direction="in" type="v"/>
+  </method>
+  <signal name="PropertiesChanged">
+   <arg type="s" name="interface"/>
+   <arg type="a{sv}" name="changed_properties"/>
+   <arg type="as" name="invalidated_properties"/>
+  </signal>
+ </interface>
+ <node name="net"/>
+</node>
+"
+
+man busctl
+
+       introspect SERVICE OBJECT [INTERFACE]
+           Show interfaces, methods, properties and signals of the specified
+           object (identified by its path) on the specified service. If the
+           interface argument is passed, the output is limited to members of the
+           specified interface.
+
+
+busctl --user introspect net.poettering.Calculator /net/poettering/Calculator
 
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
 net.poettering.Calculator           interface -         -            -
 .Divide                             method    xx        x            -
 .Multiply                           method    xx        x            -
+org.freedesktop.DBus.Introspectable interface -         -            -
+.Introspect                         method    -         s            -
+org.freedesktop.DBus.Peer           interface -         -            -
+.GetMachineId                       method    -         s            -
+.Ping                               method    -         -            -
+org.freedesktop.DBus.Properties     interface -         -            -
+.Get                                method    ss        v            -
+.GetAll                             method    s         a{sv}        -
+.Set                                method    ssv       -            -
+.PropertiesChanged                  signal    sa{sv}as  -            -
+
+
+busctl --user introspect net.poettering.Calculator /
+NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
 org.freedesktop.DBus.Introspectable interface -         -            -
 .Introspect                         method    -         s            -
 org.freedesktop.DBus.Peer           interface -         -            -
@@ -64,8 +136,17 @@ x 5
 busctl --user call net.poettering.Calculator /net/poettering/Calculator net.poettering.Calculator Divide xx 99 0
 sorry, can't do that
 
+dbus-monitor --session "interface=net.poettering.Calculator"
+
+method call time=1603110729.667975 sender=:1.4306 -> destination=net.poettering.Calculator serial=2 path=/net/poettering/Calculator; interface=net.poettering.Calculator; member=Multiply
+   int64 5
+   int64 7
+
+
 
 <case>
+
+NOTE "introspect" on /
 
 # dbus-send --system --type=method_call --print-reply --dest='com.sky.as.player' / org.freedesktop.DBus.Introspectable.Introspect
 
@@ -109,6 +190,10 @@ method return time=1600287980.030992 sender=:1.89 -> destination=:1.180 serial=1
 </node>
 "
 
+#define SD_BUS_METHOD(_member, _signature, _result, _handler, _flags)   \
+
+so "nullptr" on _signature means that no input parameters
+
 static const sd_bus_vtable g_asServiceVTable[] =
 {
     SD_BUS_VTABLE_START(0),
@@ -141,6 +226,9 @@ static const sd_bus_vtable g_asServiceVTable[] =
                                       m_interface.c_str(),
                                       g_asServiceVTable,
                                       this);
+
+
+NOTE "introspect" on /com/sky/as/service 
 
 # dbus-send --system --type=method_call --print-reply --dest='com.sky.as.player' /com/sky/as/service org.freedesktop.DBus.Introspectable.Introspect
 
@@ -299,6 +387,7 @@ method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=68
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <systemd/sd-bus-vtable.h>
 #include <systemd/sd-bus.h>
@@ -324,20 +413,27 @@ method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=68
 
 static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
 {
-  int64_t x;
-  int64_t y;
+  // int64_t x;
+  // int64_t y;
+
+  int x;
+  int y;
   int r;
 
   // reads the parameters
-  r = sd_bus_message_read(m, "xx", &x, &y);
+  r = sd_bus_message_read(m, "ii", &x, &y);
   if (r < 0)
   {
     fprintf(stderr, "failed to parse parameters: %s\n", strerror(-r));
     return r;
   }
 
+  printf("server: multiply {%d, %d} and sleep\n", x, y);
+
+  // sleep(30);
+
   // reply with the result
-  return sd_bus_reply_method_return(m, "x", x * y);
+  return sd_bus_reply_method_return(m, "i", x * y);
 }
 
 static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
@@ -471,8 +567,10 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
+  // SD_BUS_METHOD(
+  //   "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD(
-    "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+    "Multiply", "ii", "i", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_VTABLE_END};
 
@@ -513,8 +611,9 @@ int main(int argc, char *argvp[])
   // SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
   // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below.
   //
-  // The `userdata` parameter contains a pointer that will be passed to handler
-  // callback functions. It may be specified as NULL if no value is necessary.
+  // NOTE: The `userdata` parameter contains a pointer that will be passed to
+  // handler callback functions. It may be specified as NULL
+  // if no value is necessary.
   //
   // typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
   //  	void *userdata,
@@ -539,7 +638,7 @@ int main(int argc, char *argvp[])
     goto finish;
   }
 
-  printf("succuess on adding object\n");
+  printf("server: succuess on adding object\n");
 
   // take a well-known service name so that clients can find us
   r = sd_bus_request_name(bus, "net.poettering.Calculator", 0);
@@ -562,7 +661,7 @@ int main(int argc, char *argvp[])
   // operations were pending.
   //
   // When zero is returned the caller should synchronously poll for I/O events
-  // before calling into sd_bus_process() again. For that either user the
+  // before calling into sd_bus_process() again. For that either use the
   // simple, synchronous sd_bus_wait(3) call, or hook up the bus connection
   // object to an external or manual event loop using sd_bus_get_fd(3).
   //
@@ -587,12 +686,18 @@ int main(int argc, char *argvp[])
       goto finish;
     }
 
-    // processed a request and try to process another one right away
+    printf("server: sd_bus_process returns {%d}\n", r);
+
+    // return positive. processed a request and try to process
+    // another one right away
+
     if (r > 0)
     {
       printf("processed a request and try another\n");
       continue;
     }
+
+    printf("server: calls sd_bus_wait()\n");
 
     r = sd_bus_wait(bus, (uint64_t)-1);
     if (r < 0)

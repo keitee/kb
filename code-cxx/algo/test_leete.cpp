@@ -3240,6 +3240,190 @@ note on "play optimally" so all plays to leave "4" to win. so cannot win for
 
 */
 
+/*
+={=========================================================================
+algo-leetcode-326. Power of Three. Easy
+algo-leetcode-342. Power of Four. Easy
+
+see TEST(AlgoBit, power_of_two)
+
+Given an integer, write a function to determine if it is a power of three.
+
+Example 1:
+Input: 27
+Output: true
+
+Example 2:
+Input: 0
+Output: false
+
+Example 3:
+Input: 9
+Output: true
+
+Example 4:
+Input: 45
+Output: false
+
+Follow up:
+Could you do it without using any loop / recursion?
+
+*/
+
+namespace leetcode_easy_326
+{
+  // 1. loop iteration.
+  //
+  // can use while and cxx-mod operation
+  //
+  // Hence it should be possible to divide n by b x times, every time with 
+  // a remainder of 0 and the end result to be 1.
+  //
+  // 27, 0, 9
+  // 9,  0, 3
+  // 3,  0, 1
+  // 1,  1
+  //
+  // 45, 0, 15
+  // 15, 0, 5
+  // 5,  2,
+
+  bool is_power_of_three_1(int n) 
+  {
+    if (n < 3)
+      return false;
+
+    while (0 == (n % 3))
+    {
+      n /= 3;
+    }
+
+    // here can check if the remainder is 0 or the divident is 1; both means n
+    // is power of three. here use the divident since no further cals is
+    // necessary.
+
+    return n == 1;
+  }
+
+  // 4. from solution. Approach 4: Integer Limitations
+  //
+  // without using loop
+  //
+  // An important piece of information can be deduced from the function
+  // signature
+  //
+  // In particular, n is of type int. In Java, this means it is a 4 byte, signed
+  // integer. The maximum value of this data type is 2147483647.
+  //
+  // Knowing the limitation of n, we can now deduce that the maximum value of n
+  // that is also a power of three is 1162261467, 3^19.
+  //
+  // Therefore, the possible values of n where we should return true are
+  //
+  // 3^0, 3^1, ... 3^19
+  //
+  // "Since 3 is a prime number, the only divisors of 3^19 are 3^0, 3^1,..3^19"
+  //
+  // therefore all we need to do is divide 3^19 by n.
+  // A remainder of 0 means n is a divisor of 3^19
+  // and therefore a power of three.
+  //
+  // >>> 3**19
+  // 1162261467
+  //
+  // int   max   : 2147483647
+  //
+  // >>> 3**20
+  // 3486784401
+  //
+  // so n > 1162261467 are not power of 3.
+  //
+  // Runtime: 8 ms, faster than 93.31% of C++ online submissions.
+  // Memory Usage: 6.3 MB, less than 100.00% of C++ online submissions.
+
+  bool is_power_of_three_2(int n) { return (n > 0) && (1162261467 % n == 0); }
+
+  // 1. loop iteration still works for "four"
+
+  bool is_power_of_four_1(int n)
+  {
+    if (n < 4)
+      return false;
+
+    while (0 == (n % 4))
+    {
+      n /= 4;
+    }
+
+    // here can check if the remainder is 0 or the divident is 1; both means n
+    // is power of three. here use the divident since no further cals is
+    // necessary.
+
+    return n == 1;
+  }
+
+  // from discussion. Solution 2:
+  //
+  // https://leetcode.com/problems/power-of-four/discuss/901598/3-Solution-Detailed-Steps-and-Explained
+  //
+  // Idea of this solution is first check num positive and power of two - https://leetcode.com/problems/power-of-two/
+  // using (num & (num - 1)) == 0 then check (num - 1) divisable by 3.
+  //
+  // not understand but if write down numbers, can see (n-1) is divisible by 3
+  // only when n is power of 4.
+  //
+  // Runtime: 4 ms, faster than 41.70% of C++ online submissions.
+  // Memory Usage: 6.2 MB, less than 100.00% of C++ online submissions.
+
+  bool is_power_of_four_2(int n)
+  {
+    return (n > 0) && ((n & (n-1)) == 0) && ((n-1) % 3 == 0);
+  }
+
+  // from discussion.
+  //
+  // https://leetcode.com/problems/power-of-four/discuss/860067/C%2B%2B-bitset-100
+  //
+  // from observation, when use the mask bit, & with it makes 0 when n is 4^x
+  //
+  // bitset<32> b("10101010101010101010101010101010");
+  //
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions.
+  // Memory Usage: 6.3 MB, less than 100.00% of C++ online submissions.
+
+  bool is_power_of_four_3(int n)
+  {
+    // since 4^0 == 1
+    // if (n < 4)
+    //   return false;
+
+    unsigned int mask{2863311530};
+
+    return __builtin_popcount(n) == 1 && ((mask & n) == 0);
+  }
+}
+
+TEST(AlgoLeetCode, power_of_three)
+{
+  using namespace leetcode_easy_326;
+
+  {
+    auto f = is_power_of_three_2;
+
+    EXPECT_THAT(f(27), true);
+    EXPECT_THAT(f(45), false);
+  }
+
+  {
+    auto f = is_power_of_four_3;
+
+    EXPECT_THAT(f(1), true);
+    EXPECT_THAT(f(5), false);
+    EXPECT_THAT(f(8), false);
+    EXPECT_THAT(f(16), true);
+  }
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

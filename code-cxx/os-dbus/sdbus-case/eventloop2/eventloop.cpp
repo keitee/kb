@@ -24,6 +24,7 @@ Shows client thread actually runs loop and sd_event do dispatch work
 */
 
 // #define EVENTLOOP_DEBUG
+#define DEADLOCK_FIX
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -221,23 +222,29 @@ void EventLoopPrivate::quit(int exitCode)
 }
 
 /*
+NOTE: thread local
 
-Use of `m_loopRunning` and sem means flush() can be called from a different
-thread than a thread running event loop.
+`m_loopRunning` is set in run().
+
+Use of `m_loopRunning` and sem(semaphore) means flush() can be called from 
+a different thread than a thread running event loop.
 
 
 1. EventLoopPrivate *m_loopRunning;
 member variable and single entity. when two threads use the same EventLoop,
-m_loopRunning has the same single value.
+m_loopRunning has the same single value since use the same EventLoopPrivate.
 
 2. static EventLoopPrivate *m_loopRunning;
 same as 1 since `static` only make it available without making instance.
 
 3. static thread_local EventLoopPrivate *m_loopRunning;
-So how can differentiate threads? By using `thread_local`, a thread which
-runs EventLoop will have a copy of m_loopRunning since run() is where it's used
-first time and gets create/set but other threads which uses public interface
-will not have this variable set and it'll be null.
+
+So how can differentiate threads? 
+
+By using `thread_local`, a thread which runs EventLoop will have a copy of
+m_loopRunning since run() is where it's used first time and gets create/set but
+other threads which do not call run() and only uses public interface will not
+have this variable set and it'll be null.
 
 
 So deadlock will happen since when flush() gets called from different thread,
@@ -282,8 +289,6 @@ this is used in client interfaces as well and recursive lock only works for
 the same thread. Uses recursive lock for this case which seems to be rare.
 
 */
-
-#define DEADLOCK_FIX
 
 void EventLoopPrivate::flush()
 {
@@ -331,6 +336,9 @@ void EventLoopPrivate::flush()
 
   sem_t sem;
   sem_init(&sem, 0, 0);
+
+  // NOTE: this lambda is "self-contained" since sem is local and lambda will
+  // run on different thread?
 
   auto flushLambda = [&]() {
     logWarning("sem_post");

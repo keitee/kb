@@ -54,17 +54,6 @@ using namespace testing;
 2298:TEST(Ratio, Ratio)
 3190:TEST(CxxFeaturesTest, UseIsspace)
 3201:// Q: If run it standalone, it runs slower than on in GTEST. WHY?
-3251:TEST(CxxFunctionObject, FunctionPointer)
-3289:TEST(CxxFunctionObject, FunctionPointerVoidCast)
-3336:TEST(CxxFunctionObject, Function)
-3438:TEST(CxxFunctionObject, Bind)
-3626:TEST(CxxFunctionObject, BindAndFunction)
-3757:TEST(CxxFunctionObject, MemFn)
-3898:TEST(CxxFunctionObject, Case)
-3923:TEST(CxxFunctionObject, Pointer)
-3984:TEST(CxxFunctionObject, LambdaCaptureAndReturn)
-4165:TEST(CxxFunctionObject, LambdaBiggies)
-4193:TEST(CxxFunctionObject, LambdaCompare)
 4257:TEST(CxxSmartPointerShared, construct)
 4296:TEST(CxxSmartPointerShared, copy)
 4324:TEST(CxxSmartPointer, reset)
@@ -110,18 +99,6 @@ using namespace testing;
 7395:TEST(MinMax, Order)
 7603:// TEST(Operator, MinMax)
 7616:TEST(Operator, PrefixPostfix)
-7646:TEST(Template, Function)
-7721:TEST(Template, Specialisation)
-7789:TEST(CxxTemplate, DefaultTypeArgument)
-7854:TEST(Template, MemberTemplate)
-8022:TEST(Template, ReturnType)
-8093:TEST(Template, Reference)
-8137:TEST(Template, Overload)
-8202:TEST(Template, Friend)
-8277:TEST(Template, Forward)
-8415:TEST(Template, ForwardEx)
-8459:TEST(Template, VariadicSizeofOperator)
-8531:TEST(Template, TypeTrait)
 8553:TEST(Const, NoViaConstReference)
 8566:TEST(Const, NoConstToNonConst)
 8694:TEST(Const, ForMemberFunction)
@@ -493,8 +470,7 @@ TEST(CxxType, limits)
   std::cout << "ushort min: " << std::numeric_limits<unsigned short>::min()
             << std::endl;
 
-  std::cout << "short  max: " << std::numeric_limits<short>::max()
-            << std::endl;
+  std::cout << "short  max: " << std::numeric_limits<short>::max() << std::endl;
   std::cout << "short  min: " << std::numeric_limits<short>::min() << std::endl;
 
   std::cout << "u     max: " << std::numeric_limits<unsigned>::max()
@@ -592,7 +568,7 @@ TEST(CxxType, overflow)
 
     std::cout << "result       : " << result << std::endl;
 
-    EXPECT_THAT(__builtin_add_overflow_p (value1, 1, (int) 0), true);
+    EXPECT_THAT(__builtin_add_overflow_p(value1, 1, (int)0), true);
   }
 
   // The following built-in functions allow checking if simple arithmetic
@@ -625,10 +601,10 @@ TEST(CxxType, overflow)
   // bit-field, rather than precision and signedness of the underlying type.
 
   // For example, the following macro can be used to portably check, at compile-time, whether or not adding two constant integers will overflow, and perform the addition only when it is known to be safe and not to trigger a -Woverflow warning.
-  //  
+  //
   // #define INT_ADD_OVERFLOW_P(a, b) \
   //    __builtin_add_overflow_p (a, b, (__typeof__ ((a) + (b))) 0)
-  // 
+  //
   // enum {
   //     A = INT_MAX, B = 3,
   //     C = INT_ADD_OVERFLOW_P (A, B) ? 0 : A + B,
@@ -932,7 +908,7 @@ namespace cxx_variant
 } // namespace cxx_variant
 
 // ={=========================================================================
-TEST(CxxTypeVariant, check_custom_variant)
+TEST(CxxTypeVariant, custom_variant)
 {
   using namespace cxx_variant;
 
@@ -968,8 +944,9 @@ TEST(CxxTypeVariant, check_custom_variant)
   }
 }
 
-namespace cxxvariant
+namespace cxx_variant_1
 {
+  // with insert() interface
   class VariantMap
   {
   private:
@@ -1083,22 +1060,6 @@ namespace cxxvariant
       virtual void operator()(const std::string &, const std::string &) {}
     };
 
-    // void visit(Visitor &&visitor) const
-    // this is original code and which means it uses a temporary like:
-    //
-    // apply the visitor to all entries in the map, this will populate the
-    // dictionary in the reply message
-    // variantMap.visit(VariantVisitor(msg));
-    //
-    // instead, use msg and populate variant map contents into it. visitor
-    // struct can have a pointer to real object and populate maps into it.
-    //
-    // struct VariantVisitor : ASVariantMap::Visitor
-    // {
-    //  sd_bus_message * const reply;
-    //  ...
-    // }
-
     void visit(Visitor &visitor) const
     {
       for (const auto &e : m_map)
@@ -1127,10 +1088,86 @@ namespace cxxvariant
   };
 } // namespace cxxvariant
 
+/*
 // ={=========================================================================
-TEST(CxxTypeVariant, custom_variant_and_visitor)
+
+case example to build dbus message, "a(sa{sv})"
+
 {
-  using namespace cxxvariant;
+    // Vistor object that populates the reply dictionary
+    struct SystemStatusVisitor : ASVariantMap::Visitor
+    {
+        sd_bus_message * const reply;
+
+        SystemStatusVisitor(sd_bus_message *msg)
+                : reply(msg)
+        { }
+
+        void appendDictEntry(const std::string& key, const char *type, const void *value)
+        {
+            sd_bus_message_open_container(reply, SD_BUS_TYPE_DICT_ENTRY, "sv");
+            sd_bus_message_append_basic(reply, 's', key.c_str());
+
+            sd_bus_message_open_container(reply, SD_BUS_TYPE_VARIANT, type);
+            sd_bus_message_append_basic(reply, *type, value);
+            sd_bus_message_close_container(reply);
+
+            sd_bus_message_close_container(reply);
+        }
+
+        void operator()(const std::string& k, bool v) override
+        {
+            int boolValue = v;
+            appendDictEntry(k, "b", &boolValue);
+        }
+        void operator()(const std::string& k, int v) override
+        {
+            appendDictEntry(k, "i", &v);
+        }
+        void operator()(const std::string& k, double v) override
+        {
+            appendDictEntry(k, "d", &v);
+        }
+        void operator()(const std::string& k, const std::string& v) override
+        {
+            appendDictEntry(k, "s", v.c_str());
+        }
+    };
+
+    // open the dictionary container
+    rc = sd_bus_message_open_container(msg, SD_BUS_TYPE_ARRAY, "(sa{sv})");
+
+    // const std::map<std::string, ASVariantMap>& systemStatusUpdate
+
+    for ( auto statusUpdate : systemStatusUpdate ) {
+
+        rc = sd_bus_message_open_container(msg, SD_BUS_TYPE_STRUCT, "sa{sv}");
+
+        // add the arguments
+        rc = sd_bus_message_append(msg, "s", statusUpdate.first.c_str());
+
+        // open the dictionary container
+        rc = sd_bus_message_open_container(msg, SD_BUS_TYPE_ARRAY, "{sv}");
+
+        // Apply the visitor to all entries in the map, this will populate the
+        // dictionary in the reply message
+        statusUpdate.second.visit(SystemStatusVisitor(msg));
+
+        // Close the dictionary container
+        rc = sd_bus_message_close_container(msg);
+
+        // Close the dictionary container
+        rc = sd_bus_message_close_container(msg);
+    }
+
+    // Close the dictionary container
+    rc = sd_bus_message_close_container(msg);
+}
+*/
+
+TEST(CxxTypeVariant, variant_and_visitor_1)
+{
+  using namespace cxx_variant_1;
 
   // override "Visitor"
   struct CustomVisitor : VariantMap::Visitor
@@ -1200,11 +1237,193 @@ TEST(CxxTypeVariant, custom_variant_and_visitor)
                           "{key6:variant2}"));
 }
 
+namespace cxx_variant_2
+{
+  // with operator<<() interface and use std::list<> instead
+  class VariantMap
+  {
+  private:
+    struct Variant
+    {
+      enum Type
+      {
+        Boolean,
+        Integer,
+        Double,
+        String
+      } m_type;
+
+      union Basic
+      {
+        bool boolean;
+        int integer;
+        double real;
+
+        Basic() = default;
+
+        explicit Basic(bool b)
+            : boolean(b)
+        {}
+        explicit Basic(int i)
+            : integer(i)
+        {}
+        explicit Basic(double d)
+            : real(d)
+        {}
+      } m_basic;
+
+      std::string m_string;
+
+      explicit Variant(bool b)
+          : m_type(Boolean)
+          , m_basic(b)
+      {}
+      explicit Variant(int i)
+          : m_type(Integer)
+          , m_basic(i)
+      {}
+      explicit Variant(double d)
+          : m_type(Double)
+          , m_basic(d)
+      {}
+      explicit Variant(const std::string &str)
+          : m_type(String)
+          , m_string(str)
+      {}
+      explicit Variant(std::string &&str)
+          : m_type(String)
+          , m_string(std::move(str))
+      {}
+      explicit Variant(const char *str)
+          : m_type(String)
+          , m_string(str)
+      {}
+    }; // struct Variant
+
+    std::list<Variant> m_map;
+
+  public:
+    VariantMap()                   = default;
+    VariantMap(const VariantMap &) = default;
+    VariantMap(VariantMap &&)      = default;
+
+    // write(push) arg from message
+    // template <typename T>
+    //   DBusMessage &operator<<(const T &arg);
+
+    // write(push) arg from message
+    template <typename T>
+      VariantMap &operator<<(const T &arg)
+      {
+        // as changed to use std::list<>
+        m_map.emplace_back(arg);
+        return *this;
+      }
+
+    void clear() { m_map.clear(); }
+
+    bool empty() const { return m_map.empty(); }
+
+  public:
+    struct Visitor
+    {
+      virtual void operator()(bool) {}
+      virtual void operator()(int) {}
+      virtual void operator()(double) {}
+      virtual void operator()(const std::string &) {}
+    };
+
+    // void visit(Visitor &&visitor) const
+    // this is original code and which means it uses a temporary like:
+
+    void visit(Visitor &visitor) const
+    {
+      for (const auto &e : m_map)
+      {
+        const Variant &value = e;
+
+        switch (value.m_type)
+        {
+          case Variant::Boolean:
+            // visitor.operator()(value.m_basic.boolean);
+            visitor(value.m_basic.boolean);
+            break;
+          case Variant::Integer:
+            visitor.operator()(value.m_basic.integer);
+            break;
+          case Variant::Double:
+            visitor.operator()(value.m_basic.real);
+            break;
+          case Variant::String:
+            visitor.operator()(value.m_string);
+            break;
+        }
+      }
+    }
+  };
+} // namespace cxxvariant
+
+// ={=========================================================================
+TEST(CxxTypeVariant, variant_and_visitor_2)
+{
+  using namespace cxx_variant_2;
+
+  // override "Visitor"
+  struct CustomVisitor : VariantMap::Visitor
+  {
+    std::vector<std::string> coll;
+
+    CustomVisitor() = default;
+
+    virtual void operator()(bool value) override
+    {
+      coll.emplace_back("{b}");
+    }
+
+    virtual void operator()(int value) override
+    {
+      coll.emplace_back("{i}");
+    }
+
+    virtual void operator()(double value) override
+    {
+      coll.emplace_back("{d}");
+    }
+
+    virtual void operator()(const std::string &value) override
+    {
+      coll.emplace_back("{s:" + value + "}");
+    }
+  };
+
+  VariantMap vmap;
+  CustomVisitor visitor;
+
+  vmap << true;
+  vmap << false;
+
+  vmap << 3;
+  vmap << 4;
+
+  vmap << "variant1";
+  vmap << "variant2";
+
+  // call visit with the custom visitor
+  vmap.visit(visitor);
+
+  EXPECT_THAT(visitor.coll.size(), 6);
+
+  EXPECT_THAT(
+    visitor.coll,
+    ElementsAre("{b}", "{b}", "{i}", "{i}", "{s:variant1}", "{s:variant2}"));
+}
+
+// ={=========================================================================
 // cxx-17
 // #include <variant>
 // std::variant is implementation of "one-of"
 
-TEST(CxxTypeVariant, check_variant)
+TEST(CxxTypeVariant, cxx_variant)
 {
   {
     // specify types to hold
@@ -3105,7 +3324,7 @@ the object, then those values will be used to "construct" the object.
 
 */
 
-TEST(CxxCtor, check_init_list_3)
+TEST(CxxCtor, init_list_3)
 {
   // Q: represent vector's size or element value?
   //
@@ -3132,8 +3351,8 @@ TEST(CxxCtor, check_init_list_3)
     // NOTE: it's now fails on gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
     // but it is okay before. means that it is now to use list init
     //
-    // std::vector<int> coll3{10};
-    // EXPECT_THAT(coll2.size(), 10);
+    std::vector<int> coll3{10};
+    EXPECT_THAT(coll2.size(), Ne(10));
   }
 
   // /**
@@ -5976,7 +6195,20 @@ TEST(CxxFeaturesTest, UseIsspace)
 }
 
 // ={=========================================================================
-// cxx-callable
+// cxx-callable cxx-predicate
+TEST(CxxCallable, predefined)
+{
+  {
+    std::plus<int> call;
+    EXPECT_THAT(call(10, 20), 30);
+  }
+
+  {
+    std::equal_to<int> call;
+    EXPECT_THAT(call(10, 10), true);
+    EXPECT_THAT(call(10, 20), false);
+  }
+}
 
 // cxx-progress
 //
@@ -6029,6 +6261,7 @@ namespace cxx_function
   }
 } // namespace cxx_function
 
+// ={=========================================================================
 TEST(CxxCallable, function_pointer)
 {
   using namespace cxx_function;
@@ -6050,6 +6283,7 @@ TEST(CxxCallable, function_pointer)
 }
 
 /*
+// ={=========================================================================
 However, we can’t simply assign the result of dlsym() to such a pointer, as in
 the following example:
 
@@ -6116,27 +6350,27 @@ namespace cxx_callable
 
 } // namespace cxx_callable
 
-// on member function.
-//
-// NOTE NOTE on syntax since "has to specify the target". For example, update_10()
-// takes no argument but has to say:
-//
-// std::function<void(Foo &)> op = &Foo::update_10;
-//                    ^^^^^
-// error: conversion from ‘std::__cxx11::string (cxx_init_list::Foo::*)() {aka
-// std::__cxx11::basic_string<char> (cxx_init_list::Foo::*)()}’ to non-scalar
-// type ‘std::function<std::__cxx11::basic_string<char>()>’ requested
-//
-//     std::function<std::string()> f = &Foo::return_mesg;
+/*
+// ={=========================================================================
+NOTE NOTE on the syntax since "has to specify the target". 
+For example, update_10() takes no argument but has to say, "Foo &":
 
-TEST(CxxCallable, check_function)
+std::function<void(Foo &)> op = &Foo::update_10;
+                   ^^^^^
+error: conversion from ‘std::__cxx11::string (cxx_init_list::Foo::*)() {aka
+std::__cxx11::basic_string<char> (cxx_init_list::Foo::*)()}’ to non-scalar
+type ‘std::function<std::__cxx11::basic_string<char>()>’ requested
+
+    std::function<std::string()> f = &Foo::return_mesg;
+*/
+
+TEST(CxxCallable, function_template)
 {
   using namespace cxx_callable;
 
   // expect that nullptr if not set
   // NOTE: EXPECT_THAT(op, nullptr); will make compile error
   {
-    Foo foo = Foo(100);
     std::function<void(Foo &)> call;
 
     if (call == nullptr)
@@ -6166,7 +6400,7 @@ TEST(CxxCallable, check_function)
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // compile error as call is typed as function pointer
+  // compile error as `call` is typed as function pointer
   // {
   //   Foo foo = Foo(100);
   //   auto call = &Foo::update_10;
@@ -6184,9 +6418,11 @@ TEST(CxxCallable, check_function)
   }
 
   // the signature to std::function specify whether the argument is copy or
-  // reference
+  // reference; target in this examples.
+  //
+  // std::function<void(Foo &)>
+  // std::function<void(Foo)>
   {
-    // difference when use reference and copy.
     // note: use the same `foo`
     {
       Foo foo{100};
@@ -6209,8 +6445,8 @@ TEST(CxxCallable, check_function)
 
     // use reference
     {
-      vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-      vector<size_t> result{};
+      std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+      std::vector<size_t> result{};
 
       std::function<void(Foo &)> op = &Foo::update_20;
 
@@ -6219,7 +6455,7 @@ TEST(CxxCallable, check_function)
       // to get result out and algo-transform requires unary predicate
       std::transform(coll.begin(),
                      coll.end(),
-                     back_inserter(result),
+                     std::back_inserter(result),
                      print_value);
 
       EXPECT_THAT(result, ElementsAre(21, 22, 23));
@@ -6227,8 +6463,8 @@ TEST(CxxCallable, check_function)
 
     // use copy so not updated
     {
-      vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-      vector<size_t> result{};
+      std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+      std::vector<size_t> result{};
 
       std::function<void(Foo)> op = &Foo::update_20;
 
@@ -6237,7 +6473,7 @@ TEST(CxxCallable, check_function)
       // to get result out and cxx-transform requires unary predicate
       std::transform(coll.begin(),
                      coll.end(),
-                     back_inserter(result),
+                     std::back_inserter(result),
                      print_value);
 
       EXPECT_THAT(result, ElementsAre(1, 2, 3));
@@ -6245,55 +6481,7 @@ TEST(CxxCallable, check_function)
   }
 }
 
-// cxx-bind and cxx-function are compatible?
-
-TEST(CxxCallable, check_std_function_2)
-{
-  using namespace cxx_callable;
-
-  {
-    Foo foo                         = Foo(100);
-    std::function<void(Foo &)> call = &Foo::update_10;
-
-    // cannot use this since compile error
-    // auto call = &Foo::update_10;
-
-    call(foo);
-    EXPECT_THAT(foo.get_value(), 110);
-  }
-
-  {
-    Foo foo                    = Foo(100);
-    std::function<void()> call = std::bind(&Foo::update_10, &foo);
-
-    // error: no match for call to ‘(std::function<void(cxx_callable::Foo&)>) ()’
-    // when use
-    // std::function<void(Foo &)> call = &Foo::update_10;
-
-    call();
-
-    EXPECT_THAT(foo.get_value(), 110);
-  }
-
-  {
-    Foo foo                              = Foo(100);
-    std::function<void(Foo &, int)> call = &Foo::update;
-    call(foo, 50);
-
-    EXPECT_THAT(foo.get_value(), 150);
-  }
-
-  {
-    Foo foo = Foo(100);
-    std::function<void(int)> call =
-      std::bind(&Foo::update, &foo, std::placeholders::_1);
-
-    call(50);
-
-    EXPECT_THAT(foo.get_value(), 150);
-  }
-}
-
+// ={=========================================================================
 // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
 // generate a callable object. The callable generated by `mem_fn` can be
 // called on either an object or a pointer.
@@ -6304,9 +6492,20 @@ TEST(CxxCallable, check_std_function_2)
 //
 // the point is std::bind() is more flexible.
 
-TEST(CxxCallable, check_memfn)
+TEST(CxxCallable, memfn)
 {
   using namespace cxx_callable;
+
+  // when use std::function, have to speficy `target`
+  {
+    Foo foo = Foo(100);
+
+    std::function<void(Foo &)> call = &Foo::update_10;
+
+    call(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
 
   // *cxx-error* since no default ctor for std::mem_fn()
   // {
@@ -6316,9 +6515,10 @@ TEST(CxxCallable, check_memfn)
   // need target
   {
     Foo foo = Foo(100);
-    auto op = std::mem_fn(&Foo::update_10);
 
-    op(foo);
+    auto call = std::mem_fn(&Foo::update_10);
+
+    call(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
@@ -6341,7 +6541,7 @@ TEST(CxxCallable, check_memfn)
   //   EXPECT_THAT(foo.get_value(), 110);
   // }
 
-  // for_each() pass reference
+  // cxx-for-each() pass reference
   //
   // namespace algo_code
   // {
@@ -6349,7 +6549,6 @@ TEST(CxxCallable, check_memfn)
   //   _Function
   //   for_each(_InputIterator __first, _InputIterator __last, _Function __f)
   //   {
-  //     // note: call op but not use return
   //     for (; __first != __last; ++__first)
   //       __f(*__first);
   //     return _GLIBCXX_MOVE(__f);
@@ -6433,9 +6632,13 @@ TEST(CxxCallable, check_memfn)
   {
     auto f = std::mem_fn(&Foo::update_10);
 
-    std::initializer_list<decltype(f)> coll{std::mem_fn(&Foo::update_10),
-                                            std::mem_fn(&Foo::update_20),
-                                            std::mem_fn(&Foo::update_30)};
+    // std::initializer_list<decltype(f)> coll{std::mem_fn(&Foo::update_10),
+    //                                         std::mem_fn(&Foo::update_20),
+    //                                         std::mem_fn(&Foo::update_30)};
+
+    auto coll = {std::mem_fn(&Foo::update_10),
+                 std::mem_fn(&Foo::update_20),
+                 std::mem_fn(&Foo::update_30)};
 
     Foo foo = Foo(100);
 
@@ -6474,8 +6677,6 @@ TEST(CxxCallable, check_memfn)
   }
 }
 
-// *cxx-bind*
-
 namespace cxx_callable
 {
   bool check_size(std::string const &s, std::string::size_type size)
@@ -6491,20 +6692,23 @@ namespace cxx_callable
   void increase(int &i) { ++i; }
 } // namespace cxx_callable
 
-TEST(CxxCallable, check_std_bind)
+// ={=========================================================================
+// *cxx-bind*
+
+TEST(CxxCallable, bind)
 {
   using namespace cxx_callable;
 
-  // use library defined callable
-  {
-    std::plus<int> call;
-    EXPECT_THAT(call(10, 20), 30);
-  }
-
+  // use *cxx-callable-predefined* and it is not template function
+  //
   // cxx-error: no matching function for call to ‘std::plus<int>::plus(int, int)’
   // {
   //   EXPECT_THAT(std::plus<int>(10, 20), 30);
   // }
+  {
+    std::plus<int> call;
+    EXPECT_THAT(call(10, 20), 30);
+  }
 
   // cxx-min, template function
   {
@@ -6536,7 +6740,7 @@ TEST(CxxCallable, check_std_bind)
         return e.size() >= 6;
       });
 
-    // use function
+    // use bind
     auto found3 =
       std::find_if(coll.cbegin(),
                    coll.cend(),
@@ -6580,6 +6784,7 @@ TEST(CxxCallable, check_std_bind)
     EXPECT_THAT(plus10(7), 17);
 
     // 17*2 = 34. see that inner fobj itself is used as argument
+    // NOTE: how bind() works when the first param is callable?
     auto plus10times2 =
       std::bind(std::multiplies<int>(),
                 std::bind(std::plus<int>(), std::placeholders::_1, 10),
@@ -6601,26 +6806,27 @@ TEST(CxxCallable, check_std_bind)
   }
 
   {
-    set<int, greater<int>> coll1 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-    deque<int> coll2;
+    std::set<int, std::greater<int>> coll1 = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::deque<int> coll2;
 
     // initialised
     EXPECT_THAT(coll1, ElementsAre(9, 8, 7, 6, 5, 4, 3, 2, 1));
 
     // *algo-transform*
-    transform(coll1.cbegin(),
-              coll1.cend(),                     // source
-              back_inserter(coll2),             // destination
-              bind(multiplies<int>(), _1, 10)); // unary operation
+    std::transform(
+      coll1.cbegin(),
+      coll1.cend(),                               // source
+      std::back_inserter(coll2),                  // destination
+      std::bind(std::multiplies<int>(), _1, 10)); // unary operation
 
     // transformed
     EXPECT_THAT(coll2, ElementsAre(90, 80, 70, 60, 50, 40, 30, 20, 10));
 
     // algo-replace-if
-    replace_if(coll2.begin(),
-               coll2.end(),                   // range
-               bind(equal_to<int>(), _1, 70), // criterion
-               42);                           // new value
+    std::replace_if(coll2.begin(),
+                    coll2.end(),                        // range
+                    std::bind(equal_to<int>(), _1, 70), // criterion
+                    42);                                // new value
 
     // replaced
     EXPECT_THAT(coll2, ElementsAre(90, 80, 42, 60, 50, 40, 30, 20, 10));
@@ -6644,12 +6850,13 @@ TEST(CxxCallable, check_std_bind)
     //
     // __x is not "bind(greater_equal<int>(), _1, 50)" and is return value.
 
-    coll2.erase(remove_if(coll2.begin(),
-                          coll2.end(),
-                          bind(logical_and<bool>(),
-                               bind(greater_equal<int>(), _1, 50),
-                               bind(less_equal<int>(), _1, 80))),
-                coll2.end());
+    coll2.erase(
+      std::remove_if(coll2.begin(),
+                     coll2.end(),
+                     std::bind(logical_and<bool>(),
+                               std::bind(greater_equal<int>(), _1, 50),
+                               std::bind(less_equal<int>(), _1, 80))),
+      coll2.end());
 
     // replaced
     EXPECT_THAT(coll2, ElementsAre(90, 42, 40, 30, 20, 10));
@@ -6691,41 +6898,60 @@ TEST(CxxCallable, check_std_bind)
   }
 }
 
-// on member functions
-TEST(CxxCallable, check_std_bind_and_member_function)
+// ={=========================================================================
+// *cxx-bind* on member functions
+TEST(CxxCallable, bind_and_member_function)
 {
   using namespace cxx_callable;
 
-  // when use std::function<> but have to use target
+  // use std::function<> but have to use target
   {
     Foo foo{100};
-    std::function<void(Foo &)> fo = &Foo::update_10;
+    std::function<void(Foo &)> call = &Foo::update_10;
 
-    fo(foo);
+    call(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // when use cxx-bind and use target as well
+  // use cxx-bind and use target as well
   {
     Foo foo{100};
-    auto fo = std::bind(&Foo::update_10, _1);
+    auto call = std::bind(&Foo::update_10, _1);
 
     // see that pass `foo` object to op
-    fo(foo);
+    call(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // when use cxx-bind and object but not use target
+  // use cxx-bind and set target in bind call so don't need to set target when
+  // call.
+  //
+  // error: no match for call to ‘(std::function<void(cxx_callable::Foo&)>) ()’
+  // when use since call() requires a target:
+  //
+  // std::function<void(Foo &)> call = &Foo::update_10;
+  // call();
   {
     Foo foo{100};
-    auto fo = std::bind(&Foo::update_10, &foo);
+    auto call = std::bind(&Foo::update_10, &foo);
 
     // see that no target object
-    fo();
+    call();
 
     EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // void update(int value) noexcept;
+  {
+    Foo foo = Foo(100);
+    std::function<void(int)> call =
+      std::bind(&Foo::update, &foo, std::placeholders::_1);
+
+    call(50);
+
+    EXPECT_THAT(foo.get_value(), 150);
   }
 
   // `specify the target object`
@@ -6752,10 +6978,20 @@ TEST(CxxCallable, check_std_bind_and_member_function)
   // (where Sales_data::isbn(Sales_data *const this);)
   //
   // Sales_data::isbn(&total);
+}
 
-  // cxx-bind use reference
-  // shows that bind() internally uses copy of passed arguments. NO. it is
-  // becuase when bind() makes function object it binds to copy or reference.
+// ={=========================================================================
+// *cxx-bind* cxx-bind and reference
+// shows that bind() internally uses copy of passed arguments.
+//
+// void increase(int &i) { ++i; }
+//
+// NOTE: see TEST(EventLoop, check_invoke_do_copy);
+
+TEST(CxxCallable, bind_and_copy)
+{
+  using namespace cxx_callable;
+
   {
     int value{};
 
@@ -6773,17 +7009,51 @@ TEST(CxxCallable, check_std_bind_and_member_function)
 
   // it is when function object is called, that function object gets called
   // with reference within cxx-for-each
+  //
+  // template<typename _InputIterator, typename _Function>
+  //   _Function
+  //   for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+  //   {
+  //     // note: call op but not use return of __f
+  //
+  //     for (; __first != __last; ++__first)
+  //       __f(*__first);
+  //
+  //     return _GLIBCXX_MOVE(__f);
+  //   }
   {
-    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+    std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    std::vector<size_t> result{};
 
     auto fo = std::bind(&Foo::update_10, _1);
 
     {
-      for_each(coll.begin(), coll.end(), fo);
+      std::for_each(coll.begin(), coll.end(), fo);
 
       // to get result out and algo-transform requires unary predicate
-      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+      std::transform(coll.begin(),
+                     coll.end(),
+                     std::back_inserter(result),
+                     print_value);
+
+      EXPECT_THAT(result, ElementsAre(11, 12, 13));
+    }
+  }
+
+  {
+    std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    std::vector<size_t> result{};
+
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    {
+      std::for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and algo-transform requires unary predicate
+      std::transform(coll.begin(),
+                     coll.end(),
+                     std::back_inserter(result),
+                     print_value);
 
       EXPECT_THAT(result, ElementsAre(11, 12, 13));
     }
@@ -6799,27 +7069,6 @@ TEST(CxxCallable, check_std_bind_and_member_function)
     ffunc(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
-  }
-
-  // cxx-function use reference
-  {
-    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    // note:
-    // void update_10() but why <void(Foo &)>? becuse of *cxx-this* and this
-    // `specify` target object
-
-    std::function<void(Foo &)> op = &Foo::update_10;
-
-    {
-      for_each(coll.begin(), coll.end(), op);
-
-      // to get result out and algo-transform requires unary predicate
-      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
-
-      EXPECT_THAT(result, ElementsAre(11, 12, 13));
-    }
   }
 }
 
@@ -6849,21 +7098,16 @@ namespace cxx_callable
     // : m_private(std::make_shared<EventLoopPrivate>())
     {}
 
-    // NOTE:
-    // std::move() is required when forward calls to another class
     bool invokeImpl(std::function<void()> &&f) const
     {
-      // ok:
-      // if (f)
-      //   f();
-
-      // error: cannot bind ‘std::function<void()>’ lvalue
-      // to ‘std::function<void()>&&’
-      // m_private->invoke(f);
-
-      // error: cannot bind ‘std::function<void()>’ lvalue
-      // to ‘std::function<void()>&&’
-      // m_private.invoke(f);
+      // NOTE:
+      // WHY Error? is that because it is not template like invokeMethod?
+      // or std::move() is required when forward calls to another class??
+      //
+      // error: cannot bind rvalue reference of type ‘std::function<void()>&&’
+      // to lvalue of type ‘std::function<void()>’
+      //
+      //        return m_private.invoke(f);
 
       // ok:
       return m_private.invoke(std::move(f));
@@ -6926,7 +7170,8 @@ namespace cxx_callable
   };
 } // namespace cxx_callable
 
-TEST(CxxCallable, show_case)
+// ={=========================================================================
+TEST(CxxCallable, bind_embedded_target)
 {
   using namespace cxx_callable;
 
@@ -6951,6 +7196,7 @@ TEST(CxxCallable, show_case)
   // loop.invokeMethod(&Target::setNameAndValue, "case", 200);
 }
 
+// ={=========================================================================
 TEST(CxxCallable, Pointer)
 {
   using namespace cxx_callable;
@@ -7013,8 +7259,9 @@ TEST(CxxCallable, Pointer)
 #endif
 }
 
+// ={=========================================================================
 // cxx-lambda
-TEST(CxxCallable, check_lambda_capture_and_return_1)
+TEST(CxxCallable, lambda_capture_and_return_1)
 {
   {
     auto func = []() {
@@ -7046,38 +7293,6 @@ TEST(CxxCallable, check_lambda_capture_and_return_1)
     EXPECT_THAT(func(), 42.0);
   }
 
-  // CXXSLR-3.1.10 Lambdas
-  // [=] means that the outer scope is passed to the lambda by value. Thus, you
-  // can `read` but not modify all data that was readable where the lambda was
-  // defined.
-
-  {
-    int x = 42;
-    int y = 42;
-
-    auto func = [x, &y] {
-      // std::cout << "x: " << x << std::endl;
-      // std::cout << "y: " << y << std::endl;
-
-      ++y;
-
-      // *cxx-error*
-      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
-      //        ++x;
-      // ++x;
-    };
-
-    x = 77;
-    func();
-    func();
-
-    // when do capture value? the question is wrong since
-    // EXPECT_THAT(x, 42); is true inside of lambda
-
-    EXPECT_THAT(x, 77);
-    EXPECT_THAT(y, 44);
-  }
-
   // same as above but use cxx-lambda-arg
   {
     int x = 42;
@@ -7094,6 +7309,7 @@ TEST(CxxCallable, check_lambda_capture_and_return_1)
   }
 }
 
+// ={=========================================================================
 // the both causes:
 // warning: control reaches end of non-void function [-Wreturn-type]
 //
@@ -7105,7 +7321,7 @@ TEST(CxxCallable, check_lambda_capture_and_return_1)
 // error
 // error: inconsistent types ‘bool’ and ‘void’ deduced for lambda return type
 
-TEST(CxxCallable, check_lambda_capture_and_return_2)
+TEST(CxxCallable, lambda_capture_and_return_2)
 {
   {
     auto f1 = [] {
@@ -7134,27 +7350,116 @@ TEST(CxxCallable, check_lambda_capture_and_return_2)
   }
 }
 
-// cxx-lambda
-TEST(CxxCallable, check_lambda_capture_mutable)
+/*
+// ={=========================================================================
+When define lambda, compiler generates a new `unnamed class` so when pass it to
+a function, defines both a new type and an object of that type. So the data
+member of a lambda are initialized when a lambda object is created. That means
+that `the variable captured by a lambda is 'local' to a lambda.`
+
+// value or reference
+
+v1 = 42;
+auto f = [v1] { return v1; };
+v1 = 0;
+auto j = f();     // j is 42. f is callable
+
+v1 = 42;
+auto f = [&v1] { return v1; };
+v1 = 0;
+auto j = f();     // j is 0.
+
+Unlike parameters, the value of captured variable is `copied` when the lambda is
+`created, not when it is called (executed).` When pass lambda such as return a
+lambda, careful for the same reason that a function must not return a
+reference to a local variable. If possible, avoid capturing pointers or
+reference.
+
+*/
+
+TEST(CxxCallable, lambda_capture)
 {
+  // copy. lambda uses copy and caputre it when it's defined.
+  {
+    int x{42};
+
+    auto call = [x] {
+      EXPECT_THAT(x, 42);
+      EXPECT_THAT(x, 42);
+    };
+
+    x = 77;
+
+    call();
+    call();
+
+    EXPECT_THAT(x, 77);
+  }
+
+  // reference
+  {
+    int x{42};
+
+    auto call = [&x] {
+      EXPECT_THAT(x, 77);
+      EXPECT_THAT(x, 77);
+    };
+
+    x = 77;
+
+    call();
+    call();
+
+    EXPECT_THAT(x, 77);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxCallable, lambda_mutable)
+{
+  // CXXSLR-3.1.10 Lambdas
+  // [=] means that the outer scope is passed to the lambda by value. Thus, you
+  // can `read` but not modify all data that was readable where the lambda was
+  // defined.
+
+  // x is read and y is write
+  {
+    int x = 42;
+    int y = 42;
+
+    auto call = [x, &y] {
+      ++y;
+
+      // *cxx-error*
+      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
+      //        ++x;
+      // ++x;
+    };
+
+    x = 77;
+
+    call();
+    call();
+
+    EXPECT_THAT(x, 77);
+    EXPECT_THAT(y, 44);
+  }
+
   // To have a mixture of passing by value and passing by reference, you can
   // declare the lambda as mutable. In that case, objects are passed by value,
   // but inside the function object defined by the lambda, you have write access
   // to the passed value.
-  // Ok but `x` do not change so what's the point???
+  //
+  // NOTE Ok but `x` do not change so what's the point???
 
   {
     int x = 42;
     int y = 42;
 
     auto func = [x, &y]() mutable {
-      // std::cout << "x: " << x << std::endl;
-      // std::cout << "y: " << y << std::endl;
-
       ++y;
 
-      // *cxx-error* without `mutable`
-      // error: increment of read-only variable ‘x’
+      // no error since uses `mutable`
       ++x;
     };
 
@@ -7173,9 +7478,15 @@ TEST(CxxCallable, check_lambda_capture_mutable)
 
     int count = coll.size();
 
+    EXPECT_THAT(count, 5);
+
+    // generate() assigns the values that are generated by a call of op()
+    // to each element in the range [beg,end).
     std::generate(result.begin(), result.end(), [count]() mutable {
       return --count;
     });
+
+    EXPECT_THAT(count, 5);
 
     EXPECT_THAT(result, ElementsAre(4, 3, 2, 1, 0));
   }
@@ -10444,16 +10755,36 @@ TEST(CxxStream, check_manipulators_float)
   EXPECT_THAT(os.str(), "8.81");
 }
 
-// 15.9.1 File Stream Classes
-//
-// The following program first opens the file charset.out, writes the current
-// character set — all characters for the values between 32 and 255 — into this
-// file, and outputs its contents:
-//
-// If a file stream object is constructed with a string or C-string as an
-// argument, opening the file for reading and/or writing is attempted
-// automatically. Whether this attempt was successful is reflected in the
-// stream’s state. Thus, the state should be examined after construction
+/*
+15.9.1 File Stream Classes
+
+The following program first opens the file charset.out, writes the current
+character set — all characters for the values between 32 and 255 — into this
+file, and outputs its contents:
+
+If a file stream object is constructed with a string or C-string as an
+argument, opening the file for reading and/or writing is attempted
+automatically. Whether this attempt was successful is reflected in the
+stream’s state. Thus, the state should be examined after construction
+
+
+15.9.3 File Flags
+
+A set of flags is defined in the class ios_base for precise control over the
+processing mode of a file (Table 15.33). These flags are of type openmode, which
+is a bitmask type similar to fmtflags.
+
+Flag        Meaning
+in          Opens for reading (default for ifstream)
+out         Opens for writing (default for ofstream)
+app         Always appends at the end when writing
+ate         Positions at the end of the file after opening (“at end”)
+trunc       Removes the former file contents
+binary      Does not replace special characters
+
+Table 15.33. Flags for Opening Files
+
+*/
 
 // ={=========================================================================
 TEST(CxxStream, fstream_1)
@@ -13085,6 +13416,7 @@ TEST(CxxTemplate, class)
   EXPECT_THAT(coll.getColl(), ElementsAre(1, 2, 3, 4, 5));
 }
 
+// ={=========================================================================
 namespace cxx_template
 {
   // Q: strcmp returns +5/-5 than 1/-1
@@ -13105,19 +13437,188 @@ namespace cxx_template
     return 0;
   }
 
-  // *cxx-array*
+  // *cxx-array*. non-type-parameter version
   template <unsigned N, unsigned M>
   int compare(const char (&p1)[N], const char (&p2)[M])
   {
     return internal_strcmp(p1, p2);
   }
 
+  // specialisation version
   template <>
   int compare(const char *const &p1, const char *const &p2)
   {
     return internal_strcmp(p1, p2);
   }
+} // namespace cxx_template
 
+TEST(CxxTemplate, specialisation_1)
+{
+  using namespace cxx_template;
+
+  {
+    // cxx-strcmp which return 0 in case both are the same
+    EXPECT_THAT(!strcmp("strcmp", "strcmp"), true);
+    EXPECT_THAT(!internal_strcmp("strcmp", "strcmp"), true);
+
+    EXPECT_THAT(strcmp("strcmp", "strcmpx"), Not(true));
+    EXPECT_THAT(internal_strcmp("strcmp", "strcmpx"), Not(true));
+  }
+
+  {
+    // use non-type version
+    EXPECT_THAT(compare("mon", "hi"), 1);
+    EXPECT_THAT(compare("hi", "mon"), -1);
+
+    // cxx.cpp:2829:33: error: call of overloaded ‘compare(const char [3], const
+    // char [3])’ is ambiguous
+
+    // EXPECT_THAT(compare("hi", "hi"), 0);
+
+    // use specialisation version.
+    const char *p1 = "hi";
+    const char *p2 = "mon";
+    EXPECT_THAT(compare(p1, p2), -1);
+  }
+}
+
+/*
+// ={=========================================================================
+use macro for specialisation.
+
+#define SDBUS_READ_BASIC_TYPE(type, ctype, defaultValue)                        \
+    template<>                                                                  \
+    type SDBusArgumentReader::readValue< type >() const                         \
+    {                                                                           \
+        type value = defaultValue;                                              \
+        int rc = sd_bus_message_read_basic(mMessage, ctype, &value);            \
+        if (rc < 0)                                                             \
+        {                                                                       \
+            AS_LOG_WARNING("failed to read value of type '%c' (%d - %s)",       \
+                           ctype, rc, sdBusErrorString(rc));                    \
+        }                                                                       \
+        return value;                                                           \
+    }
+
+SDBUS_READ_BASIC_TYPE(bool,     SD_BUS_TYPE_BOOLEAN, false)
+SDBUS_READ_BASIC_TYPE(int32_t,  SD_BUS_TYPE_INT32,   INT32_MAX)
+SDBUS_READ_BASIC_TYPE(uint32_t, SD_BUS_TYPE_UINT32,  UINT32_MAX)
+SDBUS_READ_BASIC_TYPE(int64_t,  SD_BUS_TYPE_INT64,   INT64_MAX)
+SDBUS_READ_BASIC_TYPE(uint64_t, SD_BUS_TYPE_UINT64,  UINT64_MAX)
+SDBUS_READ_BASIC_TYPE(double,   SD_BUS_TYPE_DOUBLE,  UINT64_MAX)
+
+template<>
+std::string SDBusArgumentReader::readValue<std::string>() const
+{
+    const char *str = nullptr;
+
+    int rc = sd_bus_message_read_basic(mMessage, SD_BUS_TYPE_STRING, &str);
+    if ((rc < 0) || !str)
+    {
+        AS_LOG_WARNING("failed to read string value");
+        return std::string();
+    }
+
+    return std::string(str);
+}
+
+NOTE:
+1 "specialisation" is done without the original code
+
+2 they are all the same code other than std::string type case. then why
+  specialisation? If use usual template, should have three type parameters.
+
+*/
+namespace cxx_template
+{
+  class SDBusArgumentReader
+  {
+    private:
+      std::stringstream ss_{};
+
+    public:
+
+      SDBusArgumentReader() = default;
+      ~SDBusArgumentReader() = default;
+
+      template <typename T>
+        T readValue() const;
+  };
+
+// *cxx-template-specialization*
+#define SDBUS_READ_BASIC_TYPE(type, ctype, defaultValue)                       \
+  template <>                                                                  \
+  type SDBusArgumentReader::readValue<type>() const                            \
+  {                                                                            \
+    type value = defaultValue;                                                 \
+    if (typeid(value).name() == typeid(bool).name())                           \
+      return true;                                                             \
+    if (typeid(value).name() == typeid(int32_t).name())                        \
+      return 1;                                                                \
+    return value;                                                              \
+  }
+
+  SDBUS_READ_BASIC_TYPE(bool,     "b", false)
+  SDBUS_READ_BASIC_TYPE(int32_t,  "i", INT32_MAX)
+
+  class SDBusMessage
+  {
+    private:
+      const SDBusArgumentReader mReader;
+
+    public:
+      template <typename T>
+      const SDBusMessage &operator>>(T &arg) const;
+  };
+
+  template<typename T>
+    const SDBusMessage &SDBusMessage::operator>>(T &arg) const
+    {
+      arg = mReader.readValue<T>();
+      return *this;
+    }
+
+    // *cxx-template-explicit-instantiation*
+    template const SDBusMessage &SDBusMessage::operator>><bool>(bool &) const;
+    template const SDBusMessage &SDBusMessage::operator>>
+      <int32_t>(int32_t &) const;
+}
+
+TEST(CxxTemplate, specialisation_2)
+{
+  using namespace cxx_template;
+
+  SDBusMessage message;
+
+  bool read1{false};
+  int read2{-1};
+
+  message >> read1 >> read2;
+
+  EXPECT_THAT(read1, true);
+  EXPECT_THAT(read2, 1);
+}
+
+// can use value also as a type but nontype template parameters are limited:
+//
+// https://en.cppreference.com/w/cpp/language/template_parameters
+// A non-type template parameter must have a structural type, which is one of
+// the following types (optionally cv-qualified, the qualifiers are ignored):
+//
+// std::array example:
+//
+// std::array<int, 8> coll = {};
+//
+// EXPECT_THAT(coll.size(), 8);
+//
+// template<typename _Tp, std::size_t _Nm>
+//   struct array
+//   {
+//     // ...
+//   }
+
+namespace cxx_template
+{
   template <typename T, int size>
   class FileBuf
   {
@@ -13145,69 +13646,6 @@ namespace cxx_template
     }
   };
 
-} // namespace cxx_template
-
-// ={=========================================================================
-TEST(CxxTemplate, specialisation)
-{
-  using namespace cxx_template;
-
-  {
-    // cxx-strcmp which return 0 in case both are the same
-    EXPECT_THAT(!strcmp("strcmp", "strcmp"), true);
-    EXPECT_THAT(!internal_strcmp("strcmp", "strcmp"), true);
-
-    EXPECT_THAT(strcmp("strcmp", "strcmpx"), Not(true));
-    EXPECT_THAT(internal_strcmp("strcmp", "strcmpx"), Not(true));
-  }
-
-  {
-    EXPECT_THAT(compare("mon", "hi"), 1);
-    EXPECT_THAT(compare("hi", "mon"), -1);
-
-    // cxx.cpp:2829:33: error: call of overloaded ‘compare(const char [3], const
-    // char [3])’ is ambiguous
-
-    // EXPECT_THAT(compare("hi", "hi"), 0);
-
-    const char *p1 = "hi";
-    const char *p2 = "mon";
-    EXPECT_THAT(compare(p1, p2), -1);
-  }
-
-  {
-    FileBuf<int, 20> fbuf;
-    EXPECT_THAT(fbuf.get_size(), 20);
-  }
-
-  {
-    RangedIntPolicy<10, 100> rint;
-    EXPECT_THAT(rint.assign(9), -1);
-    EXPECT_THAT(rint.assign(101), -1);
-    EXPECT_THAT(rint.assign(30), 0);
-  }
-}
-
-// can use value also as a type but nontype template parameters are limited:
-//
-// https://en.cppreference.com/w/cpp/language/template_parameters
-// A non-type template parameter must have a structural type, which is one of
-// the following types (optionally cv-qualified, the qualifiers are ignored):
-//
-// std::array example:
-//
-// std::array<int, 8> coll = {};
-//
-// EXPECT_THAT(coll.size(), 8);
-//
-// template<typename _Tp, std::size_t _Nm>
-//   struct array
-//   {
-//     // ...
-//   }
-
-namespace cxx_template
-{
   template <typename T, int num>
   T add_num(const T t)
   {
@@ -13328,6 +13766,19 @@ namespace cxx_template
 TEST(CxxTemplate, use_non_type_argument_1)
 {
   using namespace cxx_template;
+
+  {
+    FileBuf<int, 20> fbuf;
+    EXPECT_THAT(fbuf.get_size(), 20);
+  }
+
+  {
+    RangedIntPolicy<10, 100> rint;
+    EXPECT_THAT(rint.assign(9), -1);
+    EXPECT_THAT(rint.assign(101), -1);
+    EXPECT_THAT(rint.assign(30), 0);
+  }
+
   // parse error
   // EXPECT_THAT(add_num<int, 5>(10), 15);
 

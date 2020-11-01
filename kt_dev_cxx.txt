@@ -153,6 +153,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-pattern-interface
 *kt_dev_cxx_0000* cxx-pattern-singleton
 *kt_dev_cxx_0000* cxx-pattern-factory
+*kt_dev_cxx_0000* cxx-pattern-factory cxx-named-constructor
 *kt_dev_cxx_0000* cxx-pattern-observer
 *kt_dev_cxx_0000* cxx-pattern-decorator
 *kt_dev_cxx_0000* cxx-pattern-composite
@@ -21985,7 +21986,7 @@ vector and string's [] operator returns reference but these are exceptions to
 this rule, but not a general rule. Better not use [] operator.
 
 
-{cxx-return-cxx-temporary}
+*cxx-return* *cxx-temporary-lifetime*
 
 The function returns value
 
@@ -22069,7 +22070,7 @@ to non-const.
 
 Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
 warning by default. A conforming C++ compiler can always allow
-otherwise-illegal C++ code to compile and give it some meaning — hey, it could
+otherwise-illegal C++ code to compile and give it some meaning - hey, it could
 choose to allow inline COBOL if some kooky compiler writer was willing to
 implement that extension, maybe after a few too many Tequilas. For some kinds
 of extensions the C++ standard requires that the compiler at least emit some
@@ -22111,6 +22112,33 @@ Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
 Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
 avoid making the implementation classes' destructors virtual at all, which is
 okay in that case because those classes otherwise have no need for one. 
+
+
+<ex>
+
+create a temporary instance from the called function by thread 1
+
+: KT: ASServicePrivate::request: create ASRequestPrivate {
+: KT: ASRequestPrivate::ASRequestPrivate {
+: KT: ASRequestPrivate::ASRequestPrivate }
+: KT: ASServicePrivate::request: create ASRequestPrivate }
+
+take that temporary on "const reference" so it extents its lifetime and pass
+it onto other thread run function as
+
+: requested url /as/players/1/action/watchstream
+: KT: PlaybackService::onRequest: {
+: KT: PlaybackService::onRequest: }
+
+the funciton which creates exec thread ends above and the extc thread runs
+with that tempoary and gets freed when thread ends.
+
+: KT: PlayersWatchStreamExecutor::handlePostRequest: {
+: Creating VGDRM instance
+: DRM is not available and play request is ignored
+: KT: PlayersWatchStreamExecutor::handlePostRequest: }
+: KT: ASRequestPrivate::~ASRequestPrivate {
+: KT: ASRequestPrivate::~ASRequestPrivate }
 
 
 {cxx-return-const-return}
@@ -23047,11 +23075,11 @@ terms of constness. This matters when copy an object.
   const int & `variable`              // reference to const *cxx-reference-const*
   int const & `variable`              // same
 
-o 1, `base-type` part which is for `underlying object` and for low-level. That is a
-  object that point or reference to.
+o 1, `cxx-base-type` part which is for `underlying object` and for low-level.
+  That is a object that point or reference to.
 
-o 2, `declarator-type` part which is for compound type, reference or pointer, and
-  for top-level. That is pointer or reference itself.
+o 2, `cxx-declarator-type` part which is for compound type, reference or
+  pointer, and for top-level. That is pointer or reference itself.
 
 Do not think about top low-level. The point is that low-level, underlying
 object, never be ignored but top-level can be since it's not about
@@ -23107,22 +23135,24 @@ TEST(Const, NoConstToNonConst)
 }
 
 
-{const-on-base-type}
+*cxx-const-on-base-type*
 When use const with type alias, it can be surprising. For example,
 
 typedef char *pstring;
 
-const pstring cstr = 0;    // a "const pointer to char"
-const pstring *ps;         // a "pointer to "const pointer to char*"
+// a const "pointer to char". same as "char *const cstr"
+const pstring cstr = 0;    
+
+// a pointer to const "pointer to char"
+const pstring *ps;
 
 The important thing is that type alias `is not replacing string` but it a type
-and const applies on `base-type`.
+and const applies on `cxx-base-type`.
 
-// wrong interpretation. base type is char and * is part of declarator. cstr is
-// pointer to "const char" 
+cxx-base-type is char and * is cxx-declarator. cstr is pointer to "const char" 
 const char* cstr = 0;      
 
-// base type is "pstring" so const is on pstring type is a const pointer to char
+cxx-base-type is "pstring" so const is on pstring. const "pointer to char"
 const pstring cstr = 0;    
 
 
@@ -32305,24 +32335,26 @@ are actually created. Hence called virtual constructor
 
 This is about a method but not a class. Two points:
 
-o Encapsulation. No code to create in the client and move it into factory-func. 
+o Encapsulation. No code to create in the client and move it into a factory
+  function 
  
 o Defer decision on `what to create`: creation in the base such as parameterized
-  factory-func or to defer creation to subclass, so any product class in the
+  factory function or to defer creation to subclass, so any product class in the
   tree. This subclassing often used in framework since no need to make changes
   in framework. `flexibility`
 
 
-<static-vs-virtual-factory-func>
-The non-virtual factory function is static and efficient because no virtual
-cost and has single point to access. But hard-wired choice of classes to
-create. Have to change it whenever the choice to create changes. 
+Static or virtual factory function?
+
+The non-virtual factory function is *cxx-static* and efficient because no
+virtual cost and has single point to access. But hard-wired choice of classes
+to create. Have to change it whenever the choice to create changes. 
 
 The `virtual factory function` has bigger code but subclassing can change
-class to create. So useful for framework that cannot be changed. When
-factory-func is on the creator tree and uses virtual func: pure virtual or
-virtual which as default implementation. Let subclassing decide which class to
-create; application specific document which is out of framework.
+class to create. So useful for framework that cannot be changed. When factory
+function is on the creator tree and uses virtual func: pure virtual or virtual
+which as default implementation. Let subclassing decide which class to create;
+application specific document which is out of framework.
 
 
 (client)           (creator class, Application)           (product class, Document) 
@@ -32415,7 +32447,6 @@ application specific class.
 The realistic examples may support different derived class to create using
 additional params, file, DB or env var. 
 
-<ex> 
 Can use template instead of subclassing as to what to create:
 
 class Creator {
@@ -32433,6 +32464,7 @@ template <class T>
 Product* StandardCreator<T>::CreateProduct() {
    return new T;
 };
+
 
 <ex> non-member-factory-func
 From EC++40. Use id to select different concrete class and non-member
@@ -32582,6 +32614,168 @@ class ServiceListExecutorFactory : public AS_WORKER::Factory
   map->RegisterUrl(REQ_METHOD_HTTP_GET, (char *) "/as/services",          servicelistexecutor );
   map->RegisterUrl(REQ_METHOD_HTTP_GET, (char *) "/as/services/<b>/<sb>", servicelistexecutor );
   ...
+}
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-factory cxx-named-constructor
+
+http://www.cs.technion.ac.il/users/yechiel/c++-faq/named-ctor-idiom.html
+
+A technique that provides more intuitive and/or safer construction operations
+for users of your class.
+
+The problem is that constructors always have the same name as the class.
+
+Therefore the only way to differentiate between the various constructors of a
+class is by the parameter list. But if there are lots of constructors, the
+differences between them become somewhat subtle and error prone.
+
+With the Named Constructor Idiom, you declare all the class's constructors in
+`the private or protected sections`, and you provide `public static methods` that
+return an object. These static methods are the so-called "Named Constructors."
+
+In general there is one such static method for each different way to construct
+an object.
+
+For example, suppose we are building a Point class that represents a position
+on the X-Y plane. Turns out there are two common ways to specify a 2-space
+coordinate: rectangular coordinates (X+Y), polar coordinates (Radius+Angle).
+(Don't worry if you can't remember these; the point isn't the particulars of
+ coordinate systems; the point is that there are several ways to create a
+ Point object.) 
+
+Unfortunately the parameters for these two coordinate systems are the same:
+two floats. This would create an ambiguity error in the overloaded
+constructors:
+
+class Point {
+  public:
+    Point(float x, float y);     // Rectangular coordinates
+    Point(float r, float a);     // Polar coordinates (radius and angle)
+    // ERROR: Overload is Ambiguous: Point::Point(float,float)
+};
+
+int main()
+{
+  Point p = Point(5.7, 1.2);   // Ambiguous: Which coordinate system?
+  ...
+}
+
+One way to solve this ambiguity is to use the Named Constructor Idiom:
+
+#include <cmath>               // To get std::sin() and std::cos()
+
+class Point {
+public:
+  `static Point rectangular`(float x, float y);      // Rectangular coord's
+  `static Point polar`(float radius, float angle);   // Polar coordinates
+  // These static methods are the so-called "named constructors"
+  ...
+private:
+  Point(float x, float y);     // Rectangular coordinates
+  float x_, y_;
+};
+
+inline Point::Point(float x, float y)
+  : x_(x), y_(y) { }
+
+inline Point Point::rectangular(float x, float y)
+{ return Point(x, y); }
+
+inline Point Point::polar(float radius, float angle)
+{ return Point(radius*std::cos(angle), radius*std::sin(angle)); }
+
+Now the users of Point have a clear and unambiguous syntax for creating Points
+in either coordinate system:
+
+int main()
+{
+  Point p1 = Point::rectangular(5.7, 1.2);   // Obviously rectangular
+  Point p2 = Point::polar(5.7, 1.2);         // Obviously polar
+  ...
+}
+
+Make sure your constructors are in the protected section if you expect Point
+to have derived classes. The Named Constructor Idiom can also be used to make
+sure your objects are always created via new.
+
+Note that the Named Constructor Idiom, at least as implemented above, is just
+as fast as directly calling a constructor — modern compilers will not make any
+extra copies of your object.
+
+
+https://stackoverflow.com/questions/7010827/named-constructor-idiom-and-new-operator
+
+You can avoid named constructor idiom for this completely, and do it using an
+additonal dummy enum parameter to select the constructor.
+
+enum Carthesian {carthesian};
+enum Polar {polar};
+
+class point_t {
+    int X,Y;
+  public:
+    point_t(int x, int y) : X(x), Y(y) { } // may keep as a default
+    point_t(Carthesian, int x, int y) :X(x),Y(y){}
+    point_t(Polar, float radius, float angle)
+    : X (radius*std::cos(angle)), Y(radius*std::sin(angle)) {}
+    void add(int x, int y) { X += x; Y += y; }
+};
+
+int main(int argc, char **argv) {
+  point_t *x = new point_t(carthesian,1,2);
+  point_t *y = new point_t(polar,0,3);
+  x->add(1,2);
+}
+
+It is simple, portable, and the only overhead you will see is for the passing
+of the dummy enum values. In the rare case this overhead is too high for you
+it can be eliminated by wrapping a function call even when the construction
+itself is not inlined, as follows:
+
+enum Carthesian {carthesian};
+enum Polar {polar};
+
+class point_t {
+    int X,Y;
+    void initCarthesian(int x, int y); // may be long, not inlined
+    void initPolar(float radius, float angle);
+  public:
+    point_t(int x, int y) : X(x), Y(y) { } // may keep as a default
+    point_t(Carthesian, int x, int y)
+    {initCarthesian(x,y);} // this is short and inlined
+    point_t(Polar, float radius, float angle) {initPolar(radius, angle);}
+    void add(int x, int y) { X += x; Y += y; }
+};
+
+Another approach is to use a derived class for construction. When using inner
+classes, it leads into quite a nice syntax I think:
+
+class point_t {
+    int X,Y;
+  public:
+    struct carthesian;
+    struct polar;
+    point_t(int x, int y) : X(x), Y(y) { } // may keep as a default
+    void add(int x, int y) { X += x; Y += y; }
+};
+
+struct point_t::carthesian: public point_t
+{
+  carthesian(int x, int y):point_t(x,y){}
+};
+
+struct point_t::polar: public point_t
+{
+  polar(float radius, float angle):point_t(radius*std::cos(angle),radius*std::sin(angle)){}
+};
+
+int main(int argc, char **argv) {
+  point_t *x = new point_t::carthesian(1,2);
+  point_t *y = new point_t::polar(0,3);
+  x->add(1,2);
+  return 0;
 }
 
 
@@ -36736,7 +36930,7 @@ or class from a template when compiling. Code generation and these compiler
 generated function or class are an `instantiation of the template` Must be
 defined in the same namespace that contains the original template. 
 
-see *cxx-template-control-instantiation* p675 for C++ feature to control this.
+see *cxx-template-instantiate-all* p675 for C++ feature to control this.
 
 
 <overloading-and-templates>
@@ -37501,6 +37695,10 @@ class template.
 
 <ex>
 
+NOTE that followings are all in "cpp" file but not header. If header has code,
+then code gets generated when used. By having them only on source, limits code
+generations are for types defined.  
+
 template<typename T>
 DBusMessage & DBusMessage::operator>>(T &arg)
 {
@@ -37532,6 +37730,11 @@ template DBusMessage & DBusMessage::operator>> <int>(int&);
 template DBusMessage & DBusMessage::operator>> <unsigned>(unsigned&);
 template DBusMessage & DBusMessage::operator>> <double>(double&);
 template DBusMessage & DBusMessage::operator>> <std::string>(std::string&);
+
+If don't have them, gets link error:
+
+undefined reference to `DBusMessage& DBusMessage::operator>><std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)'
+collect2: error: ld returned 1 exit status
 
 
 <ex>
@@ -37686,19 +37889,65 @@ false.
 }
 
 
-={============================================================================
-*kt_dev_cxx_0000* cxx-template-type-traits cxx-type-traits
+*cxx-trailing-return* *cxx-11*
 
-<type-transformation>
-Sometimes do not have direct access to the type we need. How to return 'value'
-rather than a reference in this example? 
+CXXPRIMER-16.2.3
+
+Suppose that want to write the function that takes a sequence and returns a
+reference to an element.
+
+template< typename It > 
+???& fcn( It beg, It end )
+{
+  // process the range
+  return *beg;  // return a reference to an element from the range
+}
+
+vector<int> vi = { 1, 2, 3, 4 };
+Blob<string> ca = { "hi", "bye" };
+
+auto &i = fcn( vi.begin(), vi.end() );    // should return int&
+auto &i = fcn( ca.begin(), ca.end() );    // should return string&
+
+Do not know the exact type to return but know that want that type to be a
+reference to the element type of the sequence. 
+
+template<typename It, typename Return> 
+Return &fcn( It beg, It end );
+
+Sure, can have more arguments but more template argument imposes a burden on
+the user. How to solve?
+
+"If a return type depends on template parameters, the simplest and best
+approach to deduce the return type is to let the compiler find out."
+
+
+The trailing return type allows us define the return type after the parameter
+list is seen.
+
+template< typename T > 
+`auto`& fcn( It beg, It end ) -> decltype(*beg)
+{
+  // process the range
+  return *beg;  // return a reference to an element from the range
+}
+
+This say fcn's return type is the same as the type returned by dereferencing
+its beg parameter and which is a reference to the type.
+
+"decltype(*beg)" returns the reference type of the element type.
+
+
+*cxx-type-transformation*
+
+How to return `value` rather than a reference in this example? 
 
 The problem is that we know almost nothing about the types we're passed. In
-this function, the only operators we 'know' we can use are iterator operations
+this function, the only operators we know we can use are iterator operations
 but no iterator operations that yield elemen type (as opposed to reference to
     element).
 
-To get the element type, use type transformation template in the <type_traits>
+To get the element type, use type transformation template in the `type_traits`
 header.
 
 When instantiate `remove_reference<>` with a reference type, public type
@@ -37707,7 +37956,8 @@ memeber `type` is the referred-to type.
 remove_reference<int&>     // `type` member is `int`
 
 template< typename T > 
-auto &fcn( It beg, It end ) -> typename remove_reference<decltype(*beg)>::type
+auto &fcn( It beg, It end ) -> 
+  typename remove_reference<decltype(*beg)>::type
 {
   // process the range
   return *beg;  // return a reference to an element from the range
@@ -37715,10 +37965,9 @@ auto &fcn( It beg, It end ) -> typename remove_reference<decltype(*beg)>::type
 
 Returns a copy of an element's value.
 
-*cpp-q* : Still use C++11 feature, trailing return. How to do that before C++11? 
 
-
-{cxx-type-traits} 
+={============================================================================
+*kt_dev_cxx_0000* cxx-template-type-traits cxx-type-traits
 
 CXXSLR 5.4
 
@@ -37995,54 +38244,6 @@ max<double>(4, 7.2); // OK
 
 template<typename T1, typename T2>
 T1 max (T1 a, T2 b);
-
-
-<cxx-template-argument-deduction-return> <cxx-trailing-return-type> *cxx-11*
-
-CXXSLR-16.2.3
-
-Suppose that want to write the function that takes a sequence and returns a
-reference to an element.
-
-template< typename It > 
-???& fcn( It beg, It end )
-{
-  // process the range
-  return *beg;  // return a reference to an element from the range
-}
-
-vector<int> vi = { 1, 2, 3, 4 };
-Blob<string> ca = { "hi", "bye" };
-
-auto &i = fcn( vi.begin(), vi.end() );    // should return int&
-auto &i = fcn( ca.begin(), ca.end() );    // should return string&
-
-Do not know the exact type to return but know that want that type to be a
-reference to the element type of the sequence. 
-
-template<typename It, typename Return> 
-Return &fcn( It beg, It end );
-
-Sure, can have more arguments but more template argument imposes a burden on
-the user. How to solve?
-
-  "If a return type depends on template parameters, the simplest and best
-  approach to deduce the return type is to let the compiler find out."
-
-
-May use decltype(*beg) to get the type but beg don't exist until the parameter
-list has been seen. The trailing return type allows us define the return type
-after the parameter list is seen.
-
-template< typename T > 
-`auto`& fcn( It beg, It end ) -> decltype(*beg)
-{
-  // process the range
-  return *beg;  // return a reference to an element from the range
-}
-
-This say fcn's return type is the same as the type returned by dereferencing
-its beg parameter and which is a reference to the type.
 
 
 <ex>
@@ -39039,8 +39240,6 @@ std::forward<int>(10), std::forward<char>(c)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-specialization
 
-{cxx-template-non-type-parameters}
-
 CPR 16.5
 
 Not always possible to write a `single` template suited for every possible
@@ -39055,7 +39254,7 @@ o When can take advantage of some specific knowledge to write more efficient
 When cannot or do not want to use the template version, can define a
 specialized version of the class or function template.
 
-CPR 16.1
+CPR 16.1 *cxx-template-non-type-parameters*
 
 o A non-type parameter represents `a value rather than a type.` These value must
   be constant expression and is a constant value inside the template
@@ -39078,7 +39277,7 @@ int compare(const T&, const T&)
   return 0;
 }
 
-// `non-type-template-parameter` version for string literals define parameters
+// `non-type-parameter` version for string literals define parameters
 // as references to an array since cannot copy an array. *cxx-declarator*
 
 template <unsigned N, unsigned M> 
@@ -39088,7 +39287,7 @@ int compare(const char (&p1) [N], const (&p2) [M])
 }
 
 If calls compare() with character pointers, the first version will be called
-because `non-type-template` version will be called only when pass a string
+because `non-type-parameter` version will be called only when pass a string
 literal which is array of const char or an array.
 
 
@@ -39103,7 +39302,7 @@ compare(p1, p2);
 compare("hi", "mom");     
 
 
-{cxx-template-specialization}
+*cxx-template-specialization*
 To handle character pointers, can define a `template specialization` of the
 first version. A `separate definition` of the template, specific instantiation
 in which `one or more template parameters are specified` to have particular
@@ -39113,8 +39312,7 @@ types.
 
   Can use `cxx-template-explicit-argument` because it specifies the types?
   No becuase explict-argument `specifies the type` with the same
-  defintion(code) but specialization supply `different definition` and
-  specifies definition or instantiation. 
+  defintion(code) but specialization supply `different definition` 
 
 
 // C++ Templates The Complete Guide Second Edition
@@ -39127,13 +39325,13 @@ to optimize implementations for certain types or to fix a misbehavior of
 certain types for an instantiation of the class template. 
 
 However, if you specialize a class template, you must also specialize all
-member functions.  Although it is possible to specialize a single member
+member functions. Although it is possible to specialize a single member
 function of a class template, once you have done so, you can no longer
 specialize the whole class template instance that the specialized member
 belongs to.
 
 
-<for-function-template>
+*cxx-template-specialization-for-function*
 To indicate that we are specializing a template, use empty braket(<>) whcih
 means we must supply arguments for `all template parameter` in the original
 template.
@@ -39144,7 +39342,7 @@ int compare(const char* `const` &p1, const char* `const` &p2)
 { return strcmp( p1, p2 ); }
 
 The hard part is to understand the function parameter type because the
-function parameter 'must' match the corresponding types in the 'original'
+function parameter `must match the corresponding types` in the original
 template:
 
 template <typename T> int compare(const T&, const T&);
@@ -39152,8 +39350,8 @@ template <typename T> int compare(const T&, const T&);
 const char *p1 = "hi", *p2 = "mom";
 
 Want to use T as "const char *" and original template requires "const" version
-of the "type". As with *cxx-const-on-base-type* the type to use in
-specialization is "const char * const" since base type is "const char *"
+of the "type". As with *cxx-const-on-base-type* , the type to use in
+specialization is "const char * const" since cxx-base-type is "const char *"
 
 This specialization becomes `non-type-template-version` which affect function
 matching.
@@ -39161,7 +39359,7 @@ matching.
 
 <ex>
 
-namespace cxx_template 
+namespace cxx_template
 {
   // Q: strcmp returns +5/-5 than 1/-1
 
@@ -39172,62 +39370,45 @@ namespace cxx_template
       unsigned int c1 = *p1;
       unsigned int c2 = *p2;
 
-      if (c1 == c2) break;
-      if (c1 != c2) return c1 < c2 ? -1 : 1;
+      if (c1 == c2)
+        break;
+      if (c1 != c2)
+        return c1 < c2 ? -1 : 1;
     }
 
     return 0;
   }
 
+  // *cxx-array*. non-type-parameter version
   template <unsigned N, unsigned M>
-    int compare(const char (&p1) [N], const char (&p2) [M])
-    {
-      return internal_strcmp(p1, p2);
-    }
-
-  template <>
-    int compare(const char* const &p1, const char *const &p2)
-    {
-      return internal_strcmp(p1, p2);
-    }
-
-  template <typename T, int size>
-    class FileBuf
-    {
-      public:
-        int get_size()
-        {
-          return sizeof(array_)/sizeof(T); 
-        }
-
-      private:
-        T array_[size];
-    };
-
-  template<int MIN, int MAX>
-  struct RangedIntPolicy
+  int compare(const char (&p1)[N], const char (&p2)[M])
   {
-    typedef int value_type;
-    value_type value_ = MIN;
-    // value_type value_{MIN};
+    return internal_strcmp(p1, p2);
+  }
 
-    int assign(value_type value)
-    {
-      if ((value < MIN) || (value > MAX))
-        return -1;
+  // specialisation version
+  template <>
+  int compare(const char *const &p1, const char *const &p2)
+  {
+    return internal_strcmp(p1, p2);
+  }
+} // namespace cxx_template
 
-      value_ = value;
-      return 0;
-    }
-  };
-
-} // namespace
-
-TEST(Template, Specialisation)
+TEST(CxxTemplate, specialisation_1)
 {
   using namespace cxx_template;
 
   {
+    // cxx-strcmp which return 0 in case both are the same
+    EXPECT_THAT(!strcmp("strcmp", "strcmp"), true);
+    EXPECT_THAT(!internal_strcmp("strcmp", "strcmp"), true);
+
+    EXPECT_THAT(strcmp("strcmp", "strcmpx"), Not(true));
+    EXPECT_THAT(internal_strcmp("strcmp", "strcmpx"), Not(true));
+  }
+
+  {
+    // use non-type version
     EXPECT_THAT(compare("mon", "hi"), 1);
     EXPECT_THAT(compare("hi", "mon"), -1);
 
@@ -39236,22 +39417,128 @@ TEST(Template, Specialisation)
 
     // EXPECT_THAT(compare("hi", "hi"), 0);
 
+    // use specialisation version.
     const char *p1 = "hi";
     const char *p2 = "mon";
     EXPECT_THAT(compare(p1, p2), -1);
   }
+}
 
+/*
+// ={=========================================================================
+use macro for specialisation.
+
+#define SDBUS_READ_BASIC_TYPE(type, ctype, defaultValue)                        \
+    template<>                                                                  \
+    type SDBusArgumentReader::readValue< type >() const                         \
+    {                                                                           \
+        type value = defaultValue;                                              \
+        int rc = sd_bus_message_read_basic(mMessage, ctype, &value);            \
+        if (rc < 0)                                                             \
+        {                                                                       \
+            AS_LOG_WARNING("failed to read value of type '%c' (%d - %s)",       \
+                           ctype, rc, sdBusErrorString(rc));                    \
+        }                                                                       \
+        return value;                                                           \
+    }
+
+SDBUS_READ_BASIC_TYPE(bool,     SD_BUS_TYPE_BOOLEAN, false)
+SDBUS_READ_BASIC_TYPE(int32_t,  SD_BUS_TYPE_INT32,   INT32_MAX)
+SDBUS_READ_BASIC_TYPE(uint32_t, SD_BUS_TYPE_UINT32,  UINT32_MAX)
+SDBUS_READ_BASIC_TYPE(int64_t,  SD_BUS_TYPE_INT64,   INT64_MAX)
+SDBUS_READ_BASIC_TYPE(uint64_t, SD_BUS_TYPE_UINT64,  UINT64_MAX)
+SDBUS_READ_BASIC_TYPE(double,   SD_BUS_TYPE_DOUBLE,  UINT64_MAX)
+
+template<>
+std::string SDBusArgumentReader::readValue<std::string>() const
+{
+    const char *str = nullptr;
+
+    int rc = sd_bus_message_read_basic(mMessage, SD_BUS_TYPE_STRING, &str);
+    if ((rc < 0) || !str)
+    {
+        AS_LOG_WARNING("failed to read string value");
+        return std::string();
+    }
+
+    return std::string(str);
+}
+
+NOTE:
+1 "specialisation" is done without the original code
+
+2 they are all the same code other than std::string type case. then why
+  specialisation? If use usual template, should have three type parameters.
+
+*/
+namespace cxx_template
+{
+  class SDBusArgumentReader
   {
-    FileBuf<int, 20> fbuf;
-    EXPECT_THAT(fbuf.get_size(), 20);
+    private:
+      std::stringstream ss_{};
+
+    public:
+
+      SDBusArgumentReader() = default;
+      ~SDBusArgumentReader() = default;
+
+      template <typename T>
+        T readValue() const;
+  };
+
+// *cxx-template-specialization*
+#define SDBUS_READ_BASIC_TYPE(type, ctype, defaultValue)                       \
+  template <>                                                                  \
+  type SDBusArgumentReader::readValue<type>() const                            \
+  {                                                                            \
+    type value = defaultValue;                                                 \
+    if (typeid(value).name() == typeid(bool).name())                           \
+      return true;                                                             \
+    if (typeid(value).name() == typeid(int32_t).name())                        \
+      return 1;                                                                \
+    return value;                                                              \
   }
 
+  SDBUS_READ_BASIC_TYPE(bool,     "b", false)
+  SDBUS_READ_BASIC_TYPE(int32_t,  "i", INT32_MAX)
+
+  class SDBusMessage
   {
-    RangedIntPolicy<10, 100> rint;
-    EXPECT_THAT(rint.assign(9), -1);
-    EXPECT_THAT(rint.assign(101), -1);
-    EXPECT_THAT(rint.assign(30), 0);
-  }
+    private:
+      const SDBusArgumentReader mReader;
+
+    public:
+      template <typename T>
+      const SDBusMessage &operator>>(T &arg) const;
+  };
+
+  template<typename T>
+    const SDBusMessage &SDBusMessage::operator>>(T &arg) const
+    {
+      arg = mReader.readValue<T>();
+      return *this;
+    }
+
+    // *cxx-template-explicit-instantiation*
+    template const SDBusMessage &SDBusMessage::operator>><bool>(bool &) const;
+    template const SDBusMessage &SDBusMessage::operator>>
+      <int32_t>(int32_t &) const;
+}
+
+TEST(CxxTemplate, specialisation_2)
+{
+  using namespace cxx_template;
+
+  SDBusMessage message;
+
+  bool read1{false};
+  int read2{-1};
+
+  message >> read1 >> read2;
+
+  EXPECT_THAT(read1, true);
+  EXPECT_THAT(read2, 1);
 }
 
 
@@ -39261,7 +39548,7 @@ Moreover, a declaration for a specialization must be in scope before any use
 of it.
 
 Because the compiler can generate code using the original template when a
-specialization is missing, errors in declaration 'order' between a template
+specialization is missing, errors in declaration `order` between a template
 and specialization are easy to make but hard to find. The compiler is unlikely
 to detect.
 
@@ -48743,7 +49030,7 @@ predicate. `the STL requires that predicates be stateless,` meaning that they
 should always yield the same result for the same value.
 
 
-<cxx-predicate-which-to-use> *algo-transform* *algo-for-each*
+<cxx-predicate-which-to-use> *algo-transform* *cxx-for-each*
 What predicate is used depends on each algorithm to use. Also see reference
 argument to predicate.  
 
@@ -48753,7 +49040,7 @@ namespace cxx_code
     _Function
     for_each(_InputIterator __first, _InputIterator __last, _Function __f)
     {
-      // note: call op but not use return
+      // note: call op but not use return of __f
 
       for (; __first != __last; ++__first)
         __f(*__first);
@@ -49110,7 +49397,7 @@ You should always declare the function call operator of predicates as being a
 constant member function.
 
 
-<cxx-fobj-predefined> <cxx-less>
+*cxx-callable-predefined* *cxx-less*
 some are cxx-predicate and some are not since do not return boolean.
 
 #include <functional>
@@ -49140,10 +49427,9 @@ set<int, greater<int>> coll;   // sort with operator>
 
 sort(svec.begin(), svec.end(), greater<string>());    // temporary object
 
-
-<code-less> template-less from bits/stl_function.h
-
 namespace std {
+
+  // bits/stl_function.h
 
   template<typename _Tp>
     struct negate : public unary_function<_Tp, _Tp>
@@ -49214,10 +49500,18 @@ namespace std {
 
 
 <ex>
-TEST(Predicate, Predefined)
+TEST(CxxCallable, predefined)
 {
-  std::plus<int> op;
-  EXPECT_THAT(op(10, 20), 30);
+  {
+    std::plus<int> call;
+    EXPECT_THAT(call(10, 20), 30);
+  }
+
+  {
+    std::equal_to<int> call;
+    EXPECT_THAT(call(10, 10), true);
+    EXPECT_THAT(call(10, 20), false);
+  }
 }
 
 
@@ -49551,14 +49845,13 @@ auto f = [&v1] { return v1; };
 v1 = 0;
 auto j = f();     // j is 0.
 
-Unlike parameters, the value of captured variable is copied when the lambda is
+Unlike parameters, the value of captured variable is `copied` when the lambda is
 `created, not when it is called (executed).` When pass lambda such as return a
 lambda, careful for the same reason that a function must not return a
 reference to a local variable. If possible, avoid capturing pointers or
 reference.
 
 
-<cxx-lambda-capture-implicit>
 `Let the compiler infer variables` we use from the code in the lambda body.
 Use an & or = in the capture list. The revised is:
 
@@ -49569,8 +49862,10 @@ auto wc = find_if( words.begin(), words.end(),
 
 // C++PL
 The [] is a capture list specifying that `local names` used (such as x) will be
-accessed through references. Capture all local names used by reference is [&],
-`to “capture” only x`, we could have said so: [&x].
+accessed through references. 
+
+Capture `all` local names used by reference is [&], `to “capture” only x`, we
+could have said so: [&x].
 
 Capture all local names used `by value` is [=]. To give the generated object a
 `copy of x`, we could have said so: [=x].

@@ -3787,7 +3787,7 @@ namespace
 
 /*
 ={=========================================================================
-cxx_pattern_visitor
+cxx_pattern_visitor cxx-variant
 */
 
 namespace cxx_variant
@@ -3951,7 +3951,7 @@ namespace cxx_variant
   }; // class VariantMap
 } // namespace cxx_variant
 
-// from TEST(CxxTypeVariant, check_custom_variant_map)
+// from TEST(CxxTypeVariant, variant_and_visitor)
 TEST(PatternVisitor, check_visitor)
 {
   using namespace cxx_variant;
@@ -4040,9 +4040,16 @@ TEST(PatternVisitor, check_visitor)
   coll.insert("key6", std::string("variant2"));
 
   {
+    std::vector<std::string> expected{"{key1:b}",
+                                      "{key2:b}",
+                                      "{key3:i}",
+                                      "{key4:i}",
+                                      "{key5:variant1}",
+                                      "{key6:variant2}"};
     CustomVisitor v;
     coll.visit(v);
     EXPECT_THAT(v.coll.size(), 6);
+    EXPECT_THAT(v.coll, expected);
   }
 
   {
@@ -4055,6 +4062,7 @@ TEST(PatternVisitor, check_visitor)
     EXPECT_THAT(pv.ss.str(), expected);
   }
 }
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

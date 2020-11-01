@@ -59,8 +59,8 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* mw-rdk-as-network
 *kt_dev_skymw_0000* mw-rdk-as-system
 *kt_dev_skymw_0000* mw-rdk-as-player
-*kt_dev_skymw_0000* mw-rdk-dtt
-*kt_dev_skymw_0000* mw-rdk-dtt-hla
+*kt_dev_skymw_0000* mw-rdk-dtt-scan
+*kt_dev_skymw_0000* mw-rdk-dtt-track
 *kt_dev_skymw_0000* mw-rdk-as-appservice rdk-as-windowmanager
 *kt_dev_skymw_0000* mw-rdk-drm
 *kt_dev_skymw_0000* mw-rdk-hdmi
@@ -1078,8 +1078,20 @@ rbt post --tracking-branch=origin/develop --repository=asplayer \
 rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-170774_AS_RDK_DTT_scan_completes_when_progress_is_not_100%
 
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=LLDEV-1821_AS_RDK_DTT_number_of_services_is_different_from_the_scan_result
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=NGDEV-171742_AS_RDK_DTT_changes_to_params_for_the_hybrid_list
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=NGDEV-170776_AS_RDK_DTT_documentId_in_/services/status_is_empty
+
+git push origin NGDEV-170776_AS_RDK_DTT_documentId_in_/services/status_is_empty
+
 rbt post --tracking-branch=origin/develop --repository=as-system-service \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-169508_AS_RDK_DTT_Simple_Hybrid_Service_List
+
 
 --branch<branch>
 The branch the change will be committed on or affects. This is a free-form
@@ -1174,9 +1186,11 @@ http://build01.mw.ethan.bskyb.com/asda/#
 curl -v -X POST http://192.168.0.12:9005/as/system/action/reset?type=reboot
 http://192.168.0.12:9005/as/system/action/reset?type=reboot
 
-curl -v -X GET http://192.168.0.102:9005/as/system/information
-curl -v -X GET http://192.168.0.103:9005/as/system/information
-curl -v -X GET http://localhost:9005/as/system/information
+curl -v GET http://192.168.0.102:9005/as/system/information
+curl -v GET http://192.168.0.12:9005/as/system/information
+curl -v GET http://192.168.0.12:9005/as/system/deviceinformation
+
+curl -v GET http://localhost:9005/as/system/information
 
 curl -v -X GET http://192.168.0.102:8008/pm/packages
 
@@ -1376,6 +1390,8 @@ void bindMethods( AS_WORKER::UrlMap *map )
   watchliveExecutor
     = new AS_PLAYER::WatchLiveExecutorFactory();
 
+  *as-map*
+
   // `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator);
   map->RegisterUrl( 
       REQ_METHOD_HTTP_POST, 
@@ -1486,6 +1502,20 @@ ASMain::ASMain( AS_WEB_SERVER_STARTUP_CALLBACK startupCallback, ASUserTag startu
 
 o web server thread *use-as-map*
 
+class ThreadParams : public Base
+{
+private:
+    AS::string m_name;
+
+public:
+    ThreadParams( const char *name );
+
+    char *GetName()
+    {
+        return (char *) (m_name.c_str());
+    }
+};
+
 // Components/AS/WebServer/source/AS_WEB_SERVER_MainThread.cpp
 
 Exec()
@@ -1504,7 +1534,19 @@ Exec()
   AS_WORKER::Executor *executor 
     = `map->CreateExecutor`( httpMethod, env, uri, &validator /* out */ )
     {
-      exec = matchingUrlRegData->factory->CreateExecutor( env, uri );
+      AS_WORKER::Executor *UrlMap::CreateExecutor
+      (int method, AS_WORKER::Environment *env, AS_WORKER::Uri *uri, AS_WORKER::ParamValidator **validator ) const
+      {
+        itUrlMap = m_registeredUrlMap.find( apiDomain );
+
+        AS::vector<UrlRegData>::const_iterator matchingUrlRegData;
+
+        if ( method == (*itUrlRegData).method && uri->CompareRegUri( *(itUrlRegData->uri), matchedPathDepth ) )
+          matchingUrlRegData = itUrlRegData;
+        
+        exec = matchingUrlRegData->factory->CreateExecutor( env, uri );
+        exec->BindThreadParams( matchingUrlRegData->params );
+      }
     }
 
   if ( executor == NULL )
@@ -1518,21 +1560,40 @@ Exec()
   *as-map-validator-check*
   validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
 
-  // if validation is okay, run it on thread
-  // Run executor in worker thread
-  else if ( executor->GetThreadParams() == NULL )
+  if ( validator == NULL || (validationErrorCode == 200) )
   {
-    m_workerQueue->Send( event, &executor, sizeof(executor) )
+    // if validation is okay, run it on thread
+    // Run executor in worker thread
+    else if ( executor->GetThreadParams() == NULL )
     {
-      int ASWorkerThread::Exec()
+      m_workerQueue->Send( event, &executor, sizeof(executor) )
       {
-        executor->RunExec( "WORKER" )
+        int ASWorkerThread::Exec()
         {
-          // after all, run real Executor::Exec();
-          ret = Exec();
+          executor->RunExec( "WORKER" )
+          {
+            // after all, run real Executor::Exec();
+            ret = Exec();
+          }
         }
       }
     }
+    else
+    {
+      *as-map-threaded*
+      // Threaded case, `run executor in AS_WORKER thread`, then send to collector 
+      // to garbage collect including uri & environment & thread 
+      // when thread terminates.
+
+      // Create thread using supplied params
+      (void) (new AS_DMS::Thread( executor, executor->GetThreadParams()->GetName() ));
+
+      m_webServer->m_Collector->Send( executor );
+    }
+  }
+  else
+  {
+    env->WriteResult( validationErrorCode, jsonBody );
   }
 }
 
@@ -1616,116 +1677,6 @@ bool ASRequest::sendErrorReply(ErrorType type, const std::string &developerMessa
   const CannedError &error = cannedErrors.at(type);
   return sendErrorReply(error.httpCode, error.errorCode, error.userMessage, developerMessage );
 }
-
-
-*as-serviceslist* *as-dtt-scan-list*
-as-api:/as/services/0/0
-
-// struct Service
-// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_Service.cpp
-
-// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/include/AS_SERVICELIST_ServiceListContainer.h
-int ServiceList::AddServiceObject( Service service )
-
-ServiceListController::
-        m_serviceList->AddServiceObject( service );
-
-int ServiceListController::GetServiceList(
-    AS::string ifNoneMatch, AS::string &serviceListEtag, AS::string &serviceList)
-
-{
-  "version": 1, 
-  "documentId": "1563970127340"
-}
-[
-  {
-    "dvbtriplet": "318.4.8583", 
-    "servicetypes": [
-      "DTT"
-    ], 
-    "c": "21", 
-    "t": "Rai 4", 
-    "sid": "M13e-4-2187", 
-    "sf": "sd", 
-    "xsg": 8
-  }, 
-  {
-    "dvbtriplet": "318.4.8585", 
-    "servicetypes": [
-      "DTT"
-    ], 
-    "c": "24", 
-    "t": "Rai Movie", 
-    "sid": "M13e-4-2189", 
-    "sf": "sd", 
-    "xsg": 8
-  }, 
-]
-
-GET
-http://192.168.0.105:9005/as/services/0/0
-
-documentId
-document unique identifier (e.g. timestamp at version 0)
-
-void ServiceListController::SetServiceJsonDefault()
-{
-    AS_LOG_ENTRY( "%s", __func__ );
-
-    SYSTEMTIME_TIMEDATE creationTime;
-
-    SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
-    if ( status == GUIDE_API_STATUS_OK )
-    {
-        AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
-
-        // Update the creation time
-        m_serviceLongListCreationTime = creationTime;
-        m_lastModificationTime = creationTime;
-    }
-    else
-    {
-        AS_LOG_ERROR( "GUIDE_API_List_GetLastModifiedTime failed with status, 0x%x", status );
-    }
-
-    AS_LOG_EXIT( "%s", __func__ );
-}
-
-    AS::string documentId = AS_DMSUTILS::uint32ToString( m_serviceLongListCreationTime );
-
-version
-the version of this complete document
-
-services
-service list
-
-c
-logical channel number
-
-t
-title, which can be an empty string
-
-sid
-service id – a private, opaque, string for AS use only
-
-// ethan-as-source/Components/AS/Services/DMSUtils/source/AS_DMSUTILS_SystemLocatorUtils.cpp
-  serialisedLocator = ("M" + uint32ToHexString( dvbOnid ) + "-" + uint32ToHexString( dvbTsid ) + "-" + uint32ToHexString( dvbSid ) + "-" + uint32ToHexString( dvbCnid )).c_str();
-
-sf
-service format (sd, hd, uhd or au)
-
-xsg
-XSI service genre
-
-dvbtriplet
-a dvb triplet in the format onid.tsid.sid. Not required if the servicetype is
-OTT, mandatory in all other cases
-
-C[0]: PK
-C[1]: Name
-C[2]: epgPresent.StartTime
-C[3]: epgPresent.Name
-C[4]: _id
 
 
 ={============================================================================
@@ -11493,13 +11444,50 @@ scp -P 10022 root@192.168.0.12:/opt/persistent/*core* .
 
 Run gdb-multiarch
 
-// no need to set sysroot and use debug binary.
+mkdir rootfs
+
+cd rootfs
+
+tar -xvf ../AX061AEI_VBN_fr_dobby_oci_containers_20200611120038sdy_MTY.rootfs.tar.gz
+tar -xvf ../AX061AEI_VBN_fr_dobby_oci_containers_20200611120038sdy_MTY-dbg.rootfs.tar.gz
+
+You will notice that libacl.so.1.1.0 exists in two places. The one in the .debug
+subdirectory is the more interesting non-stripped one.
+
+You might want to go through each .debug directory and copy all files up one
+level. This script might be useful:
+
+#!/bin/bash
+BASE_DIR="myrootfs"
+CUR_DIR=`pwd`
+cd ${BASE_DIR}
+find . -type d -name ".debug" > ../dir1.txt
+cd ..
+while read -r a_dir; do
+cd ${BASE_DIR}/${a_dir}
+find . -type f > ${CUR_DIR}/fil1.txt
+while read -r a_file; do
+if [ -f ../${a_file} ]; then
+# echo "Copying ${a_file} up one level"
+cp ${a_file} ../
+fi
+done < ${CUR_DIR}/fil1.txt
+cd ${CUR_DIR}
+done < ./dir1.txt
+
+
+// need to set sysroot and use debug binary.
 
 cp /media/keitee/ssd2/as-sky-repo/asplayer/build/asrdkplayer /media/keitee/ssd2/as-sky-repo/xi1-gdb
+
+set sysroot rootfs_x
+
 gdb-multiarch rootfs/usr/sbin/.debug/asrdkplayer core.asrdkplayer.5440.skyxione.1597263199.COR  
-gdb-multiarch ./asrdkplayer asrdkplayer-11.core.10796
-gdb-multiarch ./asrdkplayer asrdkplayer-11.core.10881
-gdb-multiarch ./asrdkplayer asrdkplayer-11.core.10916
+gdb-multiarch rootfs_2/usr/sbin/.debug/asrdkplayer core.asrdkplayer.7437.skyxione.1602636271.COR
+gdb-multiarch rootfs_2/usr/sbin/asrdkplayer core.asrdkplayer.7437.skyxione.1602636271.COR
+gdb-multiarch rootfs_2/usr/sbin/asrdkplayer core.asrdkplayer.7437.skyxione.1602636271.COR
+
+gdb-multiarch rootfs_llama/usr/sbin/.debug/asproxy core.asproxy.4906.sky-llama-panel.1603973001.COR
 
 
 *rdk-gdb*
@@ -11571,6 +11559,12 @@ b AS_WEB_SERVER_MainThread.cpp:185 if uri->GetPath().c_str() == "/9005/as/servic
 b ServiceConfigParser.cpp:ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
 // b ServiceConfigParser::checkUriAllowed if uriPath.c_str() == "/as/drm/activate"
 b ServiceConfigParser::checkUriAllowed if DEBUG_GDB()
+
+
+*rdk-minidump* *rdk-breakpad*
+https://wiki.rdkcentral.com/display/RDK/Google+Breakpad
+
+scp -P 10022 root@192.168.0.12:/opt/minidumps/234783eb-1bfa-8d3c-08faf04d-4b7f60e2.dmp .
 
 
 ={============================================================================
@@ -11920,28 +11914,53 @@ libMapiRpc.so.8.1.0
 Sep 30 08:36:26 skyxione asrdkplayer[10959]: /usr/sbin/asrdkplayer: symbol lookup error: /usr/sbin/asrdkplayer: undefined symbol: _ZTI17AAMPEventListener
 
 
+root@skyxione:/tmp/data# cat /version.txt
+imagename:SKXI11ADS_VBN_stable2_sky_20201007154031sdy
+YOCTO_VERSION=morty
+SDK_VERSION=1.1.6
+BRANCH=stable2_sky
+VERSION=000150.3.8.0
+SPIN=0
+JENKINS_JOB=RDK_FULL_STACK_skyxione-uk
+JENKINS_BUILD_NUMBER=156
+BUILD_TIME="2020-10-07 15:40:31"
+Generated on Wed Oct 07  15:40:31 UTC 2020
+root@skyxione:/tmp/data#
+
+FlashApp ./SKXI11ADS_VBN_stable2_sky_20200929154705sdy.bin
+FlashApp ./SKXI11ADS_VBN_stable2_sky_20201007154031sdy.bin
+
+
 // local build
 scp -r -P 10022 ./SKXI11ADS_VBN_2006_sprint_20200928161102sdy.bin root@192.168.0.12:/tmp/data
 cd /tmp/data
 FlashApp ./SKXI11ADS_VBN_2006_sprint_20200928161102sdy.bin
 
 
-scp -r -P 10022 ./SKXI11ADS_VBN_stable2_sky_20201007154031sdy.bin root@192.168.0.12:/tmp/data
-cd /tmp/data
+root@skyxione:/tmp/data# cat /version.txt
+imagename:SKXI11ADS_VBN_stable2_sky_20201007154031sdy
+YOCTO_VERSION=morty
+SDK_VERSION=1.1.6
+BRANCH=stable2_sky
+VERSION=000150.3.8.0
+SPIN=0
+JENKINS_JOB=RDK_FULL_STACK_skyxione-uk
+JENKINS_BUILD_NUMBER=156
+BUILD_TIME="2020-10-07 15:40:31"
+Generated on Wed Oct 07  15:40:31 UTC 2020
+
 FlashApp ./SKXI11ADS_VBN_stable2_sky_20201007154031sdy.bin
 
-FlashApp ./SKXI11ADS_VBN_stable2_sky_20201006163006sdy.bin
+// CAD2 UK
+scp -r -P 10022 ./SKXI11ADS_VBN_SKXI11AIS_000150.7.2.0.0_20201030112154sdy.bin root@192.168.0.12:/tmp/data
+cd /tmp/data
+FlashApp ./SKXI11ADS_VBN_SKXI11AIS_000150.7.2.0.0_20201030112154sdy.bin
+
+// CAD3
+scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.5.8.0.0_20201025221343sdy.bin root@192.168.0.17:/tmp/data
+FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.5.8.0.0_20201025221343sdy.bin
 
 
-scp -r -P 10022 ./LT650_VBN_stable2_sky_20201002203613sdy.bin root@192.168.0.14:/tmp/data
-FlashApp /tmp/data LT650_VBN_stable2_sky_20201002203613sdy.bin
-
-scp -r -P 10022 ./LT650_VBN_stable2_sky_20201008150222sdy.bin root@192.168.0.14:/tmp/data
-FlashApp /tmp/data LT650_VBN_stable2_sky_20201008150222sdy.bin
-
-
-scp -r -P 10022 ./SKTL11AEI_VBN_stable2_sky_20201012125210sdy.bin root@192.168.0.14:/tmp/data
-FlashApp /tmp/data SKTL11AEI_VBN_stable2_sky_20201012125210sdy.bin
 
 .bin
 SKTL11AEI_VBN_stable2_sky_20201012083207sdy.
@@ -12093,11 +12112,8 @@ journalctl -fu sky-asplayer --since today
 journalctl -fu sky-asplayer
 
 // get log from box to host
-journalctl -u sky-asproxy --since today > /opt/proxy.log
-journalctl -u sky-asrdkplayer --since today > /opt/player.log
-
 ssh -p 10022 root@192.168.0.12 "journalctl -u sky-asproxy --since today" > proxy.log
-ssh -p 10022 root@192.168.0.14 "journalctl -u sky-asplayer --since today" > player.log
+ssh -p 10022 root@192.168.0.12 "journalctl -u sky-asplayer --since today" > player.log
 
 scp -P 10022 root@192.168.0.12:/opt/dbus.log .
 
@@ -12116,6 +12132,19 @@ umount /usr/bin/ASSystemService
 
 journalctl -fu sky-assystem
 
+
+*as-network*
+
+systemctl status sky-asnetwork
+systemctl stop sky-asnetwork
+systemctl start sky-asnetwork
+
+scp -r -P 10022 ./ASNetworkService root@192.168.0.12:/opt
+
+mount-copybind /opt/ASNetworkService /usr/bin/ASNetworkService 
+umount /usr/bin/ASNetworkService
+
+journalctl -fu sky-asnetwork
 
 *as-voicesearch*
 
@@ -12198,7 +12227,10 @@ epg_ui: error while loading shared libraries: libGLESv1_CM.so: cannot open share
 pid 6 has terminated (return code 127)
 
 
-/opt/logs/sky-messages.log
+tail -f /opt/logs/sky-messages.log
+scp -P 10022 root@192.168.0.12:/opt/logs/sky-messages.log .
+
+COUNT=0; while true; do curl -v -X GET http://192.168.0.12:9005/as/system/information; let COUNT=COUNT+1; sleep 1; done
 
 
 ={============================================================================
@@ -12811,6 +12843,151 @@ method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=68
 </node>
 "
 
+
+// as-system, sender=:1.85, send a message to as-proxy and as-proxy relay it
+// to as-network
+
+method call time=1600290055.204008 sender=:1.85 -> destination=com.sky.as.proxy serial=626 path=/com/sky/as/service; interface=com.sky.as.Service1; member=DBusProxyMethodCall
+   string " {"domain":"/network","name":"PingRouter"} "
+method call time=1600290055.204395 sender=:1.4 -> destination=com.sky.as.network serial=943 path=/com/sky/as/service; interface=com.sky.as.Service1; member=PingRouter
+
+
+how? each service make a direct call to proxy:
+
+*as-system-ping*
+
+    {
+      "path": "/as/system/action/ping",
+      "method": "post",
+      "expectsBody": false,
+      "thread": "AS_SYSTEM_PING"
+    },
+
+uint32_t SystemActionPingExecutor::HandleNetworkPing ( const std::string& pingService )
+{
+  uint32_t pingReturnCode = 500;
+  DBusMessage message = DBusMessage::createMethodCall("com.sky.as.proxy",
+      "/com/sky/as/service",
+      "com.sky.as.Service1",
+      "DBusProxyMethodCall"
+      );
+
+  // to as-network
+  static const std::string pingRouterMethodArgs = 
+    R"JSON( {"domain":"/network","name":"PingRouter"} )JSON";
+
+  // note: blocking call
+  DBusMessage reply = GetDbusConnection().call( std::move(message) );
+}
+
+curl -v -X POST http://192.168.0.12:9005/as/system/action/ping?service=as
+curl -v -X POST http://192.168.0.12:9005/as/system/action/ping?service=router
+
+curl -v -X GET http://192.168.0.12:9005/as/system/bootstate
+
+
+*dbus-call-method*
+
+class SDBusSignal : public SDBusRequest
+
+class SDBusMethodCall : public SDBusRequest
+
+    SDBusMethodCall(const std::string &service,
+                    const std::string &path,
+                    const std::string &interface,
+                    const std::string &name);
+
+class ASConfigMethodCall : public SDBusMethodCall
+
+class ASRequestMethodCall : public SDBusMethodCall
+
+ASConfigMethodCall::ASConfigMethodCall(const std::string &serviceName,
+                                       const std::string &objectPath)
+    : SDBusMethodCall(serviceName, objectPath, 
+        `ASSERVICE1_INTERFACE, "Config"`)
+{}
+
+so each ASXXXMethodCall has name to call and override of demarshallArgs() so
+knows how to read from dbus message reply:
+
+int SDBusConnection::onMethodReply(
+    sd_bus_message *reply, void *userData, void*)
+{
+  call->demarshallArgs(SDBusArgumentReader(reply));
+}
+
+
+uses sd_bus_call_async, cookie and callback as done for running callable from
+a different thread
+
+bool SDBusConnection::call(const std::shared_ptr<SDBusMethodCall> &methodCall,
+                           int timeoutMSecs)
+{
+  // create a request cookie and add to the queue for the thread to process
+  methodCall->mComplete = false;
+  mQueuedRequests.emplace_back(methodCall);
+
+  // drop the lock before waking the event loop
+  locker.unlock();
+
+  // wake the event loop
+  wakeEventLoop();
+
+  // re-take the lock and wait until processed
+  locker.lock();
+  while (!methodCall->mComplete)
+  {
+    mRequestCond.wait(locker);
+  }
+
+  // done
+  return true;
+}
+
+void SDBusConnection::wakeEventLoop()
+{
+  TEMP_FAILURE_RETRY(write(mRequestEventFd, &wake, sizeof(wake)));
+}
+
+// do while on queue
+int SDBusConnection::requestEventHandler(sd_event_source *s, int fd,
+                                         uint32_t revents, void *userdata)
+{
+  const std::shared_ptr<SDBusRequest> &request 
+    = self->mQueuedRequests.front();
+
+  self->scheduleMethodCall(
+      std::dynamic_pointer_cast<SDBusMethodCall>(request));
+}
+
+// save pair<cookie, call>
+
+void SDBusConnection::scheduleMethodCall(
+    const std::shared_ptr<SDBusMethodCall> &methodCall);
+{
+  // add the callback to the map against the cookie
+  mMethodCalls.emplace(cookie, methodCall);
+}
+
+// "cal the callback" means handle "reply"
+
+int SDBusConnection::onMethodReply(
+    sd_bus_message *reply, void *userData, void*)
+{
+  // get a copy of the callback and erase from the map
+  std::shared_ptr<SDBusMethodCall> call = it->second;
+
+  // call the callback
+  if (call)
+  {
+    call->demarshallArgs(SDBusArgumentReader(reply));
+  }
+
+  // signal that a method call has completed
+  self->mRequestCond.notify_all();
+}
+
+
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASProxyService.cpp
 // note that only one method `to relay calls to other services`
 
@@ -12832,8 +13009,14 @@ int ASProxyService::proxyMethodCall( sd_bus_message *msg, void *userData, sd_bus
   self->mRdkServiceControllerShdPtr->HandleProxyMethodCall( dbusMessage, reply );
 }
 
-void RdkServicesController::HandleProxyMethodCall( const std::string dbusMessage, sd_bus_message *reply )
+void `RdkServicesController::HandleProxyMethodCall`(
+    const std::string dbusMessage, sd_bus_message *reply )
 {
+  // create event, push it onto the queue, and wake up thread
+
+  event.dbusMsg = dbusMessage;
+  event.reply = reply;
+
   mEventQueue.emplace_back(std::move(event));
 }
 
@@ -12846,43 +13029,19 @@ void RdkServicesController::threadLoop()
 
 void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_message *reply )
 {
-  std::shared_ptr<ASProxyMethodCall> proxyMsg 
+  // set domain and method from string in ASProxyMethodCall ctor
+  // ex: R"JSON( {"domain":"/network","name":"PingRouter"} )JSON";
+
+  std::shared_ptr<ASProxyMethodCall> `proxyMsg`
     = std::make_shared<ASProxyMethodCall>( dbusMessage, reply );
 
-  std::string domain;
-  std::string method;
-
-  proxyMsg->GetDomainAndMethod( domain, method );
-
+  *dbus-call*
   mSDBus->call( proxyMsg );
-}
 
-bool SDBusConnection::call(const std::shared_ptr<SDBusMethodCall> &methodCall,
-                           int timeoutMSecs)
-{
-}
+  *dbus-call-return* note: specific fot each ?MethodCall. uses sd_bus_send() in
+  this case since it relays call and reply as well.
 
-// as-system, sender=:1.85, send a message to as-proxy and as-proxy relay it
-// to as-network
-
-method call time=1600290055.204008 sender=:1.85 -> destination=com.sky.as.proxy serial=626 path=/com/sky/as/service; interface=com.sky.as.Service1; member=DBusProxyMethodCall
-   string " {"domain":"/network","name":"PingRouter"} "
-method call time=1600290055.204395 sender=:1.4 -> destination=com.sky.as.network serial=943 path=/com/sky/as/service; interface=com.sky.as.Service1; member=PingRouter
-
-
-how? each service make a direct call to proxy:
-
-uint32_t SystemActionPingExecutor::HandleNetworkPing ( const std::string& pingService )
-{
-  uint32_t pingReturnCode = 500;
-  DBusMessage message = DBusMessage::createMethodCall("com.sky.as.proxy",
-      "/com/sky/as/service",
-      "com.sky.as.Service1",
-      "DBusProxyMethodCall"
-      );
-
-
-  DBusMessage reply = GetDbusConnection().call( std::move(message) );
+  proxyMsg->SendReply();
 }
 
 
@@ -12906,7 +13065,8 @@ const string NetworkService::m_configJson = R"JSON(
     ...
     {
       "path": "PingRouter",
-      `"method": "dbusmethod",`
+      `"method": "dbusmethod",`     // dbusmethod is not used.
+
       "expectedOutputArgs": "us"
     },
   ]
@@ -12916,10 +13076,13 @@ const string NetworkService::m_configJson = R"JSON(
 // as-network on executor (detached thread)
 // Network/Executors/source/NetworkMethodCallExecutor.cpp
 void NetworkMethodCallExecutor::execute(const std::shared_ptr<ASMethodCall> method)
-
-// Network/Controllers/source/NetworkController.cpp
-uint32_t NetworkController::PingRouter()
-
+{
+  httpCode = NetworkController::getInstance()->PingRouter()
+  {
+    // Network/Controllers/source/NetworkController.cpp
+    uint32_t NetworkController::PingRouter()
+  }
+}
 
 void RdkServicesController::threadLoop()
 {
@@ -12945,6 +13108,7 @@ void RdkServicesController::onServiceRegistered(const std::string &name)
 {
   *dbus-call-service*
   // create a wrapper for the service and try and get it's JSON config
+  // mSDBus = SDBusConnection which has sd_bus and event loop thread
   std::shared_ptr<ASServiceSDBus> `service` =
     std::make_shared<ASServiceSDBus>(mSDBus, name);
 
@@ -12973,21 +13137,23 @@ std::string `ASServiceSDBus`::config() const
     std::make_shared<ASConfigMethodCall>(mServiceName, mObjectPath);
 
   // if failed to send just reply with a generic error
+  //
+  // bool SDBusConnection::call(const std::shared_ptr<SDBusMethodCall> &methodCall,
+  //                         int timeoutMSecs);
+  // Queues up the method call on the bus and blocks until it's processed 
+  // by the sdbus event loop thread.
+
+  *dbus-call*
   if (!mSDBus->call(msg))
   {
     AS_LOG_WARNING("failed to send dbus Config method call");
     return std::string();
   }
 
+  *dbus-call-return* note: specific fot each ?MethodCall
   // get the converted response from the dbus message
   return msg->config();
 }
-
-ASConfigMethodCall::ASConfigMethodCall(const std::string &serviceName,
-                                       const std::string &objectPath)
-    : SDBusMethodCall(serviceName, objectPath, 
-        `ASSERVICE1_INTERFACE, "Config"`)
-{}
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/`ServicesManager.cpp`
@@ -13000,7 +13166,7 @@ const std::string PlaybackService::mConfigJson = R"JSON(
     {
       "path": "/as/drm/status",
       "method": "ws",
-      "thread": "AS_WS_DRM"
+      "thread": "AS_WS_DRM" *as-map-threaded*
     },
     {
       "path": "/as/drm/action/activate",
@@ -13032,6 +13198,19 @@ bool `ServicesManager::registerService`(const std::string &configJson,
 
   // parse json to config
   `mParser->parse(configJson, &config);`
+  {
+    *as-map-threaded*
+    bool ServiceConfigParser::parseUris(const Json::Value &urisArray)
+    {
+        // the thread field is optional, if present it indicates the request should be
+        // processed in a different thread
+        if (thread.isString())
+        {
+            serviceUrl.threaded = true;
+            serviceUrl.threadName = thread.asString().substr(0, 15);
+        }
+    }
+  }
 
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding ws executor for '/as/voice/status'
   // M:ServicesManager.cpp F:bindServiceMethods L:382 > adding http executor for '/as/voice/results'
@@ -13067,38 +13246,55 @@ bool `ServicesManager::registerService`(const std::string &configJson,
               `service`,
               url.expectsBody);
 
-          // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
-          //
-          // void `ProxyUrlMap::RegisterUrl`( REQ_METHOD method,
-          //     const std::string &url,
-          //     AS_WORKER::Factory *factory,
-          //     const std::string &threadName )
-
-          `mUrlMap->RegisterUrl`(method, url.path, factory);
+          *as-map-threaded*
+          if (url.threaded)
           {
-            *as-map-validator*
-            static std::map<std::string, UriParamValidatorType> `overrideUriParamValidator` = 
-            {
-              {"/as/players/<vwid>/action/watchlive", URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
-              ...
-            };
-
-            // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
-            // defines all validators
-
-            paramValidator = new `PlayersVwidParamValidator()`;
-
-            // call the original methods to register the url
-            // AS_WORKER::UrlMap::RegisterUrl add url to m_registeredUrlMap once
-            // checking on COUNTRY* and PLATFOTM* (which is only flag from #defines)
-
-            // if found in overrideUriParamValidator then use it and if not,
-            // paramValidator is null
-
-            `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator, threadParams);
-
-            // M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+            mUrlMap->RegisterUrl(method, url.path, factory, url.threadName);
           }
+          else
+          {
+            // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/ProxyUrlMap.cpp
+            //
+            // void `ProxyUrlMap::RegisterUrl`( REQ_METHOD method,
+            //     const std::string &url,
+            //     AS_WORKER::Factory *factory,
+            //     const std::string &threadName = std::string());
+
+            `mUrlMap->RegisterUrl`(method, url.path, factory);
+            {
+              // create the thread params if a name was given
+              AS_WORKER::ThreadParams *threadParams = nullptr;
+              if ( !threadName.empty() )
+              {
+                  threadParams = new AS_WORKER::ThreadParams( threadName.c_str() );
+              }
+
+              *as-map-validator*
+              static std::map<std::string, UriParamValidatorType>
+              `overrideUriParamValidator` = 
+              {
+                {"/as/players/<vwid>/action/watchlive", URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID},
+                ...
+              };
+
+              // if found in overrideUriParamValidator then use it and if not,
+              // paramValidator is null
+              //
+              // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
+              // defines all validators
+
+              case URI_PARAM_VALIDATOR_TYPE_PLAYERS_VWID:
+                paramValidator = new `PlayersVwidParamValidator()`;
+
+              // call the original methods to register the url
+              // AS_WORKER::UrlMap::RegisterUrl add url to m_registeredUrlMap once
+              // checking on COUNTRY* and PLATFOTM* (which is only flag from #defines)
+
+              `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator, threadParams);
+
+              // M:AS_WORKER_UrlMap.cpp F:RegisterUrl L:337 > KT: register uri 9005/as/players/<vwid>/action/watchlive
+          }
+        }
       }
     }
   }
@@ -13154,10 +13350,13 @@ struct ParamAttributes
     /**
      * @brief The constructor with default values to allow partial initialisation
      */
-    ParamAttributes( bool risMandatory = false, std::string rexpandedName =
-        std::string(), std::string rdescription = std::string(), ParamDataType
-        rdataType = ParamDataTypeUndef, std::set<std::string> rvalidValues =
-        std::set<std::string>(), REQ_METHOD rrequestMethod = REQ_METHOD_UNKNOWN
+    ParamAttributes( 
+        bool risMandatory = false, 
+        std::string rexpandedName = std::string(), 
+        std::string rdescription = std::string(), 
+        ParamDataType rdataType = ParamDataTypeUndef, 
+        std::set<std::string> rvalidValues = std::set<std::string>(), 
+        REQ_METHOD rrequestMethod = REQ_METHOD_UNKNOWN
         )
     {
         isMandatory = risMandatory;
@@ -13176,12 +13375,16 @@ struct ParamAttributes
     REQ_METHOD requestMethod;            ///< The HTTP method for which the parameter is applicable
 };
 
+
+*dtt-scan-list*
 {
+// std::string, `TExpectedParams`
 "/as/services", {
                  {AS_WORKER::QUERY_PARAM,
                   {
                    // `{std::string, ParamAttributes}`
-                   {"filter", {false, 
+                   {"filter", {
+                                false, 
                                 "Filter", 
                                 "Filter type of services, OTT is online services only",
                                 AS_WORKER::ParamDataTypeEnum,
@@ -13214,26 +13417,19 @@ struct ParamAttributes
         {"viewingRestrictionWindow", {false, "ViewingRestrictionWindow", "Configure ViewingRestrictionWindow", AS_WORKER::ParamDataTypeEnum, {"ALWAYS", "06-20"}}},
         {"hardOfHearingSubtitles", {false, "HardOfHearingSubtitles", "Enable/disable HardOfHearingSubtitles", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}},
         {"auto60fpsMode", 
-          {false, "Auto60fpsMode", "Enable/disable Auto60fpsMode", AS_WORKER::ParamDataTypeEnum, {"on", "off"}}}
+          {
+            false, 
+            "Auto60fpsMode", 
+            "Enable/disable Auto60fpsMode", 
+            AS_WORKER::ParamDataTypeEnum, 
+            {"on", "off"}
+          }
+        }
       }
     }
   },
 
 ...
-
-
-// Components/AS/Worker/include/AS_WORKER_ParamValidator.h
-
-class ParamValidator : public Base
-
-class SystemSettingParamValidator : public AS_WORKER::ParamValidator
-{
-  virtual int Validate(
-      AS_WORKER::Params &params, 
-      AS::string &postBody, 
-      AS::string &jsonResponse, 
-      const std::function<int( Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function = {} );
-};
 
 
 *as-map-as-port-attribute*
@@ -13303,17 +13499,14 @@ void `UrlMap::RegisterUrl`( REQ_METHOD method, char *url,
   printf("KT: okay reg {%s}\n", uri.c_str() );
   m_registeredUrlMap[apiDomain].push_back( data );
 
-  // if found in overrideUriParamValidator then use it and if not,
-  // paramValidator is null. so use default validator
-
   if ( paramValidator == NULL )
   {
     paramValidator = new AS_WORKER::ParamValidator();
   }
 
-  // get TExpectedParams from expectedParamsList and save it to `m_expectedParams`
-  // if found.
-  paramValidator->SetExpectedParamsForUrl( method, url );
+  // get TExpectedParams from expectedParamsList and save it 
+  // to `m_expectedParams` if found.
+  paramValidator->`SetExpectedParamsForUrl`( method, url );
 }
 
 
@@ -13340,22 +13533,55 @@ struct Error
   AS::string developerMessage; ///< The developer message
 };
 
-int ParamValidator::Validate(AS_WORKER::Params &params, AS::string &postBody,
-    AS::string &jsonResponse, const std::function<int( Json::Value &,
-      AS::multimap<int, Error> & )> &function )
+
+*as-map-validator-check*
+int ParamValidator::Validate(
+    AS_WORKER::Params &params, 
+    AS::string &postBody,
+    `AS::string &jsonResponse`, 
+    const std::function<int( Json::Value &, AS::multimap<int, Error> & )> &function )
 {
   // ErrCode: 102, User Message: Invalid Parameters, Notes: The URL was badly formed.
   AS::multimap<int, Error> errors;
 
   // return `failedReasons`
-  void ParamValidator::PerformValidation( Params &params, AS::string &postBody,
+  void ParamValidator::`PerformValidation`( 
+      Params &params, AS::string &postBody,
       TFailReasons &failedReasons, bool lambdaOverrideAvailable )
   {
-    // look up `m_expectedParams` and build up `failedReasons`
+    // look up `m_expectedParams` which is set by `SetExpectedParamsForUrl` and
+    // build up `failedReasons`
+
+    for(ech attribute)
+    {
+      // when not found `vaild` values
+      failedReasons.push_back( FailReason
+          {
+          .key = paramAttrIt->first.c_str(), 
+          .value = value, 
+          .reason = ParamValidationFailReasonUnexpectedValue, 
+          .requestMethod = m_method} );
+    }
   }
 
   // loops on `failedReasons` and builds errors
+
+  {
+    case AS_WORKER::ParamValidationFailReasonUnexpectedValue:
+      error.developerMessage = "Parameter \"" + it->key + "\" has a value \"" + it->value + "\" KT that is unexpected as per spec";
+      errorCode = 102;
+      break;
+  }
+
   errors.insert( AS::make_pair( errorCode, error ) );
+
+  else if ( errors.find( 104 ) != errors.end() )
+  {
+    httpCode = 404;
+
+    errorDoc["userMessage"] = "Not supported";
+    errorDoc["errorCode"] = 104;
+  }
 
   // use the supplied function
   if ( function )
@@ -13367,20 +13593,49 @@ int ParamValidator::Validate(AS_WORKER::Params &params, AS::string &postBody,
     }
   }
 
+  Json::StyledWriter writer;
+  jsonResponse = writer.write( errorDoc ).c_str();
+
   return httpCode;
 }
 
 // each validator override `Validate()` and call base one at the end.
-int ServicesManualActionScanParamValidator::Validate( AS_WORKER::Params &params,
-    AS::string &postBody, AS::string &jsonResponse, const std::function<int(
-      Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function )
 
+// Components/AS/Worker/include/AS_WORKER_ParamValidator.h
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/include/URIParamFilter.h
+
+class ParamValidator : public Base
+
+class SystemSettingParamValidator : public AS_WORKER::ParamValidator
+{
+  virtual int Validate(
+      AS_WORKER::Params &params, 
+      AS::string &postBody, 
+      AS::string &jsonResponse, 
+      const std::function<int( Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function = {} );
+};
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/URIParamFilter.cpp
+
+int PlayersVwidParamValidator::Validate(
+    AS_WORKER::Params &params, AS::string &postBody, AS::string &jsonResponse, const std::function<int( Json::Value &, AS::multimap<int, AS_WORKER::Error> & )> &function )
 {
   // define lamba
 
   return AS_WORKER::ParamValidator::Validate( params, postBody, jsonResponse, `lambda` );
 }
 
+
+curl -v -X GET http://192.168.0.12:9005/as/services/1/1?filter=filter
+{
+   "developerMessage" : [
+      {
+         "reason0" : "Parameter \"filter\" has a value \"filter\" that is unexpected as per spec"
+      }
+   ],
+   "errorCode" : 102,
+   "userMessage" : "Invalid Parameters"
+}
 
 
 // ethan-as-source/Components/Rdk/ASProxy/Proxy/Main/source/`ProxyUrlMap.cpp`
@@ -13398,10 +13653,14 @@ AS_WORKER::Executor *ProxyUrlMap::CreateExecutor( int method,
 }
 
 
+note: *as-map-params*
+class Uri : public Params
+
+
 // /rdk/ASProxy/Proxy/Services/source/ServiceHttpExecutor.cpp
 
-AS_WORKER::Executor *ServiceHttpExecutorFactory::doCreateExecutor(AS_WORKER::Environment *env,
-                                                                 AS_WORKER::Params *params)
+AS_WORKER::Executor *ServiceHttpExecutorFactory::doCreateExecutor(
+    AS_WORKER::Environment *env, AS_WORKER::Params *params)
 {
   return new ServiceHttpExecutor(`mService`, mExpectsRequestBody, env, params);
 }
@@ -13422,7 +13681,7 @@ int ServiceHttpExecutor::Exec()
     return execGetOrPost(IService::REQUEST_TYPE_POST);
 }
 
-*dbus-call-request*
+*dbus-call-request-blocking-call* 
 int ServiceHttpExecutor::execGetOrPost(int requestType)
 {
   // send the request off to the remote process
@@ -13455,7 +13714,8 @@ ASResponse ASServiceSDBus::request(int flags,
         std::move(requestBody));
 
   // if failed to send just reply with a generic error
-  if (!mSDBus->call(msg))
+  *dbus-call*
+  `if (!mSDBus->call(msg))`
   {
     AS_LOG_WARNING("failed to send dbus Request method call");
 
@@ -13465,6 +13725,7 @@ ASResponse ASServiceSDBus::request(int flags,
         "  \"developerMessage\": \"Failed to send IPC message\"\n}");
   }
 
+  *dbus-call-return* note: specific fot each ?MethodCall
   // get the converted response from the dbus message
   return msg->response();
 }
@@ -13488,7 +13749,7 @@ ASRequestMethodCall::ASRequestMethodCall(const std::string &serviceName,
 }
 
 
-*dbus-call*
+*dbus-call-request*
 {
   SD_BUS_METHOD("Config", nullptr,
       "s",
@@ -13525,10 +13786,19 @@ int ASRequestPrivate::marshallReply()
 "s"                               // body
 
 
-*dbus-call-request-receive*
+*dbus-call-request-receive* *dbus-call-config*
 // service/asservice.cpp
 // Called by the sd-bus library when a 'com.sky.as.Service1.Request' method
 // call arrives.
+
+int ASServicePrivate::config(sd_bus_message *msg, void *userData,
+                             sd_bus_error *retError)
+{
+  ASServicePrivate *self = reinterpret_cast<ASServicePrivate*>(userData);
+  assert(self != nullptr);
+
+  return sd_bus_reply_method_return(msg, "s", self->m_configJson.c_str());
+}
 
 int ASServicePrivate::request(sd_bus_message *msg, void *userData,
                               sd_bus_error *retError)
@@ -13562,22 +13832,42 @@ void PlaybackService::onRequest( const ASRequest &request )
 
 m_serviceHandlerMap["/as/players"] = std::make_shared<ASPlayerHandler>( this );
 
-void ASPlayerHandler::onRequest( const ASRequest &request )
-{
-}
+void ASPlayerHandler::onRequest( const ASRequest &request );
 
 
 *rdk-as-proxy-listener* *as-system-status* *as-map*
 
-each service(client) express interest:
+each service(server) express intend that it will send a signal whenever it need
+to udpate status and the proxy register itself to each service:
 
 const std::string PlaybackService::mConfigJson = R"JSON(
 {
   "providesSystemStatus" : true,
-  ..
+  ...
 }
 
-as-proxy:
+const string SystemService::m_configJson = R"JSON(
+{
+  "providesSystemStatus" : true,
+  ...
+}
+
+{
+  "providesSystemInfo": true,
+}
+
+note: is this on somewhere?
+
+#ifdef APROXY_GENERATE_SYSTEM_JSON
+    // if the service provides values for the system info URL then also attach
+    // that to the system info executor
+    if (config.providesSystemInfo)
+    {
+        mSysInfoFactory->addService(service);
+    }
+#endif
+
+*as-proxy-system-status* 
 
 void ServicesManager::createBuiltinExecutors()
 {
@@ -13601,7 +13891,7 @@ bool ServicesManager::registerService(const std::string &configJson)
 void SystemStatusExecutorFactory::addService(const std::shared_ptr<IService> &service)
 {
   // the callback to call for updates
-  IService::SystemStatusListener handler =
+  IService::SystemStatusListener `handler` =
     std::bind(&SystemStatusExecutorFactory::`onStatusUpdate`,
         this, std::placeholders::_1);
 
@@ -13627,17 +13917,90 @@ void SystemStatusExecutorFactory::addService(const std::shared_ptr<IService> &se
 
     This does two things; it sets up a dbus match filter so that the signal
     will be received, and then it sends a method call to the service telling it
-    we're interested in system updates.
- */
+    `we're interested in system updates.`
+
 int ASServiceSDBus::registerSystemStatusListener(const SystemStatusListener &handler)
 {
+  // lambda that adds that stores the callback against the match tag
+  std::function<void(int)> registerLambda =
+      [&](int tag)
+      {
+          std::lock_guard<std::mutex> locker(mLock);
+          mSystemStatusListeners.emplace(tag, `handler`);
+      };
 
   // create a rule so we received the dbus signal
   int tag = connectSignalAndRegister("SysStatusUpdate",
-      "RegisterSysStatusListener",
+      `"RegisterSysStatusListener"`,
       std::string(),
       registerLambda, unregisterLambda,
       10000);
+}
+
+int ASServiceSDBus::connectSignalAndRegister(
+    const char *signalName,
+    const char *registerMethod,
+    ...)
+{
+  // attempt to add the match
+  int tag = mSDBus->addMatch(rule, 
+        std::bind(`&ASServiceSDBus::onUpdateSignal`,
+        this,
+        std::placeholders::_1,
+        std::placeholders::_2));
+
+  // call the user supplied function to register the tag
+  if (registerCb)
+  {
+      registerCb(tag);
+  }
+
+  std::shared_ptr<ASListenerMethodCall> msg =
+    std::make_shared<ASListenerMethodCall>(mServiceName, mObjectPath,
+        registerMethod, arg0);
+
+  mSDBus->call(msg, timeoutMSecs);
+}
+
+
+when gets signal
+
+// mSDBus->addMatch() causes this gets called and wraps message with
+// SDBusMessage
+
+int SDBusConnection::onRuleMatch(sd_bus_message *msg, void *userData, void*)
+{
+  // call the registered callback
+  const MatchRule &rule = it->second;
+  if (rule.callback)
+  {
+    // wrap the message in c++ fluff and call
+    rule.callback(rule.tag, SDBusMessage(msg));
+  }
+}
+
+void `ASServiceSDBus::onUpdateSignal`(int matchTag,
+    const `SDBusMessage` &message)
+{
+  onSysStatusUpdateSignal(matchTag, message);
+}
+
+void ASServiceSDBus::onSysStatusUpdateSignal(int matchTag,
+                                             const SDBusMessage &message)
+{
+  // sanity check the signal args
+  message.verifySignature("a(sa{sv})"));
+
+  // convert message to Json statuses
+
+  auto listener = mSystemStatusListeners.find(matchTag);
+
+  const SystemStatusListener &handler = listener->second;
+
+  if (handler)
+  {
+    handler(std::move(statuses));
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -13651,15 +14014,22 @@ int ASServiceSDBus::registerSystemStatusListener(const SystemStatusListener &han
     \warning This callback will be called from an arbitrary dbus thread, so
     it should be quick and perform locking on all shared data structures.
  */
-void SystemStatusExecutorFactory::onStatusUpdate(Json::Value &&statuses)
+void SystemStatusExecutorFactory::`onStatusUpdate`(Json::Value &&statuses);
 
 
-a service(player client) side:
+a service(player) side (server as to status update):
 
 {
-    SD_BUS_METHOD("RegisterSysStatusListener",   nullptr,         nullptr,     
-        &ASServicePrivate::registerSystemStatusListener,    SD_BUS_VTABLE_UNPRIVILEGED),
+  SD_BUS_METHOD("RegisterSysStatusListener",   nullptr,         nullptr,     
+      &ASServicePrivate::registerSystemStatusListener,    SD_BUS_VTABLE_UNPRIVILEGED),
+
+  SD_BUS_METHOD("UnregisterSysStatusListener", nullptr,         nullptr,     
+      &ASServicePrivate::unregisterSystemStatusListener,  SD_BUS_VTABLE_UNPRIVILEGED),
+
+  SD_BUS_SIGNAL("SysStatusUpdate",             "a(sa{sv})",                                                            0),
 }
+
+std::multimap<std::string, std::string> m_registeredSystemStatusClients;
 
 int ASServicePrivate::registerSystemStatusListener(sd_bus_message *msg, void *userData, sd_bus_error *retError)
 {
@@ -13671,12 +14041,38 @@ int ASServicePrivate::registerSystemStatusListener(sd_bus_message *msg, void *us
 }
 
 
-parse dbus msg, save url and caller to the map
+parse dbus msg, save url and caller to the listener map
 
 int ASServicePrivate::registerListener(sd_bus_message *msg,...)
+{
+  // new unique caller / url pair so add to the map
+  listenerMap->emplace(urlValue, caller);
+}
 
 
 clients send a signal when need to update /as/system/status
+
+void ServicesScanController::updateSystemStatus_() const
+{
+  m_service->SendSystemStatusUpdates("available");
+}
+
+void PlaybackService::SendSystemStatusUpdates(const std::string &state)
+{
+  std::map<std::string, ASVariantMap> systemStatus;
+  ASVariantMap servicelistState;
+
+  servicelistState.insert("state", state);
+
+  if (state == "unavailable")
+    servicelistState.insert("reason", std::string("DTT scan required"));
+
+  LOG_MIL("SendSystemStatusUpdates state{%s}", state.c_str());
+
+  systemStatus.emplace("servicelist", servicelistState);
+
+  `updateSystemStatus(systemStatus);`
+}
 
 void ASServicePrivate::updateSystemStatus( const std::map<std::string, ASVariantMap>& systemStatusUpdate )
 {
@@ -13686,6 +14082,8 @@ void ASServicePrivate::updateSystemStatus( const std::map<std::string, ASVariant
     sendSystemStatusUpdateTo(it->second, systemStatusUpdate);
   }
 }
+
+// build message accoring to signature "a(sa{sv})"
 
 void ASServicePrivate::sendSystemStatusUpdateTo(const std::string &service, const std::map<std::string, ASVariantMap>& systemStatusUpdate)
 {
@@ -13698,14 +14096,88 @@ void ASServicePrivate::sendSystemStatusUpdateTo(const std::string &service, cons
       &msg,
       m_objectPath.c_str(),
       m_interface.c_str(),
-      "SysStatusUpdate");
+      `"SysStatusUpdate"`); *dbus-call-signal*
+
+  rc = sd_bus_send_to(m_dbusConn.handle(), msg, service.c_str(), nullptr);
+}
+
+call as-system signal:
+{
+  SD_BUS_SIGNAL("SysStatusUpdate",             "a(sa{sv})",                                                            0),
 }
 
 
-call as-system signal:
+*as-use-dbus-call-signal*
 
-    SD_BUS_SIGNAL("SysStatusUpdate",             "a(sa{sv})",                                                            0),
+void NetworkController::NetworkControllerThreadMain()
+{
+  m_systemService->registerForSignal(
+      "com.sky.as.network",
+      "/com/sky/as/service",
+      "com.sky.as.Service1",
+      `"IpAddressUpdate"`,
+      std::string(),
+      std::bind(&NetworkController::onSignalReceived, this,
+        std::placeholders::_1, std::placeholders::_2) );
+}
 
+int ASServicePrivate::registerForSignal(const std::string& service,
+    ...)
+{
+  // create a lambda to be invoked within the context of the event loop thread
+  std::function<void()> lambda =
+    [this, service, path, interface, signalName, extraArgs, signalCallback]()
+    {
+      std::string matchRule = "type='signal'";
+      if ( !service.empty() )
+      {
+        matchRule += ( ",sender='" + service + "'" );
+      }
+      if ( !path.empty() )
+      {
+        matchRule += ( ",path='" + path + "'" );
+      }
+      if ( !interface.empty() )
+      {
+        matchRule += ( ",interface='" + interface + "'" );
+      }
+      if ( !signalName.empty() )
+      {
+        matchRule += ( ",member='" + signalName + "'" );
+      }
+      if ( !extraArgs.empty() )
+      {
+        matchRule += ( "," + extraArgs );
+      }
+
+      // attempt to add the rule match
+      sd_bus_slot *slot = nullptr;
+
+      int rc = sd_bus_add_match(m_dbusConn.handle(), &slot, matchRule.c_str(),
+          sd_bus_message_handler_t(&onRuleMatch),
+          this);
+
+      if ((rc < 0) || (!slot))
+      {
+        LOG_SYS_ERROR(-rc, "failed to register for signal");
+      }
+      else
+      {
+        // rule added so insert into our local map
+
+        int tag = ++mMatchTagCounter;
+
+        mMatchSlots.emplace(slot, MatchRule(tag, signalCallback));
+      }
+    };
+
+  eventLoop.invokeMethod(std::move(lambda));
+
+  return mMatchTagCounter;
+}
+
+
+*as-watchstream*
 
 dbus-monitor --system --profile "interface=com.sky.as.Service1"
 dbus-monitor --system "interface=com.sky.as.Service1"
@@ -14592,7 +15064,7 @@ size_t recvTimeout( uint32_t *event, void *payload, size_t *payloadSize, int tim
 }
 
 
-*as-player-build*
+*as-player-build* as-player-systemd
 // cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 // cmake -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=PROD -DCMAKE_TOOLCHAIN_FILE=../kit.toolchain.new.cmake ..
 
@@ -14797,7 +15269,12 @@ curl -v -X GET http://192.168.0.12:9005/as/services/genres
 *as-player-setting*
 
 curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
-curl -v -X POST http://192.168.0.9:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
+curl -v -X POST http://192.168.0.12:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
+500 POST http://192.168.0.15:9005/as/players/setting/audioLanguage {"audioLanguage": "INVALID_VALUE"} [1602542005.99]
+
+Oct 16 11:59:26 skyxione com.sky.as.player[5754]: Language code was not found for language name: INVALID_VALUE
+Oct 16 11:59:26 skyxione com.sky.as.player[5754]: Failed to set player settings audio language
+
 
 method call time=1597328569.868368 sender=:1.2 -> destination=com.sky.as.player serial=404 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
@@ -14908,7 +15385,7 @@ string:'{"audioLanguage" : "INVALID_VALUE"}'
 
 
 ={============================================================================
-*kt_dev_skymw_0000* mw-as-dtt
+*kt_dev_skymw_0000* mw-as-dtt-scan *as-mr*
 
 // for SDK path
 keitee@kit-ubuntu:/media/keitee/ssd2/rdk/2.0/sysroots$ 
@@ -15735,7 +16212,13 @@ enum CoreStatus {
 
 POST
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=3
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-21c
+
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-1a
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-10bf-1b
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2045-5d
+
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2045-189
+
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-21e
 
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-b1b
@@ -15878,9 +16361,6 @@ string:''
 }
 
 
-={============================================================================
-*kt_dev_skymw_0000* mw-rdk-dtt-hla
-
 *as-dtt-scan-list* *as-mr*
 
 delete mr list
@@ -15894,7 +16374,16 @@ rm -rf /media/apps/mediarite/*
 
 https://www.stb.bskyb.com/confluence/display/2016/Hybrid+Service+List+HLA
 
-ethan-as-source/Components/AS/Services/Controllers/ServiceListController/source/AS_SERVICELIST_ServiceListContainer.cpp
+as-api:/as/services/0/0
+
+// struct Service
+// ethan-as-source/Components/AS/Services/Controllers/
+// ServiceListController/source/AS_SERVICELIST_Service.cpp
+
+// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/
+// include/AS_SERVICELIST_ServiceListContainer.h
+// ethan-as-source/Components/AS/Services/Controllers/ServiceListController/
+// source/AS_SERVICELIST_ServiceListContainer.cpp
 
 void ServiceListController::BuildServiceListSuccessDocument()
 {
@@ -15903,19 +16392,148 @@ void ServiceListController::BuildServiceListSuccessDocument()
   m_serviceList->SetDocId( m_serviceLongListCreationTime );
 }
 
+
+int ServiceList::AddServiceObject( Service service )
+
+ServiceListController::
+        m_serviceList->AddServiceObject( service );
+
+
+int ServiceListController::GetServiceList(
+    AS::string ifNoneMatch, AS::string &serviceListEtag, AS::string &serviceList)
+
+{
+  "version": 1, 
+  "documentId": "1563970127340"
+}
+[
+  {
+    "dvbtriplet": "318.4.8583", 
+    "servicetypes": [
+      "DTT"
+    ], 
+    "c": "21", 
+    "t": "Rai 4", 
+    "sid": "M13e-4-2187", 
+    "sf": "sd", 
+    "xsg": 8
+  }, 
+  {
+    "dvbtriplet": "318.4.8585", 
+    "servicetypes": [
+      "DTT"
+    ], 
+    "c": "24", 
+    "t": "Rai Movie", 
+    "sid": "M13e-4-2189", 
+    "sf": "sd", 
+    "xsg": 8
+  }, 
+]
+
 void ServiceListController::SetServiceJsonDefault()
 {
-  SYSTEMTIME_TIMEDATE creationTime;
+    AS_LOG_ENTRY( "%s", __func__ );
 
-  SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
-  if ( status == GUIDE_API_STATUS_OK )
-  {
-    AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
+    SYSTEMTIME_TIMEDATE creationTime;
 
-    // Update the creation time
-    m_serviceLongListCreationTime = creationTime;
-    m_lastModificationTime = creationTime;
-  }
+    SYSTEM_STATUS status = GUIDE_API_List_GetLastModifiedTime( m_serviceLongListHandle, &creationTime );
+    if ( status == GUIDE_API_STATUS_OK )
+    {
+        AS_LOG_INFO( "GUIDE_API_List_GetLastModifiedTime succeeded, creationTime: %u", creationTime );
+
+        // Update the creation time
+        m_serviceLongListCreationTime = creationTime;
+        m_lastModificationTime = creationTime;
+    }
+    else
+    {
+        AS_LOG_ERROR( "GUIDE_API_List_GetLastModifiedTime failed with status, 0x%x", status );
+    }
+
+    AS_LOG_EXIT( "%s", __func__ );
+}
+
+    AS::string documentId = AS_DMSUTILS::uint32ToString( m_serviceLongListCreationTime );
+
+
+documentId
+document unique identifier (e.g. timestamp at version 0)
+
+version
+the version of this complete document
+
+services
+service list
+
+c
+logical channel number
+
+t
+title, which can be an empty string
+
+sid
+service id – a private, opaque, string for AS use only
+
+// ethan-as-source/Components/AS/Services/DMSUtils/source/AS_DMSUTILS_SystemLocatorUtils.cpp
+  serialisedLocator = ("M" + uint32ToHexString( dvbOnid ) + "-" + uint32ToHexString( dvbTsid ) + "-" + uint32ToHexString( dvbSid ) + "-" + uint32ToHexString( dvbCnid )).c_str();
+
+sf
+service format (sd, hd, uhd or au)
+
+xsg
+XSI service genre
+
+dvbtriplet
+a dvb triplet in the format onid.tsid.sid. Not required if the servicetype is
+OTT, mandatory in all other cases
+
+C[0]: PK
+C[1]: Name
+C[2]: epgPresent.StartTime
+C[3]: epgPresent.Name
+C[4]: _id
+
+
+int ServiceListExecutor::Exec()
+{
+    bool isValidParameter = false;
+
+    // Validate the <b> and <sb> parameters when passed.
+    if( m_params->HasValue("b") )
+    {
+        if ( m_params->IsInt( m_params->GetValue( "b" ) ) )
+        {
+            int bouquetId = m_params->ToInt( m_params->GetValue( "b" ) );
+
+            if( m_params->HasValue("sb") )
+            {
+                if ( m_params->IsInt( m_params->GetValue( "sb" ) ) )
+                {
+                    int subBouquetId = m_params->ToInt( m_params->GetValue( "sb" ) );
+
+                    AS_LOG_INFO( "Bouquet id %d and Subbouquet id %d passed", bouquetId, subBouquetId );
+                    isValidParameter = true;
+                }
+                else
+                {
+                    AS_LOG_ERROR( "Invalid Subbouquet id parameter passed" );
+                }
+            }
+            else
+            {
+                AS_LOG_ERROR( "Missing Subbouquet id parameter" );
+            }
+        }
+        else
+        {
+            AS_LOG_ERROR( "Invalid Bouquet id parameter passed" );
+        }
+    }
+    else
+    {
+        isValidParameter = true;
+    }
 }
 
 
@@ -15923,7 +16541,9 @@ GET(1)
 http://192.168.0.12:9005/as/services/0/0
 
 // OK
+curl -v -X GET http://192.168.0.12:9005/as/services/0/0 > dtt_list.out
 curl -v -X GET http://192.168.0.12:9005/as/services/0/0
+curl -v -X GET http://192.168.0.13:9005/as/services/1/1
 
 curl -v -X GET http://192.168.0.14:9005/as/services/0/0
 curl -v -X GET http://192.168.0.14:9005/as/services/0/0 > mr_list.out
@@ -16016,11 +16636,32 @@ https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=I
 // about headers
 https://www.stb.bskyb.com/confluence/display/2016/OVP+HLA
 
-UK service list:  
-curl 
--H "X-SkyOTT-Provider: SKY" 
--H "X-SkyOTT-Proposition: SKYQ" 
--H "X-SkyOTT-Territory: GB" 
+"X-SkyOTT-Provider: SKY"
+"X-SkyOTT-Proposition: SKYQ"
+"X-SkyOTT-Territory: GB"
+"X-SkyOTT-Device: IPSETTOPBOX"
+"X-SkyOTT-Platform: SKYQ-RDK"
+
+
+X-SkyOTT-Provider:SKY
+X-SkyOTT-Proposition:SKYQ
+X-SkyOTT-Territory:GB
+X-SkyOTT-Device:MOBILE
+X-SkyOTT-Platform:ANDROID
+
+curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" \
+-H "X-SkyOTT-Territory: GB" \
+-H "X-SkyOTT-Device: MOBILE" \
+-H "X-SkyOTT-Platform: ANDROID" http://atlantis.epgsky.com/as/services/4096/1
+
+For GB - yes, the following seems to work:
+
+curl --location --request GET 'https://atlantis.epgsky.com/as/services/4096/1' \
+--header 'x-skyott-territory:  GB' \
+--header 'x-skyott-proposition:  SKYQ' \
+--header 'x-skyott-provider:  SKY' \
+--header 'x-skyott-device:  MOBILE' \
+--header 'x-skyott-platform:  ANDROID'
 
 http://atlantis.epg.bskyb.com/as/services/4101/1
 
@@ -16256,7 +16897,7 @@ when make a list, get that id from controller.
 
 
 14. error when do scan start from scan completed without calling "commit"
-
+no error handling. 
 
 15 issues
 
@@ -16272,6 +16913,67 @@ https://www.stb.bskyb.com/jira/browse/NGDEV-170776, documentId in /services/stat
 
 16. what to do when there is no channels found after scan complete? currently
 says "available".
+
+
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-dtt-track
+
+https://www.stb.bskyb.com/jira/browse/NGDEV-155159
+
+TableResultError getTrack(const char * iPlayerId, FutarqueString iAttributes, int64 iTrackPK, TracksResult & oTableResult) FJAP_THROW(FutarqueRpcException);
+TableResultError getTracks(const char * iPlayerId, FutarqueString iAttributes, CoreTrackType iCoreTrackType, TracksResult & oTableResult) FJAP_THROW(FutarqueRpcException);
+bool selectTrack(const char * iPlayerId, CoreTrackType iTrackType, int64 iTrackPK) FJAP_THROW(FutarqueRpcException);
+int64 getSelectedTrack(const char * iPlayerId, CoreTrackType iTrackType) FJAP_THROW(FutarqueRpcException);
+
+enum CoreTrackType {
+    CTT_Clock = 1,
+    CTT_Video = 2,
+    CTT_Supplementary_Audio = 3, ///< Supplementary audio used for decoding impared tracks which has to be mixed with main audio. This MUST come before CTT_Audio
+    CTT_Audio = 4,
+    CTT_Subtitle = 5,
+    CTT_Application_TTX = 6, // Added in GWRPCv5
+    CTT_Application = 7,
+    CTT_ConditionalAccess = 8,
+    CTT_ServiceInfo = 9,
+    FUTARQUE_REFLECTION_SKIP() CTT_NumberOf = CTT_ServiceInfo
+};
+
+*as-dtt-track*
+
+http://10.184.136.138:8081/job/AS_TEST_XIONE/513/artifact/output/TEST-players_tracks_TEST_001_jsonschema.xml/*view*
+
+returns tracks of current service
+/players/<vwid>/tracks
+
+curl -vLN -X GET http://192.168.0.12:9005/as/players/1/tracks
+
+{
+  "audiotracks": [
+    {
+      "selected": true, 
+      "audioid": "0", 
+      "isocode": "deu", 
+      "name": "Deutsch"
+    }, 
+    {
+      "audioid": "1", 
+      "isocode": "eng", 
+      "name": "Englisch"
+    }
+  ], 
+  "subtitletracks": []
+}
+
+
+http://192.168.0.15:9005/as/players/1/tracks?collapse=false
+
+
+Attempts to tune and begin playback of specified audio track.
+/players/<vwid>/action/setaudio
+URI STRUCTURE /as/players/<vwid>/action/setaudio?audioid=<audioid>
+
+
+/players/<vwid>/action/setsubtitles
 
 
 ={============================================================================
@@ -17740,6 +18442,11 @@ May 13 10:27:55 arrisxi6-morty com.sky.as.player[31140]:
   // when use `base64` tool
   url {http://hls-aws.vevo.com/v3/hls/2014/11/GB1101400832/71098441-2388-4c34-ab09-5376691623d5/index.m3u8
     ?drmInitData=dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9MQo=}
+
+
+com.sky.as.player[8523]: WatchStream url: http://natgeo-go-cdhls.ak-cdn.skydvn.com/cdhlsnatgeo/1806/mob.m3u8?c3.ri=13505162505327421366, widevinelicenceurl: , pos: 0, speed: 1.000000, sid: 4031
+com.sky.as.player[8523]: overrideAudioLanguage: , settingAudioLanguage: eng, defaultAudioLanguage: eng
+com.sky.as.player[8523]: Creating VGDRM instance
 
 
 // not real url to play since used fake token and all that
@@ -20082,7 +20789,7 @@ python -m framework players.vwid1.action.watchstream.watchstream.players_1_actio
 *players.setting.setting.players_setting_TEST_03_errorcode*
 file="players/setting/setting.py
 
-AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --all --platform xi1-de --disable-drm-check  --disable-preboot-check' \
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005 --xml-output players_setting_TEST_03_errorcode --all --platform xi1-uk --disable-drm-check  --disable-preboot-check' \
 python -m framework players.setting.setting.players_setting_TEST_03_errorcode
 
 
@@ -20107,7 +20814,7 @@ AMS_TEST_SUITE='--host 192.168.0.12 --port 9005  --all --platform xi1-uk --disab
 python -m framework suite.integration.ip_skit.dtt_suite.dtt_TEST_001_dtt_scan_complete
 
 
-AMS_TEST_SUITE='--host 192.168.0.12 --port 9005  --all --platform xi1-uk --disable-drm-check --disable-preboot-check' \
+AMS_TEST_SUITE='--host 192.168.0.12 --port 9005  --xml-output test-002 --all --platform xi1-uk --disable-drm-check --disable-preboot-check' \
 python -m framework suite.integration.ip_skit.dtt_suite.dtt_TEST_002_scan_dtt_full_channel_all
 
 

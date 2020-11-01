@@ -798,6 +798,7 @@ TEST(CxxStringOperation, find_substring_3)
     std::string coll3{"The sixth sick sheik's sixth sheep's sick."};
 
     // not found
+    // same as coll3.rfind(coll2, 0);
     auto found = my_rfind(coll3, coll2, 0);
     EXPECT_THAT(found, std::string::npos);
 

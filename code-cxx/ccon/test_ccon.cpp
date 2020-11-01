@@ -3229,6 +3229,7 @@ namespace cxx_condition_error
       std::this_thread::sleep_for(std::chrono::milliseconds(val));
     }
   }
+
   void consumer(int num)
   {
     // pop values if available (num identifies the consumer)
@@ -3262,40 +3263,11 @@ TEST(DISABLED_CConCondition, see_condition_error_5)
   auto c2 = std::async(std::launch::async, consumer, 2);
 }
 
-// when
-//
-// void consumer(locked_queue<int>* q);
-//
-// TEST(CConCondition, NotCopyable)
-// {
-//   using namespace cxx_condition;
-//
-//   locked_queue<int> q;
-//
-//   // *cxx-error*
-//   // ccon_ex.cpp:89:30:   required from here
-//   // /usr/include/c++/4.9/tuple:142:42: error: use of deleted function
-//   ‘cxx_condition::locked_queue<int>::locked_queue(cxx_condition::locked_queue<int>&&)’
-//   //   : _M_head_impl(std::forward<_UHead>(__h)) { }
-//   //                                           ^
-//   // ccon_ex.cpp:31:11: note:
-//   ‘cxx_condition::locked_queue<int>::locked_queue(cxx_condition::locked_queue<int>&&)’
-//   is implicitly deleted because the default definition would be ill-formed:
-//   //      class locked_queue {
-//   //            ^
-//   // ccon_ex.cpp:31:11: error: use of deleted function
-//   ‘std::mutex::mutex(const std::mutex&)’
-//   // In file included from /usr/include/c++/4.9/future:39:0,
-//   //                  from ccon_ex.cpp:3:
-//   // /usr/include/c++/4.9/mutex:129:5: note: declared here
-//   //      mutex(const mutex&) = delete;
-//   //      ^
-//   // ...
-//
-//   std::thread c1(&consumer, q);
-// }
+/* ={=========================================================================
+cxx-eventfd
+*/
 
-TEST(CConCondition, check_eventfd)
+TEST(CConCondition, eventfd)
 {
   std::string result{};
 

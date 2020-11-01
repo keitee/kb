@@ -14,6 +14,10 @@ class DBusConnection
 private:
   std::shared_ptr<DBusConnectionPrivate> m_private;
 
+private:
+  // not used and removed
+  // DBusConnection();
+
   // NOTE:
   // DBusConnection ctor is private since it's used from statc function
   // systemBus/sessionBus and user is expected to use this to get dbus.
@@ -23,14 +27,11 @@ private:
   // DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
   //
   // did not hide shared pointer arg inside and this means user have to specify
-  // it. WHY? because:
+  // it than DBusConnection ctor do it. WHY? because:
   //
   // systemBus() call returns either invalid connection or valid one. To
   // distinguish two case.
 
-private:
-  // not used and removed
-  // DBusConnection();
   DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
 public:
@@ -56,6 +57,10 @@ public:
 
   DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
 
+  // TODO
+  // bool send(DBusMessage &&message) const;
+
+  // note: is not used outside of this class so why it's public?
   bool callWithCallback(DBusMessage &&message,
                         const std::function<void(DBusMessage &&)> &callback,
                         int msTimeout = -1) const;

@@ -674,7 +674,6 @@ TEST(Sdbus, check_send) {}
 // sd_bus_is_monitor() returns whether the monitor mode is enabled/disabled for
 // the given bus object.
 
-
 // same as TEST(Sdbus, check_call_and_read_1) and add client/server mode check.
 //
 // [ RUN      ] Sdbus.check_client_and_server_1
@@ -701,14 +700,14 @@ TEST(Sdbus, check_client_and_server_1)
 
   // int sd_bus_is_server(sd_bus *bus);
   r = sd_bus_is_server(bus);
-  if ( r > 0)
+  if (r > 0)
   {
     std::cout << "server mode is set" << std::endl;
   }
 
   // int sd_bus_is_bus_client(sd_bus *bus);
   r = sd_bus_is_bus_client(bus);
-  if ( r > 0)
+  if (r > 0)
   {
     std::cout << "client mode is set, r:" << r << std::endl;
   }

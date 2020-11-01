@@ -192,7 +192,7 @@ add_executable(${PROJECT_NAME} "test_sdbus_case.cpp"
 
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS} "-lsystemd")
 
-
+# to try sdbusserver(loopback server)
 add_executable(test_sdbus_server "test_sdbus_server.cpp" 
   eventloop2/eventloop.cpp
   dbus/dbusmessage.cpp 
@@ -200,6 +200,7 @@ add_executable(test_sdbus_server "test_sdbus_server.cpp"
   dbus/dbusfiledescriptor.cpp)
 target_link_libraries(test_sdbus_server gmock_main Boost::thread ${LIBS} "-lsystemd")
 
+# to try sdbusserver(loopback server) from sdbus source
 add_executable(test_bus_server test-bus-server.cpp)
 target_link_libraries(test_bus_server Boost::thread ${LIBS} "-lsystemd")
 

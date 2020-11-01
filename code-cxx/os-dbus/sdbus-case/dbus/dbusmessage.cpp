@@ -9,8 +9,10 @@
 #include <cmath> // std::nan
 #include <systemd/sd-bus.h>
 
+#include <fcntl.h>
+
 /* ={--------------------------------------------------------------------------
- @brief :
+ @brief : implement variant type
  DBusMessagePrivate::Argument
 */
 
@@ -83,7 +85,7 @@ DBusMessagePrivate::Argument::operator DBusFileDescriptor() const
 }
 
 // return the corresponding dbus type character that matches the stored type
-// int the variant os-dbus-type
+// int the variant. os-dbus-type
 char DBusMessagePrivate::Argument::dbusType() const
 {
   switch (type_)
@@ -108,95 +110,62 @@ char DBusMessagePrivate::Argument::dbusType() const
 /* ={--------------------------------------------------------------------------
  @brief :
   DBusMessagePrivate
-
-const std::map<DBusMessage::ErrorType, std::string>
-  DBusMessagePrivate::m_errorNames = {
-    {DBusMessage::NoError, ""},
-    {DBusMessage::Other, ""},
-    {DBusMessage::Failed, "org.freedesktop.DBus.Error.Failed"},
-    {DBusMessage::NoMemory, "org.freedesktop.DBus.Error.NoMemory"},
-    {DBusMessage::ServiceUnknown, "org.freedesktop.DBus.Error.ServiceUnknown"},
-    {DBusMessage::NoReply, "org.freedesktop.DBus.Error.NoReply"},
-    {DBusMessage::BadAddress, "org.freedesktop.DBus.Error.BadAddress"},
-    {DBusMessage::NotSupported, "org.freedesktop.DBus.Error.NotSupported"},
-    {DBusMessage::LimitsExceeded, "org.freedesktop.DBus.Error.LimitsExceeded"},
-    {DBusMessage::AccessDenied, "org.freedesktop.DBus.Error.AccessDenied"},
-    {DBusMessage::NoServer, "org.freedesktop.DBus.Error.NoServer"},
-    {DBusMessage::Timeout, "org.freedesktop.DBus.Error.Timeout"},
-    {DBusMessage::NoNetwork, "org.freedesktop.DBus.Error.NoNetwork"},
-    {DBusMessage::AddressInUse, "org.freedesktop.DBus.Error.AddressInUse"},
-    {DBusMessage::Disconnected, "org.freedesktop.DBus.Error.Disconnected"},
-    {DBusMessage::InvalidArgs, "org.freedesktop.DBus.Error.InvalidArgs"},
-    {DBusMessage::UnknownMethod, "org.freedesktop.DBus.Error.UnknownMethod"},
-    {DBusMessage::TimedOut, "org.freedesktop.DBus.Error.TimedOut"},
-    {DBusMessage::InvalidSignature,
-     "org.freedesktop.DBus.Error.InvalidSignature"},
-    {DBusMessage::UnknownInterface,
-     "org.freedesktop.DBus.Error.UnknownInterface"},
-    {DBusMessage::UnknownObject, "org.freedesktop.DBus.Error.UnknownObject"},
-    {DBusMessage::UnknownProperty,
-     "org.freedesktop.DBus.Error.UnknownProperty"},
-    {DBusMessage::PropertyReadOnly,
-     "org.freedesktop.DBus.Error.PropertyReadOnly"},
-    {DBusMessage::InternalError, "org.qtproject.QtDBus.Error.InternalError"},
-    {DBusMessage::InvalidObjectPath,
-     "org.qtproject.QtDBus.Error.InvalidObjectPath"},
-    {DBusMessage::InvalidService, "org.qtproject.QtDBus.Error.InvalidService"},
-    {DBusMessage::InvalidMember, "org.qtproject.QtDBus.Error.InvalidMember"},
-    {DBusMessage::InvalidInterface,
-     "org.qtproject.QtDBus.Error.InvalidInterface"}};
 */
 
+// clang-format off
 // when use `enum class`
+// reply error: org.freedesktop.DBus.Error.NoReply Method call timed out
+//
+// src/libsystemd/sd-bus/bus-error.c
+// 126:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_ACCESS_DENIED, "Access denied");
+// 129:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_INVALID_ARGS, "Invalid argument");
+// 132:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_UNIX_PROCESS_ID_UNKNOWN, "No such process");
+// 135:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_FILE_NOT_FOUND, "File not found");
+// 138:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_FILE_EXISTS, "File exists");
+// 142:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_TIMEOUT, "Timed out");
+// 145:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_IO_ERROR, "Input/output error");
+// 150:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_DISCONNECTED, "Disconnected");
+// 153:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_NOT_SUPPORTED, "Not supported");
+// 156:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_BAD_ADDRESS, "Address not available");
+// 159:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_LIMITS_EXCEEDED, "Limits exceeded");
+// 162:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_ADDRESS_IN_USE, "Address in use");
+// 165:                return SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_INCONSISTENT_MESSAGE, "Inconsistent message");
+// 338:        *e = SD_BUS_ERROR_MAKE_CONST(name, message);
+// src/libsystemd/sd-bus/sd-bus.c
+// 2436:                        &SD_BUS_ERROR_MAKE_CONST(SD_BUS_ERROR_NO_REPLY, "Method call timed out"),
+
 const std::map<DBusMessage::ErrorType, std::string>
   DBusMessagePrivate::m_errorNames = {
     {DBusMessage::ErrorType::NoError, ""},
     {DBusMessage::ErrorType::Other, ""},
     {DBusMessage::ErrorType::Failed, "org.freedesktop.DBus.Error.Failed"},
     {DBusMessage::ErrorType::NoMemory, "org.freedesktop.DBus.Error.NoMemory"},
-    {DBusMessage::ErrorType::ServiceUnknown,
-     "org.freedesktop.DBus.Error.ServiceUnknown"},
+    {DBusMessage::ErrorType::ServiceUnknown, "org.freedesktop.DBus.Error.ServiceUnknown"},
     {DBusMessage::ErrorType::NoReply, "org.freedesktop.DBus.Error.NoReply"},
-    {DBusMessage::ErrorType::BadAddress,
-     "org.freedesktop.DBus.Error.BadAddress"},
-    {DBusMessage::ErrorType::NotSupported,
-     "org.freedesktop.DBus.Error.NotSupported"},
-    {DBusMessage::ErrorType::LimitsExceeded,
-     "org.freedesktop.DBus.Error.LimitsExceeded"},
-    {DBusMessage::ErrorType::AccessDenied,
-     "org.freedesktop.DBus.Error.AccessDenied"},
+    {DBusMessage::ErrorType::BadAddress, "org.freedesktop.DBus.Error.BadAddress"},
+    {DBusMessage::ErrorType::NotSupported, "org.freedesktop.DBus.Error.NotSupported"},
+    {DBusMessage::ErrorType::LimitsExceeded, "org.freedesktop.DBus.Error.LimitsExceeded"},
+    {DBusMessage::ErrorType::AccessDenied, "org.freedesktop.DBus.Error.AccessDenied"},
     {DBusMessage::ErrorType::NoServer, "org.freedesktop.DBus.Error.NoServer"},
     {DBusMessage::ErrorType::Timeout, "org.freedesktop.DBus.Error.Timeout"},
     {DBusMessage::ErrorType::NoNetwork, "org.freedesktop.DBus.Error.NoNetwork"},
-    {DBusMessage::ErrorType::AddressInUse,
-     "org.freedesktop.DBus.Error.AddressInUse"},
-    {DBusMessage::ErrorType::Disconnected,
-     "org.freedesktop.DBus.Error.Disconnected"},
-    {DBusMessage::ErrorType::InvalidArgs,
-     "org.freedesktop.DBus.Error.InvalidArgs"},
-    {DBusMessage::ErrorType::UnknownMethod,
-     "org.freedesktop.DBus.Error.UnknownMethod"},
+    {DBusMessage::ErrorType::AddressInUse, "org.freedesktop.DBus.Error.AddressInUse"},
+    {DBusMessage::ErrorType::Disconnected, "org.freedesktop.DBus.Error.Disconnected"},
+    {DBusMessage::ErrorType::InvalidArgs, "org.freedesktop.DBus.Error.InvalidArgs"},
+    {DBusMessage::ErrorType::UnknownMethod, "org.freedesktop.DBus.Error.UnknownMethod"},
     {DBusMessage::ErrorType::TimedOut, "org.freedesktop.DBus.Error.TimedOut"},
-    {DBusMessage::ErrorType::InvalidSignature,
-     "org.freedesktop.DBus.Error.InvalidSignature"},
-    {DBusMessage::ErrorType::UnknownInterface,
-     "org.freedesktop.DBus.Error.UnknownInterface"},
-    {DBusMessage::ErrorType::UnknownObject,
-     "org.freedesktop.DBus.Error.UnknownObject"},
-    {DBusMessage::ErrorType::UnknownProperty,
-     "org.freedesktop.DBus.Error.UnknownProperty"},
-    {DBusMessage::ErrorType::PropertyReadOnly,
-     "org.freedesktop.DBus.Error.PropertyReadOnly"},
-    {DBusMessage::ErrorType::InternalError,
-     "org.qtproject.QtDBus.Error.InternalError"},
-    {DBusMessage::ErrorType::InvalidObjectPath,
-     "org.qtproject.QtDBus.Error.InvalidObjectPath"},
-    {DBusMessage::ErrorType::InvalidService,
-     "org.qtproject.QtDBus.Error.InvalidService"},
-    {DBusMessage::ErrorType::InvalidMember,
-     "org.qtproject.QtDBus.Error.InvalidMember"},
-    {DBusMessage::ErrorType::InvalidInterface,
-     "org.qtproject.QtDBus.Error.InvalidInterface"}};
+    {DBusMessage::ErrorType::InvalidSignature, "org.freedesktop.DBus.Error.InvalidSignature"},
+    {DBusMessage::ErrorType::UnknownInterface, "org.freedesktop.DBus.Error.UnknownInterface"},
+    {DBusMessage::ErrorType::UnknownObject, "org.freedesktop.DBus.Error.UnknownObject"},
+    {DBusMessage::ErrorType::UnknownProperty, "org.freedesktop.DBus.Error.UnknownProperty"},
+    {DBusMessage::ErrorType::PropertyReadOnly, "org.freedesktop.DBus.Error.PropertyReadOnly"},
+    {DBusMessage::ErrorType::InternalError, "org.qtproject.QtDBus.Error.InternalError"},
+    {DBusMessage::ErrorType::InvalidObjectPath, "org.qtproject.QtDBus.Error.InvalidObjectPath"},
+    {DBusMessage::ErrorType::InvalidService, "org.qtproject.QtDBus.Error.InvalidService"},
+    {DBusMessage::ErrorType::InvalidMember, "org.qtproject.QtDBus.Error.InvalidMember"},
+    {DBusMessage::ErrorType::InvalidInterface, "org.qtproject.QtDBus.Error.InvalidInterface"}
+};
+// clang-format on
 
 DBusMessagePrivate::DBusMessagePrivate(DBusMessage::MessageType type,
                                        const std::string &service,
@@ -318,50 +287,76 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
   }
 }
 
-// attempts to read the arguments from the message and convert sd_bus_message to
-// Arguments
-//
-// https://www.freedesktop.org/software/systemd/man/sd_bus_message_read.html
-//
-// /usr/include/systemd/sd-bus-protocol.h
-// Primitive types
-//
-// enum {
-//         _SD_BUS_TYPE_INVALID         = 0,
-//         SD_BUS_TYPE_BYTE             = 'y',
-//         SD_BUS_TYPE_BOOLEAN          = 'b',
-//         SD_BUS_TYPE_INT16            = 'n',
-//         SD_BUS_TYPE_UINT16           = 'q',
-//         SD_BUS_TYPE_INT32            = 'i',
-//         SD_BUS_TYPE_UINT32           = 'u',
-//         SD_BUS_TYPE_INT64            = 'x',
-//         SD_BUS_TYPE_UINT64           = 't',
-//         SD_BUS_TYPE_DOUBLE           = 'd',
-//         SD_BUS_TYPE_STRING           = 's',
-//         SD_BUS_TYPE_OBJECT_PATH      = 'o',
-//         SD_BUS_TYPE_SIGNATURE        = 'g',
-//         SD_BUS_TYPE_UNIX_FD          = 'h',
-//         SD_BUS_TYPE_ARRAY            = 'a',
-//         SD_BUS_TYPE_VARIANT          = 'v',
-//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in signatures */
-//         SD_BUS_TYPE_STRUCT_BEGIN     = '(',
-//         SD_BUS_TYPE_STRUCT_END       = ')',
-//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in signatures */
-//         SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
-//         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
-// };
-//
-// int sd_bus_message_read_basic(	sd_bus_message *m,
-// 	char type,
-// 	void *p);
-//
-// int sd_bus_message_skip(	sd_bus_message *m,
-// 	const char* types);
+/*
+attempts to read the arguments from the message and convert sd_bus_message to
+Arguments
+
+https://freedesktop.org/software/systemd/man/sd_bus_message_read_basic.html#
+
+/usr/include/systemd/sd-bus-protocol.h
+Primitive types
+
+enum {
+       _SD_BUS_TYPE_INVALID         = 0,
+       SD_BUS_TYPE_BYTE             = 'y',
+       SD_BUS_TYPE_BOOLEAN          = 'b',
+       SD_BUS_TYPE_INT16            = 'n',
+       SD_BUS_TYPE_UINT16           = 'q',
+       SD_BUS_TYPE_INT32            = 'i',
+       SD_BUS_TYPE_UINT32           = 'u',
+       SD_BUS_TYPE_INT64            = 'x',
+       SD_BUS_TYPE_UINT64           = 't',
+       SD_BUS_TYPE_DOUBLE           = 'd',
+       SD_BUS_TYPE_STRING           = 's',
+       SD_BUS_TYPE_OBJECT_PATH      = 'o',
+       SD_BUS_TYPE_SIGNATURE        = 'g',
+       SD_BUS_TYPE_UNIX_FD          = 'h',
+       SD_BUS_TYPE_ARRAY            = 'a',
+       SD_BUS_TYPE_VARIANT          = 'v',
+       SD_BUS_TYPE_STRUCT           = 'r', // not actually used in signatures
+       SD_BUS_TYPE_STRUCT_BEGIN     = '(',
+       SD_BUS_TYPE_STRUCT_END       = ')',
+       SD_BUS_TYPE_DICT_ENTRY       = 'e', // not actually used in signatures
+       SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
+       SD_BUS_TYPE_DICT_ENTRY_END   = '}'
+};
+
+int sd_bus_message_read_basic(sd_bus_message *m,
+  char type,
+  void *p);
+
+sd_bus_message_read_basic() reads a basic type from a message and advances the
+read position in the message. The set of basic types and their ascii codes
+passed in type are described in the D-Bus Specification.
+
+int sd_bus_message_skip(sd_bus_message *m,
+  const char* types);
+
+
+https://freedesktop.org/software/systemd/man/sd_bus_message_at_end.html#
+
+int sd_bus_message_at_end(sd_bus_message *m,
+  int complete);
+
+sd_bus_message_at_end() returns whether all data from the currently opened
+container in m or all data from all containers in m has been read. If complete
+is zero, this function returns whether all data from the currently opened
+container has been read. If complete is non-zero, this function returns whether
+all data from all containers in m has been read.
+
+https://freedesktop.org/software/systemd/man/sd_bus_message_peek_type.html#
+
+sd_bus_message_peek_type() determines the type of the next element in m to be
+read by sd_bus_message_read() or similar functions. On success, the type is
+stored in type, if it is not NULL. If the type is a container type, the type of
+its elements is stored in contents, if it is not NULL. If this function
+successfully determines the type of the next element in m, it returns a positive
+integer. If there are no more elements to be read, it returns zero.
+
+*/
 
 bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 {
-  // NOTE:
-  // No document on sd_bus_message_at_end() and need to look into the code?
   while (!sd_bus_message_at_end(message, false))
   {
     char type = '\0';
@@ -430,10 +425,10 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
         break;
       }
 
+      // original code which don't support array type. added support here and
+      // where get this from?
       case SD_BUS_TYPE_ARRAY:
       case SD_BUS_TYPE_STRUCT:
-
-        // original code
 #if 0
        {
          std::string types;
@@ -524,9 +519,21 @@ bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
   } // while
 }
 
-// construct a sd_bus_message for either a method call or signal
+/*
+construct a sd_bus_message for either a method call or signal
+that is, from args to sd_bus_message
+
+https://freedesktop.org/software/systemd/man/sd_bus_message_append_basic.html#
+
+sd_bus_message_append_basic() appends a single field to the message m. The
+parameter type determines how the pointer p is interpreted. type must be one of
+the basic types as defined by the Basic Types section of the D-Bus
+specification, and listed in the table below.
+
+*/
+
 DBusMessagePrivate::sd_bus_message_ptr
-DBusMessagePrivate::toMessage(sd_bus *bus) const
+DBusMessagePrivate::toMessage_(sd_bus *bus) const
 {
   int rc{};
 
@@ -552,7 +559,7 @@ DBusMessagePrivate::toMessage(sd_bus *bus) const
   else
   {
     logError("invalid message type");
-    // same as T()
+    // same as T() and sd_bus_message_ptr is unique_ptr with deleter
     return sd_bus_message_ptr(nullptr, sd_bus_message_unref);
   }
 
@@ -612,6 +619,21 @@ DBusMessagePrivate::toMessage(sd_bus *bus) const
       return sd_bus_message_ptr(nullptr, sd_bus_message_unref);
     }
   } // for
+
+  // sd_bus_message_dump() is not found. which version?
+  //
+  // debug purpose
+  // https://freedesktop.org/software/systemd/man/sd_bus_message_dump.html#
+  // int sd_bus_message_dump( sd_bus_message *m,
+  //   FILE *f,
+  //   uint64_t flags);
+  //
+  // On inclusion of the <cstdio> header file, three objects of this type are
+  // automatically created, and pointers to them are declared: stdin, stdout and
+  // stderr, associated with the standard input stream, standard output stream
+  // and standard error stream, respectively.
+  //
+  // sd_bus_message_dump(message, stdout, O_WRONLY);
 
   // now return the constructed message
   return sd_bus_message_ptr(message, sd_bus_message_unref);
@@ -740,16 +762,8 @@ DBusMessage &DBusMessage::operator>>(T &arg)
   return *this;
 }
 
-// NOTE: what if don't have these? will see link error and see
-// *cxx-template-control-instantiation*
-
 template DBusMessage &DBusMessage::operator>><bool>(bool &);
-
-// In function `DBusMessage_message_create_Test::TestBody()::{lambda()#1}::operator()() const':
-// undefined reference to `DBusMessage& DBusMessage::operator>><std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&)'
-// collect2: error: ld returned 1 exit status
 template DBusMessage &DBusMessage::operator>><std::string>(std::string &);
-
 template DBusMessage &DBusMessage::operator>><int>(int &);
 template DBusMessage &DBusMessage::operator>><unsigned>(unsigned &);
 template DBusMessage &DBusMessage::operator>><double>(double &);

@@ -191,7 +191,8 @@ OStream& operator<<(OStream& sout, Value const& root) {
   return sout;
 }
 
-//jsoncpp/src/lib_json/json_reader.cpp
+http://open-source-parsers.github.io/jsoncpp-docs/doxygen/json__reader_8cpp.html
+jsoncpp/src/lib_json/json_reader.cpp
 
 IStream& operator>>(IStream& sin, Value& root) {
   CharReaderBuilder b;
@@ -319,7 +320,7 @@ TEST(CxxJSON, read_from_file)
 }
 
 // ={=========================================================================
-// read json file but use stringstream
+// read json file but use stringstream so no use of parse()
 
 TEST(CxxJSON, read_from_file_and_use_stringstream)
 {
@@ -719,7 +720,7 @@ TEST(CxxJSON, check_operator_equal)
 
 // ={=========================================================================
 // "string" and number are different? how?
-TEST(CxxJSON, check_string_and_number)
+TEST(CxxJSON, string_and_number_1)
 {
   // create the main object
   Json::Value val;
@@ -732,22 +733,20 @@ TEST(CxxJSON, check_string_and_number)
   EXPECT_THAT(val["year1"].isNumeric(), true);
 
   // get type
-  // std::cout << val["year1"].type() << std::endl;
   EXPECT_THAT(val["year1"].type(), Json::intValue); // 1
 
   // it can be converted to string as well
-  std::cout << val["year1"].asString() << std::endl;
-  std::cout << val["year1"].asInt() << std::endl;
+  EXPECT_THAT(val["year1"].asString(), "1865");
+  EXPECT_THAT(val["year1"].asInt(), 1865);
 
   // "year2" is string
   EXPECT_THAT(val["year2"].isString(), true);
   EXPECT_THAT(val["year2"].isNumeric(), false);
 
   // get type
-  // std::cout << val["year2"].type() << std::endl;
   EXPECT_THAT(val["year2"].type(), Json::stringValue); // 4
 
-  std::cout << val["year2"].asString() << std::endl;
+  EXPECT_THAT(val["year2"].asString(), "1865");
 
   // NOTE: however, string not be converted to number
   try
@@ -757,6 +756,30 @@ TEST(CxxJSON, check_string_and_number)
   {
     EXPECT_THAT(std::string(e.what()), "Value is not convertible to Int.");
   }
+}
+
+// ={=========================================================================
+// can use without using "asXXX()"? No, compile error
+TEST(CxxJSON, string_and_number_2)
+{
+  std::string asString{};
+  int asInt{};
+
+  // create the main object
+  Json::Value val;
+
+  val["year1"] = 1865;
+  val["year2"] = "1865";
+
+  // "year1" is number
+  EXPECT_THAT(val["year1"].isString(), false);
+  EXPECT_THAT(val["year1"].isNumeric(), true);
+
+  // get type
+  EXPECT_THAT(val["year1"].type(), Json::intValue); // 1
+
+  // compile error
+  // asString = val["year1"]
 }
 
 namespace
@@ -1587,7 +1610,7 @@ TEST(CxxJSON, DISABLED_write_to_json_using_asstring)
 }
 
 // ={=========================================================================
-TEST(CxxJSON, write_json_to_file_and_read_back)
+TEST(CxxJSON, write_json_to_file_and_read_back_1)
 {
   Json::Value servicelist;
 
@@ -1629,6 +1652,71 @@ TEST(CxxJSON, write_json_to_file_and_read_back)
     std::ofstream ofs{"fsout.json"};
 
     ofs << oss.str();
+  }
+
+  {
+    using namespace json_write;
+
+    // read from a file
+    std::ifstream ifs{"fsout.json"};
+
+    Json::Reader reader;
+    Json::Value root;
+
+    // use reader and get `root`
+    reader.parse(ifs, root);
+
+    // can print directly
+    // std::cout << root << std::endl;
+
+    std::string response;
+    std::ostringstream oss;
+    oss << root;
+    response.assign(oss.str());
+
+    EXPECT_THAT(response, expected_2);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxJSON, write_json_to_file_and_read_back_2)
+{
+  Json::Value servicelist;
+
+  servicelist["documentId"] = "1563970127340";
+  servicelist["version"]    = 1;
+
+  Json::Value service1;
+  service1["dvbtriplet"] = "318.4.8583";
+
+  service1["servicetypes"] = Json::Value(Json::arrayValue);
+  service1["servicetypes"].append("DTT");
+  service1["servicetypes"].append("OTT");
+
+  service1["c"]   = "21";
+  service1["t"]   = "Rai 4";
+  service1["sid"] = "M13e-4-2187";
+  service1["sf"]  = "sd";
+  service1["xsg"] = 8;
+
+  Json::Value service2;
+  service2["dvbtriplet"]   = "318.4.8585";
+  service2["servicetypes"] = Json::Value(Json::arrayValue);
+  service2["servicetypes"].append("DTT");
+  service2["c"]   = "24";
+  service2["t"]   = "Rai Movie";
+  service2["sid"] = "M13e-4-2189";
+  service2["sf"]  = "sd";
+  service2["xsg"] = 8;
+
+  servicelist["services"] = Json::Value(Json::arrayValue);
+  servicelist["services"].append(service1);
+  servicelist["services"].append(service2);
+
+  // note that can write Json::Value on stream directly
+  {
+    std::ofstream ofs{"fsout.json"};
+    ofs << servicelist;
   }
 
   {

@@ -3,6 +3,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <semaphore.h>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -42,6 +43,7 @@ namespace
   }
 } // namespace
 
+// ={=========================================================================
 // posts many work but nothing is done since do not run event loop and process
 // nothing.
 //
@@ -65,6 +67,7 @@ TEST(EventLoop, check_no_work)
   EXPECT_THAT(value, 0);
 }
 
+// ={=========================================================================
 // will flush() make difference? blocked since didn't call run() so
 // EventLoopPrivate::m_loopRuunig is null and runs path when "this !=
 // m_loopRunning". that use sem and wait for that and blocked there.
@@ -85,10 +88,22 @@ TEST(EventLoop, DISABLED_check_flush_and_no_work)
   EXPECT_THAT(value, 0);
 }
 
-// one thread which runs event loop and the other pushes task and use flush()
-//
-// it surfaces deadlock issue and works okay when have
-// #define DEADLOCK_FIX
+/*
+// ={=========================================================================
+one thread which runs event loop and the other pushes task and use flush()
+
+it surfaces deadlock issue and works okay when have
+#define DEADLOCK_FIX
+
+[ RUN      ] EventLoop.check_deadlock
+0001028541.479683 WRN: < M:eventloop.cpp F:EventLoopPrivate L:61 > EventLoopPrivate::EventLoopPrivate() thread(139713626164224)
+0001028541.479760 WRN: < M:eventloop.cpp F:run L:174 > eventloop runs and set the thread local to this. thread id(139713626164224), m_loopRunning(0x0x5556ff1c7490)
+post works to event loop
+value: 0
+0001028542.780217 WRN: < M:eventloop.cpp F:flush L:334 > flush called from different thread(139713591228160), m_loopRunning(0x(nil))
+(stops)
+
+*/
 
 TEST(EventLoop, check_deadlock)
 {
@@ -117,6 +132,7 @@ TEST(EventLoop, check_deadlock)
   EXPECT_THAT(value, 10);
 }
 
+// ={=========================================================================
 // flush() is not called in dtor. do we ever need to call flush()? As
 // event_flush2 shows, there is no real need to do since quit() pushes exist
 // task which will be in the last of the queue. So until that gets processed,
@@ -198,6 +214,7 @@ TEST(EventLoop, check_flush_with_flush)
   }
 }
 
+// ={=========================================================================
 TEST(EventLoop, check_flush_with_flush_and_copy)
 {
   {
@@ -254,6 +271,7 @@ TEST(EventLoop, check_flush_with_flush_and_copy)
   }
 }
 
+// ={=========================================================================
 // What's going to happen when f() uses reference to local.
 //
 // as you can see, for dangling case, it's changes randomly
@@ -308,7 +326,6 @@ TEST(EventLoop, check_flush_with_flush_and_copy)
 
 TEST(EventLoop, check_flush_and_dangling_1)
 {
-  // no dangling case
   {
     int value{};
 
@@ -317,7 +334,6 @@ TEST(EventLoop, check_flush_and_dangling_1)
     auto f1 = std::async(std::launch::async, [&]() {
       // std::this_thread::sleep_for(chrono::milliseconds(300));
 
-      // shall use std::ref
       for (int i = 0; i < 10; ++i)
         loop.invokeMethod(std::bind(w1, std::ref(value)));
 
@@ -329,7 +345,11 @@ TEST(EventLoop, check_flush_and_dangling_1)
 
     EXPECT_THAT(value, 10);
   }
+}
 
+// ={=========================================================================
+TEST(EventLoop, check_flush_and_dangling_2)
+{
   {
     int value{};
 
@@ -350,7 +370,11 @@ TEST(EventLoop, check_flush_and_dangling_1)
 
     EXPECT_THAT(value, 0);
   }
+}
 
+// ={=========================================================================
+TEST(EventLoop, check_flush_and_dangling_3)
+{
   // sometimes raise exception but mostly makes code dump:
   //
   // #0  __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:308
@@ -403,6 +427,7 @@ TEST(EventLoop, check_flush_and_dangling_1)
   }
 }
 
+// ={=========================================================================
 // see that it works without flush() since flush() is only necessary when
 // forcefully shutdown all.
 
@@ -497,6 +522,7 @@ TEST(EventLoop, check_flush_without_flush)
 
 // see quit() first and flush() later
 
+// ={=========================================================================
 TEST(EventLoop, check_flush_with_wrong_order)
 {
   int value{};
@@ -586,6 +612,7 @@ namespace
   }
 } // namespace
 
+// NOTE:
 // invokeMethod() use copy? okay use on temporary? yes since cxx-bind use copy
 // context which is usded in invokeMethod()
 //
@@ -650,11 +677,10 @@ namespace
 // body: body5
 // [       OK ] EventLoop.event_invoke_do_copy (501 ms)
 
-TEST(EventLoop, check_invoke_do_copy)
+// ={=========================================================================
+TEST(EventLoop, check_invoke_do_copy_1)
 {
   {
-    int value{};
-
     EventLoop loop;
 
     auto f1 = std::async(std::launch::async, [&]() {
@@ -707,6 +733,193 @@ TEST(EventLoop, check_invoke_do_copy)
   }
 }
 
+// ={=========================================================================
+// same as use copy
+TEST(EventLoop, check_invoke_do_copy_2)
+{
+  {
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      std::vector<std::string> header;
+      std::string body;
+
+      // from ASRequestPrivate::marshallAndSendReply
+      auto f = [&](const std::vector<std::string> &headers,
+                   const std::string &body) {
+        std::this_thread::sleep_for(chrono::milliseconds(100));
+
+        std::cout << "================" << std::endl;
+        std::cout << "headers: size : " << headers.size() << ": ";
+        for (const auto &h : headers)
+        {
+          std::cout << h << ", ";
+        }
+        std::cout << std::endl;
+
+        std::cout << "body: " << body << std::endl;
+      };
+
+      // header.push_back(std::string("header1"));
+      header.push_back("header1");
+      body = "body1";
+
+      // Unlike void cause_dangling_reference_2(EventLoop &loop); case where
+      // uses reference to local, bind() uses copies so not a problem here.
+
+      loop.invokeMethod(f, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header2");
+      body = "body2";
+      loop.invokeMethod(f, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header3");
+      body = "body3";
+      loop.invokeMethod(f, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header4");
+      body = "body4";
+      loop.invokeMethod(f, header, body);
+
+      // now changes header and body. post it
+      header.push_back("header5");
+      body = "body5";
+      loop.invokeMethod(f, header, body);
+
+      // okay, reset them
+      header.clear();
+      body.clear();
+
+      std::cout << "reset them and quit" << std::endl;
+
+      EXPECT_THAT(header.size(), 0);
+      EXPECT_THAT(body.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+  }
+}
+
+// ={=========================================================================
+// do not work
+TEST(EventLoop, check_invoke_do_copy_3)
+{
+  {
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      std::vector<std::string> header;
+      std::string body;
+
+      // from ASRequestPrivate::marshallAndSendReply
+      auto f = [&]() {
+        std::this_thread::sleep_for(chrono::milliseconds(100));
+
+        std::cout << "================" << std::endl;
+        std::cout << "headers: size : " << header.size() << ": ";
+        for (const auto &h : header)
+        {
+          std::cout << h << ", ";
+        }
+        std::cout << std::endl;
+
+        std::cout << "body: " << body << std::endl;
+      };
+
+      // header.push_back(std::string("header1"));
+      header.push_back("header1");
+      body = "body1";
+
+      // Unlike void cause_dangling_reference_2(EventLoop &loop); case where
+      // uses reference to local, bind() uses copies so not a problem here.
+
+      loop.invokeMethod(f);
+
+      // now changes header and body. post it
+      header.push_back("header2");
+      body = "body2";
+      loop.invokeMethod(f);
+
+      // now changes header and body. post it
+      header.push_back("header3");
+      body = "body3";
+      loop.invokeMethod(f);
+
+      // now changes header and body. post it
+      header.push_back("header4");
+      body = "body4";
+      loop.invokeMethod(f);
+
+      // now changes header and body. post it
+      header.push_back("header5");
+      body = "body5";
+      loop.invokeMethod(f);
+
+      // okay, reset them
+      header.clear();
+      body.clear();
+
+      std::cout << "reset them and quit" << std::endl;
+
+      EXPECT_THAT(header.size(), 0);
+      EXPECT_THAT(body.size(), 0);
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+  }
+}
+
+// ={=========================================================================
+// work
+//
+// [ RUN      ] EventLoop.check_invoke_do_copy_4
+// 0001029888.368044 WRN: < M:eventloop.cpp F:EventLoopPrivate L:61 > EventLoopPrivate::EventLoopPrivate() thread(140532841815040)
+// 0001029888.368229 WRN: < M:eventloop.cpp F:run L:174 > eventloop runs and set the thread local to this. thread id(140532841815040), m_loopRunning(0x0x55b0fcbce640)
+// sem post
+// 0001029891.368760 WRN: < M:eventloop.cpp F:run L:187 > eventloop stops and set the thread local to null
+// 0001029891.368879 WRN: < M:eventloop.cpp F:~EventLoopPrivate L:81 > EventLoopPrivate::~EventLoopPrivate()
+// [       OK ] EventLoop.check_invoke_do_copy_4 (3001 ms)
+
+TEST(EventLoop, check_invoke_do_copy_4)
+{
+  {
+    EventLoop loop;
+
+    auto f1 = std::async(std::launch::async, [&]() {
+      sem_t sem;
+      sem_init(&sem, 0, 0);
+
+      auto f = [&]() {
+        std::this_thread::sleep_for(chrono::milliseconds(3000));
+
+        std::cout << "sem post" << std::endl;
+
+        sem_post(&sem);
+      };
+
+      loop.invokeMethod(f);
+
+      if (sem_wait(&sem) != 0)
+        std::cout << "failed to wait sem\n";
+
+      loop.quit(0);
+    });
+
+    // blocks here
+    loop.run();
+  }
+}
+
+// ={=========================================================================
 // use memeber function
 
 TEST(EventLoop, check_invoke_member)
@@ -782,6 +995,7 @@ namespace
   }
 } // namespace
 
+// ={=========================================================================
 TEST(EventLoop, event_cli)
 {
   CommandHandler handler;
@@ -884,47 +1098,146 @@ TEST(EventLoop, event_cli)
 }
 */
 
-// M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140408928236480)
-// event loops blocks on here
-// M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(140408928236480), m_loopRunning(0x0x5651c1ad9620)
-// M:dbusconnection.cpp F:call L:481 > DBusConnection::call() is called on the other thread
-// M:dbusconnection.cpp F:callWithCallback L:249 > callWithCallback::call() place a call on the event loop thread
-// M:dbusconnection.cpp F:operator() L:188 > callWithCallback::call() called on the event loop thread
-// M:dbusconnection.cpp F:methodCallCallback_ L:143 > methodCallCallback_:: calls f
-// M:dbusconnection.cpp F:call L:513 > call:: return replyMessage
-// name: org.freedesktop.DBus
-// name: org.freedesktop.Notifications
-// name: :1.7
-// name: org.freedesktop.network-manager-applet
-// name: :1.8
-//
-// NOTE: it causes `deadlock` and m_loopRunning is null when called from the
-// same thread?
-//
-// since loop.quit() set it to null and ends event loop. Then DBusConnection()
-// dtor calls loop.flush() but event loop is already gone. so blocking forever.
-// so same as callig, like `event_flush3` case
-//
-// loop.quit();
-// loop.flush();
-//
-// M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
-// M:eventloop.cpp F:flush L:322 > flush called from different thread(140408928236480), m_loopRunning(0x(nil))
-//
-// So, to fix?
-// 1. works when remove flush() from DBusConnection
-// 2. case examples do not use quit()
-//
-// NOTE:
-// 1. it is less likely to use flush() from event loop thread and if do, have to
-// post a task which calls flush().
-//
-// 2. should consider to use quit() in event loop dtor and to have check in
-// flush() to see whether event loop is still running or not.
-//
-// 3. case examples seems not to handle "dtor/exit" path of event loop.
+/*
+// ={=========================================================================
 
-TEST(DBusMessage, message_call)
+  // issue the method call and store the response message in m
+  r = sd_bus_call_method(bus,
+                         "net.poettering.Calculator",         // service
+                         "/net/poettering/Calculator",        // object path
+                         "net.poettering.Calculator", // interface
+                         "Multiply",                        // method
+                         &error,         // object to return error in
+                         &m,             // return message on success
+                         "xx",           // input signature
+                         5, // first argument
+                         7 // second argument
+  );
+
+has to change the server to use "int" than "int64_t". if not, gets error:
+
+reply error org.freedesktop.DBus.Error.InvalidArgs Invalid arguments 'ii' to call net.poettering.Calculator.Multiply(), expecting 'xx'.
+
+[ RUN      ] DBusMessage.message_call_1
+event loops blocks on here
+0001094022.240514 WRN: < M:dbusconnection.cpp F:call L:547 > DBusConnection::call() is called on the other thread
+0001094022.240583 WRN: < M:dbusconnection.cpp F:callWithCallback L:265 > callWithCallback::call() place a call on the event loop thread
+0001094022.240676 WRN: < M:dbusconnection.cpp F:operator() L:195 > callWithCallback::call() called on the event loop thread
+0001094022.241494 WRN: < M:dbusconnection.cpp F:methodCallCallback_ L:145 > methodCallCallback_:: calls f
+0001094022.241642 WRN: < M:dbusconnection.cpp F:call L:579 > call:: return replyMessage
+result: 35
+[       OK ] DBusMessage.message_call_1 (5002 ms)
+
+*/
+
+TEST(DBusMessage, message_1)
+{
+  DBusMessage message =
+    DBusMessage::createMethodCall("net.poettering.Calculator",  // service
+        "/net/poettering/Calculator", // object path
+        "net.poettering.Calculator",  // interface
+        "Multiply");                  // method
+
+  message << 5;
+  message << 7;
+
+  // can use this?
+  // if (!sd_bus_message_has_signature(msg, "usa{ss}a{ss}s"))
+  //     return false;
+
+  EXPECT_THAT(message.signature(), "ii");
+}
+
+TEST(DBusMessage, message_call_1)
+{
+  // create event loop
+  EventLoop loop;
+
+  // connect to dbus
+  DBusConnection conn = DBusConnection::sessionBus(loop);
+  EXPECT_THAT(conn.isConnected(), true);
+
+  // without `target` to call member function since it's static and it is to
+  // call on different thread
+  auto f1 = std::async(std::launch::async, [&]() {
+    int result;
+
+    // wait for some time
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    DBusMessage message =
+      DBusMessage::createMethodCall("net.poettering.Calculator",  // service
+                                    "/net/poettering/Calculator", // object path
+                                    "net.poettering.Calculator",  // interface
+                                    "Multiply");                  // method
+
+    message << 5;
+    message << 7;
+
+    DBusMessage reply = conn.call(std::move(message));
+
+    if ( reply.isError() )
+    {
+      std::cout << "reply error " << reply.errorName() << " " << reply.errorMessage() << std::endl;
+    }
+
+    EXPECT_THAT(reply.isError(), false);
+
+    reply >> result;
+    std::cout << "result: " << result << std::endl;
+
+    loop.quit(0);
+  });
+
+  // blocks here
+  std::cout << "event loops blocks on here" << std::endl;
+  loop.run();
+}
+
+/*
+M:eventloop.cpp F:EventLoopPrivate L:60 > EventLoopPrivate::EventLoopPrivate() thread(140408928236480)
+event loops blocks on here
+M:eventloop.cpp F:run L:173 > eventloop runs and set the thread local to this. thread id(140408928236480), m_loopRunning(0x0x5651c1ad9620)
+M:dbusconnection.cpp F:call L:481 > DBusConnection::call() is called on the other thread
+M:dbusconnection.cpp F:callWithCallback L:249 > callWithCallback::call() place a call on the event loop thread
+M:dbusconnection.cpp F:operator() L:188 > callWithCallback::call() called on the event loop thread
+M:dbusconnection.cpp F:methodCallCallback_ L:143 > methodCallCallback_:: calls f
+M:dbusconnection.cpp F:call L:513 > call:: return replyMessage
+name: org.freedesktop.DBus
+name: org.freedesktop.Notifications
+name: :1.7
+name: org.freedesktop.network-manager-applet
+name: :1.8
+
+NOTE: this causes `deadlock`
+
+since loop.quit() set it to null and ends event loop. Then DBusConnection()
+dtor calls loop.flush() but event loop is already gone. so invokeMethond is okay 
+but blocks on sem_wait forever.
+
+loop.quit();
+loop.flush();
+
+M:eventloop.cpp F:run L:185 > eventloop stops and set the thread local to null
+M:eventloop.cpp F:flush L:322 > flush called from different thread(140408928236480), m_loopRunning(0x(nil))
+
+So, to fix?
+1. works when remove flush() from DBusConnection
+2. AS case examples do not use quit() and use flush from DBusConnection.
+
+NOTE:
+1. it is less likely to use flush() from event loop thread and if do, have to
+post a task which calls flush().
+
+2. should consider to use quit() in event loop dtor and to have check in
+flush() to see whether event loop is still running or not.
+
+3. case examples seems not to handle "dtor/exit" path of event loop since
+"systemctl stop" use SIGTERM to kill process. 
+
+// ={=========================================================================
+*/
+TEST(DBusMessage, message_call_2)
 {
   // create event loop
   EventLoop loop;
