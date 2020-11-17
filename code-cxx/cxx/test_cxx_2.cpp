@@ -426,6 +426,7 @@ TEST(CxxIterator, next_do_not_change_pos)
 }
 
 // ={=========================================================================
+// cxx-distance
 TEST(CxxIterator, distance)
 {
   // cxx-distance which returns positive/negative
@@ -434,6 +435,24 @@ TEST(CxxIterator, distance)
     std::vector<int> coll{1, 2, 3, 4, 5};
 
     EXPECT_THAT(std::distance(coll.begin(), coll.end()), coll.size());
+  }
+
+  // cxx-distance use "[first, last)" so the distance is "2"
+  {
+    std::set<int> coll{1, 2, 3, 4, 5};
+
+    auto first = coll.find(1);
+    auto last = coll.find(3);
+
+    EXPECT_THAT(std::distance(first, last), 2);
+  }
+
+  {
+    std::set<int> coll{1, 2, 3, 4, 5};
+
+    auto first = coll.find(1);
+
+    EXPECT_THAT(std::distance(first, first), 0);
   }
 
   {
@@ -632,7 +651,7 @@ TEST(CxxIterator, adaptor_insert)
     *it++ = 44;
     *it++ = 55;
 
-    // NOTE: Q: WHY 55 but not 0??
+    // NOTE: Q: WHY 55 but not 0?? corrupted?
     // EXPECT_THAT(coll.size(), 0);
   }
 
@@ -648,6 +667,20 @@ TEST(CxxIterator, adaptor_insert)
     *it = 3;
     *it = 44;
     *it = 55;
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
+  }
+  // "++" has no effect.
+  {
+    std::list<int> coll;
+
+    std::insert_iterator<std::list<int>> it(coll, coll.begin());
+
+    *it++ = 1;
+    *it++ = 2;
+    *it++ = 3;
+    *it++ = 44;
+    *it++ = 55;
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 44, 55));
   }
@@ -674,6 +707,53 @@ TEST(CxxIterator, adaptor_insert)
     std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.begin()));
 
     EXPECT_THAT(ret, ElementsAre(1, 2, 3, 44, 55));
+  }
+}
+
+// ={=========================================================================
+// A general inserter, or general insert iterator, 1 is initialized with two
+// values: the container and the position that is used for the insertions.
+
+TEST(CxxIterator, adaptor_insert_pos)
+{
+  // from begin()
+  {
+    std::list<int> coll{1, 2, 3, 44, 55};
+    std::list<int> ret{};
+
+    std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.begin()));
+
+    EXPECT_THAT(ret, ElementsAre(1, 2, 3, 44, 55));
+  }
+
+  // from end(). same
+  {
+    std::list<int> coll{1, 2, 3, 44, 55};
+    std::list<int> ret{};
+
+    std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.end()));
+
+    EXPECT_THAT(ret, ElementsAre(1, 2, 3, 44, 55));
+  }
+
+  // from begin()
+  {
+    std::list<int> coll{1, 2, 3, 44, 55};
+    std::list<int> ret{100, 200};
+
+    std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.begin()));
+
+    EXPECT_THAT(ret, ElementsAre(1, 2, 3, 44, 55, 100, 200));
+  }
+
+  // from end()
+  {
+    std::list<int> coll{1, 2, 3, 44, 55};
+    std::list<int> ret{100, 200};
+
+    std::copy(coll.begin(), coll.end(), std::inserter(ret, ret.end()));
+
+    EXPECT_THAT(ret, ElementsAre(100, 200, 1, 2, 3, 44, 55));
   }
 }
 
@@ -985,7 +1065,7 @@ TEST(CxxVector, ctors)
     EXPECT_THAT(coll, ElementsAre(5));
   }
   {
-    std::vector<int> coll{1,2,3,4,5};
+    std::vector<int> coll{1, 2, 3, 4, 5};
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
   }
@@ -1011,6 +1091,13 @@ TEST(CxxVector, ctors)
     std::vector<int> coll(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10, 10, 10, 10, 10));
+  }
+  {
+    std::vector<std::pair<int, int>> table(5);
+    EXPECT_THAT(table.size(), 5);
+
+    EXPECT_THAT(table[0].first, 0);
+    EXPECT_THAT(table[0].second, 0);
   }
 
   {
@@ -2350,27 +2437,24 @@ TEST(CxxSet, check_insert_and_duplicate)
   EXPECT_THAT(ret.second, true);
 }
 
+/*
 // ={=========================================================================
-// note that use lower_bound() to see if serch item falls in between items.
-//
-// std::map<Key,T,Compare,Allocator>::lower_bound
-// std::set<Key,Compare,Allocator>::lower_bound
-//
-// 1) Returns an iterator pointing to the first element that is not less than
-// (i.e. greater or equal to) key.
+use lower_bound() to see if serch item falls in between items.
 
-TEST(CxxSet, check_equal_range)
+cxx-set-lower-bound cxx-set-upper-bound cxx-set-equal-range
+
+std::map<Key,T,Compare,Allocator>::lower_bound
+std::set<Key,Compare,Allocator>::lower_bound
+
+1) Returns an iterator pointing to the first element that is not less than
+(i.e. greater or equal to) key.
+ 
+*/
+
+TEST(CxxSet, equal_range)
 {
   {
-    std::set<int> coll;
-
-    coll.insert(1);
-    coll.insert(2);
-    coll.insert(4);
-    coll.insert(5);
-    coll.insert(6);
-
-    EXPECT_THAT(coll, ElementsAre(1, 2, 4, 5, 6));
+    std::set<int> coll{1,2,3,4,5,6};
 
     // Returns an iterator to the first element `with key not less than val.`
     EXPECT_THAT(*coll.lower_bound(3), 4);
@@ -2541,6 +2625,7 @@ TEST(CxxMap, check_compare)
 }
 
 // ={=========================================================================
+// *cxx-map-find
 TEST(CxxMap, find)
 {
   {
@@ -2566,7 +2651,7 @@ TEST(CxxMap, find)
       EXPECT_THAT(it->second, 2);
     }
 
-    // at() returns value
+    // but at() returns value
     {
       auto value = coll.at(3.0);
       EXPECT_THAT(value, 2);
@@ -5274,6 +5359,127 @@ TEST(AlgoSorting, AlgoSortNth)
 
     // 4 3 4 3 2 2 3 1 5 5 4 5 6 6 7 (15)
     PRINT_ELEMENTS(coll);
+  }
+}
+
+/*
+// ={=========================================================================
+
+11.10 Sorted-Range Algorithms
+
+Sorted-range algorithms require that the source ranges have the elements sorted
+according to their sorting criterion.
+
+cxx-algo-include
+
+Checking Whether Several Elements Are Present
+
+bool
+includes (InputIterator1 beg, InputIterator1 end,
+  InputIterator2 searchBeg, InputIterator2 searchEnd);
+
+o Thus, [searchBeg,searchEnd) must be a subset of [beg,end).
+
+o The caller has to ensure that both ranges are sorted according to the same
+  sorting criterion on entry. 
+
+
+Searching First or Last Possible Position
+
+ForwardIterator
+lower_bound (ForwardIterator beg, ForwardIterator end, const T& value);
+
+ForwardIterator
+upper_bound (ForwardIterator beg, ForwardIterator end, const T& value);
+
+o lower_bound() returns the position of the first element that has a value equal
+  to or greater than value. This is "the first position" where an element with
+  value value could get inserted without breaking the sorting of the range
+  [beg,end).
+
+o upper_bound() returns the position of the first element that has a value
+  greater than value. This is "the last position" where an element with value
+  value could get inserted without breaking the sorting of the range [beg,end).
+
+o Associative containers provide equivalent "member functions" that provide
+  better performance
+
+  error: ‘class std::unordered_set<int>’ has no member named ‘lower_bound’
+     auto range_begin = coll.lower_bound(4);
+
+  error: ‘class std::vector<int>’ has no member named ‘lower_bound’
+     auto range_begin = coll.lower_bound(4);
+
+*/
+
+// ={=========================================================================
+// cxx-include
+TEST(CxxAlgoSortedRange, include)
+{
+  std::list<int> coll{1,2,3,4,5,6,7,8,9};
+  std::vector<int> search{3,4,7};
+
+  // check whether all elements in search are also in coll
+  EXPECT_THAT(std::includes(coll.cbegin(), coll.cend(),
+        search.cbegin(), search.cend()), true);
+}
+
+// ={=========================================================================
+// cxx-lower-bound algo-binary-search
+TEST(CxxAlgoSortedRange, lower_bound)
+{
+  // since it's set, duplicates are removed and it becomes:
+  // std::set<int> coll{1,2,4,5,6};
+  {
+    std::set<int> coll{1,2,4,4,4,5,6};
+
+    auto range_begin = coll.find(4);
+    auto range_end = coll.find(5);
+
+    EXPECT_THAT(std::distance(coll.begin(), range_begin), 2);
+    EXPECT_THAT(std::distance(coll.begin(), range_end), 3);
+
+    EXPECT_THAT(std::distance(range_begin, range_end), 1);
+
+    EXPECT_THAT(coll.equal_range(4), std::make_pair(range_begin, range_end));
+  }
+
+  // so use multiset
+  {
+    std::multiset<int> coll{1, 2, 4, 4, 4, 5, 6};
+
+    auto range_begin = coll.lower_bound(4);
+    auto range_end = coll.upper_bound(4);
+
+    EXPECT_THAT(*range_begin, 4);
+    EXPECT_THAT(*range_end, 5);
+
+    EXPECT_THAT(std::distance(range_begin, range_end), 3);
+
+    EXPECT_THAT(coll.equal_range(4), std::make_pair(range_begin, range_end));
+  }
+
+  // use a element which is not in the coll 
+  {
+    std::multiset<int> coll{1, 2, 4, 4, 4, 5, 6};
+
+    // Returns an iterator to the first element `with key not less than val.`
+    EXPECT_THAT(*coll.lower_bound(3), 4);
+
+    // Returns a `range, pair of iterators`, denoting the elements with val
+    EXPECT_THAT(*coll.equal_range(3).first, 4);
+    EXPECT_THAT(*coll.equal_range(3).second, 4);
+
+    EXPECT_THAT(coll.equal_range(0).first, coll.begin());
+    EXPECT_THAT(coll.equal_range(0).second, coll.begin());
+
+    EXPECT_THAT(coll.equal_range(7).first, coll.end());
+    EXPECT_THAT(coll.equal_range(7).second, coll.end());
+
+    EXPECT_THAT(*coll.lower_bound(5), 5);
+    EXPECT_THAT(*coll.upper_bound(5), 6);
+    EXPECT_THAT(*coll.equal_range(5).first, 5);
+    EXPECT_THAT(*coll.equal_range(5).second, 6);
   }
 }
 

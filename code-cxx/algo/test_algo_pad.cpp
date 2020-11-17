@@ -35,131 +35,105 @@ void PRINT_ELEMENTS(T &coll, const string optstr = "")
 
 /*
 ={=========================================================================
-algo-leetcode-326. Power of Three. Easy
+algo-leetcode-409. Longest Palindrome Easy
 
-Given an integer, write a function to determine if it is a power of three.
+989. Add to Array-Form of Integer Easy
+
+For a non-negative integer X, the array-form of X is an array of its digits in
+left to right order.  For example, if X = 1231, then the array form is
+[1,2,3,1].
+
+Given the array-form A of a non-negative integer X, return the array-form of the
+integer X+K.
 
 Example 1:
-Input: 27
-Output: true
+
+Input: A = [1,2,0,0], K = 34
+Output: [1,2,3,4]
+Explanation: 1200 + 34 = 1234
 
 Example 2:
-Input: 0
-Output: false
+
+Input: A = [2,7,4], K = 181
+Output: [4,5,5]
+Explanation: 274 + 181 = 455
 
 Example 3:
-Input: 9
-Output: true
+
+Input: A = [2,1,5], K = 806
+Output: [1,0,2,1]
+Explanation: 215 + 806 = 1021
 
 Example 4:
-Input: 45
-Output: false
 
-Follow up:
-Could you do it without using any loop / recursion?
+Input: A = [9,9,9,9,9,9,9,9,9,9], K = 1
+Output: [1,0,0,0,0,0,0,0,0,0,0]
+Explanation: 9999999999 + 1 = 10000000000
+ 
+Note：
+
+1 <= A.length <= 10000
+0 <= A[i] <= 9
+0 <= K <= 10000
+If A.length > 1, then A[0] != 0
+
+vector<int> addToArrayForm(vector<int>& A, int K);
 
 */
 
-namespace leetcode_easy_326
+namespace algo_palindrome
 {
-  // makes a better result.
-  vector<int> intersection_1(vector<int> &nums1, vector<int> &nums2)
+  int countSegments(string s)
   {
-    std::unordered_set<int> table;
-    std::unordered_set<int> check;
-    std::vector<int> result{};
+    int count{};
 
-    if (nums1.size() < nums2.size())
+    for (auto e : s)
     {
-      table.insert(nums2.cbegin(), nums2.cend());
-      check.insert(nums1.cbegin(), nums1.cend());
-
-      for (const auto e : check)
-      {
-        if (table.end() != table.find(e))
-          result.push_back(e);
-      }
     }
-    else
-    {
-      table.insert(nums1.cbegin(), nums1.cend());
-      check.insert(nums2.cbegin(), nums2.cend());
-
-      for (const auto e : check)
-      {
-        if (table.end() != table.find(e))
-          result.push_back(e);
-      }
-    }
-
-    return result;
   }
+} // namespace algo_palindrome
 
-  vector<int> intersection_2(vector<int> &nums1, vector<int> &nums2)
-  {
-    std::set<int> input1;
-    std::set<int> input2;
-    std::vector<int> result{};
-
-    input1.insert(nums1.cbegin(), nums1.cend());
-    input2.insert(nums2.cbegin(), nums2.cend());
-
-    // Processing the Union of Two Sorted Sets
-    // OutputIterator
-    // set_intersection (InputIterator source1Beg, InputIterator source1End,
-    // InputIterator source2Beg, InputIterator source2End,
-    // OutputIterator destBeg)
-
-    std::set_intersection(input1.cbegin(), input1.cend(),
-        input2.cbegin(), input2.cend(),
-        std::back_inserter(result));
-
-    return result;
-  }
-}
-
-TEST(AlgoLeetCode, power_of_three)
+TEST(AlgoPalindrome, longest_can_be_built)
 {
-  using namespace leetcode_easy_326;
+  using namespace algo_palindrome;
 
   {
-    auto f = intersection_1;
+    auto f = add_strings_1;
 
-    vector<int> coll1{1,2,2,1};
-    vector<int> coll2{2,2};
-
-    EXPECT_THAT(f(coll1, coll2), std::vector<int>{2});
+    // EXPECT_THAT(f("123", "35"), "158");
+    EXPECT_THAT(f("1", "9"), "10");
   }
 
   {
-    auto f = intersection_1;
+    auto f = add_array_form_1;
 
-    vector<int> coll1{4,9,5};
-    vector<int> coll2{9,4,9,8,4};
-    vector<int> result{9, 4};
-    // vector<int> result{4, 9};
+    vector<int> coll{1, 2, 0, 0};
 
-    EXPECT_THAT(f(coll1, coll2), result);
+    EXPECT_THAT(f(coll, 34), ElementsAre(1, 2, 3, 4));
   }
 
   {
-    auto f = intersection_2;
+    auto f = add_array_form_1;
 
-    vector<int> coll1{1,2,2,1};
-    vector<int> coll2{2,2};
+    vector<int> coll{2, 7, 4};
 
-    EXPECT_THAT(f(coll1, coll2), std::vector<int>{2});
+    EXPECT_THAT(f(coll, 181), ElementsAre(4, 5, 5));
   }
 
   {
-    auto f = intersection_2;
+    auto f = add_array_form_1;
 
-    vector<int> coll1{4,9,5};
-    vector<int> coll2{9,4,9,8,4};
-    // vector<int> result{9, 4};
-    vector<int> result{4, 9};
+    vector<int> coll{2, 1, 5};
 
-    EXPECT_THAT(f(coll1, coll2), result);
+    EXPECT_THAT(f(coll, 806), ElementsAre(1, 0, 2, 1));
+  }
+
+  {
+    auto f = add_array_form_1;
+
+    vector<int> coll{9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+
+    EXPECT_THAT(f(coll, 1), ElementsAre(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
   }
 }
 

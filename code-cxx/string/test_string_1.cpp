@@ -74,6 +74,19 @@ TEST(String, ctors)
     EXPECT_THAT(s.length(), 4);
   }
 
+  {
+    std::string coll{"12345"};
+
+    EXPECT_EQ(coll.size(), 5);
+    EXPECT_EQ(coll.length(), 5);
+
+    // this is error since iterator is not int
+    // EXPECT_EQ(coll.end(), 5);
+
+    EXPECT_EQ(*coll.end(), '\0');
+    EXPECT_EQ(coll, "12345");
+  }
+
   // 6)
   // template< class InputIt >
   // basic_string( InputIt first, InputIt last,
@@ -88,17 +101,10 @@ TEST(String, ctors)
   // 9) Constructs the string with the contents of the initializer list ilist.
   // basic_string( std::initializer_list<CharT> ilist,
   //               const Allocator& alloc = Allocator() );
+
   {
-    std::string coll{"12345"};
-
-    EXPECT_EQ(coll.size(), 5);
-    EXPECT_EQ(coll.length(), 5);
-
-    // this is error since iterator is not int
-    // EXPECT_EQ(coll.end(), 5);
-
-    EXPECT_EQ(*coll.end(), '\0');
-    EXPECT_EQ(coll, "12345");
+    std::string s{'a'};
+    EXPECT_THAT(s, "a");
   }
 
   // ascii code 48 is '0'
@@ -298,7 +304,7 @@ TEST(StringOperation, check_resize)
 /*
 ={=========================================================================
 string-substring string-find string-substr
-cxx-srring-find
+cxx-string-find
 http://www.cplusplus.com/reference/string/string/find/
 
 size_t find (const string& str, size_t pos = 0) const noexcept;
@@ -399,7 +405,7 @@ namespace string_find
 } // namespace string_find
 
 // ={=========================================================================
-TEST(StringOperation, check_find_char)
+TEST(StringOperation, find_1)
 {
   std::string coll{"There are two needles in this haystack with needles."};
 
@@ -432,6 +438,7 @@ TEST(StringOperation, check_find_char)
   }
 
   {
+    // 1) Finds the first substring equal to str.
     // size_type find( const basic_string& str, size_type pos = 0 ) const;
 
     auto pos = coll.find("n");
@@ -449,20 +456,18 @@ TEST(StringOperation, check_find_char)
 }
 
 // ={=========================================================================
-TEST(StringOperation, check_find_substring_1)
+TEST(StringOperation, find_2)
 {
-  // try to match "V" from "IV" only for one char so expects no match. However,
-  // that's not the case.
   {
     std::string coll1{"IV"};
     std::string coll2{"V"};
 
-    // find sill search
     EXPECT_THAT(coll1.find(coll2), 1);
 
-    // size_type find( const CharT* s, size_type pos, size_type count ) const;
     // 2) Finds the first substring equal to the range [s, s+count). This range
     // may contain null characters. NOTE on "s+count"
+    //
+    // size_type find( const CharT* s, size_type pos, size_type count ) const;
 
     EXPECT_THAT(coll1.find(coll2.c_str(), 0, coll2.size()), 1);
     EXPECT_THAT(coll1.find(coll2.c_str(), 0, coll2.size() - 1), 0);
@@ -844,7 +849,7 @@ TEST(CxxStringOperation, find_substring_3)
 // the end of the string, or if count == npos, the returned substring is [pos,
 // size()).
 
-TEST(StringOperation, check_substr)
+TEST(StringOperation, substr)
 {
   {
     std::string coll{"interchangeability"};
@@ -867,6 +872,15 @@ TEST(StringOperation, check_substr)
     EXPECT_THAT(coll.substr(5, 6), "change");
 
     EXPECT_THAT(coll.substr(0, 0), "");
+  }
+
+  {
+    std::string coll{"0123456789"};
+
+    EXPECT_THAT(coll.substr(0, 0), "");
+    EXPECT_THAT(coll.substr(0, 1), "0");
+    EXPECT_THAT(coll.substr(0, 2), "01");
+    EXPECT_THAT(coll.substr(0, 3), "012");
   }
 
   // {"4096,1"}; gets id to make "4096/1"
@@ -1933,7 +1947,7 @@ TEST(StringConversion, stringstream)
     {
       ss << "player " << i;
       string_vector.push_back(string(ss.str()));
-      ss.str("");
+      ss.str(""); // cxx-stringstream-reset
     }
 
     EXPECT_THAT(string_vector,
@@ -2080,6 +2094,57 @@ TEST(StringConversion, stringstream_to_hex)
   }
 }
 
+// ={=========================================================================
+TEST(StringConversion, stringstream_and_scanf)
+{
+  const char address[]{"AA:BB:CC:DD:EE:FF"};
+
+  {
+    int bytes[6]{};
+    int bytesConsumed{};
+
+    auto bytesRead = sscanf(address,
+                            "%02X:%02X:%02X:%02X:%02X:%02X%n",
+                            &bytes[0],
+                            &bytes[1],
+                            &bytes[2],
+                            &bytes[3],
+                            &bytes[4],
+                            &bytes[5],
+                            &bytesConsumed);
+
+    EXPECT_THAT(strlen(address), 17);
+    EXPECT_THAT(bytesConsumed, 17);
+
+    EXPECT_THAT(bytesRead, 6);
+    EXPECT_THAT(bytes[0], 0xAA);
+    EXPECT_THAT(bytes[1], 0xBB);
+    EXPECT_THAT(bytes[2], 0xCC);
+  }
+
+  // misses out the first one
+  {
+    std::vector<int> coll{};
+
+    int byte;
+
+    std::istringstream ss{address};
+    std::string token{};
+
+    while (std::getline(ss, token, ':'))
+    {
+      ss >> std::hex >> byte;
+      // cout << std::hex << byte << endl;
+      coll.emplace_back(byte);
+    }
+
+    EXPECT_THAT(coll.size(), 5);
+    // EXPECT_THAT(coll[0], 0xAA);
+    EXPECT_THAT(coll[0], 0xBB);
+    EXPECT_THAT(coll[1], 0xCC);
+  }
+}
+
 namespace string_conversion
 {
   /**
@@ -2088,14 +2153,14 @@ namespace string_conversion
    * @note This is only defined for int types. Specifically it's not defined for enums.
    */
   //
-  template<class T>
-    inline typename std::enable_if<std::is_integral<T>::value, std::string>::type
-    to_string_1(const T& val)
-    {
-      std::ostringstream str;
-      str << val;
-      return str.str();
-    }
+  template <class T>
+  inline typename std::enable_if<std::is_integral<T>::value, std::string>::type
+  to_string_1(const T &val)
+  {
+    std::ostringstream str;
+    str << val;
+    return str.str();
+  }
 
   static inline std::string to_string_2(uint32_t i)
   {
@@ -2103,7 +2168,7 @@ namespace string_conversion
     ss << i;
     return ss.str();
   }
-}
+} // namespace string_conversion
 
 // ={=========================================================================
 TEST(StringConversion, string_to_number)
@@ -2132,7 +2197,8 @@ TEST(StringConversion, boost_lexicalcast)
   EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
   EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
   EXPECT_THAT(boost::lexical_cast<std::string>(0x10), "16");
-  EXPECT_THAT(boost::lexical_cast<std::string>(16060300000001), "16060300000001");
+  EXPECT_THAT(boost::lexical_cast<std::string>(16060300000001),
+              "16060300000001");
 
   EXPECT_THAT(boost::lexical_cast<int>("11"), 11);
   EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
@@ -2378,9 +2444,14 @@ TEST(StringConversion, formatter)
                                value),
               expected);
 
-  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 3 has type ‘int’ [-Wformat=]
+  // coped from the above:
+  // causes the compiler to check the arguments in calls to my_printf for consistency
+  // with the printf style format string argument my_format.
+
+  // warning: format ‘%lld’ expects argument of type
+  // ‘long long int’, but argument 3 has type ‘int’ [-Wformat=]
   //                                 value),
- 
+
   EXPECT_THAT(string_formatter("variable %s has value in dec %lld, hex 0x%x",
                                "value",
                                value,
@@ -2644,19 +2715,22 @@ TEST(StringTrim, 2018_11)
   }
 }
 
-// ={=========================================================================
-// string-split string-parse
-//
-// 4.6 Splitting a String
-// You want to split a delimited string into multiple strings. For example, you
-// may want to split the string "Name|Address|Phone" into three separate
-// strings, "Name", "Address", and "Phone", with the delimiter removed.
+/* 
+={=========================================================================
+cxx-string-split cxx-string-parse
 
-// *cxx-string-find* *cxx-string-substr* *cxx-string-replace*
-//
-// CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
-// make the original example short.
+4.6 Splitting a String
 
+You want to split a delimited string into multiple strings. For example, you may
+want to split the string "Name|Address|Phone" into three separate strings,
+"Name", "Address", and "Phone", with the delimiter removed.
+
+*cxx-string-find* *cxx-string-substr* *cxx-string-replace*
+
+CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
+make the original example short.
+
+*/
 TEST(StringSplit, get_extension)
 {
   const string suffix{"tmp"};
@@ -2668,7 +2742,7 @@ TEST(StringSplit, get_extension)
   {
     auto idx = inputname.find('.');
 
-    // if not have .
+    // if not have '.'
     if (idx == string::npos)
     {
       filename = inputname + '.' + suffix;
@@ -2695,11 +2769,13 @@ TEST(StringSplit, get_extension)
     ElementsAre("prog.tmp", "mydir.tmp", "hello.tmp", "opps.xxx", "end.tmp"));
 }
 
-// 2018.10
-// split input string by delimeter and put them into vector
-// void split(const string &s, char delim, vector<string> &coll);
-//
-// note that substr(idx, `length`); but not substr(idx, idx);
+/*
+2018.10
+split input string by delimeter and put them into vector
+void split(const string &s, char delim, vector<string> &coll);
+
+note that string::substr(idx, `length`); but not substr(idx, idx);
+*/
 
 namespace stringsplit
 {
@@ -2707,23 +2783,23 @@ namespace stringsplit
   // this has *undefined* behaviour; sometimes works and sometimes infinite loop
   // since `found` is npos when not found and do ++found and use it loop
   // condition.
-  //
-  // void split(const string &s, char delim, vector<string> &coll)
-  // {
-  //   size_t i{};
-  //   size_t found{};
-  //   std::string token;
-  //
-  //   for (i = 0; found != std::string::npos; )
-  //   {
-  //     found = s.find(delim, i);
-  //     token = s.substr(i, found-i);
-  //     i = ++found;
-  //     coll.push_back(token);
-  //     // std::cout << "token: " << token << std::endl;
-  //   }
-  // }
+  void split_0(const string &s, char delim, vector<string> &coll)
+  {
+    size_t i{};
+    size_t found{};
+    std::string token;
 
+    for (i = 0; found != std::string::npos;)
+    {
+      found = s.find(delim, i);
+      token = s.substr(i, found - i);
+      i     = ++found;
+      coll.push_back(token);
+      // std::cout << "token: " << token << std::endl;
+    }
+  }
+
+  // fails on some case
   void split_1(const string &s, char delim, vector<string> &coll)
   {
     string::size_type i     = 0;
@@ -2746,6 +2822,8 @@ namespace stringsplit
     }
   }
 
+  // cxx-string-find
+  // size_type find( CharT ch, size_type pos = 0 ) const;
   void split_2(const string &input, char delim, vector<string> &coll)
   {
     string::size_type i{};
@@ -2765,10 +2843,10 @@ namespace stringsplit
   // 2018.11.14
   void split_3(const string &s, const char delim, vector<string> &coll)
   {
-    string token{};
     size_t start{}, end{};
 
     end = s.find(delim, start);
+
     for (; end < string::npos;)
     {
       coll.push_back(s.substr(start, end - start));
@@ -2789,6 +2867,54 @@ namespace stringsplit
     {
       coll.emplace_back(std::move(token));
     }
+  }
+
+  // to support any delims like "is_any_of"
+  void split_5(const std::string &s,
+               const std::string delim,
+               std::vector<std::string> &coll)
+  {
+    std::string::size_type start{}, end{};
+
+    end = s.find_first_of(delim, start);
+
+    for (; end != std::string::npos;)
+    {
+      coll.push_back(s.substr(start, end - start));
+      start = end + 1;
+      end   = s.find_first_of(delim, start);
+    }
+
+    coll.push_back(s.substr(start));
+  }
+
+  // to support that not to add empty result
+  int split_6(const std::string &s)
+  {
+    std::string::size_type start{}, end{};
+    std::string temp{};
+    int count{};
+    const char delim{' '};
+
+    end = s.find(delim, start);
+
+    for (; end != std::string::npos;)
+    {
+      temp = s.substr(start, end - start);
+
+      if (false == temp.empty())
+        count++;
+
+      start = end + 1;
+      end   = s.find(delim, start);
+    }
+
+    temp = s.substr(start);
+
+    if (false == temp.empty())
+      count++;
+
+    return count;
   }
 } // namespace stringsplit
 
@@ -2844,34 +2970,88 @@ TEST(StringSplit, use_delimeter)
 
       {
         // same as how boost works
-        vector<string> coll;
+        std::vector<string> coll;
         f("||Name", '|', coll);
         EXPECT_THAT(coll, ElementsAre("", "", "Name"));
       }
-
-      // {
-      //   // same as how boost works
-      //   vector<string> coll;
-      //   f("||", '|', coll);
-      //   EXPECT_THAT(coll, ElementsAre("", "", ""));
-      // }
     }
   }
 
-  // split_4 is different on this case
+  // split_4 is different on this case and which is different from the boost
+  // case
   {
-    auto f = split_4;
+    {
+      // same as how boost works
+      std::vector<string> coll;
+      split_2("||", '|', coll);
+      EXPECT_THAT(coll, ElementsAre("", "", ""));
+    }
 
-    std::vector<std::string> coll;
-    f("||", '|', coll);
-    EXPECT_THAT(coll, ElementsAre("", ""));
+    {
+      // same as how boost works
+      std::vector<string> coll;
+      split_3("||", '|', coll);
+      EXPECT_THAT(coll, ElementsAre("", "", ""));
+    }
+
+    {
+      auto f = split_4;
+
+      std::vector<std::string> coll;
+      f("||", '|', coll);
+      EXPECT_THAT(coll, ElementsAre("", ""));
+    }
   }
 }
 
-// *boost-split* *boost-is-any-of*
-// The one function that is in the example that isn’t in the table is
-// is_any_of. This is a function template that returns a predicate
-// function object that can be used by the trim_if-style functions.
+// ={=========================================================================
+TEST(StringSplit, use_delimeter_is_any)
+{
+  using namespace stringsplit;
+
+  {
+    std::vector<std::string> coll;
+    split_5("Name|Address|Phone", "|", coll);
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+
+  {
+    std::vector<string> coll;
+    boost::split(coll, "Name|Address,Phone", boost::is_any_of("|,"));
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+
+  {
+    std::vector<string> coll;
+    split_5("Name|Address,Phone", "|,", coll);
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+}
+
+// ={=========================================================================
+TEST(StringSplit, use_delimeter_no_empty)
+{
+  using namespace stringsplit;
+
+  {
+    auto count = split_6("Hello, my name is John");
+    EXPECT_THAT(count, 5);
+  }
+
+  {
+    auto count = split_6("");
+    EXPECT_THAT(count, 0);
+  }
+}
+
+/*
+={=========================================================================
+*boost-split* *boost-is-any-of*
+The one function that is in the example that isn’t in the table is is_any_of.
+This is a function template that returns a predicate function object that can be
+used by the trim_if-style functions.
+
+*/
 
 TEST(StringSplit, use_boost)
 {
@@ -2910,12 +3090,6 @@ TEST(StringSplit, use_boost)
   }
 
   {
-    // note: cxx-boost-split see how boost works
-    //
-    // Value of: svec
-    // Expected: has 1 element that is equal to "Name"
-    //   Actual: { "", "", "Name" }, which has 3 elements
-
     vector<string> coll;
     boost::split(coll, "||Name", boost::is_any_of("|"));
 

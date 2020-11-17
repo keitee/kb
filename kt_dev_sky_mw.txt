@@ -1067,7 +1067,7 @@ rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-170778_AS_RDK_DTT_invalid_fields_in_player/status
 
 rbt post --tracking-branch=origin/develop --repository=asplayer \
---username=kyoupark --password=tegI3301 --branch=NGDEV-170772_AS_RDK_DTT_some_fields_in_IDLE_state_are_extra
+--username=kyoupark --password=tegI3301 --branch=NGDEV-170772_AS_RDK_DTT_some_fields_in_IDLE_state_are_extra_reopen
 
 rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-170773_AS_RDK_DTT_scan_status_has_duplicated_updates
@@ -1088,6 +1088,21 @@ rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-170776_AS_RDK_DTT_documentId_in_/services/status_is_empty
 
 git push origin NGDEV-170776_AS_RDK_DTT_documentId_in_/services/status_is_empty
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=LLDEV-1983_AS_DEV_RDK_handle_services/b/sb
+git push origin LLDEV-1983_AS_DEV_RDK_handle_services/b/sb
+git branch LLDEV-2189_AS_DEV_RDK_unexpected_PENDING_status
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
+git branch NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
+git push origin NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=LLDEV-2086_AS_DEV_RDK_DTT_/services_list_is_not_available_after_a_DTT_scan_with_no_feeds
+
+git branch LLDEV-2086_AS_DEV_RDK_DTT_/services_list_is_not_available_after_a_DTT_scan_with_no_feeds
 
 rbt post --tracking-branch=origin/develop --repository=as-system-service \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-169508_AS_RDK_DTT_Simple_Hybrid_Service_List
@@ -1142,21 +1157,22 @@ http://10.184.136.124:9001/r/1013/diff/
 // update
 // If you want to update a specific review request by ID, you can use the -r parameter:
 
-rbt post --tracking-branch=origin/NGDEV-163115_AS_Voice_search_support_for_Verdi -r 1069
-rbt post --tracking-branch=origin/develop --branch=NGDEV-167550_AS_DTH_unit_test_compile_failure -r 1133
-
 rbt post --tracking-branch=origin/develop -r 1147 --branch=NGDEV-166495_AS_RDK_Migrate_DTT_in_AS_player_XiOne
 rbt post --tracking-branch=origin/develop -r 1183 --branch=NGDEV-168097_AS_RDK_DTT_Enable_DTT
 rbt post --tracking-branch=origin/develop -r 1172 --branch=NGDEV-168097_AS_RDK_DTT_Enable_DTT
-
 rbt post --tracking-branch=origin/develop -r 1196 --branch=NGDEV-169508_AS_RDK_DTT_Simple_Hybrid_Service_List
 rbt post --tracking-branch=origin/develop -r 1197 --branch=NGDEV-169508_AS_RDK_DTT_Simple_Hybrid_Service_List
-
-
 rbt post --tracking-branch=origin/develop -r 1208 --branch=NGDEV-170778_AS_RDK_DTT_invalid_fields_in_player/status
+rbt post --tracking-branch=origin/develop -r 1255 --branch=NGDEV-170772_AS_RDK_DTT_some_fields_in_IDLE_state_are_extra_reopen
+rbt post --tracking-branch=origin/develop -r 1277 --branch=LLDEV-2086_AS_DEV_RDK_DTT_/services_list_is_not_available_after_a_DTT_scan_with_no_feeds
 
+rbt post --tracking-branch=origin/develop -S -r 1274 --branch=NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
+
+-S,--squash-history
+Force the review request to be created without history, even if the server supports it. Uploaded diffs will be squashed together.
 
 Review request #1010 posted.
+
 
 http://10.184.136.124:9001/r/1010/
 http://10.184.136.124:9001/r/1010/diff/
@@ -1414,6 +1430,9 @@ void bindMethods( AS_WORKER::UrlMap *map )
     
     // The URI can be something like, for e.g. 9001/as/schedule/<date>/<sid>.
     // The API domain for the above example is "schedule"
+    //
+    // note that as-map-domain maps to a vector which has `all` apis belongs
+    // to that domain. "/player" for example
 
     m_registeredUrlMap[apiDomain].push_back( data );
   }
@@ -1537,9 +1556,47 @@ Exec()
       AS_WORKER::Executor *UrlMap::CreateExecutor
       (int method, AS_WORKER::Environment *env, AS_WORKER::Uri *uri, AS_WORKER::ParamValidator **validator ) const
       {
+        // search through `vector of apis` mapped to `domain`
+
+        // skyxione asproxy[454]: KT-PRN: loop found 
+        // {/9001/as/players/1/action/watchstream} 
+        // {/9001/as/players/<vwid>/action/watchstream} 
+        // {3}
+
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
+        // {/9002/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
+        // {/9003/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9004/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9005/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9006/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9007/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9008/as/players/<vwid>/action/watchstream}
+        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9009/as/players/<vwid>/action/watchstream}
+
         itUrlMap = m_registeredUrlMap.find( apiDomain );
 
         AS::vector<UrlRegData>::const_iterator matchingUrlRegData;
+
+        // use "string parse"
+        //
+        // To store path and path type. eg: if url is 9001/as/schedule/<date>/<sid> no of path is 5.
+        //  m_pathVar[0] will be <false, 9001>
+        //  m_pathVar[1] will be <false, as>
+        //  m_pathVar[2] will be <false, schedule>
+        //  m_pathVar[3] will be <`true`, <date> > since path is variable and param type is path param
+        //  m_pathVar[4] will be <`true`, <sid> > since path is variable and param type is path param
+        //
+        // will be `true` for any "<???>" in url
+        //
+        // AS::vector<AS::pair<bool, AS::string> > m_pathVar;
+        //
+        // note: after all, CompareRegUri() do not consider "<xxx>" token 
+        // in comparision to decide if it has found a match and compare the rest.
+        // so can distinguish two:
+        //
+        // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchlive}
+        // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchstream}
 
         if ( method == (*itUrlRegData).method && uri->CompareRegUri( *(itUrlRegData->uri), matchedPathDepth ) )
           matchingUrlRegData = itUrlRegData;
@@ -11659,11 +11716,11 @@ patch -p1 < /media/keitee/ssd2/e2fsprogs.patch
 
 Applying patch 0065-RTK-237-STR-reboot-reason-bootstatus.patch
 
-/media/keitee/ssd2/direct_build_xi1_tip/meta-rdk-oem-sky-realtek/meta-xione/recipes-kernel/linux/files
-0065-RTK-237-STR-reboot-reason-bootstatus.patch
+meta-rdk-oem-sky-realtek/meta-xione/recipes-kernel/linux/files/0065-RTK-237-STR-reboot-reason-bootstatus.patch
+
+Index: kernel-source/drivers/soc/realtek/rtd13xx/rtd13xx_suspend.c
 
 remove hunk #7 from the patch file
-
 
  #define REBOOT_MAGIC 0xdeadbeef
 @@ -471,10 +579,8 @@ int __init rtk_suspend_init(void)
@@ -11679,26 +11736,24 @@ remove hunk #7 from the patch file
  	return 0;
  }
 
+delete them manually if patch is already appliced to this file
+
+./tmp/work/skyxione-rdk-linux-gnueabi/linux-hank/4.9.119-r0/git/drivers/soc/realtek/rtd13xx/rtd13xx_suspend.c
+./tmp/work-shared/skyxione/kernel-source/drivers/soc/realtek/rtd13xx/rtd13xx_suspend.c
+
 to:
 
-	rtk_acpu_set_flag(0x00000000);
 	suspend_set_ops(&rtk_suspend_ops);
-	pm_power_off = rtk_power_off;
-	arm_pm_restart = rtk_sys_reset;
 
  	return 0;
  }
-
-./tmp/work/skyxione-rdk-linux-gnueabi/linux-hank/4.9.119-r0/git/drivers/soc/realtek/rtd13xx/rtd13xx_suspend.c
-
-delete them manually since patch is already appliced to this file
-./tmp/work-shared/skyxione/kernel-source/drivers/soc/realtek/rtd13xx/rtd13xx_suspend.c
 
 
 # 2006_sprint
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
 -b 2006_sprint -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
 
+*rdk-build*
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/sky-realtek-manifest \
 -b stable2_sky -m skyxione.xml --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo --no-repo-verify -g all
 
@@ -11757,7 +11812,7 @@ no changes added to commit (use "git add" and/or "git commit -a")
 EXTERNALSRC_pn-devicesettings-hal-headers = "/media/keitee/ssd2/direct_build_xi1_tip/generic/devicesettings/generic"
 
 // add these
-ENV_PRODUCT = "skyxione-de"
+ENV_PRODUCT = "skyxione-uk"
 EPG_VARIANT = "PROD"
 VGDRM_TYPE = "PROXY"
 
@@ -11776,7 +11831,7 @@ export PATH=/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bi
 
 export PATH=/media/keitee/ssd2/direct_build_xi1_tip/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1/openembedded-core/bitbake/bin:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
 
-export PATH=/media/keitee/ssd2/direct_build_xi1_tip/openembedded-core/scripts:/media/keitee/ssd2/direct_build_xi1_tip/openembedded-core/bitbake/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
+export PATH=/media/keitee/ssd2/direct_build_stabke2_sky/openembedded-core/scripts:/media/keitee/ssd2/direct_build_stable2_sky/openembedded-core/bitbake/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/home/keitee/.local/bin:/home/keitee/bin:/home/keitee/works/bitbake-1.40/bin:/home/keitee/bin:/home/keitee/vim/bin:/home/keitee/git/kb/bin:/home/keitee/.cargo/bin:/home/keitee/Downloads/git-repo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/keitee/.fzf/bin
 
 bitbake comcast-mediaclient-vbn-image
 
@@ -11954,7 +12009,12 @@ FlashApp ./SKXI11ADS_VBN_stable2_sky_20201007154031sdy.bin
 // CAD2 UK
 scp -r -P 10022 ./SKXI11ADS_VBN_SKXI11AIS_000150.7.2.0.0_20201030112154sdy.bin root@192.168.0.12:/tmp/data
 cd /tmp/data
-FlashApp ./SKXI11ADS_VBN_SKXI11AIS_000150.7.2.0.0_20201030112154sdy.bin
+FlashApp ./SKXI11ADS_VBN_SKXI11AIS_000150.7.2.0.0_20201030112154sdy.bin   // mr 8.3
+FlashApp ./SKXI11ADS_VBN_SKXI11AIS_000150.5.8.0.0_20201027155603sdy.bin   // mr 8.2 but no epg
+FlashApp ./SKXI11ADS_VBN_stable2_sky_20201007154031sdy.bin // not able to going back
+
+scp -r -P 10022 ./SKXI11ADS_VBN_SKXI11AIS_000150.8.6.0.0_20201116195701sdy.bin root@192.168.0.12:/tmp/data
+FlashApp ./SKXI11ADS_VBN_SKXI11AIS_000150.8.6.0.0_20201116195701sdy.bin
 
 // CAD3
 scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.5.8.0.0_20201025221343sdy.bin root@192.168.0.17:/tmp/data
@@ -12063,6 +12123,17 @@ ssh -p 10022 root@192.168.0.12
 cd /opt
 
 
+*rdk-sdk*
+
+2020.11.03
+https://www.stb.bskyb.com/fileshare/index.php/s/od0kATwll7inOiS
+
+Each time you wish to use the SDK in a new shell session, you need to source the environment setup script e.g.
+ $ . /media/keitee/ssd2/rdk/2.0/environment-setup-armv7at2hf-neon-rdk-linux-gnueabi
+
+$ cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK ..
+
+
 *as-mr* as-mediarite
 systemctl stop mediarite.service
 systemctl status mediarite.service
@@ -12117,6 +12188,8 @@ ssh -p 10022 root@192.168.0.12 "journalctl -u sky-asplayer --since today" > play
 
 scp -P 10022 root@192.168.0.12:/opt/dbus.log .
 
+http://192.168.0.12:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL 
+http://192.168.0.12:9005/as/services/scan/action/commit
 
 *as-system*
 
@@ -13045,7 +13118,7 @@ void ASProxyService::ProcessDbusCall( const std::string dbusMessage, sd_bus_mess
 }
 
 
-*as-network*
+*as-network* *as-map-config*
 
 const string NetworkService::m_configJson = R"JSON(
 {
@@ -13083,6 +13156,7 @@ void NetworkMethodCallExecutor::execute(const std::shared_ptr<ASMethodCall> meth
     uint32_t NetworkController::PingRouter()
   }
 }
+
 
 void RdkServicesController::threadLoop()
 {
@@ -13162,6 +13236,7 @@ std::string `ASServiceSDBus`::config() const
 
 const std::string PlaybackService::mConfigJson = R"JSON(
 {
+  "domain": "/player", *as-map-domain*
   "uris": [
     {
       "path": "/as/drm/status",
@@ -13182,6 +13257,7 @@ const std::shared_ptr<AS_MAIN::`ProxyUrlMap`> mUrlMap;
 void ServicesManager::createBuiltinExecutors()
 {
    // BAD REQUEST (fallback)
+   // 143:AS_ERROR: Expect 404/104, received 404/{u'errorCode': 101, u'developerMessage': u'An URL which did not translate into an AS call was received. The URL was POST 9005/as/players/1/action/watchlive?sid=920', u'userMessage': u'Invalid URL'}
 	AS_WEB_SERVER::BadReqExecutorFactory *badreqExecutor = new AS_WEB_SERVER::BadReqExecutorFactory();
 
    mUrlMap->RegisterUrl( REQ_METHOD_HTTP_GET, ( char * ) BAD_REQUEST, badreqExecutor );
@@ -13336,7 +13412,7 @@ static std::map<std::string, `TExpectedParams`> `expectedParamsList` = {
 
 #elif defined(RDK)
 // The dat file deals with RDK specific param support
-#include "ExpectedParams_rdk.dat"
+`#include "ExpectedParams_rdk.dat"`
 };
 
 typedef std::map<ParamTypes_t, TParamAttributes> TExpectedParams;
@@ -13384,7 +13460,7 @@ struct ParamAttributes
                   {
                    // `{std::string, ParamAttributes}`
                    {"filter", {
-                                false, 
+                                false, // risMandatory
                                 "Filter", 
                                 "Filter type of services, OTT is online services only",
                                 AS_WORKER::ParamDataTypeEnum,
@@ -13399,6 +13475,39 @@ struct ParamAttributes
                   }
                  }
                 }
+},
+
+{
+  "/as/players/<vwid>/action/watchlive", {
+    {AS_WORKER::QUERY_PARAM,
+      {
+        {
+          "sid", {false, "ServiceId", "Service id of service being tuned", 
+                  AS_WORKER::ParamDataTypeLocator, 
+                  {STRINGIFY(SYSTEMLOCATOR_TYPE_SERVICE)}}
+        },
+        {"vtrack", {false, "VideoTrack", "Video track to tune to", AS_WORKER::ParamDataTypeString}},
+        {"atrack", {false, "AudioTrack", "Audio track to tune to", AS_WORKER::ParamDataTypeString}},
+        {"lcn", {false, "LogicalChannelNumber", "Logical channel number", AS_WORKER::ParamDataTypeInt}}
+      }
+    },
+    {AS_WORKER::PATH_PARAM,
+      {
+        {"vwid", {true, "VideoWindow", "The video window of the play job", AS_WORKER::ParamDataTypeInt, {"1" /*Pip is dealt with in PlayersVwidParamValidator*/}}}
+      }
+    }
+  }
+},
+
+{"/as/services/scan/action/start", {
+  {AS_WORKER::QUERY_PARAM,
+    {
+      {"scantype", {true, "ScanType", "Type of the scan to perform", AS_WORKER::ParamDataTypeEnum, {"DTT-UPDATE", "DTT-FULL", "SMATV", "OFTA", "FIRST-INSTALL"}}},
+      {"channeltype", {false, "ChannelType", "Type of the DTT channel", AS_WORKER::ParamDataTypeEnum, {"FTA", "ALL"}}},
+      {"country", {false, "Country", "Country of the scan", AS_WORKER::ParamDataTypeEnum, {"DEU", "AUT"}}}
+    }
+  }
+                                   }
 },
 
 {
@@ -13654,6 +13763,8 @@ AS_WORKER::Executor *ProxyUrlMap::CreateExecutor( int method,
 
 
 note: *as-map-params*
+
+// ethan-as-source/Components/AS/Worker/source/AS_WORKER_Uri.cpp
 class Uri : public Params
 
 
@@ -13840,13 +13951,13 @@ void ASPlayerHandler::onRequest( const ASRequest &request );
 each service(server) express intend that it will send a signal whenever it need
 to udpate status and the proxy register itself to each service:
 
-const std::string PlaybackService::mConfigJson = R"JSON(
+const string `PlaybackService`::mConfigJson = R"JSON(
 {
   "providesSystemStatus" : true,
   ...
 }
 
-const string SystemService::m_configJson = R"JSON(
+const string `SystemService`::m_configJson = R"JSON(
 {
   "providesSystemStatus" : true,
   ...
@@ -13856,18 +13967,7 @@ const string SystemService::m_configJson = R"JSON(
   "providesSystemInfo": true,
 }
 
-note: is this on somewhere?
-
-#ifdef APROXY_GENERATE_SYSTEM_JSON
-    // if the service provides values for the system info URL then also attach
-    // that to the system info executor
-    if (config.providesSystemInfo)
-    {
-        mSysInfoFactory->addService(service);
-    }
-#endif
-
-*as-proxy-system-status* 
+*as-proxy-system-status* *dbus-call-service* *dbus-call-signal*
 
 void ServicesManager::createBuiltinExecutors()
 {
@@ -13884,9 +13984,49 @@ bool ServicesManager::registerService(const std::string &configJson)
   // and similarly for the /as/system/status websocket
   if (`config.providesSystemStatus`)
   {
-    mSysStatusFactory->addService(service);
+    `mSysStatusFactory`->addService(service);
+  }
+
+#ifdef APROXY_GENERATE_SYSTEM_JSON note: is this on somewhere?
+
+  // if the service provides values for the system info URL then also attach
+  // that to the system info executor
+  if (config.providesSystemInfo)
+  {
+    `mSysInfoFactory`->addService(service);
+  }
+#endif
+
+  if (method == REQ_METHOD_WS)
+  {
+    AS_WORKER::Factory *factory = 
+      new `ServiceWsExecutorFactory`(
+        mSecurity,
+        allowedLevels,
+        service);
+
+      mUrlMap->RegisterUrl(method, url.path, factory, url.threadName);
   }
 }
+
+
+AS_WORKER::Executor 
+*ServiceWsExecutorFactory::doCreateExecutor(AS_WORKER::Environment *env)
+{
+  listener.listenerTag = mService->registerWebSocketListener(urlPath, listener.listener);
+
+}
+
+// ethan-as-source/Components/Rdk/ASProxy/Proxy/Services/source/rdk/ASServiceSDBus.cpp
+{
+    // create a rule so we received the dbus signal
+    int tag = connectSignalAndRegister("WebSocketUpdate",
+                                       "RegisterWebSocketListener",
+                                       wsUrl,
+                                       registerLambda, unregisterLambda,
+                                       10000);
+}
+
 
 void SystemStatusExecutorFactory::addService(const std::shared_ptr<IService> &service)
 {
@@ -13930,7 +14070,8 @@ int ASServiceSDBus::registerSystemStatusListener(const SystemStatusListener &han
       };
 
   // create a rule so we received the dbus signal
-  int tag = connectSignalAndRegister("SysStatusUpdate",
+  int tag = connectSignalAndRegister(
+      `"SysStatusUpdate",`
       `"RegisterSysStatusListener"`,
       std::string(),
       registerLambda, unregisterLambda,
@@ -13938,7 +14079,7 @@ int ASServiceSDBus::registerSystemStatusListener(const SystemStatusListener &han
 }
 
 int ASServiceSDBus::connectSignalAndRegister(
-    const char *signalName,
+    `const char *signalName`,
     const char *registerMethod,
     ...)
 {
@@ -13960,6 +14101,22 @@ int ASServiceSDBus::connectSignalAndRegister(
         registerMethod, arg0);
 
   mSDBus->call(msg, timeoutMSecs);
+}
+
+
+a service(player) side (server as to status update):
+
+{
+  SD_BUS_METHOD("RegisterSysStatusListener", nullptr, nullptr,
+      &ASServicePrivate::registerSystemStatusListener,
+      SD_BUS_VTABLE_UNPRIVILEGED),
+
+  SD_BUS_METHOD("UnregisterSysStatusListener", nullptr, nullptr,
+      &ASServicePrivate::unregisterSystemStatusListener,
+      SD_BUS_VTABLE_UNPRIVILEGED),
+
+  *dbus-call-signal*
+  SD_BUS_SIGNAL("SysStatusUpdate", "a(sa{sv})", 0),
 }
 
 
@@ -14004,7 +14161,7 @@ void ASServiceSDBus::onSysStatusUpdateSignal(int matchTag,
 }
 
 // -----------------------------------------------------------------------------
-    Called when one of our services sends us a signal that it's status has
+    `Called when one of our services sends us a signal` that it's status has
     changed.
 
     The \a statuses value is a JSON object that contains one or more status
@@ -14017,21 +14174,11 @@ void ASServiceSDBus::onSysStatusUpdateSignal(int matchTag,
 void SystemStatusExecutorFactory::`onStatusUpdate`(Json::Value &&statuses);
 
 
-a service(player) side (server as to status update):
-
-{
-  SD_BUS_METHOD("RegisterSysStatusListener",   nullptr,         nullptr,     
-      &ASServicePrivate::registerSystemStatusListener,    SD_BUS_VTABLE_UNPRIVILEGED),
-
-  SD_BUS_METHOD("UnregisterSysStatusListener", nullptr,         nullptr,     
-      &ASServicePrivate::unregisterSystemStatusListener,  SD_BUS_VTABLE_UNPRIVILEGED),
-
-  SD_BUS_SIGNAL("SysStatusUpdate",             "a(sa{sv})",                                                            0),
-}
+service side:
 
 std::multimap<std::string, std::string> m_registeredSystemStatusClients;
 
-int ASServicePrivate::registerSystemStatusListener(sd_bus_message *msg, void *userData, sd_bus_error *retError)
+int ASServicePrivate::`registerSystemStatusListener`(sd_bus_message *msg, void *userData, sd_bus_error *retError)
 {
   ASServicePrivate *self = reinterpret_cast<ASServicePrivate*>(userData);
   assert(self != nullptr);
@@ -14077,7 +14224,8 @@ void PlaybackService::SendSystemStatusUpdates(const std::string &state)
 void ASServicePrivate::updateSystemStatus( const std::map<std::string, ASVariantMap>& systemStatusUpdate )
 {
   // then send signals to any listeners
-  for (auto it = m_registeredSystemStatusClients.begin(); it != m_registeredSystemStatusClients.end(); ++it)
+  for (auto it = `m_registeredSystemStatusClients`.begin(); 
+      it != m_registeredSystemStatusClients.end(); ++it)
   {
     sendSystemStatusUpdateTo(it->second, systemStatusUpdate);
   }
@@ -14101,9 +14249,17 @@ void ASServicePrivate::sendSystemStatusUpdateTo(const std::string &service, cons
   rc = sd_bus_send_to(m_dbusConn.handle(), msg, service.c_str(), nullptr);
 }
 
-call as-system signal:
+
+*cached-update*
+
+int ASServicePrivate::registerWsListener(sd_bus_message *msg, void *userData,
+                                         sd_bus_error *retError)
 {
-  SD_BUS_SIGNAL("SysStatusUpdate",             "a(sa{sv})",                                                            0),
+  ASServicePrivate *self = reinterpret_cast<ASServicePrivate*>(userData);
+  assert(self != nullptr);
+
+  return self->`registerListener`(msg, &self->m_registeredWsClients,
+      std::mem_fn(&ASServicePrivate::sendCachedWsUpdateTo));
 }
 
 
@@ -15176,8 +15332,8 @@ echo $WESTEROS_SINK_USE_GFX
 asrdkplayer -v
 
 
-*aamp-player*
-sdk/sysroot/armv7ahf-neon-rdk-linux-gnueabi/usr/include/main_aamp.h
+*as-player-aamp*
+sdk:sysroots/armv7at2hf-neon-rdk-linux-gnueabi/usr/include/main_aamp.h
 
 class PlayerInstanceAAMP
 {
@@ -15268,7 +15424,7 @@ curl -v -X GET http://192.168.0.12:9005/as/services/genres
 
 *as-player-setting*
 
-curl -v -X GET http://192.168.0.9:9005/as/players/setting/audioLanguage
+curl -v -X GET http://192.168.0.12:9005/as/players/setting/audioLanguage
 curl -v -X POST http://192.168.0.12:9005/as/players/setting/audioLanguage --data '{"audioLanguage": "INVALID_VALUE"}'
 500 POST http://192.168.0.15:9005/as/players/setting/audioLanguage {"audioLanguage": "INVALID_VALUE"} [1602542005.99]
 
@@ -15517,7 +15673,13 @@ root@skyxione:~# /lib/ld-2.24.so --list /usr/sbin/asrdkplayer
 /services/scan/status
 
 // from asda
-POST
+POST 
+http://192.168.0.12:9005/as/services/scan/action/start?scantype=OFTA
+
+27:AS Request to 
+   http://192.168.0.24:9005/as/services/scan/action/start?scantype=OFTA [1604433002.52]
+30:AS_ERROR: Expect 404/104, received 404/{u'errorCode': 101, u'userMessage': u'Invalid URL'}
+
 http://192.168.0.12:9005/as/services/scan/action/start?scantype=DTT-FULL
 http://192.168.0.12:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL 
 
@@ -15643,7 +15805,7 @@ string:""
 // NOK
 curl -v -X POST http://192.168.0.12:9005/as/services/scan/action/commit
 
-POST http://192.168.0.14:9005/as/services/scan/action/commit
+POST http://192.168.0.12:9005/as/services/scan/action/commit
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
 /com/sky/as/service \
@@ -16034,7 +16196,11 @@ git push origin ready-NGDEV-161284_DTT_playback:NGDEV-161284_DTT_playback
 git push origin ready-NGDEV-161284_DTT_playback_propose:NGDEV-161284_DTT_playback
 
 
-*as-dtt-play-status*
+*as-dtt-play-status* *as-dtt-asda*
+
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.12:9005" -H "Origin:" http://192.168.0.12:9005/as/services/status
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.12:9005" -H "Origin:" http://192.168.0.12:9005/as/system/status
+curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.12:9005" -H "Origin:" http://192.168.0.12:9005/as/players/1/status
 
 // from aamp player
 
@@ -16213,17 +16379,22 @@ enum CoreStatus {
 POST
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=3
 
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-1a
+// 140:AS Request to 
+// http://192.168.0.24:9005/as/players/1/action/watchlive?sid=920 [1604433006.09]
+// 143:AS_ERROR: Expect 404/104, received 404/{u'errorCode': 101, u'developerMessage': u'An URL which did not translate into an AS call was received. The URL was POST 9005/as/players/1/action/watchlive?sid=920', u'userMessage': u'Invalid URL'}
+
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-ad
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-10bf-1b
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2045-5d
 
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2045-189
+// channel 5
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2134-16c
 
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-21e
+// "t" : "Rai 1 HD",
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M13e-4-218c-e7
 
-http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-b1b
+// "t" : "Rai Movie",
+http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M13e-4-2189-e6
 
-			"sid" : "M233a-1044-1044-1a",
 // llama
 http://192.168.0.14:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-1a
 http://192.168.0.14:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-1c
@@ -16944,7 +17115,6 @@ http://10.184.136.138:8081/job/AS_TEST_XIONE/513/artifact/output/TEST-players_tr
 
 returns tracks of current service
 /players/<vwid>/tracks
-
 curl -vLN -X GET http://192.168.0.12:9005/as/players/1/tracks
 
 {
@@ -16964,17 +17134,133 @@ curl -vLN -X GET http://192.168.0.12:9005/as/players/1/tracks
   "subtitletracks": []
 }
 
+// output from dtt support
+{
+        "audiotracks" :
+        [
+                {
+                        "audioid" : "5",
+                        "isocode" : "eng",
+                        "name" : "English",
+                        "selected" : true
+                },
+                {
+                        "audioid" : "4",
+                        "isocode" : "ita",
+                        "name" : "Italian"
+                }
+        ],
+        "subtitletracks" : []
+}* Closing connection 0
+
 
 http://192.168.0.15:9005/as/players/1/tracks?collapse=false
 
+void PlayersComponentTracksExecutor::handleGetRequest( const ASRequest &request )
+void ASPlayerSession::GetComponentTracks( const ASRequest &request )
 
+
+*/players/<vwid>/action/setaudio*
 Attempts to tune and begin playback of specified audio track.
-/players/<vwid>/action/setaudio
 URI STRUCTURE /as/players/<vwid>/action/setaudio?audioid=<audioid>
 
+void ASPlayerSession::SetAudioComponentTrack( const ASRequest &request )
+m_playerInterface->setAudioTrack( audioId );
+bool AAMPPlayer::setAudioTrack(int audioIndex)
+
+curl -v -X POST http://192.168.0.12:9005/as/players/1/action/setaudio?audioid=4
+http://192.168.0.12:9005/as/players/1/action/setaudio?audioid=4
 
 /players/<vwid>/action/setsubtitles
 
+
+*as-player-aamp*
+
+	/**
+	 *   @brief Set optional preferred language list
+	 *   @param[in] languageList - string with comma-delimited language list in ISO-639
+	 *             from most to least preferred: "lang1,lang2". Set NULL to clear current list.
+	 *
+	 *   @return void
+	 */
+	 void SetPreferredLanguages(const char* languageList);
+
+
+dtt-stream
+
+// use this file to build dtplay
+readlink -f ./DTAPI/Lib/GCC5.1_CXX11_ABI0/DTAPI64.o
+
+DtPlay Italy_MUX3_514_8Mhz.ts  -mB 8 -mC QAM64 -t 2115 -l 0 -r 24882353  -mf 514 -mt DVBT -n 2
+DtPlay ~/ts-streams/DVBT-ITA/Italy_MUX3_514_8Mhz.ts  -mB 8  -mC QAM64 -t 315 -l 0 -r 19906000 -mf 514 -mt DVBT -mc 2/3 -mG 1/4 -n 1
+DtPlay ~/ts-streams/DVBT-ITA/Italy_MUX3_514_8Mhz.ts  -mB 8  -mC QAM64 -t 315 -l 0 -r 19905882 -mf 514 -mt DVBT -mc 2/3 -mG 1/4 -n 1
+
+"RAI 1 HD"
+
+dtt > listtrack a
+[11:25:31,034240] MAIN(3020).20 console.cpp:761(L1)set ATRACKS
+[11:25:31,035171] MAIN(3020).20 console.cpp:815(L1)Current service PK is: 172
+[11:25:31,035910] MAIN(3020).20 console.cpp:819(L1)Core status: eCsAllIsWell
+[11:25:31,040031] MAIN(3020).20 TableResult.cpp:39(L0)TracksResult
+[0] PK (9)
+>> [1] Name (12)
+[2] SetMediaUrlPK (9)
+[3] UpdateSource (3)
+[4] TrackType (3)
+[5] TrackEncapsulation (3)
+[6] ContentType (3)
+[7] TrackDescription (12)
+[8] Language (12)
+>> [9] SignalledISO639 (12)
+[10] ComponentTag (5)
+[11] Pid (9)
+[12] IsSelected (1)
+[13] MetaInfo (13)
+[14] AudioRouting (3)
+[15] AudioMixType (3)
+[16] AudioIsSupplementary (1)
+[17] _id (9)
+Row 0000 {
+ 5
+1| English (MPEG)
+ | 4
+ | 1
+ | 200
+ | 1
+ | 1
+ |
+8| eng
+9| eng
+ | 2
+ | 450
+12| 1
+ |
+ | 1
+ | 2
+ | 0
+ | 5
+}
+Row 0001 {
+ 4
+ | Italian SurroundSound (AC3)
+ | 4
+ | 1
+ | 202
+ | 1
+ | 1
+ |
+ | ita
+ | ita
+ | -1
+ | 449
+12| 0
+ |
+ | 1
+ | 3
+ | 0
+ | 4
+}
+dtt >
 
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-as-appservice rdk-as-windowmanager

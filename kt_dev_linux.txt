@@ -1104,7 +1104,7 @@ $ { date;time; } > mylog
 ={============================================================================
 *kt_linux_bash_019* sh-pipeline-case-problem
 
-The task is that if see two log lines in order in a log and then it is to flag
+The task is that if see two log lines in order in a log and then like to flag
 it up as error.
 
 Line xx: ... > VRM_JOB_START: jtVRM=3, jhVRM=0x3000385
@@ -1123,8 +1123,8 @@ scan_for()
 A=``mycat $1 | egrep -n "(VRM_JOB_START:|XTVFS_WriteEx)" | scan_for``
 
 
-The $A will have all lines which are echoed from scan_for(). Okay, expand
-this.
+The variable $A will have all lines which are echoed from scan_for() and
+expand this.
 
 scan_for()
 {
@@ -1167,9 +1167,7 @@ scan_for()
 }
 
 
-The reason:
-
-From *sh-pipeline-subshell*
+The reason is from *sh-pipeline-subshell*
 
 `each-command` in a pipeline is executed in its own `subshell`. The exit status
 of a pipeline is the exit status of the `last-command` in the pipeline, unless
@@ -1180,6 +1178,83 @@ http://mywiki.wooledge.org/BashFAQ/024
 I set variables in a loop that's in a pipeline. Why do they disappear after the
 loop terminates? Or, why can't I pipe data to read?
 
+    # Works only in ksh88/ksh93, or zsh or bash 4.2 with lastpipe enabled
+    # In other shells, this will print 0
+    linecount=0
+
+    printf '%s\n' foo bar |
+    while IFS= read -r line
+    do
+        linecount=$((linecount + 1))
+    done
+
+    echo "total number of lines: $linecount"
+
+The *sh-while-loop* above is executed in a new subshell with its own copy of
+the variable linecount created with the initial value of '0' taken from the
+parent shell. This copy then is used for counting. When the while loop is
+finished, the subshell copy is discarded, and the original variable linecount
+of the parent (whose value hasn't changed) is used in the echo command.
+
+
+# keitee@kit-ubuntu:~/git/kb/code-sh$ bash loop_2.sh
+# total number of lines: 0
+
+linecount=0
+
+# here "print" is necessary to feed "read" command. 
+
+printf '%s\n' foo bar |
+while ifs= read -r line
+do
+    linecount=$((linecount + 1))
+done
+
+echo "total number of lines: $linecount"
+
+
+# keitee@kit-ubuntu:~/git/kb/code-sh$ bash loop_3.sh
+# echo hello
+# read echo hello
+# variable:
+keite
+f() {
+    if [[ -t 0 ]]; then
+        echo "echo $1"
+    else
+        read var
+        echo "read $var"
+    fi
+};
+
+f 'hello'
+
+# keitee@kit-ubuntu:~/git/kb/code-sh$ bash loop_3.sh
+# echo hello
+#
+# since
+# -t fd
+# True if file descriptor fd is open and refers to a terminal.
+# "0" is stdin and it's open.
+
+f 'hello' | f
+# howwever, when use "|", 0 is not stdin and gets false.
+
+echo "variable: $var" # prints nothing
+
+Again, in both cases the pipeline causes read or some containing command to
+run in a subshell, so its effect is never witnessed in the parent process.
+
+It should be stressed that this issue isn't specific to loops. It's a general
+property of all pipes, though the "while/read" loop might be considered the
+canonical example that crops up over and over when people read the help or
+manpage description of the read builtin and notice that it accepts data on
+stdin. They might recall that data redirected into a compound command is
+available throughout that command, but not understand why all the fancy
+process substitutions and redirects they run across in places like FAQ #1 are
+necessary. Naturally they proceed to put their funstuff directly into a
+pipeline, and confusion ensues.
+
 Workarounds
 
 Use ProcessSubstitution (Bash/Zsh/Ksh93 only). note: OK 
@@ -1187,10 +1262,9 @@ http://mywiki.wooledge.org/ProcessSubstitution
 
 
 The problem is changes in subshell cannot be seen in parent. How to solve? Use
-redirection from subshell.
+*sh-command-substitution* output from the subshell
 
-
-<xtvfs_write_error2>
+<ex> 
 ##P2
 ## PicassoShutdownFail: Park, Kyoung-Taek, 09/01/2012
 ## Check for XTVFS error on a recording
@@ -1321,6 +1395,23 @@ if __name__ == "__main__":
     else:
         print str(lineNo) + " Player blocked"
         sys.exit (1)
+
+<ex>
+
+$ sudo echo function > /sys/kernel/debug/tracing/current_tracer
+-bash: /sys/kernel/debug/tracing/current_tracer: Permission denied
+
+$ sudo 'echo function > /sys/kernel/debug/tracing/current_tracer'
+[sudo] password for keitee:
+sudo: echo function > /sys/kernel/debug/tracing/current_tracer: command not found
+
+$ echo function > /sys/kernel/debug/tracing/current_tracer
+-bash: /sys/kernel/debug/tracing/current_tracer: Permission denied
+
+$ sudo bash -c "echo function > /sys/kernel/debug/tracing/current_tracer"
+$
+
+see *sh-invoking* for "-c" option
 
 
 ={============================================================================
@@ -3893,7 +3984,7 @@ _that_generates_url
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-expansion-command sh-output-from-command
+*kt_linux_bash_001* sh-expansion-command sh-output-from-command *sh-command-substitution*
 
 3.5.4 Command Substitution
 
@@ -3913,7 +4004,7 @@ week=``date '+%W'``             # The week of the year (0..53).
 
 
 Bash performs the expansion by executing COMMAND in a `subshell` environment
-and replacing the command substitution with the standard output of the
+and replacing the command substitution `with the standard output` of the
 command, with any trailing newlines deleted.
 
 Embedded newlines are not deleted, but may be removed during `word splitting` 
@@ -4901,6 +4992,8 @@ $echo $ac_optarg
 ={============================================================================
 *kt_linux_bash_024* sh-builtin-bash
 
+https://www.gnu.org/software/bash/manual/html_node/Bash-Builtins.html
+
 4.2 Bash Builtin Commands
 
 This section describes builtin commands which are unique to or have been
@@ -5461,6 +5554,14 @@ which are not available with the `set` builtin.
 -i
     Force the shell to run interactively. Interactive shells are described in
     Interactive Shells.
+
+
+-c
+Read and execute commands from the first non-option argument command_string,
+then exit. If there are arguments after the command_string, the first argument
+  is assigned to $0 and any remaining arguments are assigned to the positional
+  parameters. The assignment to $0 sets the name of the shell, which is used
+  in warning and error messages.
 
 
 {end-of-option}
@@ -8304,7 +8405,8 @@ chrome://tracing/
 
 *tool-trace-tool-ftrace*
 
-https://lwn.net/Articles/365835/
+1. https://lwn.net/Articles/365835/
+
 Currently the API to interface with Ftrace is located in the Debugfs file
 system. Typically, that is mounted at /sys/kernel/debug. For easier
 accessibility, I usually create a /debug directory and mount it there. Feel
@@ -8312,6 +8414,78 @@ free to choose your own location for Debugfs.
 
 When Ftrace is configured, it will create its own directory called tracing
 within the Debugfs file system. 
+
+One of the most powerful tracers of Ftrace is the function tracer. It uses the
+-pg option of gcc to have every function in the kernel call a special function
+"mcount()". That function must be implemented in assembly because the call
+does not follow the normal C ABI.
+
+This information is quite powerful and shows the flow of functions nicely. But
+it can be a bit hard to follow. The `function graph` tracer, created by Frederic
+Weisbecker, traces both the entry and exit of a function, which gives the
+tracer the ability to know the depth of functions that are called. The
+function graph tracer can make following the flow of execution within the
+kernel much easier to follow with the human eye:
+
+This gives the start and end of a function denoted with the C like annotation
+of "{" to start a function and "}" at the end. Leaf functions, which do not
+call other functions, simply end with a ";". The DURATION column shows the
+time spent in the corresponding function. The function graph tracer records
+the time the function was entered and exited and reports the difference as the
+duration. These numbers only appear with the leaf functions and the "}"
+symbol. Note that this time also includes the overhead of all functions within
+a nested function as well as the overhead of the function graph tracer itself.
+The function graph tracer hijacks the return address of the function in order
+to insert a trace callback for the function exit. This breaks the CPU's branch
+prediction and causes a bit more overhead than the function tracer. The
+closest true timings only occur for the leaf functions.
+
+The lonely "+" that is there is an annotation marker. When the duration is
+greater than 10 microseconds, a "+" is shown. If the duration is greater than
+100 microseconds a "!" will be displayed.
+
+
+Using trace_printk()
+
+printk() is the king of all debuggers, but it has a problem. If you are
+debugging a high volume area such as the timer interrupt, the scheduler, or
+the network, printk() can lead to bogging down the system or can even create a
+live lock. It is also quite common to see a bug "disappear" when adding a few
+printk()s. This is due to the sheer overhead that printk() introduces.
+
+Ftrace introduces a new form of printk() called trace_printk(). It can be used
+just like printk(), and can also be used in any context (interrupt code, NMI
+    code, and scheduler code). What is nice about trace_printk() is that it
+does not output to the console. `Instead it writes to the Ftrace ring buffer`
+and can be read via the trace file.
+
+Writing into the ring buffer with trace_printk() only takes around a tenth of
+a microsecond or so. But using printk(), especially when writing to the serial
+console, may take several milliseconds per write. The performance advantage of
+trace_printk() lets you record the most sensitive areas of the kernel with
+very little impact.
+
+For example you can add something like this to the kernel or module:
+
+    trace_printk("read foo %d out of bar %p\n", bar->foo, bar);
+
+
+What's next?
+
+The next article will continue the discussion on debugging the kernel with
+Ftrace. The method above to disable the tracing `may not be fast enough.` The
+latency between the end of the program run_test and echoing the 0 into the
+tracing_on file may cause the ring buffer to overflow and lose the relevant
+data. I will discuss other methods to stop tracing a bit more efficiently, how
+to debug a crash, and looking at what functions in the kernel are stack hogs.
+
+The best way to find out more is to enable Ftrace and just play with it. You
+can learn a lot about how the kernel works by just following the function
+graph tracer.
+
+
+2. Debugging the kernel using Ftrace - part 2
+https://lwn.net/Articles/366796/
 
 
 https://blog.fpmurphy.com/2014/05/kernel-tracing-using-ftrace.html
@@ -8385,6 +8559,8 @@ nop
 # echo 1 > /sys/kernel/debug/tracing/tracing_on
 
 
+*trace-events*
+
 Events which are available for tracing are listed in
 /sys/kernel/debug/tracing/available_events. To enable a particular event, such
 as sched_wakeup, simply echo it to /sys/kernel/debug/tracing/set_event. For
@@ -8423,7 +8599,7 @@ directory:
 $ sudo ls /sys/kernel/debug/tracing/events
 
 
-Ftrace uses a custom kernel ring buffer to store event information. The ring
+Ftrace uses a custom `kernel ring buffer` to store event information. The ring
 buffer can be used in either an overwrite mode or in producer/consumer mode.
 
 Producer/consumer mode is where if the producer were to fill up the ring
@@ -8439,15 +8615,6 @@ $ sudo cat /sys/kernel/debug/tracing/buffer_total_size_kb
 16896
 $ sudo cat /sys/kernel/debug/tracing/buffer_size_kb
 1408
-
-
-A `trace marker` enables some coordination between what is happening in user
-space and inside the kernel by providing a way to write into the ftrace kernel
-ring buffer `from user space.` This marker will then appear in the trace output
-to give a location where a specific event occurred. Here is an example of
-setting a trace marker:
-
-# echo "FINN" > /sys/kernel/debug/tracing/trace_marker
 
 
 One of the annoying things about ftrace for most first time users of the tool
@@ -8580,6 +8747,8 @@ sudo bash -c "cat /sys/kernel/debug/tracing/trace" | less
 ...
 
 
+*tool-trace-cmd* https://lwn.net/Articles/410200/
+
 To simplify the use of ftrace, Rostedt has written two tools trace-cmd and
 kernelshark. These are available as standard repo RPMs in Fedora 20. Trace-cmd
 is a binary command line tool which acts as a user interface to ftrace whereas
@@ -8609,13 +8778,33 @@ sudo apt-get install trace-cmd
 https://kernelshark.org/
 
 
-<tool-trace-tool-ftrace-add-tag>
+*tool-trace-tool-ftrace-marker*
+
+$ man trace-cmd-record
+
+OPTIONS
+
+       -e event
+           Specify an event to trace. Various static `trace points` have been
+           added to the Linux kernel. They are grouped by subsystem where you
+           can enable all events of a given subsystem or specify specific
+           events to be enabled. The event is of the format
+           "subsystem:event-name". You can also just specify the subsystem
+           without the :event-name or the event-name without the "subsystem:".
+           Using "-e sched_switch" will enable the "sched_switch" event where
+           as, "-e sched" will enable all events under the "sched" subsystem.
+
+               The 'event' can also contain glob expressions. That is,
+                   "*stat*" will select all events (or subsystems) that have
+                     the characters "stat" in their names.
+
+               The keyword 'all' can be used to enable all events.
 
 trace_marker - Writes into this file writes into the kernel buffer
 
-A trace marker enables some coordination between what is happening in user
+A `trace marker` enables some coordination between what is happening in user
 space and inside the kernel by providing a way to write into the ftrace kernel
-ring buffer from user space. This marker will then appear in the trace output
+ring buffer `from user space.` This marker will then appear in the trace output
 to give a location where a specific event occurred. Here is an example of
 setting a trace marker:
 
@@ -8645,18 +8834,19 @@ echo 3500 > /sys/kernel/debug/tracing/buffer_size_kb
 chmod 777 /sys/kernel/debug
 chmod 222 /sys/kernel/debug/tracing/trace_marker
 
+
 Changes to mpm_component_video.c
 
 This causes the text FRAME_PRESENTED to be written into the ftrace log file
 
 DIAG_LOG_MIL(g_MPM_Logging_ID, ("FRAME_PRESENTED: hMC=0x%x", h_media_connection));
-system("echo FRAME_PRESENTED > /sys/kernel/debug/tracing/trace_marker");
+`system("echo FRAME_PRESENTED > /sys/kernel/debug/tracing/trace_marker");`
 DIAG_PMON_DECODER_1ST_FRAME(g_MPM_Logging_ID, h_media_connection);
 Changes to player_api_avcontrol.c
 
 This causes the text VIDEO_IS_SHOWN to be written into the ftrace log, then
 the trace buffer is stopped, then the trigger file is created to allow
-trace_cmd.sh to collect and write the logs to the FSN_DATA directory.
+`trace_cmd.sh to collect and write the logs to the FSN_DATA directory.`
 
 if ( true == visibility )
 {
@@ -8668,28 +8858,42 @@ if ( true == visibility )
 else
 
 
-Debugging the kernel using Ftrace - part 2
-https://lwn.net/Articles/366796/
-
-
 <tool-ftrace-others>
 https://github.com/brendangregg/perf-tools
 
 
-<tool-trace-tool-uftrace>
+*tool-trace-tool-uftrace*
 The uftrace tool is to trace and analyze execution of a program written in
 C/C++. It was heavily inspired by the `ftrace` framework of the Linux kernel
-(especially function graph tracer) and supports userspace programs. It
+(especially function graph tracer) and `supports userspace programs.` It
 supports various kind of commands and filters to help analysis of the program
 execution and performance.
 
-note:
-what's difference from ftrace? supports userspace programs.
 
+*gcc-option-debug-profile*
 The -pg debug option generates profiling information used by gprof
 
 https://github.com/namhyung/uftrace
 https://github.com/namhyung/uftrace/wiki/Tutorial
+
+
+git clone https://github.com/namhyung/uftrace
+
+How to build and install uftrace
+
+On Linux distros, misc/install-deps.sh installs required software(s) on your
+system. Those are for optional advanced features but highly recommend to
+install them together.
+
+$ sudo misc/install-deps.sh
+Once you installed required software(s) on your system, it can be built and installed like following:
+
+$ ./configure
+$ make
+$ sudo make install
+
+For more advanced setup, please refer INSTALL.md file.
+
 
 To analyze this program with uftrace, you need to enable the compiler
 instrumentation. The gcc provides -pg and -finstrument-functions options for
@@ -8709,7 +8913,7 @@ option.
 
 $ uftrace record -A search@arg1,arg2 -A sum@arg1,arg2,arg3 -R search@retval -R sum@retval t_ex_test
 
-Users can use various filter options to limit functions it records/prints. The
+Users can use various `filter options` to limit functions it records/prints. The
 depth filter (-D option) is to omit functions under the given call depth. The
 time filter (-t option) is to omit functions running less than the given time.
 And the function filters (-F and -N options) are to show/hide functions under
@@ -8723,6 +8927,67 @@ $ uftrace record -F find_path -A find_path@arg1,arg2,arg3 -R find_sum@retval t_e
 
 // can see from the second arg
 $ uftrace record -F find_path -A find_path@arg2,arg3 -R find_sum@retval t_ex_test
+
+<ex>
+$ cat hello.cpp
+
+#include <iostream>
+#include <vector>
+
+using namespace std;
+
+int main()
+{
+  cout << "Hello world" << endl;
+  return 0;
+}
+
+
+$ uftrace hello_out
+Hello world
+# DURATION     TID     FUNCTION
+            [   580] | _GLOBAL__sub_I_main() {
+            [   580] |   __static_initialization_and_destruction_0() {
+  44.157 us [   580] |     std::ios_base::Init::Init();
+   0.117 us [   580] |     __cxa_atexit();
+  45.375 us [   580] |   } /* __static_initialization_and_destruction_0 */
+  45.647 us [   580] | } /* _GLOBAL__sub_I_main */
+            [   580] | main() {
+   4.597 us [   580] |   std::operator<<();
+   5.516 us [   580] |   std::basic_ostream::operator<<();
+  10.396 us [   580] | } /* main */
+
+
+$ uftrace record hello_out
+Hello world
+
+$ ll
+drwxr-xr-x  2 keitee keitee 4.0K Nov  1 22:27 uftrace.data/
+
+$ uftrace replay
+# DURATION     TID     FUNCTION
+            [  1139] | _GLOBAL__sub_I_main() {
+            [  1139] |   __static_initialization_and_destruction_0() {
+  93.501 us [  1139] |     std::ios_base::Init::Init();
+   0.263 us [  1139] |     __cxa_atexit();
+  95.246 us [  1139] |   } /* __static_initialization_and_destruction_0 */
+  95.944 us [  1139] | } /* _GLOBAL__sub_I_main */
+            [  1139] | main() {
+   9.570 us [  1139] |   std::operator<<();
+  13.818 us [  1139] |   std::basic_ostream::operator<<();
+  24.033 us [  1139] | } /* main */
+
+
+$ ltrace ./hello_out
+__monstartup(0x55bf3a5c1870, 0x55bf3a5c1b19, 0x7ffc337cb538, 4)                                                                               = 0
+__cxa_atexit(0x7f70a95b5260, 0, 0x55bf3a7c2008, 0)                                                                                            = 0
+_ZNSt8ios_base4InitC1Ev(0x55bf3a7c2135, 0xffff, 0x7ffc337cb538, 160)                                                                          = 0
+__cxa_atexit(0x7f70a9b44a40, 0x55bf3a7c2135, 0x55bf3a7c2008, 6)                                                                               = 0
+_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc(0x55bf3a7c2020, 0x55bf3a5c1b21, 0x7ffc337cb538, 192)                                  = 0x55bf3a7c2020
+_ZNSolsEPFRSoS_E(0x55bf3a7c2020, 0x7f70a9bb4860, 0x55bf3a7c2020, 0x55bf3a5c1b2cHello world
+)                                                              = 0x55bf3a7c2020
++++ exited (status 0) +++
+
 
 <ex>
             [ 10578] | find_path(1, 1) {
@@ -11184,7 +11449,6 @@ NAME
 ={============================================================================
 *kt_linux_tool_035* tool-wget tool-curl
 
-{tool-wget}
 wget http://xxx.tar.bz2 -O - | tar -xjf -
 
 -O file
@@ -14069,15 +14333,28 @@ sudo apt-get install ghex
 
 
 ={============================================================================
-*kt_linux_tool_051* tool-uptime
+*kt_linux_tool_051* tool-lsof tool-uptime
 
 /opt/zinc/oss/bin/busybox uptime; /opt/zinc/oss/bin/busybox lsof | wc -l
 
+This command can be useful in several scenarios. One of those scenarios is if
+you want to check which processes are running at a certain port. In order to
+do so you’ve got to specify the -i option. 
 
-={============================================================================
-*kt_linux_tool_051* tool-lsof
+Let’s take a look at the example below, where we check which processes are
+  running on port 22 which is the port for SSH.
 
-/opt/zinc/oss/bin/busybox uptime; /opt/zinc/oss/bin/busybox lsof | wc -l
+lsof -i TCP:22
+
+It’s also possible to list a range of ports. The following example lists all
+processes running in the port range 20 - 30.
+
+lsof -i TCP:20-30
+
+Last, but not least, the output of the lsof command can be used to kill all
+processes of a specific user — derk in this case.
+
+kill -9 ``lsof -t -u derk``
 
 
 ={============================================================================
@@ -14131,13 +14408,6 @@ command contains the following columns:
 
 ={============================================================================
 *kt_linux_tool_051* tool-add-user tool-sudo
-
-<sudoer>
-apt-get install sudo
-su
-adduser <username> sudo
-re-login
-
 
 <groupadd>
        The groupadd command creates a new group account using the values
@@ -14239,7 +14509,16 @@ $ sudo adduser kyoupark ccusers
 
        deluser [options] user group
 
-<sudo>
+
+*tool-sudo*
+
+<sudoer>
+apt-get install sudo
+su
+adduser <username> sudo
+re-login
+
+
 As an alternative to using the root account directly, users can be allowed to
 temporarily give their own accounts Super User privileges using the sudo
 command. Sudo provides specified users or groups of users with limited root
@@ -14311,6 +14590,23 @@ Where USERNAME is your username.
 
 4. %users localhost=USERSTUFF
 
+
+*tool-sudo-shell*
+
+     -i, --login
+                 Run the shell specified by the target user's password
+                 database entry as a login shell.  This means that
+                 login-specific resource files such as .profile or .login will
+                 be read by the shell.  If a command is specified, it is
+                 passed to the shell for execution via the shell's -c option.
+                 If no command is specified, an interactive shell is executed.
+                 sudo attempts to change to that user's home directory before
+                 running the shell.  The command is run with an environment
+                 similar to the one a user would receive at log in.  The
+                 Command environment section in the sudoers(5) manual
+                 documents how the -i option affects the environment in which
+                 a command is run when the sudoers policy is in use.
+ 
 
 ={============================================================================
 *kt_linux_tool_051* tool-su
@@ -42194,9 +42490,9 @@ Appendix A Extended regular expressions
 The only difference between basic and extended regular expressions is in the
 behavior of a few meta characters: ‘?’, ‘+’, ('()'), and braces (‘{}’). 
 
-While `basic regular expressions require these to be escaped` if you want them
-`to behave as special characters`, when using extended regular expressions you
-must escape them if you want them to match a literal character. 
+While `basic regular expressions require these to be escaped, "\",` if you want 
+them `to behave as special characters`, when using extended regular expressions 
+you must escape them if you want them to match a literal character. 
 
 
 3.6 Basic vs Extended Regular Expressions
@@ -42274,8 +42570,22 @@ A regular expression may be followed by one of several `repetition-operators`:
     Causes the resulting RE to match 0 or 1 repetitions of the preceding RE.
     ab? will match either ‘a’ or ‘ab’.
 
+    (from C++PL 37.1.1)
+    A suffix ? after any of the repetition notations makes the pattern matcher
+    ‘‘lazy’’ or ‘‘non-greedy.’’ That is, when looking for a pattern, it will
+    look for the shortest match rather than the longest. By default, the
+    pattern matcher always looks for the longest match (similar to C++’s Max
+        Munch rule; §10.3). 
+
+    Consider: ababab 
+
+    The pattern (ab)* matches all of ababab . Howev er, (ab)∗? matches only
+    the first ab.
+
+    Optional (zero or one), that is {0,1}
+
 ‘*’
-    The preceding item will be matched zero or more times.
+    The preceding item will be matched `zero or more times`
 
 ‘+’
     The preceding item will be matched one or more times.
@@ -42336,6 +42646,7 @@ High 65 to 70. Southeast wind around 10
 High Dig to 70. Southeast wind around 10
 
 
+*regex-class-character*
 Within a bracket expression, a `range-expression` consists of two characters
 separated by a hyphen. It matches any single character that sorts between the
 two characters, inclusive. In the default C locale, the sorting sequence is the
@@ -42438,7 +42749,8 @@ Most meta-characters lose their special meaning inside bracket expressions.
     represents the characters not in the list. If you want to make the ‘^’
     character a list item, place it anywhere but first.
 
-<regex-backslash>
+
+*regex-class-shorthand*
 3.3 The Backslash Character and Special Expressions
 
 The `\` character, when followed by certain ordinary characters, takes a special
@@ -42457,17 +42769,23 @@ meaning:
     Match the empty string at the end of word.
 
 ‘\w’
-    Match `word-constituent`, it is a synonym for ‘[_[:alnum:]]’.
+Match `word-constituent`, it is a synonym for ‘[_[:alnum:]]’.
 
 ‘\W’
-    Match non-word constituent, it is a synonym for ‘[^_[:alnum:]]’.
+Match non-word constituent, it is a synonym for ‘[^_[:alnum:]]’.
 
 ‘\s’
-    Match whitespace, it is a synonym for ‘[[:space:]]’.
+Match whitespace, it is a synonym for ‘[[:space:]]’.
 
 ‘\S’
-    Match non-whitespace, it is a synonym for ‘[^[:space:]]’.
-    *regex-negative-match*
+Match non-whitespace, it is a synonym for ‘[^[:space:]]’.
+*regex-negative-match*
+
+\d  
+[[:digit]]
+
+\D
+Not \d [^[:digit]]
 
 
 3.4 Anchoring

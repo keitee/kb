@@ -413,15 +413,16 @@ method return time=1600288780.823462 sender=:1.4 -> destination=:1.185 serial=68
 
 static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
 {
-  // int64_t x;
-  // int64_t y;
+  int64_t x;
+  int64_t y;
 
-  int x;
-  int y;
+  // int x;
+  // int y;
   int r;
 
   // reads the parameters
-  r = sd_bus_message_read(m, "ii", &x, &y);
+  r = sd_bus_message_read(m, "xx", &x, &y);
+  // r = sd_bus_message_read(m, "ii", &x, &y);
   if (r < 0)
   {
     fprintf(stderr, "failed to parse parameters: %s\n", strerror(-r));
@@ -433,7 +434,8 @@ static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
   // sleep(30);
 
   // reply with the result
-  return sd_bus_reply_method_return(m, "i", x * y);
+  // return sd_bus_reply_method_return(m, "i", x * y);
+  return sd_bus_reply_method_return(m, "x", x * y);
 }
 
 static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
@@ -567,10 +569,10 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
-  // SD_BUS_METHOD(
-  //   "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD(
-    "Multiply", "ii", "i", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+    "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+  // SD_BUS_METHOD(
+  //   "Multiply", "ii", "i", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_VTABLE_END};
 

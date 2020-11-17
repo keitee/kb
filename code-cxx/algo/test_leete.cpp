@@ -8,6 +8,7 @@
 #include <set>
 #include <stack>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -3276,7 +3277,7 @@ namespace leetcode_easy_326
   //
   // can use while and cxx-mod operation
   //
-  // Hence it should be possible to divide n by b x times, every time with 
+  // Hence it should be possible to divide n by b x times, every time with
   // a remainder of 0 and the end result to be 1.
   //
   // 27, 0, 9
@@ -3288,7 +3289,7 @@ namespace leetcode_easy_326
   // 15, 0, 5
   // 5,  2,
 
-  bool is_power_of_three_1(int n) 
+  bool is_power_of_three_1(int n)
   {
     if (n < 3)
       return false;
@@ -3377,7 +3378,7 @@ namespace leetcode_easy_326
 
   bool is_power_of_four_2(int n)
   {
-    return (n > 0) && ((n & (n-1)) == 0) && ((n-1) % 3 == 0);
+    return (n > 0) && ((n & (n - 1)) == 0) && ((n - 1) % 3 == 0);
   }
 
   // from discussion.
@@ -3401,7 +3402,7 @@ namespace leetcode_easy_326
 
     return __builtin_popcount(n) == 1 && ((mask & n) == 0);
   }
-}
+} // namespace leetcode_easy_326
 
 TEST(AlgoLeetCode, power_of_three)
 {
@@ -3421,6 +3422,454 @@ TEST(AlgoLeetCode, power_of_three)
     EXPECT_THAT(f(5), false);
     EXPECT_THAT(f(8), false);
     EXPECT_THAT(f(16), true);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-349. Intersection of Two Arrays, Easy
+
+Given two arrays, write a function to compute their intersection.
+
+Example 1:
+Input: nums1 = [1,2,2,1], nums2 = [2,2]
+Output: [2]
+
+Example 2:
+Input: nums1 = [4,9,5], nums2 = [9,4,9,8,4]
+Output: [9,4]
+
+Note:
+Each element in the result must be unique.
+The result can be in any order.
+
+*/
+
+namespace leetcode_easy_326
+{
+  // makes a better result.
+  vector<int> intersection_1(vector<int> &nums1, vector<int> &nums2)
+  {
+    std::unordered_set<int> table;
+    std::unordered_set<int> check;
+    std::vector<int> result{};
+
+    if (nums1.size() < nums2.size())
+    {
+      table.insert(nums2.cbegin(), nums2.cend());
+      check.insert(nums1.cbegin(), nums1.cend());
+
+      for (const auto e : check)
+      {
+        if (table.end() != table.find(e))
+          result.push_back(e);
+      }
+    }
+    else
+    {
+      table.insert(nums1.cbegin(), nums1.cend());
+      check.insert(nums2.cbegin(), nums2.cend());
+
+      for (const auto e : check)
+      {
+        if (table.end() != table.find(e))
+          result.push_back(e);
+      }
+    }
+
+    return result;
+  }
+
+  vector<int> intersection_2(vector<int> &nums1, vector<int> &nums2)
+  {
+    std::set<int> input1;
+    std::set<int> input2;
+    std::vector<int> result{};
+
+    input1.insert(nums1.cbegin(), nums1.cend());
+    input2.insert(nums2.cbegin(), nums2.cend());
+
+    // Processing the Union of Two Sorted Sets
+    // OutputIterator
+    // set_intersection (InputIterator source1Beg, InputIterator source1End,
+    // InputIterator source2Beg, InputIterator source2End,
+    // OutputIterator destBeg)
+
+    std::set_intersection(input1.cbegin(),
+                          input1.cend(),
+                          input2.cbegin(),
+                          input2.cend(),
+                          std::back_inserter(result));
+
+    return result;
+  }
+} // namespace leetcode_easy_326
+
+TEST(AlgoLeetCode, intersection)
+{
+  using namespace leetcode_easy_326;
+
+  {
+    auto f = intersection_1;
+
+    vector<int> coll1{1, 2, 2, 1};
+    vector<int> coll2{2, 2};
+
+    EXPECT_THAT(f(coll1, coll2), std::vector<int>{2});
+  }
+
+  {
+    auto f = intersection_1;
+
+    vector<int> coll1{4, 9, 5};
+    vector<int> coll2{9, 4, 9, 8, 4};
+    vector<int> result{9, 4};
+    // vector<int> result{4, 9};
+
+    EXPECT_THAT(f(coll1, coll2), result);
+  }
+
+  {
+    auto f = intersection_2;
+
+    vector<int> coll1{1, 2, 2, 1};
+    vector<int> coll2{2, 2};
+
+    EXPECT_THAT(f(coll1, coll2), std::vector<int>{2});
+  }
+
+  {
+    auto f = intersection_2;
+
+    vector<int> coll1{4, 9, 5};
+    vector<int> coll2{9, 4, 9, 8, 4};
+    // vector<int> result{9, 4};
+    vector<int> result{4, 9};
+
+    EXPECT_THAT(f(coll1, coll2), result);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-414. Third Maximum Number Easy
+
+Given a non-empty array of integers, return the third maximum number in this
+array. If it does not exist, return the maximum number. The time complexity must
+be in O(n).
+
+Example 1:
+
+Input: [3, 2, 1]
+Output: 1
+
+Explanation: The third maximum is 1.
+
+Example 2:
+
+Input: [1, 2]
+Output: 2
+
+Explanation: The third maximum does not exist, so the maximum (2) is returned
+instead.
+
+Example 3:
+
+Input: [2, 2, 3, 1]
+Output: 1
+
+Explanation: Note that the third maximum here means the third maximum distinct
+number. Both numbers with value 2 are both considered as second maximum.
+
+*/
+
+namespace leetcode_easy_414
+{
+  // NO
+  // going up/down from the current. don't work since the first element is
+  // counted twice.
+  int thirdMax_1(const vector<int> &nums)
+  {
+    if (nums.size() == 1)
+      return nums[0];
+
+    // value
+    int cmin{INT32_MAX}, cmax{INT32_MIN};
+
+    int count{0};
+
+    for (size_t i = 0; i < nums.size(); i++)
+    {
+      // going up
+      if (nums[i] > cmax)
+      {
+        cmax = nums[i];
+        count++;
+      }
+
+      // going down
+      if (nums[i] < cmin)
+      {
+        cmin = nums[i];
+        count++;
+      }
+    }
+
+    if (count == 3)
+    {
+      return cmin;
+    }
+    else
+    {
+      return cmax;
+    }
+  }
+
+  // NO
+  // use cxx-minmax approach but fails on
+  // EXPECT_THAT(f({1,2,2,5,3,5}), 2);
+  int thirdMax_2(const vector<int> &nums)
+  {
+    if (nums.size() == 1)
+      return nums[0];
+
+    // value
+    int cmin{nums[0]}, cmax{nums[0]};
+
+    int count{0};
+
+    for (size_t i = 1; i < nums.size(); i++)
+    {
+      // up
+      if (nums[i] > cmax)
+      {
+        cmax = nums[i];
+        count++;
+      }
+
+      // down
+      if (nums[i] < cmin)
+      {
+        cmin = nums[i];
+        count++;
+      }
+    }
+
+    // if (cmax - cmin == 2)
+    // cxx-overflow
+    //  int   min   : -2147483648
+    // [-2147483648,1,1]
+
+    if (count == 2)
+    {
+      return cmin;
+    }
+    else
+    {
+      return cmax;
+    }
+  }
+
+  // NO
+  // https://leetcode.com/problems/third-maximum-number/discuss/933125/Solution-wvideo-whiteboard-explanation
+  // works well until see cases with INT32_MIN, -2147483648 in input
+  int thirdMax_3(const vector<int> &nums)
+  {
+    int third{INT32_MIN};
+    int second{INT32_MIN};
+    int first{nums[0]};
+    int count{0};
+
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      int value = nums[i];
+
+      // shift to right
+      if (value > first)
+      {
+        third  = second;
+        second = first;
+        first  = value;
+        count++;
+      }
+      else if ((value < first) && (value > second))
+      {
+        third  = second;
+        second = value;
+        count++;
+      }
+      // else if ((value < second) && (value >= third))
+      else if (value < second)
+      {
+        third = value;
+        count++;
+      }
+    }
+
+    // return third == INT32_MIN ? first : third;
+    return count < 2 ? first : third;
+  }
+
+  // https://leetcode.com/problems/third-maximum-number/discuss/911981/best-cpp-solution
+  // Runtime: 8 ms, faster than 89.41% of C++ online submissions for Third Maximum Number.
+  // Memory Usage: 9.3 MB, less than 51.72% of C++ online submissions for Third Maximum Number.
+  // {
+  //   long long a,b,c;
+  //   a=b=c=LLONG_MIN;
+  //   for(int x: nums) {
+  //     if(x>=a) {
+  //       if(x>a) {
+  //         c=b;
+  //         b=a;
+  //       }
+  //       a=x;
+  //     }
+  //     else if(x>=b) {
+  //       if(x>b) c=b;
+  //       b=x;
+  //     }
+  //     else if(x>=c) c=x;
+  //   }
+  //   return c==LLONG_MIN ? a : c;
+  // }
+  //
+  // this works and get hint. the problem of _3() is handling of INT32_MIN so
+  // like this, if use bigger type, problem solved. so revise _3() and passed.
+
+  int thirdMax_4(const vector<int> &nums)
+  {
+    long long third{LLONG_MIN};
+    long long second{LLONG_MIN};
+    long long first{nums[0]};
+
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      int value = nums[i];
+
+      // shift to right
+      if (value > first)
+      {
+        third  = second;
+        second = first;
+        first  = value;
+      }
+      else if ((value < first) && (value > second))
+      {
+        third  = second;
+        second = value;
+      }
+      else if ((value < second) && (value > third))
+      {
+        third = value;
+      }
+    }
+
+    return third == LLONG_MIN ? first : third;
+  }
+} // namespace leetcode_easy_414
+
+TEST(AlgoLeetCode, third_max)
+{
+  using namespace leetcode_easy_414;
+
+  {
+    auto f = thirdMax_4;
+
+    EXPECT_THAT(f({3, 2, 1}), 1);
+    EXPECT_THAT(f({1, 2}), 2);
+    EXPECT_THAT(f({2, 2, 3, 1}), 1);
+    EXPECT_THAT(f({1, 2, 2, 5, 3, 5}), 2);
+
+    EXPECT_THAT(f({1, 2, -2147483648}), -2147483648);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-434. Number of Segments in a String Easy
+
+You are given a string s, return the number of segments in the string. 
+
+A segment is defined to be a contiguous sequence of non-space characters.
+
+Example 1:
+
+Input: s = "Hello, my name is John"
+Output: 5
+Explanation: The five segments are ["Hello,", "my", "name", "is", "John"]
+
+Example 2:
+
+Input: s = "Hello"
+Output: 1
+
+Example 3:
+
+Input: s = "love live! mu'sic forever"
+Output: 4
+
+Example 4:
+
+Input: s = ""
+Output: 0
+
+Constraints:
+
+0 <= s.length <= 300
+
+s consists of lower-case and upper-case English letters, digits or one of the
+following characters "!@#$%^&*()_+-=',.:".  
+
+The only space character in s is ' '.
+
+*/
+
+namespace leetcode_easy_414
+{
+  // see namespace stringsplit
+  // to support that not to add empty result
+  int split_6(const std::string &s)
+  {
+    std::string::size_type start{}, end{};
+    std::string temp{};
+    int count{};
+    const char delim{' '};
+
+    end = s.find(delim, start);
+
+    for (; end != std::string::npos;)
+    {
+      temp = s.substr(start, end - start);
+
+      if (false == temp.empty())
+        count++;
+
+      start = end + 1;
+      end   = s.find(delim, start);
+    }
+
+    temp = s.substr(start);
+
+    if (false == temp.empty())
+      count++;
+
+    return count;
+  }
+} // namespace leetcode_easy_414
+
+// ={=========================================================================
+TEST(AlgoLeetCode, count_segments)
+{
+  using namespace leetcode_easy_414;
+
+  {
+    auto count = split_6("Hello, my name is John");
+    EXPECT_THAT(count, 5);
+  }
+
+  {
+    auto count = split_6("");
+    EXPECT_THAT(count, 0);
   }
 }
 

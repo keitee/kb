@@ -67,7 +67,7 @@ include_directories(SYSTEM ${GTEST_DIR}/include)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
+add_compile_options("-pg;-D_GLIBCXX_DEBUG;-lsystemd")
 
 
 # cmake help
@@ -181,7 +181,10 @@ set(LIBS libcxx.a)
 link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
-# sdbus_client
+# test_sdbus_client
+add_executable(test_client_1 "test_client_1.cpp")
+target_link_libraries(test_client_1 gmock_main ${LIBS} "-lsystemd")
+
 add_executable(sdbus_client_1 "sdbus_client_1.cpp")
 target_link_libraries(sdbus_client_1 gmock_main ${LIBS} "-lsystemd")
 

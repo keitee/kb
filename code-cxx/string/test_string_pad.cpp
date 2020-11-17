@@ -26,13 +26,9 @@ using testing::StrEq;
 TEST(StringPad, parse_ids)
 {
   {
-    const std::string coll{"M217c-385-3f-1836"};
+    std::string s{"this is string"};
 
-    auto pos = coll.find_last_of('-');
-
-    auto last = coll.substr(pos + 1, std::string::npos);
-
-    EXPECT_THAT(last, "1836");
+    auto found = s.find('i');
   }
 }
 

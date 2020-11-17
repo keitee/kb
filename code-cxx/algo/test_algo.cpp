@@ -1394,7 +1394,7 @@ TEST(AlgoOccurance, check_seen_odd_times)
 
 /*
 ={=========================================================================
-algo-occurance
+algo-occurance cxx-lookup-table
 
 When input a, and b are 0 <= a <= b <= 100,000,000), write a code to find
 out how many k integer appears.
@@ -2120,7 +2120,297 @@ TEST(AlgoOccurance, check_longest_sequence)
 
 /*
 ={=========================================================================
-algo-unique
+algo-occurance cxx-lookup-table
+algo-leetcode-383. Ransom Note, Easy
+
+Given an arbitrary ransom note string and another string containing letters from
+all the magazines, write a function that will return true if the ransom note can
+be constructed from the magazines ; otherwise, it will return false.
+
+Each letter in the magazine string can only be used once in your ransom note.
+
+Example 1:
+Input: ransomNote = "a", magazine = "b"
+Output: false
+
+Example 2:
+Input: ransomNote = "aa", magazine = "ab"
+Output: false
+
+Example 3:
+Input: ransomNote = "aa", magazine = "aab"
+Output: true
+
+Constraints:
+You may assume that both strings contain only lowercase letters.
+
+*/
+
+namespace leetcode_easy_383
+{
+  // Runtime: 40 ms, faster than 47.04% of C++ online submissions for Ransom Note.
+  // Memory Usage: 9.3 MB, less than 99.43% of C++ online submissions for Ransom Note.
+  //
+  // How can we improve?
+
+  bool can_construct_1(std::string note, std::string magazine)
+  {
+    std::unordered_map<char, size_t> map_note{};
+    std::unordered_map<char, size_t> map_maga{};
+
+    // build unordered_map for note. loop1
+    for (auto const e : note)
+    {
+      map_note[e]++;
+    }
+
+    // build unordered_map for magazine. loop2
+    for (auto const e : magazine)
+    {
+      map_maga[e]++;
+    }
+
+    // then check that each element in note matches to the one in the magazine
+    for (auto const e : note)
+    {
+      // need to use find() since it do not raise exception but at() do when not
+      // found.
+
+      // try to find it in magazine
+      auto found = map_maga.find(e);
+
+      // if not in the magazine or if it's in the magazine but the count do not
+      // match then return fasle
+      //
+      // don't need to use find() on the note since it surely has a element
+      // under checking.
+
+      // if ((map_note.end() == found) || (map_note.at(e) != found->second))
+      if ((map_note.end() == found) || (map_note.at(e) > found->second))
+        return false;
+    }
+
+    return true;
+  }
+
+  // fails since "aaaaaabbbbbbbccdddddddeefffffffggggggghhhhhiiiijjjjj" when
+  // sorted.
+  //
+  // bool can_construct_2(std::string ransomNote, std::string magazine)
+  // {
+  //   // sort them
+  //   std::sort(ransomNote.begin(), ransomNote.end());
+  //   std::sort(magazine.begin(), magazine.end());
+  //
+  //   if (std::string::npos == magazine.find(ransomNote))
+  //     return false;
+  //
+  //   return true;
+  // }
+
+  // Runtime: 140 ms, faster than 5.63% of C++ online submissions for Ransom Note.
+  // Memory Usage: 9.2 MB, less than 99.49% of C++ online submissions for Ransom Note.
+
+  bool can_construct_2(std::string ransomNote, std::string magazine)
+  {
+    // sort them
+    std::sort(ransomNote.begin(), ransomNote.end());
+    std::sort(magazine.begin(), magazine.end());
+
+    return std::includes(magazine.cbegin(),
+                         magazine.cend(),
+                         ransomNote.cbegin(),
+                         ransomNote.cend());
+  }
+
+  // from discussion
+  // Runtime: 12 ms, faster than 95.44% of C++ online submissions for Ransom Note.
+  // Memory Usage: 9 MB, less than 99.49% of C++ online submissions for Ransom Note.
+  //
+  // note: been thinking about "subset" and not found easy way. seems that see
+  // the problem too complicated. As the discussion, can do with simple table.
+
+  bool can_construct_3(std::string ransomNote, std::string magazine)
+  {
+    // number of alphabet since the condition is that they are
+    // all lowercase letters
+    std::vector<int> table(26, 0);
+
+    // build table to increase
+    for (const auto e : magazine)
+    {
+      table[e - 'a']++;
+    }
+
+    for (const auto e : ransomNote)
+    {
+      table[e - 'a']--;
+
+      // means that e is seen only in note or more in note than magazine.
+      if (table[e - 'a'] < 0)
+        return false;
+    }
+
+    return true;
+  }
+} // namespace leetcode_easy_383
+
+TEST(AlgoOccurance, can_construct)
+{
+  using namespace leetcode_easy_383;
+
+  // auto f = can_construct_1;
+  auto f = can_construct_3;
+
+  // Input: ransomNote = "aa", magazine = "aab"
+  EXPECT_THAT(f("aa", "aab"), true);
+
+  // Input: ransomNote = "a", magazine = "b"
+  EXPECT_THAT(f("a", "b"), false);
+
+  // Input: ransomNote = "aa", magazine = "ab"
+  EXPECT_THAT(f("aa", "ab"), false);
+
+  // failed case from submission. so the count in magazine can ">=" than one in
+  // note.
+  EXPECT_THAT(f("bg", "efjbdfbdgfjhhaiigfhbaejahgfbbgbjagbddfgdiaigdadhcfcj"),
+              true);
+}
+
+/*
+={=========================================================================
+algo-leetcode-392. Is Subsequence, Easy
+
+Given a string s and a string t, check if s is subsequence of t.
+
+A subsequence of a string is a new string which is formed from the original
+string by deleting some (can be none) of the characters without disturbing the
+relative positions of the remaining characters. (ie, "ace" is a subsequence of
+"abcde" while "aec" is not).
+
+Follow up:
+If there are lots of incoming S, say S1, S2, ... , Sk where k >= 1B, and you
+want to check one by one to see if T has its subsequence. In this scenario, how
+would you change your code?
+
+Credits:
+Special thanks to @pbrother for adding this problem and creating all test cases.
+
+Example 1:
+Input: s = "abc", t = "ahbgdc"
+Output: true
+
+Example 2:
+Input: s = "axc", t = "ahbgdc"
+Output: false
+
+Constraints:
+0 <= s.length <= 100
+0 <= t.length <= 10^4
+Both strings consists only of lowercase characters.
+
+*/
+
+namespace leetcode_easy_392
+{
+  // first attempt and failed on submission
+  bool is_sub_sequence_1(string s, string t)
+  {
+    // quick optimisation
+    if (s.size() > t.size())
+      return false;
+
+    // number of alphabet since the condition is that they are
+    // all lowercase letters
+    std::vector<int> table(26, -1);
+
+    // build table. order starts from 1.
+    int order{1};
+
+    for (const auto e : t)
+    {
+      table[e - 'a'] = order++;
+    }
+
+    int previous{-1};
+
+    order = 0;
+
+    for (const auto e : s)
+    {
+      order = table[e - 'a'];
+
+      if ((order == -1) || (order < previous))
+        return false;
+
+      previous = order;
+    }
+
+    return true;
+  }
+
+  // https://leetcode.com/problems/is-subsequence/discuss/925542/Solution-in-C%2B%2B(O(n)-solution)
+  //
+  // class Solution {
+  // public:
+  //     bool isSubsequence(string s, string t) {
+  //         int x=0;
+  //         if (s.size()==0){return true;}
+  //         for (int i=0;i<t.size();i++)
+  //         {
+  //             if(t[i]==s[x]){x++;}
+  //             if(x==s.size()){return true;}
+  //         }
+  //         return false;
+  //     }
+  // };
+  //
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Is Subsequence.
+  // Memory Usage: 6.7 MB, less than 5.08% of C++ online submissions for Is Subsequence.
+  //
+  // o so see from "t" which is larger than s but not the other around
+  // o increase index only when t's char matches to s's one *in order* and
+  //   index should be the same as s's size.
+
+  bool is_sub_sequence_2(string s, string t)
+  {
+    size_t index{};
+
+    // for ("", "") case
+    if (s.size() == 0)
+      return true;
+
+    for (auto e : t)
+    {
+      if (s[index] == e)
+        ++index;
+
+      if (index == s.size())
+        return true;
+    }
+
+    return false;
+  }
+} // namespace leetcode_easy_392
+
+TEST(AlgoOccurance, is_sub_sequence)
+{
+  using namespace leetcode_easy_392;
+
+  auto f = is_sub_sequence_2;
+
+  EXPECT_THAT(f("abc", "ahbgdc"), true);
+  EXPECT_THAT(f("axc", "ahbgdc"), false);
+
+  // failed case from submission
+  // "aaaaaa"
+  // "bbaaaa"
+  EXPECT_THAT(f("aaaaaa", "bbaaaa"), false);
+}
+
+/*
+={=========================================================================
+algo-unique cxx-lookup-table
 
 From Cracking the coding interview, p172,
 
@@ -2235,7 +2525,7 @@ TEST(AlgoUnique, check_unique_lookup)
 
 /*
 ={=========================================================================
-algo-unique
+algo-unique cxx-lookup-table
 
 first unique byte *ex-interview*
 
@@ -3572,7 +3862,7 @@ Unlike number version, the difference is "string" and "largest"
 */
 
 // namespace U28_2018_12_03
-namespace algopalindrome
+namespace algo_palindrome
 {
   // palindrome is *symmetric* while moving i(center) from input text.
   // so center start from 0th and for every char of input:
@@ -3623,15 +3913,14 @@ namespace algopalindrome
 
     return saved;
   }
-} // namespace algopalindrome
+} // namespace algo_palindrome
 
 // The simplest solution to this problem is to try a brute-force approach,
 // checking if each substring is a palindrome. However, this means we need to
 // check C(N, 2) substrings (where N is the number of characters in the string),
 // and the time complexity would be O(N^3).
 //
-//
-// The complexity could be reduced to O(N^2) by storing results of sub problems.
+// The complexity could be reduced to O(N^2) by storing "results of sub problems"
 // To do so we need a table of Boolean values, of size, where
 //
 // the key idea:
@@ -3639,146 +3928,310 @@ namespace algopalindrome
 // a palindrome.
 //
 // We start by initializing all elements [i,i] with true (one-character
-// palindromes) and all the elements [i,i+i] with true for all consecutive two
-// identical characters (for two-character palindromes). We then go on to
-// inspect substrings greater than two characters, setting the element at [i,j]
-// to true if the element at [i+i,j-1] is true and the characters on the
-// positions i and j in the string are also equal. Along the way, we retain the
-// start position and length of the longest palindromic substring in order to
-// extract it after finishing computing the table.
+// palindromes)
 //
-//       0 1 2 3 4
-//       l e v e l
-// 0, l  o       *
-// 1, e    o   *
-// 2, v      o x
-// 3, e        o
-// 4, l          o
+// and all the elements [i,i+i] with true for all consecutive two identical
+// characters (for two-character palindromes).
 //
-// i = 0, maxLen = 5
+// We then go on to inspect substrings greater than two characters, setting the
+// element at [i,j] to true if the element at [i+i,j-1] is true and the
+// characters on the positions i and j in the string are also equal.
 //
-// why chekc "table[(i + 1)*len + j - 1]"? To see substr is symetric. ex, to see
-// [0, 4] is symetic, check substr(1,3) is symetric, that is [1, 3]
+// Along the way, we retain the start position and length of the longest
+// palindromic substring in order to extract it after finishing computing the
+// table.
 
-namespace algopalindrome
+namespace algo_palindrome
 {
   // from text code
-  std::string palindrome_longest_2(std::string str)
+  std::string palindrome_longest_2(std::string s)
   {
-    size_t const len    = str.size();
-    size_t longestBegin = 0;
-    size_t maxLen       = 1;
+    const size_t len = s.size();
 
-    std::vector<bool> table(len * len, false);
+    // bool table and use array since it's fastest. see cxx-bool
+    bool table[len * len]{false};
 
-    // one-character palindromes:
-    // We start by initializing all elements [i,i] with true and set diagonal
-    // elements of the table
+    // 1. one char palindrome
+    // We start by initializing all elements [i,i] with true (one-character
+    // palindromes). set diagonal
+    for (size_t i = 0; i < len; ++i)
+      table[i + i * len] = true;
 
-    for (size_t i = 0; i < len; i++)
-    {
-      table[i * len + i] = true;
-    }
-
-    // two-character palindromes:
+    // 2. two chars palindrome
     // and all the elements [i,i+i] with true for all consecutive two identical
-    // characters. We then go on to inspect
+    // characters (for two-character palindromes).
     //
-    // why "len -1"? since needs two chars to inspect
-    // 0 1 2 3 4, len is 5
-    // l e v e 1
+    // o why "len-1"? since needs two chars
 
-    for (size_t i = 0; i < len - 1; ++i)
-    {
-      if (str[i] == str[i + 1])
-      {
-        table[i * len + i + 1] = true;
-        if (maxLen < 2)
-        {
-          longestBegin = i;
-          maxLen       = 2;
-        }
-      }
-    }
-
-    // k = 3 which means see three elements range
-    //
-    // We then go on to inspect substrings greater than two characters, setting
-    // the element at [i,j] to true if the element at [i+1,j-1] is true and the
-    // characters on the positions i and j in the string are also equal.
-    //
     // Along the way, we retain the start position and length of the longest
     // palindromic substring in order to extract it after finishing computing
     // the table.
 
-    for (size_t k = 3; k <= len; k++)
+    // palindrome starts pos
+    size_t begin{0};
+    // palindrome current len. why 1? since there is always one-char palindrome.
+    size_t maxlen{1};
+
+    for (size_t i = 0; i < len - 1; ++i)
     {
-      for (size_t i = 0; i < len - k + 1; i++)
+      if (s[i] == s[i + 1])
+        table[i * len + i + 1] = true;
+
+      // update manlen and begin
+      if (maxlen < 2)
       {
-        size_t j = i + k - 1;
-
-        cout << "k: " << k << ", i: " << i << ", j: " << j << ", table["
-             << ((i + 1) * len + j - 1) << "]:" << table[(i + 1) * len + j - 1]
-             << endl;
-
-        // table[(i + 1) * len + j - 1] is to mark the previous palindrome
-        // substring.
-        //
-        // table[i * len + j] = true; is to set current substring
-
-        if (str[i] == str[j] && table[(i + 1) * len + j - 1])
-        {
-          table[i * len + j] = true;
-
-          cout << "k: " << k << ", i: " << i << ", j: " << j << ", table["
-               << ((i + 1) * len + j - 1)
-               << "]:" << table[(i + 1) * len + j - 1] << ", table["
-               << i * len + j << "] = true" << endl;
-
-          if (maxLen < k)
-          {
-            longestBegin = i;
-            maxLen       = k;
-          }
-        } // if end
+        maxlen = 2;
+        begin  = i;
       }
     }
 
-    return std::string(str.substr(longestBegin, maxLen));
-  }
-} // namespace algopalindrome
+    // We then go on to inspect substrings greater than two characters, setting
+    // the element at [i,j] to true if the element at [i+i,j-1] is true and the
+    // characters on the positions i and j in the string are also equal.
 
-// TEST(U28, 2018_12_03)
-TEST(AlgoPalindrome, check_longest)
+    //       0 1 2 3 4
+    //       l e v e l
+    // 0, l  o       *
+    // 1, e  x o   *
+    // 2, v  x x o
+    // 3, e  x x x o
+    // 4, l  x x x x o
+    //
+    // k: 3, [0, 2], table[6]:1
+    // k: 3, [1, 3], table[12]:1
+    // k: 3, [1, 3], table[12]:1, table[8] = true
+    // k: 3, [2, 4], table[18]:1
+    // k: 4, [0, 3], table[7]:0
+    // k: 4, [1, 4], table[13]:0
+    // k: 5, [0, 4], table[8]:1
+    // k: 5, [0, 4], table[8]:1, table[4] = true
+    // substr(0, 5)
+
+    // why need lows in array? it's to save result of the previous substr and
+    // to use starts pos for each i.
+    //
+    // the half of table(marked x) is not used.
+    //
+    // why check "table[(i + 1)*len + j - 1]"? To see substr is symetric. ex, to
+    // see [0, 4] is symetric, check the previous substr(1,3) is symetric, that
+    // is [1, 3], by checking value in the table.
+
+    for (size_t inspect_size = 3; inspect_size <= len; inspect_size++)
+    {
+      for (size_t i = 0; i < len - inspect_size + 1; i++)
+      {
+        // the last char in inspect range [i, inspect size-1]. e.g., when
+        // inspect size is 3, [0, 2], [1, 3], ...
+        size_t j = i + inspect_size - 1;
+
+        // cout << "k: " << inspect_size << ", [" << i << ", " << j << "], table["
+        //      << ((i + 1) * len + j - 1) << "]:" << table[(i + 1) * len + j - 1]
+        //      << endl;
+
+        if ((s[i] == s[j]) && table[(i + 1) * len + j - 1])
+        {
+          table[i * len + j] = true;
+
+          // cout << "k: " << inspect_size << ", [" << i << ", " << j << "], table["
+          //      << ((i + 1) * len + j - 1)
+          //      << "]:" << table[(i + 1) * len + j - 1] << ", table["
+          //      << i * len + j << "] = true" << endl;
+
+          if (maxlen < inspect_size)
+          {
+            maxlen = inspect_size;
+            begin  = i;
+          }
+        }
+      }
+    } // for end
+
+    // cout << "substr(" << longestBegin << ", " << maxLen << ")" << endl;
+
+    return s.substr(begin, maxlen);
+  }
+
+  // remove comment and return size
+  int palindrome_longest_3(std::string s)
+  {
+    const size_t len = s.size();
+
+    // if not support variable array size, use vector.
+    // bool table[len*len]{false};
+    std::vector<bool> table(len * len, false);
+
+    for (size_t i = 0; i < len; ++i)
+      table[i + i * len] = true;
+
+    size_t begin{0};
+    size_t maxlen{1};
+
+    for (size_t i = 0; i < len - 1; ++i)
+    {
+      if (s[i] == s[i + 1])
+        table[i * len + i + 1] = true;
+
+      if (maxlen < 2)
+      {
+        maxlen = 2;
+        begin  = i;
+      }
+    }
+
+    for (size_t inspect_size = 3; inspect_size <= len; inspect_size++)
+    {
+      for (size_t i = 0; i < len - inspect_size + 1; i++)
+      {
+        size_t j = i + inspect_size - 1;
+
+        if ((s[i] == s[j]) && table[(i + 1) * len + j - 1])
+        {
+          table[i * len + j] = true;
+
+          if (maxlen < inspect_size)
+          {
+            maxlen = inspect_size;
+            begin  = i;
+          }
+        }
+      }
+    } // for end
+
+    return maxlen;
+  }
+} // namespace algo_palindrome
+
+TEST(AlgoPalindrome, longest)
 {
-  using namespace algopalindrome;
+  using namespace algo_palindrome;
 
   {
     auto f = palindrome_longest_2;
 
     EXPECT_THAT(f("sahararahnide"), "hararah");
-
-    //       0 1 2 3 4
-    //       l e v e l
-    // 0, l  o       *
-    // 1, e    o   *
-    // 2, v      o x
-    // 3, e        o
-    // 4, l          o
-    //
-    // k: 3, i: 0, j: 2, table[6]:1
-    // k: 3, i: 1, j: 3, table[12]:1
-    // k: 3, i: 1, j: 3, table[12]:1, table[8] = true
-    // k: 3, i: 2, j: 4, table[18]:1
-    // k: 4, i: 0, j: 3, table[7]:0
-    // k: 4, i: 1, j: 4, table[13]:0
-    // k: 5, i: 0, j: 4, table[8]:1
-    // k: 5, i: 0, j: 4, table[8]:1, table[4] = true
-
     EXPECT_THAT(f("level"), "level");
-
+    EXPECT_THAT(f("leeel"), "leeel");
     EXPECT_THAT(f("ss"), "ss");
     EXPECT_THAT(f("s"), "s");
+  }
+
+  {
+    auto f = palindrome_longest_3;
+
+    EXPECT_THAT(f("level"), 5);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-409. Longest Palindrome Easy
+
+NOTE: this is different from "28. Longest palindromic substring" since it is to
+find one "can be built"
+
+Given a string s which consists of lowercase or uppercase letters, return the
+length of the longest palindrome that can be built with those letters.
+
+Letters are case sensitive, for example, "Aa" is not considered a palindrome
+here.
+
+Example 1:
+
+Input: s = "abccccdd"
+Output: 7
+Explanation:
+One longest palindrome that can be built is "dccaccd", whose length is 7.
+Example 2:
+
+Input: s = "a"
+Output: 1
+Example 3:
+
+Input: s = "bb"
+Output: 2
+ 
+
+Constraints:
+
+1 <= s.length <= 2000
+s consits of lower-case and/or upper-case English letters only.
+
+
+From solution
+
+Approach #1: Greedy [Accepted]
+
+Intuition
+
+A palindrome consists of letters with equal partners, plus possibly a unique
+center (without a partner). The letter i from the left has its partner i from
+the right. For example in 'abcba', 'aa' and 'bb' are partners, and 'c' is a
+unique center.
+
+Imagine we built our palindrome. It consists of as many partnered letters as
+possible, plus a unique center if possible. This motivates a greedy approach.
+
+Algorithm
+
+For each letter, say it occurs v times. We know we have v / 2 * 2 letters that
+can be partnered for sure. For example, if we have 'aaaaa', then we could have
+'aaaa' partnered, which is 5 / 2 * 2 = 4 letters partnered.
+
+At the end, if there was any v % 2 == 1, then that letter could have been a
+unique center. Otherwise, every letter was partnered. To perform this check, we
+will check for v % 2 == 1 and ans % 2 == 0, the latter meaning we haven't yet
+added a unique center to the answer.
+
+*/
+
+namespace algo_palindrome
+{
+  // from solution java code
+  // Runtime: 4 ms, faster than 87.45% of C++ online submissions for Longest Palindrome.
+  // Memory Usage: 6.8 MB, less than 97.95% of C++ online submissions for Longest Palindrome.
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Longest Palindrome.
+  // Memory Usage: 6.9 MB, less than 97.95% of C++ online submissions for Longest Palindrome.
+
+  int longest_palindrome_can_be_built_1(string s)
+  {
+    int table[256]{0};
+
+    for (auto e : s)
+      table[(int)e]++;
+
+    int ans{0};
+
+    for (auto e : table)
+    {
+      ans += (e / 2) * 2;
+
+      // when use "if ((e % 2 == 1))"
+      //
+      // Value of: f("abccccdd")
+      // Expected: is equal to 7
+      //   Actual: 8 (of type int)
+      //
+      // so "(ans % 2 == 0)" is necessary to add "unique center" once but not
+      // multiple times.
+
+      if ((ans % 2 == 0) && (e % 2 == 1))
+        ans++;
+    }
+
+    return ans;
+  }
+} // namespace algo_palindrome
+
+TEST(AlgoPalindrome, longest_can_be_built)
+{
+  using namespace algo_palindrome;
+
+  {
+    auto f = longest_palindrome_can_be_built_1;
+
+    EXPECT_THAT(f("abccccdd"), 7);
+    EXPECT_THAT(f("a"), 1);
+    EXPECT_THAT(f("bb"), 2);
   }
 }
 
@@ -6830,6 +7283,85 @@ TEST(AlgoBit, check_hamming_weight)
 }
 
 /*
+={=========================================================================
+algo-leetcode-401. Binary Watch, Easy
+
+A binary watch has 4 LEDs on the top which represent the hours (0-11), and the 6
+LEDs on the bottom represent the minutes (0-59).
+
+Each LED represents a zero or one, with the least significant bit on the right.
+
+Given a non-negative integer n which represents the number of LEDs that are
+currently on, return all possible times the watch could represent.
+
+Example:
+
+Input: n = 1
+Return: ["1:00", "2:00", "4:00", "8:00", "0:01", "0:02", "0:04", "0:08", "0:16", "0:32"]
+
+Note:
+o The order of output does not matter.
+
+o The hour must not contain a leading zero, for example "01:00" is not valid, it
+  should be "1:00".
+
+o The minute must be consist of two digits and may contain a leading zero, for
+  example "10:2" is not valid, it should be "10:02".
+
+
+  5  4  3  2  1  0 th
+|32|16| 8| 4| 2| 1|
+      [ hours     ]
+[ minutes         ]
+
+is it about getting all "combination" of bit positions for the given number of
+bits(num)? 
+
+No as shown in the solution from discussion, it's different approach and
+thinking. 
+
+*/
+
+namespace leetcode_easy_401
+{
+  // from discussion
+  // https://leetcode.com/problems/binary-watch/discuss/926686/Easy-Bit-Count-Solution-(C%2B%2B)
+  //
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Binary Watch.
+  // Memory Usage: 6.8 MB, less than 8.16% of C++ online submissions for Binary Watch.
+
+  std::vector<std::string> read_binary_watch(int num)
+  {
+    std::vector<std::string> result{};
+    std::ostringstream os{};
+
+    for (int hour = 0; hour < 12; ++hour)
+    {
+      for (int minute = 0; minute < 60; ++minute)
+      {
+        if (__builtin_popcount(hour) + __builtin_popcount(minute) == num)
+        {
+          os.str(""); // cxx-stringstream-reset
+          os << hour << ":" << std::setfill('0') << std::setw(2) << minute;
+          result.push_back(os.str());
+        }
+      }
+    }
+
+    return result;
+  }
+} // namespace leetcode_easy_401
+
+TEST(AlgoBit, binary_watch)
+{
+  using namespace leetcode_easy_401;
+
+  auto f = read_binary_watch;
+
+  f(1);
+}
+
+/*
 //={=========================================================================
 algo-bit algo-leetcode-231. Power of Two
 
@@ -6895,7 +7427,7 @@ namespace algo_bit
     if (n < 0)
       return false;
 
-    return (n & (n-1)) == 0;
+    return (n & (n - 1)) == 0;
   }
 } // namespace algo_bit
 
@@ -8207,7 +8739,7 @@ TEST(AlgoFrogJump, check_frog_jump)
 
 /*
 ={=========================================================================
-algo-minmax
+algo-minmax cxx-min cxx-max
 
 {
   // bits/predefined_ops.h
@@ -8259,21 +8791,24 @@ namespace algo_min_max
   bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
 } // namespace algo_min_max
 
+//={========================================================================
 // copied from cxx-min-cxx-max
-TEST(AlgoMinMax, check_stl_imps)
+TEST(AlgoMinMax, stl_version)
 {
   using namespace algo_min_max;
 
   {
     std::deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
 
-    // NOTE: does it matter since we want max value but not index of max
-    // element? yes if want to know the pos of it
-    //
     // If more than one minimum or maximum element exists, min_element() and
-    // max_element() return `the first` found; minmax_element() returns the first
-    // minimum but the last maximum element, so max_element() and minmax_element()
-    // don’t yield the same maximum element.
+    // max_element() return `the first` found;
+    //
+    // minmax_element() returns the first minimum but the last maximum element,
+    // so max_element() and minmax_element() don’t yield the same maximum
+    // element.
+    //
+    // does this differene matter since we want max value but not index of max
+    // element? yes if want to know the pos of it
 
     EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
     EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
@@ -8441,7 +8976,7 @@ namespace algo_min_max
     return __result;
   }
 
-  // std-minmax
+  // cxx-minmax
   // If more than one minimum or maximum element exists, min_element() and
   // max_element() return `the first` found;
   //
@@ -8473,7 +9008,8 @@ namespace algo_min_max
   }
 } // namespace algo_min_max
 
-TEST(AlgoMinMax, check_own_imps)
+//={========================================================================
+TEST(AlgoMinMax, my_version)
 {
   using namespace algo_min_max;
 
@@ -10146,9 +10682,9 @@ namespace leetcode_easy_303
   // int sumRange(int i, int j);
   int get_slice_sum_1(const std::vector<int> &sum, int first, int last)
   {
-    return sum[last+1] - sum[first];
+    return sum[last + 1] - sum[first];
   }
-}
+} // namespace leetcode_easy_303
 
 // Time complexity : O(1) time per query, O(n) time pre-computation.  Since the
 // cumulative sum is cached, each sumRange query can be calculated in O(1) time.
@@ -11182,7 +11718,7 @@ TEST(AlgoRapairman, 0704)
 
 /*
 ={=========================================================================
-algo-conversion algo-atoi
+algo-conversion cxx-atoi
 
 * input type? digits only? no space?
 * input size?
@@ -11352,7 +11888,187 @@ TEST(AlgoConversion, check_to_integer)
 
 /*
 ={=========================================================================
-algo-conversion algo-itoa
+algo-conversion algo-leetcode-415 Add Strings Easy
+
+Given two non-negative integers num1 and num2 represented as string, return the
+sum of num1 and num2.
+
+Note:
+
+The length of both num1 and num2 is < 5100.
+Both num1 and num2 contains only digits 0-9.
+Both num1 and num2 does not contain any leading zero.
+
+You must not use any built-in BigInteger library or convert the inputs to
+integer directly.
+
+*/
+
+namespace algo_conversion
+{
+  // https://leetcode.com/problems/add-strings/solution/
+  //
+  // Runtime: 4 ms, faster than 84.95% of C++ online submissions for Add Strings.
+  // Memory Usage: 7 MB, less than 55.83% of C++ online submissions for Add Strings.
+
+  string add_strings_1(string num1, string num2)
+  {
+    std::string result{};
+
+    // NOTE: thumb-up!
+    // intentionally use int since it goes down to minus.
+    // get values while it's vaild. positive index. if goes to minus, use 0
+    // which has no effect in adding them.
+
+    int run1 = num1.size() - 1;
+    int run2 = num2.size() - 1;
+
+    int carry{}, remain{};
+
+    while (run1 >= 0 || run2 >= 0)
+    {
+      int value1 = run1 >= 0 ? num1[run1] - '0' : 0;
+      int value2 = run2 >= 0 ? num2[run2] - '0' : 0;
+
+      // note that be careful of order. if switch, fails since "carry" gets
+      // updated first and affects "remain".
+      remain = (value1 + value2 + carry) % 10;
+      carry  = (value1 + value2 + carry) / 10;
+
+      result.push_back('0' + remain);
+
+      run1--;
+      run2--;
+    }
+
+    if (carry)
+      result.push_back('0' + carry);
+
+    return std::string(result.crbegin(), result.crend());
+  }
+} // namespace algo_conversion
+
+TEST(AlgoConversion, add_string)
+{
+  using namespace algo_conversion;
+
+  {
+    auto f = add_strings_1;
+
+    EXPECT_THAT(f("123", "35"), "158");
+    EXPECT_THAT(f("1", "9"), "10");
+  }
+}
+
+/*
+={=========================================================================
+algo-conversion algo-leetcode-989. Add to Array-Form of Integer Easy
+
+For a non-negative integer X, the array-form of X is an array of its digits in
+left to right order.  For example, if X = 1231, then the array form is
+[1,2,3,1].
+
+Given the array-form A of a non-negative integer X, return the array-form of the
+integer X+K.
+
+Example 1:
+
+Input: A = [1,2,0,0], K = 34
+Output: [1,2,3,4]
+Explanation: 1200 + 34 = 1234
+
+Example 2:
+
+Input: A = [2,7,4], K = 181
+Output: [4,5,5]
+Explanation: 274 + 181 = 455
+
+Example 3:
+
+Input: A = [2,1,5], K = 806
+Output: [1,0,2,1]
+Explanation: 215 + 806 = 1021
+
+Example 4:
+
+Input: A = [9,9,9,9,9,9,9,9,9,9], K = 1
+Output: [1,0,0,0,0,0,0,0,0,0,0]
+Explanation: 9999999999 + 1 = 10000000000
+ 
+
+Note：
+
+1 <= A.length <= 10000
+0 <= A[i] <= 9
+0 <= K <= 10000
+If A.length > 1, then A[0] != 0
+
+*/
+
+namespace algo_conversion
+{
+  // Runtime: 48 ms, faster than 92.45% of C++ online submissions for Add to Array-Form of Integer.
+  // Memory Usage: 30.1 MB, less than 5.15% of C++ online submissions for Add to Array-Form of Integer.
+
+  vector<int> add_array_form_1(vector<int> &A, int K)
+  {
+    vector<int> result{};
+
+    int run1 = A.size() - 1;
+
+    int carry{}, remain{};
+
+    while (run1 >= 0 || K != 0)
+    {
+      int value1 = run1 >= 0 ? A[run1] : 0;
+      int value2 = K % 10;
+
+      remain = (value1 + value2 + carry) % 10;
+      carry  = (value1 + value2 + carry) / 10;
+
+      result.push_back(remain);
+
+      run1--;
+      K /= 10;
+    }
+
+    if (carry)
+      result.push_back(carry);
+
+    return vector<int>(result.crbegin(), result.crend());
+  }
+} // namespace algo_conversion
+
+TEST(AlgoConversion, add_array)
+{
+  using namespace algo_conversion;
+
+  auto f = add_array_form_1;
+
+  {
+    vector<int> coll{1, 2, 0, 0};
+    EXPECT_THAT(f(coll, 34), ElementsAre(1, 2, 3, 4));
+  }
+
+  {
+    vector<int> coll{2, 7, 4};
+    EXPECT_THAT(f(coll, 181), ElementsAre(4, 5, 5));
+  }
+
+  {
+    vector<int> coll{2, 1, 5};
+    EXPECT_THAT(f(coll, 806), ElementsAre(1, 0, 2, 1));
+  }
+
+  {
+    vector<int> coll{9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
+    EXPECT_THAT(f(coll, 1), ElementsAre(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+  }
+}
+
+/*
+={=========================================================================
+algo-conversion cxx-itoa
 
 * what base? 10 or 2?
 * sign support?
@@ -11366,7 +12082,7 @@ there is no check on the end of string input? '0' is not the same as
  
 */
 
-namespace algoconversion
+namespace algo_conversion
 {
   // naive version
   std::string itoa_1(const int input)
@@ -11406,17 +12122,160 @@ namespace algoconversion
     return result;
   }
 
-} // namespace algoconversion
+} // namespace algo_conversion
 
-TEST(AlgoConversion, check_to_string)
+TEST(AlgoConversion, to_string)
 {
-  using namespace algoconversion;
+  using namespace algo_conversion;
 
   const std::vector<std::function<std::string(const int)>> imps{itoa_1, itoa_2};
 
   for (const auto &f : imps)
   {
     EXPECT_THAT(f(123), Eq("123"));
+  }
+}
+
+/*
+={=========================================================================
+algo-conversion leetcode-405. Convert a Number to Hexadecimal Easy
+
+Given an integer, write an algorithm to convert it to hexadecimal. For negative
+integer, two’s complement method is used.
+
+Note:
+
+All letters in hexadecimal (a-f) must be in lowercase.
+The hexadecimal string must not contain extra leading 0s. If the number is zero, it is represented by a single zero character '0'; otherwise, the first character in the hexadecimal string will not be the zero character.
+The given number is guaranteed to fit within the range of a 32-bit signed integer.
+You must not use any method provided by the library which converts/formats the number to hex directly.
+
+Example 1:
+
+Input:
+26
+Output:
+"1a"
+
+Example 2:
+
+Input:
+-1
+Output:
+"ffffffff"
+ 
+*/
+
+namespace leetcode_easy_401
+{
+  // python
+  // >>> hex(-127)
+  // '-0x7f'
+  // >>> hex(127)
+  // '0x7f'
+
+  std::string tohex_1(int num)
+  {
+    static const std::string table{"0123456789abcdef"};
+
+    std::string result{};
+
+    bool sign{};
+
+    if (num < 0)
+    {
+      sign = true;
+      num  = -num;
+    }
+
+    while (num)
+    {
+      result.insert(0, 1, table[num % 16]);
+      num /= 16;
+    }
+
+    if (sign)
+      result.insert(0, 1, '-');
+
+    return result;
+  }
+
+  // how to support?
+  // EXPECT_THAT(f(-1), "ffffffff");
+
+  std::string tohex_2(int num)
+  {
+    static const std::string table{"0123456789abcdef"};
+
+    if (num == 0)
+      return "0";
+
+    std::string result{};
+
+    uint32_t value = static_cast<uint32_t>(num);
+
+    while (value)
+    {
+      result.insert(0, 1, table[value % 16]);
+      value /= 16;
+    }
+
+    return result;
+  }
+
+  // use bit operations
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Convert a Number to Hexadecimal.
+  // Memory Usage: 6.2 MB, less than 5.63% of C++ online submissions for Convert a Number to Hexadecimal.
+
+  std::string tohex_3(int num)
+  {
+    static const std::string table{"0123456789abcdef"};
+
+    if (num == 0)
+      return "0";
+
+    std::string result{};
+
+    uint32_t value = static_cast<uint32_t>(num);
+
+    while (value)
+    {
+      // cxx-bit cxx-mod cxx-div note that cxx-div like this do not always work.
+      result.insert(0, 1, table[value & 15]);
+      value >>= 4;
+    }
+
+    return result;
+  }
+} // namespace leetcode_easy_401
+
+TEST(AlgoConversion, to_hex)
+{
+  using namespace leetcode_easy_401;
+
+  {
+    auto f = tohex_3;
+
+    EXPECT_THAT(f(26), "1a");
+    EXPECT_THAT(f(-1), "ffffffff");
+
+    // case from submission
+    EXPECT_THAT(f(0), "0");
+  }
+
+  // when use test cases approach
+  {
+    std::vector<std::pair<int, std::string>> test_case = {{26, "1a"},
+                                                          {-1, "ffffffff"},
+                                                          {0, "0"}};
+
+    for (const auto &e : test_case)
+    {
+      auto result = tohex_3(e.first);
+
+      if (result != e.second)
+        cout << "fails on " << e.first << endl;
+    }
   }
 }
 
@@ -15935,9 +16794,9 @@ TEST(AlgoSort, MergeSortedList)
 algo-search-binary-search
 
 Time complexity : O(logn). The search space is halved each time, so the time
-complexity is O(\log n)O(logn).
+complexity is O(logn).
 
-Space complexity : O(1)O(1).
+Space complexity : O(1)
 
 */
 
@@ -16064,7 +16923,91 @@ namespace algo_binary_search
     return first;
   }
 
-  // NOTE: GT(Greater) version, use index, return *bool*.
+  // GT(Greater) version, use index, return index.
+  // use [f, l)
+  template <typename _T>
+  size_t my_binary_search_1_3_1(vector<_T> &coll, const _T value)
+  {
+    size_t first = 0;
+    size_t last  = coll.size();
+
+    while (first < last)
+    {
+      size_t mid = (first + last) / 2;
+
+      // std::cout << "middle : " << mid << std::endl;
+
+      if (value <= coll[mid])
+      {
+        last = mid;
+      }
+      else if (value > coll[mid])
+      {
+        first = ++mid;
+      }
+    }
+
+    return first;
+  }
+
+  // GT(Greater) version, use index, return index.
+  // return "last"
+  template <typename _T>
+  size_t my_binary_search_1_3_2(vector<_T> &coll, const _T value)
+  {
+    size_t first = 0;
+    size_t last  = coll.size();
+
+    while (first < last)
+    {
+      size_t mid = (first + last) / 2;
+
+      // std::cout << "middle : " << mid << std::endl;
+
+      if (value <= coll[mid])
+      {
+        last = mid;
+      }
+      else if (value > coll[mid])
+      {
+        first = ++mid;
+      }
+    }
+
+    return last;
+  }
+
+  // GT(Greater) version, use index, return index.
+  // try wrong GT()
+  template <typename _T>
+  size_t my_binary_search_1_3_3(vector<_T> &coll, const _T value)
+  {
+    size_t first = 0;
+    size_t last  = coll.size();
+
+    while (first < last)
+    {
+      size_t mid = (first + last) / 2;
+
+      // std::cout << "middle : " << mid << std::endl;
+
+      // if (value <= coll[mid])
+      if (value < coll[mid])
+      {
+        last = --mid;
+      }
+      // else if (value > coll[mid])
+      else if (value >= coll[mid])
+      {
+        first = mid;
+      }
+    }
+
+    return last;
+  }
+
+  // NOTE: GT(Greater) version, use index
+  // same as 1_3() but return bool instead.
   template <typename _T>
   bool my_binary_search_1_4(vector<_T> &coll, const _T value)
   {
@@ -16120,9 +17063,14 @@ namespace algo_binary_search
   // mid = (low + high) / 2;
   //
   // see *cxx-overflow*
+  //
+  // so as with stl version, can use distance():
+  //
+  // mid = (low + (high-low)/2);
 
   int my_binary_search_2_1_error(vector<int> &coll, int key)
   {
+    // *cxx-undefined*
     size_t low{};
     size_t high{};
     size_t mid{};
@@ -16170,6 +17118,33 @@ namespace algo_binary_search
 
     // to return index. see above when not found.
     return low;
+  }
+
+  // NOTE: SELECTED. equality version
+  // return high
+  int my_binary_search_2_1_1(vector<int> &coll, int key)
+  {
+    int low{};
+    int high{};
+    int mid{};
+
+    low  = 0;
+    high = coll.size() - 1;
+
+    while (low <= high)
+    {
+      mid = (low + high) / 2;
+
+      if (key == coll[mid])
+        return mid;
+      else if (key < coll[mid])
+        high = mid - 1;
+      else
+        low = mid + 1;
+    }
+
+    // to return index. see above when not found.
+    return high;
   }
 
   // return bool
@@ -16262,7 +17237,8 @@ namespace algo_binary_search
 
 } // namespace algo_binary_search
 
-TEST(AlgoSearch, compare_binary_search)
+// ={=========================================================================
+TEST(AlgoSearch, binary_search_compare)
 {
   using namespace algo_binary_search;
 
@@ -16316,36 +17292,12 @@ TEST(AlgoSearch, compare_binary_search)
     EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 0), 0);
   }
 
-  // GT(Greater) version, use index, return index.
-  {
-    EXPECT_THAT(my_binary_search_1_3(coll, 5), 2);
-    EXPECT_THAT(my_binary_search_1_3(coll, 2), 1);
-
-    // fails
-    // EXPECT_THAT(my_binary_search_1_3(coll, 7), 4);
-    // wrong value
-    EXPECT_THAT(my_binary_search_1_3(coll, 7), 3);
-
-    EXPECT_THAT(my_binary_search_1_3(coll, 0), 0);
-  }
-
   // GT(Greater) version, use index, return *bool*.
   {
     EXPECT_THAT(my_binary_search_1_4(coll, 5), true);
     EXPECT_THAT(my_binary_search_1_4(coll, 2), false);
     EXPECT_THAT(my_binary_search_1_4(coll, 7), false);
     EXPECT_THAT(my_binary_search_1_4(coll, 0), false);
-  }
-
-  // EQ(Equality) version, use index, return index
-  {
-    //                    0  1  2  3
-    std::vector<int> coll{1, 3, 5, 6};
-
-    EXPECT_THAT(my_binary_search_2_1(coll, 5), 2);
-    EXPECT_THAT(my_binary_search_2_1(coll, 2), 1);
-    EXPECT_THAT(my_binary_search_2_1(coll, 7), 4);
-    EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
   }
 
   // EQ(Equality) version, use index, return bool
@@ -16374,6 +17326,95 @@ TEST(AlgoSearch, compare_binary_search)
 
     EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 0), 0);
   }
+}
+
+/*
+// ={=========================================================================
+GT(Greater) version, use index, return index found or to insert when not found
+as cxx-lower-bound
+
+o when return index that it's found or it's to insert if not found, requires 
+  [f, l) to consider.
+
+o can use first or last both
+
+o GT(value > middle) is important. when "use value >= middle, value < middle",
+  run infinite loop.
+
+*/
+TEST(AlgoSearch, binary_search_greater_version)
+{
+  using namespace algo_binary_search;
+
+  //                    0  1  2  3
+  std::vector<int> coll{1, 3, 5, 6};
+
+  // fails when use [first, last-1]
+  {
+    EXPECT_THAT(my_binary_search_1_3(coll, 5), 2);
+    EXPECT_THAT(my_binary_search_1_3(coll, 2), 1);
+
+    // fails
+    // EXPECT_THAT(f(coll, 7), 4);
+
+    EXPECT_THAT(my_binary_search_1_3(coll, 7), 3);
+    EXPECT_THAT(my_binary_search_1_3(coll, 0), 0);
+  }
+
+  // get the expected result when use [first, last)
+  {
+    EXPECT_THAT(my_binary_search_1_3_1(coll, 5), 2);
+    EXPECT_THAT(my_binary_search_1_3_1(coll, 2), 1);
+    EXPECT_THAT(my_binary_search_1_3_1(coll, 7), 4);
+    EXPECT_THAT(my_binary_search_1_3_1(coll, 0), 0);
+  }
+
+  // "first or last" both works when use [first, last)
+  {
+    EXPECT_THAT(my_binary_search_1_3_2(coll, 5), 2);
+    EXPECT_THAT(my_binary_search_1_3_2(coll, 2), 1);
+    EXPECT_THAT(my_binary_search_1_3_2(coll, 7), 4);
+    EXPECT_THAT(my_binary_search_1_3_2(coll, 0), 0);
+  }
+
+  // // "first or last" both works when use [first, last)
+  // {
+  //   // ok
+  //   EXPECT_THAT(my_binary_search_1_3_3(coll, 5), 2);
+  //   // infinite loop
+  //   EXPECT_THAT(my_binary_search_1_3_3(coll, 2), 1);
+  //   // EXPECT_THAT(my_binary_search_1_3_3(coll, 7), 4);
+  //   // EXPECT_THAT(my_binary_search_1_3_3(coll, 0), 0);
+  // }
+}
+
+/*
+// ={=========================================================================
+Unlike GT version, cannot use "high" for the same result.
+
+*/
+TEST(AlgoSearch, binary_search_equal_version)
+{
+  using namespace algo_binary_search;
+
+  //                    0  1  2  3
+  std::vector<int> coll{1, 3, 5, 6};
+
+  // EQ(Equality) version, use index, return index
+  {
+    EXPECT_THAT(my_binary_search_2_1(coll, 5), 2);
+    EXPECT_THAT(my_binary_search_2_1(coll, 2), 1);
+    EXPECT_THAT(my_binary_search_2_1(coll, 7), 4);
+    EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
+  }
+
+  // // same but reurn high
+  // {
+  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 5), 2);
+  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 2), 1);
+  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 7), 4);
+  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 0), 0);
+  // }
 }
 
 namespace algo_binary_search
@@ -16454,7 +17495,7 @@ namespace algo_binary_search
   }
 
   // NOTE: GT version. SELECTED. not equality version
-  // if implements binary search using lower_bound() way
+  // it implements binary search using cxx-lower-bound() way
   template <typename _Iterator, typename _T>
   _T my_binary_search_3(_Iterator first, _Iterator last, const _T value)
   {
@@ -16469,9 +17510,13 @@ namespace algo_binary_search
 
       if (*_middle < value)
       {
-        first = _middle;
-        ++first;
-        // why -1? since length is 0 when there is one element like index 0.
+        first = ++_middle;
+
+        // why -1? _length is given input and _half is num of element including
+        // middle. we used up to _half. so "- _half" and excludes the middle. so
+        // "-1" more.
+        // again, when "<=", "_half" becomes the input for next loop. so simply
+        // assign.
         _length = _length - _half - 1;
       }
       else
@@ -16481,7 +17526,7 @@ namespace algo_binary_search
       }
     }
 
-    // stl code
+    // stl code that return iterator
     // return first;
 
     // ues T instead but T is type of element.
@@ -16522,6 +17567,7 @@ namespace algo_binary_search
   }
 } // namespace algo_binary_search
 
+// ={=========================================================================
 TEST(AlgoSearch, binary_search_stl_version)
 {
   //  0  1  2  3  4  5  6  7  8  9  0  1  2
@@ -16677,6 +17723,7 @@ namespace leetcode_easy_278
       return false;
   }
 
+  // so why use GT version? since use ">=" case as one but not two.
   int first_bad_version(int n, const int bad)
   {
     int first{1};
@@ -16685,20 +17732,24 @@ namespace leetcode_easy_278
 
     while (first < last)
     {
-      middle = (last - first) / 2 + first;
+      // to avoid cxx-overflow and more importantly to use isBadversion(int). so
+      // can not use "long long middle"
 
-      // not bad version, like GT()
+      middle = first + (last - first) / 2;
+
+      // not bad version, like GT(). middle < bad
       if (false == isBadVersion(middle, bad))
       {
         first = ++middle;
       }
       // bad version
-      // The only scenario left is where isBadVersion(mid) return true.
+      // The only scenario left is where isBadVersion(mid) return true where
+      // middle >= bad
       //
       // G G G G G G G B B B B B B B
       //
       // This tells us that mid "may or may not" be the first bad version, but
-      // we can tell for sure that all versions after midmid can be discarded.
+      // we can tell for sure that all versions after mid can be discarded.
       // Therefore we set right = mid as the new search space of interval
       // [left,mid] (inclusive).
       else
@@ -16774,6 +17825,26 @@ SYNOPSIS
 >>> print(math.sqrt(16))
 4.0
 
+  // when use sqrt() function
+  {
+    // 2
+    // 2.82843
+    // 3.16228
+    // 4
+
+    EXPECT_DOUBLE_EQ(sqrt(4), 2);
+    EXPECT_NEAR(sqrt(8), 2.82843, 0.00001);
+
+    // Expected equality of these values:
+    //   sqrt(10)
+    //     Which is: 3.1622776601683795
+    //   3.16228
+    // EXPECT_DOUBLE_EQ(sqrt(10), 3.16228);
+
+    EXPECT_NEAR(sqrt(10), 3.16228, 0.00001);
+    EXPECT_DOUBLE_EQ(sqrt(16), 4);
+  }
+
 */
 
 namespace leetcode_easy_017
@@ -16824,11 +17895,13 @@ namespace leetcode_easy_017
     return ans;
   }
 
-  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
+  // Note: _1() can be further optimized to start with ‘start’ = 0
   // and ‘end’ = x/2.
   // Floor of square root of x cannot be more than x/2 when x > 1.
   //
-  // cxx-error-overflow Line 18: Char 15: runtime error: signed integer
+  // cxx-error-overflow
+  //
+  // Line 18: Char 15: runtime error: signed integer
   // overflow: 536848899 * 536848899 cannot be represented in type 'int'
   // (solution.cpp)
   //
@@ -17047,6 +18120,219 @@ TEST(AlgoSearch, binary_search_sqrt_performance_2)
     EXPECT_THAT(f(1), 1);
     EXPECT_THAT(f(2147395599), 46339);
   }
+}
+
+/*
+={=========================================================================
+algo-search-binary-search algo-leetcode-367. Valid Perfect Square, Easy
+
+Given a positive integer num, write a function which returns True if num is a
+perfect square else False.
+
+bool isPerfectSquare(int num); 
+
+Follow up: Do not use any built-in library function such as sqrt.
+
+Example 1:
+Input: num = 16
+Output: true
+
+Example 2:
+Input: num = 14
+Output: false
+ 
+Constraints:
+
+1 <= num <= 2^31 - 1
+
+A perfect square is a number which is generated by multiplying two equal
+integers by each other. For example, number 9 is a perfect square because it can
+be expressed as a product two equal integers being: 9 = 3 x 3.
+
+*/
+
+namespace leetcode_easy_349
+{
+  // use get_sqrt_3(int x) but don't need to care abot "floor" value since need
+  // to return bool.
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Valid Perfect Square.
+  // Memory Usage: 6.3 MB, less than 99.95% of C++ online submissions for Valid Perfect Square.
+
+  bool is_perfect_square_1(int num)
+  {
+    if (num == 0 || num == 1)
+      return true;
+
+    // start from 2.
+    int first{2};
+    int last{num / 2};
+
+    while (first <= last)
+    {
+      long long middle = (first + last) / 2;
+      long long square = middle * middle;
+
+      // equal so it's perfect square
+      if (square == num)
+        return true;
+      else if (square < num)
+      {
+        first = middle + 1;
+      }
+      else
+      {
+        last = middle - 1;
+      }
+    }
+
+    return false;
+  }
+
+  // NAME
+  //        ceil, ceilf, ceill - ceiling function: smallest integral value
+  //        not less than argument
+  //
+  // SYNOPSIS
+  //        #include <math.h>
+  //
+  //        double ceil(double x);
+  //        float ceilf(float x);
+  //        long double ceill(long double x);
+  //
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Valid Perfect Square.
+  // Memory Usage: 6.3 MB, less than 99.95% of C++ online submissions for Valid Perfect Square.
+
+  bool is_perfect_square_2(int num)
+  {
+    auto square = sqrt(num);
+
+    // or
+    // if(square == floor(square))
+
+    if (square == ceil(square))
+      return true;
+
+    return false;
+  }
+} // namespace leetcode_easy_349
+
+TEST(AlgoSearch, binary_search_perfect_square)
+{
+  using namespace leetcode_easy_349;
+
+  {
+    auto f = is_perfect_square_1;
+
+    EXPECT_THAT(f(16), true);
+    EXPECT_THAT(f(14), false);
+  }
+}
+
+/*
+={=========================================================================
+algo-search-binary-search algo-leetcode-374. Guess Number Higher or Lower, Easy
+
+We are playing the Guess Game. The game is as follows:
+
+I pick a number from 1 to n. You have to guess which number I picked.
+
+Every time you guess wrong, I will tell you whether the number I picked is
+higher or lower than your guess.
+
+You call a pre-defined API int guess(int num), which returns 3 possible results:
+
+-1: The number I picked is lower than your guess (i.e. pick < num).
+1: The number I picked is higher than your guess (i.e. pick > num).
+0: The number I picked is equal to your guess (i.e. pick == num).
+
+Return the number that I picked.
+
+Example 1:
+Input: n = 10, pick = 6
+Output: 6
+
+Example 2:
+Input: n = 1, pick = 1
+Output: 1
+
+Example 3:
+Input: n = 2, pick = 1
+Output: 1
+
+Example 4:
+Input: n = 2, pick = 2
+Output: 2
+
+Constraints:
+
+1 <= n <= 231 - 1
+1 <= pick <= n
+
+*/
+
+namespace leetcode_easy_374
+{
+  // *cxx-template-nontype-paremeter*
+  template <int pick>
+  int guess(int n)
+  {
+    if (n == pick)
+      return 0;
+    // num > pick
+    else if (n > pick)
+      return -1;
+    else
+      return 1;
+  };
+
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Guess Number Higher or Lower.
+  // Memory Usage: 6.2 MB, less than 100.00% of C++ online submissions for Guess Number Higher or Lower.
+
+  int guess_number_1(int n, std::function<int(int)> guess)
+  {
+    if (n == 1)
+      return n;
+
+    int first{1};
+    int last{n};
+
+    while (first <= last)
+    {
+      // to avoid cxx-overflow and more importantly to use guess(int). so
+      // can not use "long long middle":
+      // long long middle = (first + last) / 2;
+      int middle = (first + (last - first) / 2);
+
+      // when equals
+      if (0 == guess(middle))
+        return middle;
+      // middle < pick
+      else if (1 == guess(middle))
+      {
+        first = middle + 1;
+      }
+      // middle > pick
+      else
+      {
+        last = middle - 1;
+      }
+    }
+
+    return first;
+  }
+} // namespace leetcode_easy_374
+
+TEST(AlgoSearch, binary_search_guess_number)
+{
+  using namespace leetcode_easy_374;
+
+  auto f = guess_number_1;
+
+  EXPECT_THAT(f(10, guess<6>), 6);
+  EXPECT_THAT(f(1, guess<1>), 1);
+  EXPECT_THAT(f(2, guess<1>), 1);
+  EXPECT_THAT(f(2, guess<2>), 2);
+  EXPECT_THAT(f(2147483647, guess<2126753390>), 2126753390);
 }
 
 /*

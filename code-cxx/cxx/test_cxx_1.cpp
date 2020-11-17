@@ -86,9 +86,6 @@ using namespace testing;
 6690:TEST(Override, PureVirtual)
 6744:TEST(Rtti, UseTypeid)
 6762:TEST(Rtti, DynamicCast)
-6829:TEST(Regex, Match)
-6876:TEST(Regex, MatchFound)
-6904:TEST(Regex, MatchResult)
 7017:TEST(Bit, BitSetCtor)
 7058:TEST(Bit, SizeConsideration)
 7088:TEST(Bit, RightShift)
@@ -446,6 +443,7 @@ TEST(CxxType, sizes)
 }
 
 // ={=========================================================================
+// cxx-limits
 // ushort max   : 65535
 // ushort min   : 0
 // short  max   : 32767
@@ -1086,7 +1084,7 @@ namespace cxx_variant_1
       }
     }
   };
-} // namespace cxxvariant
+} // namespace cxx_variant_1
 
 /*
 // ={=========================================================================
@@ -1313,12 +1311,12 @@ namespace cxx_variant_2
 
     // write(push) arg from message
     template <typename T>
-      VariantMap &operator<<(const T &arg)
-      {
-        // as changed to use std::list<>
-        m_map.emplace_back(arg);
-        return *this;
-      }
+    VariantMap &operator<<(const T &arg)
+    {
+      // as changed to use std::list<>
+      m_map.emplace_back(arg);
+      return *this;
+    }
 
     void clear() { m_map.clear(); }
 
@@ -1361,7 +1359,7 @@ namespace cxx_variant_2
       }
     }
   };
-} // namespace cxxvariant
+} // namespace cxx_variant_2
 
 // ={=========================================================================
 TEST(CxxTypeVariant, variant_and_visitor_2)
@@ -1375,20 +1373,11 @@ TEST(CxxTypeVariant, variant_and_visitor_2)
 
     CustomVisitor() = default;
 
-    virtual void operator()(bool value) override
-    {
-      coll.emplace_back("{b}");
-    }
+    virtual void operator()(bool value) override { coll.emplace_back("{b}"); }
 
-    virtual void operator()(int value) override
-    {
-      coll.emplace_back("{i}");
-    }
+    virtual void operator()(int value) override { coll.emplace_back("{i}"); }
 
-    virtual void operator()(double value) override
-    {
-      coll.emplace_back("{d}");
-    }
+    virtual void operator()(double value) override { coll.emplace_back("{d}"); }
 
     virtual void operator()(const std::string &value) override
     {
@@ -10313,9 +10302,9 @@ TEST(CxxBool, bool_conversion)
 }
 
 // ={=========================================================================
-// cxx-stream
+// cxx-stream cxx-io
 
-TEST(CxxStream, check_stdio_input)
+TEST(CxxStream, stdio_input)
 {
   {
     int i{};
@@ -10498,7 +10487,7 @@ TEST(CxxStream, std_getline)
 // setstate(state)     Sets additional state flags
 
 // ={=========================================================================
-TEST(CxxStream, check_stdio_numbers)
+TEST(CxxStream, state)
 {
   int i1{}, i2{}, i3{}, i4{};
 
@@ -10574,7 +10563,7 @@ TEST(CxxStream, check_stdio_numbers)
 // template< class CharT >
 // /*unspecified*/ put_time( const std::tm* tmb, const CharT* fmt );
 
-TEST(CxxStream, check_manipulator_put_time)
+TEST(CxxStream, manipulator_put_time)
 {
   auto now = chrono::system_clock::now();
   time_t t = chrono::system_clock::to_time_t(now);
@@ -10674,35 +10663,45 @@ TEST(CxxStream, check_manipulators_user_defined)
   }
 }
 
-// CLR-15.6 Manipulators
-//
-// The standard manipulators with arguments are defined in the header file
-// <iomanip>, which must be included to work with the standard manipulators
-// taking arguments: #include <iomanip>
+/*
+CLR-15.6 Manipulators
 
-// CLR-15.7.1 Format Flags
-// Table 15.9. Manipulators Provided by the C++ Standard Library
-//
-// setw(val)
-// Sets the field width of the next input and output to val (corresponds to
-// width())
-//
-// setfill(c)
-// Defines c as the fill character (corresponds to fill())
-//
-// left
-// Left-adjusts the value
-//
-// right
-// Right-adjusts the value
-//
-// internal
-// Left-adjusts the sign and right-adjusts the value
-//
-// Table 15.17. Manipulators for Adjustment
+The standard manipulators with arguments are defined in the header file
+<iomanip>, which must be included to work with the standard manipulators
+taking arguments: #include <iomanip>
+
+
+CLR-15.7.1 Format Flags
+Table 15.9. Manipulators Provided by the C++ Standard Library
+
+setw(val)
+Sets the field width of the next input and output to val (corresponds to
+width())
+
+setfill(c)
+Defines c as the fill character (corresponds to fill())
+
+left
+Left-adjusts the value
+
+right
+Right-adjusts the value
+
+internal
+Left-adjusts the sign and right-adjusts the value
+
+Table 15.17. Manipulators for Adjustment
+
+[ RUN      ] CxxStream.manipulators
+value: +3301, value: -3301
+value: +3301, value: -3301
+| start             | end               | perms             | offset            | pathname
+             | start               | end             | perms            | offset                              | pathname
+             | start               | end             | perms            | offset                              | pathname
+*/
 
 // ={=========================================================================
-TEST(CxxStream, check_manipulators)
+TEST(CxxStream, manipulators_1)
 {
   // showpos Forces writing a positive sign on positive numbers
   // noshowpos Forces not writing a positive sign on positive numbers
@@ -10734,6 +10733,29 @@ TEST(CxxStream, check_manipulators)
   cout << setw(20) << right << "| start" << setw(20) << "| end" << setw(20)
        << "| perms" << setw(20) << "| offset" << setw(40) << "| pathname"
        << endl;
+}
+
+TEST(CxxStream, manipulators_2)
+{
+  std::ostringstream os{};
+
+  int value = 3301;
+
+  {
+    os.str("");
+
+    os << std::setw(8) << value;
+
+    EXPECT_THAT(os.str(), "    3301");
+  }
+
+  {
+    os.str("");
+
+    os << std::setfill('0') << std::setw(8) << value;
+
+    EXPECT_THAT(os.str(), "00003301");
+  }
 }
 
 // 15.7.6 Floating-Point Notation
@@ -12279,64 +12301,140 @@ TEST(Rtti, DynamicCast)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-regex
+cxx-regex
 
-// 14.1 The Regex Match and Search Interface
+14.1 The Regex Match and Search Interface
 
-TEST(CxxRegex, Match)
+(2) (since C++11)
+explicit basic_regex( const CharT* s,
+  flag_type f = std::regex_constants::ECMAScript );
+
+*/
+
+TEST(CxxRegex, match_1)
 {
   // find XML/HTML tagged value (using fefault syntax)
-  regex reg1("<.*>.*</.*>");
-  bool found = regex_match("<tag>value</tag>", reg1);
-  EXPECT_EQ(found, true);
+  // As with strings, this is a specialization of class std::basic_regex<> for
+  // the character type char.
+  {
+    std::regex reg("<.*>.*</.*>");
+    bool found = std::regex_match("<tag>value</tag>", reg);
+
+    EXPECT_EQ(found, true);
+  }
 
   // find XML/HTML tagged value (tags before and after the value must match)
-  // R"(<(.*)>.*</\1>)" // equivalent to: "<(.*)>.*</\\1>"
-  regex reg2("<(.*)>.*</\\1>");
-  found = regex_match("<tag>value</tag>", reg2);
-  EXPECT_EQ(found, true);
+  //
+  // Here, we use the concept of “grouping.” We use “(...)” to define a
+  // so-called capture group, to which we refer later on with the regular
+  // expression “\1”. Note, however, that we specify the regular expression as
+  // an ordinary character sequence, so we have to specify the “character \
+  // followed by the character 1” as “\\1”.
+  //
+  // Alternatively, we could use a raw string, which was introduced with C++11
+  // It starts with “R"(” and ends with “)"”.
+  //
+  // R"(<(.*)>.*</\1>)" is equivalent to: "<(.*)>.*</\\1>"
+
+  {
+    std::regex reg("<(.*)>.*</\\1>");
+    bool found = std::regex_match("<tag>value</tag>", reg);
+
+    EXPECT_EQ(found, true);
+  }
+  {
+    std::regex reg(R"(<(.*)>.*</\1>)");
+    auto found = std::regex_match("<tag>value</tag>", reg);
+
+    EXPECT_EQ(found, true);
+  }
 
   // find XML/HTML tagged value (using grep syntax)
-  regex reg3("<\\(.*\\)>.*</\\1>", regex_constants::grep);
-  found = regex_match("<tag>value</tag>", reg2);
-  EXPECT_EQ(found, true);
+  //
+  // What we introduce here as special characters for regular expressions is
+  // part of the grammar they have. Note that the C++ standard library supports
+  // various grammars. The default grammar is a “modified ECMAScript grammar,”
+  // which is introduced in detail in Section 14.8, page 738. But the next
+  // statements show how a different grammar can be used:
+  //
+  // C++PL 37.1.1
+  // The regex library can recognize several variants of the notation for
+  // regular expressions (§37.2).  Here, I first present the default notation
+  // used, a variant of the ECMA standard used for ECMAScript (more commonly
+  // known as JavaScript).
+  //
+  // that is C++ regex is BRE by default
+
+  {
+    regex reg("<\\(.*\\)>.*</\\1>", regex_constants::grep);
+    auto found = std::regex_match("<tag>value</tag>", reg);
+
+    EXPECT_EQ(found, true);
+  }
 
   // use C string as reg expression (needs explicit cast to regex)
-  found = regex_match("<tag>value</tag>", regex("<.*>.*</.*>"));
-  EXPECT_EQ(found, true);
+  {
+    auto found =
+      std::regex_match("<tag>value</tag>", std::regex("<.*>.*</.*>"));
 
-  // regex_match() versus regex_search():
-  //
-  // regex_match() checks whether the *whole* character sequence matches a
-  // regular expression.
-  //
-  // regex_search() checks whether the character sequence *partially* matches a
-  // regular expression.
-
-  found = regex_match("XML tag: <tag>value</tag>",
-                      regex("<(.*)>.*</\\1>")); // note: fails to match
-  EXPECT_EQ(found, false);
-
-  found = regex_search("XML tag: <tag>value</tag>",
-                       regex("<(.*)>.*</\\1>")); // matches
-  EXPECT_EQ(found, true);
-
-  found = regex_match("XML tag: <tag>value</tag>",
-                      regex(".*<(.*)>.*</\\1>.*")); // matches
-  EXPECT_EQ(found, true);
-
-  found = regex_search("XML tag: <tag>value</tag>",
-                       regex(".*<(.*)>.*</\\1>.*")); // matches
-  EXPECT_EQ(found, true);
+    EXPECT_EQ(found, true);
+  }
 }
 
-TEST(CxxRegex, MatchFound)
+/*
+// ={=========================================================================
+the difference of regex_match() and regex_search()
+
+regex_match() checks whether the *whole* character sequence matches a
+regular expression.
+
+regex_search() checks whether the character sequence *partially* matches a
+regular expression.
+
+*/
+TEST(CxxRegex, match_and_search)
+{
+  // fails to match
+  {
+    auto found = std::regex_match("XML tag: <tag>value</tag>",
+                                  std::regex("<(.*)>.*</\\1>"));
+
+    EXPECT_EQ(found, false);
+  }
+
+  // but search is fine
+  {
+    auto found = std::regex_search("XML tag: <tag>value</tag>",
+                                   std::regex("<(.*)>.*</\\1>"));
+
+    EXPECT_EQ(found, true);
+  }
+
+  // when extend 'expression'
+  {
+    auto found = std::regex_match("XML tag: <tag>value</tag>",
+                                  std::regex(".*<(.*)>.*</\\1>.*"));
+
+    EXPECT_EQ(found, true);
+  }
+
+  {
+    auto found = std::regex_search("XML tag: <tag>value</tag>",
+                                   std::regex(".*<(.*)>.*</\\1>.*"));
+
+    EXPECT_EQ(found, true);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxRegex, match_2)
 {
   string data{"XML tag: <tag-name>the value</tag-name>."};
 
   {
-    regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>)");
+    std::regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>)");
 
     // for returned details of the match
     std::smatch m;
@@ -12357,44 +12455,167 @@ TEST(CxxRegex, MatchFound)
   }
 }
 
-// CXXSLR-14.2 Dealing with Subexpressions
+/*
+// ={=========================================================================
 
-TEST(CxxRegex, MatchResult)
+C++PL 37.1
+
+That last pattern is useful for parsing XML. It finds tag/end-of-tag markers.
+Note that I used a non-greedy match (a lazy match), .∗? , for the subpattern
+between the tag and the end tag. Had I used plain .∗ , this input would have
+caused a problem:
+
+Always look for the <b>bright</b> side of <b>life</b>.
+
+A greedy match for the first subpattern would match the first < with the last >
+. A greedy match on the second subpattern would match the first <b> with the
+last </b> . Both would be correct behavior, but unlikely what the programmer
+wanted.
+
+NOTE: NOT work as described??
+
+*/
+
+TEST(CxxRegex, match_and_greedy)
 {
-  string data{"XML tag: <tag-name>the value</tag-name>."};
+  {
+    std::string data{"<tag>value</tag>"};
+
+    // has only one sub_match
+    std::regex reg(R"(<(.*)>.*</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 2);
+
+    EXPECT_THAT(m[0].str(), "<tag>value</tag>");
+    EXPECT_THAT(m[1].str(), "tag");
+  }
+
+  {
+    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(<(.*)>.*</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, false);
+
+    EXPECT_THAT(m.size(), 0);
+  }
+
+  {
+    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(<(.*)>(.*)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, false);
+
+    EXPECT_THAT(m.size(), 0);
+  }
+
+  {
+    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(.*<(.*)>(.*)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 3);
+
+    EXPECT_THAT(m[0].str(),
+                "Always look for the <b>bright</b> side of <b>life</b>");
+    EXPECT_THAT(m[1].str(), "b");
+    EXPECT_THAT(m[2].str(), "life");
+  }
+
+  {
+    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(.*<(.*?)>(.*?)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 3);
+
+    EXPECT_THAT(m[0].str(),
+                "Always look for the <b>bright</b> side of <b>life</b>");
+    EXPECT_THAT(m[1].str(), "b");
+    EXPECT_THAT(m[2].str(), "life");
+  }
+}
+
+/*
+// ={=========================================================================
+CXXSLR-14.2 Dealing with Subexpressions
+
+In this example, we can demonstrate the use of match_results objects, which can
+be passed to regex_match() and regex_search() to get details of matches. Class
+std::match_results<> is a template that has to get instantiated by the iterator
+type of the characters processed. The C++ standard library provides some
+predefined instantiations:
+
+smatch: for details of matches in strings
+cmatch: for details of matches in C-strings (const char*)
+...
+
+Thus, if we call regex_match() or regex_search() for C++ strings, type smatch
+has to be used; for ordinary string literals, type cmatch has to be used.
+
+Regex: <(.*)>(.*)</(\1)>
+XML tag: <tag-name>the value</tag-name>.
+        | | m[1] | |  m[2] |  | m[3] | |
+| prefix|             m[0]            | suffix
+
+In general, the match_results object contains:
+
+o A sub_match object m[0] for all the matched characters
+
+o A prefix(), a sub_match object that represents all characters before
+ the first matched character
+
+o A suffix(), a sub_match object that represents all characters after
+ the last matched character
+
+*/
+
+TEST(CxxRegex, match_result)
+{
+  std::string data{"XML tag: <tag-name>the value</tag-name>."};
 
   // ok
-  regex rx(R"(<([\w-]+)>(.*)<\/([\w-]+)>)");
-
-  // ok
-  // regex rx("<(.*)>(.*)</(\\1)>");
+  std::regex rx(R"(<([\w-]+)>(.*)<\/([\w-]+)>)");
 
   // for returned details of the match
   std::smatch m;
 
-  auto found = regex_search(data, m, rx);
+  auto found = std::regex_search(data, m, rx);
+
   EXPECT_TRUE(found);
 
   if (found)
   {
-    // Regex: <(.*)>(.*)</(\1)>
-    // XML tag: <tag-name>the value</tag-name>.
-    //           | m[1] | |  m[2] |  | m[3] | |
-    // | prefix|             m[0]            | suffix
-    //
-    // In general, the match_results object contains:
-    //
-    //  o A sub_match object m[0] for all the matched characters
-    //
-    //  o A prefix(), a sub_match object that represents all characters before
-    //  the first matched character
-    //
-    //  o A suffix(), a sub_match object that represents all characters after
-    //  the last matched character
-
     EXPECT_THAT(m.empty(), false);
 
-    // size() yields the number of sub_match objects (including m[0]).
+    // size() yields the number of "sub_match" objects (including m[0]).
 
     EXPECT_THAT(m.size(), 4);
 
@@ -12405,6 +12626,7 @@ TEST(CxxRegex, MatchResult)
     // that is m[0]
 
     EXPECT_THAT(m.str(), "<tag-name>the value</tag-name>");
+    EXPECT_THAT(m[0].str(), "<tag-name>the value</tag-name>");
 
     // member function length() to yield the length of the matched string as a
     // whole (calling length() or length(0)) or the length of the nth matched
@@ -12418,24 +12640,27 @@ TEST(CxxRegex, MatchResult)
     // matched substring (calling length(n))
 
     EXPECT_THAT(m.position(), 9);
+    EXPECT_THAT(m.position(0), 9);
     EXPECT_THAT(m.prefix().str(), "XML tag: ");
     EXPECT_THAT(m.suffix().str(), ".");
 
+    EXPECT_THAT(m.position(1), 10);
     EXPECT_THAT(m[1].str(), "tag-name");
     EXPECT_THAT(m.str(1), "tag-name");
-    EXPECT_THAT(m.position(1), 10);
+    EXPECT_THAT(m[1].matched, true);
 
+    EXPECT_THAT(m.position(2), 19);
     EXPECT_THAT(m[2].str(), "the value");
     EXPECT_THAT(m.str(2), "the value");
-    EXPECT_THAT(m.position(2), 19);
+    EXPECT_THAT(m[2].matched, true);
 
+    EXPECT_THAT(m.position(3), 30);
     EXPECT_THAT(m[3].str(), "tag-name");
     EXPECT_THAT(m.str(3), "tag-name");
-    EXPECT_THAT(m.position(3), 30);
+    EXPECT_THAT(m[3].matched, true);
 
-    // use iterator
-
-    ostringstream os;
+    // use iterator and operator<<() writes the characters to a stream
+    std::ostringstream os;
 
     for (auto pos = m.begin(); pos != m.end(); ++pos)
     {
@@ -12456,6 +12681,175 @@ TEST(CxxRegex, MatchResult)
     EXPECT_THAT(os.str(),
                 "<tag-name>the value</tag-name>, 30\ntag-name, "
                 "8\nthe value, 9\ntag-name, 8\n");
+  }
+}
+
+/*
+// ={=========================================================================
+
+14.7 Regex Exceptions
+
+When regular expressions are parsed, things can become very complicated. The C++
+standard li- brary provides a special exception class to deal with
+regular-expression exceptions. This class is derived from std::runtime_error
+(see Section 4.3.1, page 41) and provides an additional mem- ber code() to yield
+an error code. This might help to find out what’s wrong if an exception is
+thrown when processing regular expressions.
+
+Unfortunately, the error codes returned by code() are implementation specific,
+so it doesn’t help to print them directly. Instead, you have to use something
+like the following header file to deal with regex exceptions in a reasonable
+way:
+
+*/
+
+namespace cxx_regex
+{
+  template <typename T>
+    std::string regexCode (T code)
+    {
+      switch (code) {
+        case std::regex_constants::error_collate:
+          return "error_collate: "
+            "regex has invalid collating element name";
+        case std::regex_constants::error_ctype:
+          return "error_ctype: "
+            "regex has invalid character class name";
+        case std::regex_constants::error_escape:
+          return "error_escape: "
+            "regex has invalid escaped char. or trailing escape";
+        case std::regex_constants::error_backref:
+          return "error_backref: "
+            "regex has invalid back reference";
+        case std::regex_constants::error_brack:
+          return "error_brack: "
+            "regex has mismatched ’[’ and ’]’";
+        case std::regex_constants::error_paren:
+          return "error_paren: "
+            "regex has mismatched ’(’ and ’)’";
+        case std::regex_constants::error_brace:
+          return "error_brace: "
+            "regex has mismatched ’{’ and ’}’";
+        case std::regex_constants::error_badbrace:
+          return "error_badbrace: "
+            "regex has invalid range in {} expression";
+        case std::regex_constants::error_range:
+          return "error_range: "
+            "regex has invalid character range, such as ’[b-a]’";
+        case std::regex_constants::error_space:
+          return "error_space: "
+            "insufficient memory to convert regex into finite state";
+        case std::regex_constants::error_badrepeat:
+          return "error_badrepeat: "
+            "one of *?+{ not preceded by valid regex";
+        case std::regex_constants::error_complexity:
+          return "error_complexity: "
+            "complexity of match against regex over pre-set level";
+        case std::regex_constants::error_stack:
+          return "error_stack: "
+            "insufficient memory to determine regex match";
+      }
+      return "unknown/non-standard regex error code";
+    }
+}
+
+// Because we use the grep grammar here but do escape the characters { and },
+// the program might have an output such as the following:
+
+TEST(CxxRegex, exception)
+{
+  using namespace cxx_regex;
+
+  try {
+    // initialize regular expression with invalid syntax:
+    regex pat ("\\\\.*index\\{([^}]*)\\}",
+        regex_constants::grep|regex_constants::icase);
+  }
+  catch (const regex_error& e) 
+  {
+    // cerr << "regex_error: \n"
+    //   << " what(): " << e.what() << "\n"
+    //   << " code(): " << regexCode(e.code()) << endl;
+
+    EXPECT_THAT(std::string(e.what()),
+                "Unexpected character in brace expression.");
+    EXPECT_THAT(regexCode(e.code()),
+                "error_badbrace: regex has invalid range in {} expression");
+  }
+}
+
+// ={=========================================================================
+TEST(CxxRegex, match_class_1)
+{
+  std::string data{"/as/services/0/0"};
+
+  {
+    try
+    {
+      // note: ctor can also raise exception
+      std::regex reg(R"(/as/services/\d/\d)");
+
+      bool found{};
+
+      found = std::regex_search(data, reg);
+
+      EXPECT_TRUE(found);
+    }
+    catch(const regex_error &e)
+    {
+      std::cout << "what: " << e.what() << ", code: " << e.code() << std::endl;
+    }
+  }
+
+  {
+    try
+    {
+      // note: ctor can also raise exception
+      std::regex reg{"/as/services/[[:digit:]]/[[:digit:]]"};
+
+      bool found{};
+
+      found = std::regex_search(data, reg);
+
+      EXPECT_TRUE(found);
+    }
+    catch(const regex_error &e)
+    {
+      std::cout << "what: " << e.what() << ", code: " << e.code() << std::endl;
+    }
+  }
+}
+
+// ={=========================================================================
+TEST(CxxRegex, match_class_2)
+{
+  std::vector<std::string> coll{
+    "/as/services/0/0",
+    "/as/services/10/20",
+    "/as/services/100/100",
+    "/as/services/234/0"
+  };
+
+  {
+    std::regex reg{"/as/services/\\d+/\\d+"};
+
+    for (const auto &e : coll)
+    {
+      auto found = std::regex_search(e, reg);
+
+      EXPECT_TRUE(found);
+    }
+  }
+
+  {
+    std::regex reg{R"("/as/services/\d+/\d+")"};
+
+    for (const auto &e : coll)
+    {
+      auto found = std::regex_search(e, reg);
+
+      EXPECT_TRUE(found);
+    }
   }
 }
 
@@ -12731,6 +13125,7 @@ TEST(CxxBit, check_bit_array)
 
 /*
 // ={=========================================================================
+*cxx-bool*
 
 [ RUN      ] CxxBit.check_performace_on_vector_bool
 [       OK ] CxxBit.check_performace_on_vector_bool (277 ms)
@@ -12741,7 +13136,7 @@ TEST(CxxBit, check_bit_array)
 [ RUN      ] CxxBit.check_performace_on_array_bool
 [       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
 
-array bool is fastest.
+NOTE array bool is fastest.
 
 */
 
@@ -13533,16 +13928,15 @@ namespace cxx_template
 {
   class SDBusArgumentReader
   {
-    private:
-      std::stringstream ss_{};
+  private:
+    std::stringstream ss_{};
 
-    public:
+  public:
+    SDBusArgumentReader()  = default;
+    ~SDBusArgumentReader() = default;
 
-      SDBusArgumentReader() = default;
-      ~SDBusArgumentReader() = default;
-
-      template <typename T>
-        T readValue() const;
+    template <typename T>
+    T readValue() const;
   };
 
 // *cxx-template-specialization*
@@ -13558,31 +13952,31 @@ namespace cxx_template
     return value;                                                              \
   }
 
-  SDBUS_READ_BASIC_TYPE(bool,     "b", false)
-  SDBUS_READ_BASIC_TYPE(int32_t,  "i", INT32_MAX)
+  SDBUS_READ_BASIC_TYPE(bool, "b", false)
+  SDBUS_READ_BASIC_TYPE(int32_t, "i", INT32_MAX)
 
   class SDBusMessage
   {
-    private:
-      const SDBusArgumentReader mReader;
+  private:
+    const SDBusArgumentReader mReader;
 
-    public:
-      template <typename T>
-      const SDBusMessage &operator>>(T &arg) const;
+  public:
+    template <typename T>
+    const SDBusMessage &operator>>(T &arg) const;
   };
 
-  template<typename T>
-    const SDBusMessage &SDBusMessage::operator>>(T &arg) const
-    {
-      arg = mReader.readValue<T>();
-      return *this;
-    }
+  template <typename T>
+  const SDBusMessage &SDBusMessage::operator>>(T &arg) const
+  {
+    arg = mReader.readValue<T>();
+    return *this;
+  }
 
-    // *cxx-template-explicit-instantiation*
-    template const SDBusMessage &SDBusMessage::operator>><bool>(bool &) const;
-    template const SDBusMessage &SDBusMessage::operator>>
-      <int32_t>(int32_t &) const;
-}
+  // *cxx-template-explicit-instantiation*
+  template const SDBusMessage &SDBusMessage::operator>><bool>(bool &) const;
+  template const SDBusMessage &SDBusMessage::operator>>
+    <int32_t>(int32_t &) const;
+} // namespace cxx_template
 
 TEST(CxxTemplate, specialisation_2)
 {
