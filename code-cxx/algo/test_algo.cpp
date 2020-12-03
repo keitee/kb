@@ -1197,6 +1197,11 @@ namespace algoswap
   }
 
   // cxx-xor
+  //
+  // The ^ (bitwise XOR) in C or C++ takes two numbers as operands and does 
+  // XOR on every bit of two numbers. The result of XOR is 1 if the two bits 
+  // are different.
+  //
   // X XOR  X  = 0
   // X XOR  0  = X
   // X XOR  1  = ~X    // X XOR (~0) = ~X
@@ -4063,7 +4068,6 @@ namespace algo_palindrome
     for (size_t i = 0; i < len; ++i)
       table[i + i * len] = true;
 
-    size_t begin{0};
     size_t maxlen{1};
 
     for (size_t i = 0; i < len - 1; ++i)
@@ -4074,7 +4078,6 @@ namespace algo_palindrome
       if (maxlen < 2)
       {
         maxlen = 2;
-        begin  = i;
       }
     }
 
@@ -4091,7 +4094,6 @@ namespace algo_palindrome
           if (maxlen < inspect_size)
           {
             maxlen = inspect_size;
-            begin  = i;
           }
         }
       }
@@ -7110,11 +7112,9 @@ namespace algo_bit
 {
   // as with itoa
   //
-  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Number of
-  // 1 Bits.
-  //
-  // Memory Usage: 8.1 MB, less than 70.42% of C++ online submissions for Number
-  // of 1 Bits.
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions 
+  // Memory Usage: 8.1 MB, less than 70.42% of C++ online submissions 
+
   int get_hamming_weight_1(uint32_t n)
   {
     int count{};
@@ -7146,7 +7146,7 @@ namespace algo_bit
   }
 
   // page 51. exercise 2-9. In a two's complement number system, x &= (x-1)
-  // deletes the rightmost 1-bit in x. Explain why. Use this observation to write
+  // "deletes the rightmost 1-bit in x." Explain why. Use this observation to write
   // a 'faster' version of bitcount.
   //
   // Answer:
@@ -7231,7 +7231,7 @@ namespace algo_bit
 } // namespace algo_bit
 
 //={=========================================================================
-TEST(AlgoBit, check_hamming_weight)
+TEST(AlgoBit, hamming_weight)
 {
   using namespace algo_bit;
 
@@ -7279,6 +7279,94 @@ TEST(AlgoBit, check_hamming_weight)
       // Input: 11111111111111111111111111111101, 4294967293
       EXPECT_THAT(f(4294967293), true);
     }
+  }
+}
+
+/*
+={=========================================================================
+algo-bits-count-bits 
+
+461. Hamming Distance Easy
+
+The Hamming distance between two integers is the number of positions at which
+the corresponding bits are different.
+
+Given two integers x and y, calculate the Hamming distance.
+
+Note:
+0 ≤ x, y < 231.
+
+Example:
+
+Input: x = 1, y = 4
+
+Output: 2
+
+Explanation:
+1   (0 0 0 1)
+4   (0 1 0 0)
+       *   *
+
+The above arrows point to positions where the corresponding bits are different.
+*/
+
+namespace leetcode_easy_461
+{
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions
+  // Memory Usage: 6.3 MB, less than 43.57% of C++ online submissions
+
+  int hamming_distance_1(int x, int y)
+  {
+    unsigned int ux{x};
+    unsigned int uy{y};
+    int count{};
+
+    while (ux || uy)
+    {
+      if ((ux & 0x1) != (uy & 0x1))
+        ++count;
+
+      ux >>= 1;
+      uy >>= 1;
+    }
+
+    return count;
+  }
+
+  // if use cxx-xor and "deletes the rightmost 1-bit in x." to cound bit which
+  // shown above:
+  //
+  // cxx-xor
+  // The ^ (bitwise XOR) in C or C++ takes two numbers as operands and does 
+  // XOR on every bit of two numbers. The result of XOR is 1 if the two bits 
+  // are different.
+
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions
+  // Memory Usage: 6.3 MB, less than 43.57% of C++ online submissions
+
+  int hamming_distance_2(int x, int y)
+  {
+    int input = x ^ y;
+    int count{};
+
+    while (input)
+    {
+      input = input & (input -1);
+      ++count;
+    }
+
+    return count;
+  }
+}
+
+TEST(AlgoBit, hamming_distance)
+{
+  using namespace leetcode_easy_461;
+
+  {
+    auto f = hamming_distance_2;
+
+    EXPECT_THAT(f(1, 2), 2);
   }
 }
 
@@ -8791,8 +8879,21 @@ namespace algo_min_max
   bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
 } // namespace algo_min_max
 
+/*
 //={========================================================================
-// copied from cxx-min-cxx-max
+copied from cxx-min-cxx-max
+
+template< class ForwardIt >
+ForwardIt max_element( ForwardIt first, ForwardIt last );
+
+template< class ForwardIt, class Compare >
+ForwardIt max_element( ForwardIt first, ForwardIt last, Compare comp );
+
+template< class ForwardIt >
+std::pair<ForwardIt,ForwardIt>
+    minmax_element( ForwardIt first, ForwardIt last );
+
+*/
 TEST(AlgoMinMax, stl_version)
 {
   using namespace algo_min_max;
@@ -8810,34 +8911,53 @@ TEST(AlgoMinMax, stl_version)
     // does this differene matter since we want max value but not index of max
     // element? yes if want to know the pos of it
 
-    EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
-    EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+    EXPECT_THAT(*std::max_element(coll.begin(), coll.end()), 6);
+    EXPECT_THAT(*std::min_element(coll.begin(), coll.end()), -3);
 
     // get the first
-    EXPECT_THAT(distance(coll.begin(), max_element(coll.begin(), coll.end())),
-                4);
+    EXPECT_THAT(
+      std::distance(coll.begin(), std::max_element(coll.begin(), coll.end())),
+      4);
 
     // return iterator pair
     // Note also that minmax_element() yields `the last maximum`, so the distance
     // 9.
-    auto minmax = minmax_element(coll.begin(), coll.end());
+    auto minmax = std::minmax_element(coll.begin(), coll.end());
     EXPECT_THAT(*(minmax.first), -3); // first minimum
     EXPECT_THAT(*(minmax.second), 6); // last maximum
 
     // last maximum is 6 which is the last element so minmax returns the last
     // max.
-    EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size() - 1);
+    EXPECT_THAT(std::distance(coll.begin(), minmax.second), coll.size() - 1);
 
     // see difference
-    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-    EXPECT_THAT(distance(min_element(coll.begin(), coll.end()),
-                         max_element(coll.begin(), coll.end())),
+    EXPECT_THAT(std::distance(minmax.first, minmax.second), 9);
+    EXPECT_THAT(std::distance(std::min_element(coll.begin(), coll.end()),
+                              std::max_element(coll.begin(), coll.end())),
                 -1);
 
     // min/max of absolute values
-    EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
-    EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+    EXPECT_THAT(*std::min_element(coll.begin(), coll.end(), AbsLess), 0);
+    EXPECT_THAT(*std::max_element(coll.begin(), coll.end(), AbsLess), 6);
   }
+
+  // meant "auto minmax" but not "auto mixmax" get these errors:
+  //
+  // error: overloaded function with no contextual type information
+  //      int min = *(minmax.first);
+  //                         ^~~~~
+  // error: overloaded function with no contextual type information
+  //      int max = *(minmax.second);
+  //                         ^~~~~~
+  //
+  // WHY? since there is std::minmax() so careful about it.
+  //
+  // {
+  //   auto mixmax = std::minmax_element(s.cbegin(), s.cend());
+  //
+  //   int min = *(minmax.first);
+  //   int max = *(minmax.second);
+  // }
 }
 
 namespace algo_min_max
@@ -8990,6 +9110,7 @@ namespace algo_min_max
     if (__first == __last)
       return std::make_pair(__first, __last);
 
+    // this is important
     _Iterator __max = __first;
     _Iterator __min = __first;
 
@@ -9005,6 +9126,28 @@ namespace algo_min_max
     }
 
     return std::make_pair(__min, __max);
+  }
+
+  std::pair<int, int> my_minmax(const std::vector<int> &coll)
+  {
+    if (coll.empty())
+      return std::make_pair(0, 0);
+
+    int min = coll[0];
+    int max = coll[0];
+
+    auto size = coll.size();
+
+    for (size_t i = 1; i < size; ++i)
+    {
+      if (coll[i] > max)
+        max = coll[i];
+
+      if (coll[i] < min)
+        min = coll[i];
+    }
+
+    return std::make_pair(min, max);
   }
 } // namespace algo_min_max
 
@@ -16802,28 +16945,11 @@ Space complexity : O(1)
 
 namespace algo_binary_search
 {
-  // To sum:
-  // 1. GT version end loop when "first == end"
-  // 2. GT and iterator version work for both returning bool and returing index
-  // to insert.
-  // 3. GT and index version works differently for both returning bool and
-  // returning index.
-  // 4. GT version check if it's found when ends the loop
-  //
-  // Q:should have empty input check? YES, if not, do access to first like
-  // "*first"
+  // since distance(first, last) exclude last, "last = mid" is missing out
+  // last elements? has the same effect when use "0, size()" in middle calc.
 
-  // GT(Greater) version, use iterator, return bool.
-  //
-  // NOTE: access to end, "*end" is okay?
-  //
-  // NOTE: since distance(first, last) exclude last, "last = mid" is missing out
-  // last elements? `first` gets updated and will be the right pos.
-  //
-  // if (value <= *mid)
-  // {
-  //   last = mid;
-  // }
+  // Q: should have empty input check? YES, if not, do access to first like
+  // "*first"
 
   template <typename _Iterator, typename _T>
   bool my_binary_search_1_1(_Iterator first, _Iterator last, const _T value)
@@ -16845,7 +16971,7 @@ namespace algo_binary_search
     return value == *first ? true : false;
   }
 
-  // NOTE: has "equal check" in the loop.
+  // OK. GT and see can have has "equal check" in the loop.
   template <typename _Iterator, typename _T>
   bool my_binary_search_1_1_1(_Iterator first, _Iterator last, const _T value)
   {
@@ -16870,7 +16996,7 @@ namespace algo_binary_search
     return value == *first ? true : false;
   }
 
-  // GT(Greater) version, use iterator, return index.
+  // OK. GT(Greater) version, use iterator, return index.
   // return index which it is found or is to insert if not found.
   template <typename _Iterator, typename _T>
   size_t my_binary_search_1_2(_Iterator first, _Iterator last, const _T value)
@@ -16896,6 +17022,7 @@ namespace algo_binary_search
     return std::distance(start, first);
   }
 
+  // Fails when use [first, last-1]
   // GT(Greater) version, use index, return index.
   // return index which it is found or is to insert if not found.
   template <typename _T>
@@ -16923,7 +17050,7 @@ namespace algo_binary_search
     return first;
   }
 
-  // GT(Greater) version, use index, return index.
+  // OK. GT(Greater) version, use index, return index.
   // use [f, l)
   template <typename _T>
   size_t my_binary_search_1_3_1(vector<_T> &coll, const _T value)
@@ -16935,23 +17062,21 @@ namespace algo_binary_search
     {
       size_t mid = (first + last) / 2;
 
-      // std::cout << "middle : " << mid << std::endl;
-
-      if (value <= coll[mid])
-      {
-        last = mid;
-      }
-      else if (value > coll[mid])
+      // GT
+      if (value > coll[mid])
       {
         first = ++mid;
+      }
+      else if (value <= coll[mid])
+      {
+        last = mid;
       }
     }
 
     return first;
   }
 
-  // GT(Greater) version, use index, return index.
-  // return "last"
+  // same as the above but return "last"
   template <typename _T>
   size_t my_binary_search_1_3_2(vector<_T> &coll, const _T value)
   {
@@ -16977,8 +17102,7 @@ namespace algo_binary_search
     return last;
   }
 
-  // GT(Greater) version, use index, return index.
-  // try wrong GT()
+  // No. to see if wrong GT() works but no.
   template <typename _T>
   size_t my_binary_search_1_3_3(vector<_T> &coll, const _T value)
   {
@@ -17006,13 +17130,12 @@ namespace algo_binary_search
     return last;
   }
 
-  // NOTE: GT(Greater) version, use index
-  // same as 1_3() but return bool instead.
+  // return bool instead.
   template <typename _T>
   bool my_binary_search_1_4(vector<_T> &coll, const _T value)
   {
     size_t first = 0;
-    size_t last  = coll.size() - 1;
+    size_t last  = coll.size();
 
     while (first < last)
     {
@@ -17032,41 +17155,6 @@ namespace algo_binary_search
 
     return value == coll[first] ? true : false;
   }
-
-  // To sum:
-  // 1. EQ ends loop when first > last.
-  // 2. EQ check if it's found while in the loop
-  //
-  // ansic, p58
-  // cracking the coding interview, p120
-  // Programming Pearl, p46
-  //
-  // note:
-  //
-  // it has the same as distance() in iterator version or can use
-  // length approach as stl version.
-
-  // EQ(Equality) version, use index, return index
-  //
-  // note that when not found, return index to insert to maintain the sorted
-  // input.
-
-  // *cxx-undefined* when use size_t since can be negative on this case:
-  //
-  // EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
-  //
-  // when mid is 0, "high = mid -1" becomes -1 when int but big number when
-  // size_t
-  //
-  // this may cause overflow when high and low are both big number in additon.
-  //
-  // mid = (low + high) / 2;
-  //
-  // see *cxx-overflow*
-  //
-  // so as with stl version, can use distance():
-  //
-  // mid = (low + (high-low)/2);
 
   int my_binary_search_2_1_error(vector<int> &coll, int key)
   {
@@ -17116,12 +17204,11 @@ namespace algo_binary_search
         low = mid + 1;
     }
 
-    // to return index. see above when not found.
+    // to return index which is found or is to insert.
     return low;
   }
 
-  // NOTE: SELECTED. equality version
-  // return high
+  // Fails when use high
   int my_binary_search_2_1_1(vector<int> &coll, int key)
   {
     int low{};
@@ -17231,115 +17318,50 @@ namespace algo_binary_search
     // when not found only
     return std::distance(saved_begin, begin);
   }
-
-  // NOTE:
-  // To sum, use EQ and index version.
-
 } // namespace algo_binary_search
-
-// ={=========================================================================
-TEST(AlgoSearch, binary_search_compare)
-{
-  using namespace algo_binary_search;
-
-  // cxx-binary-search, stl version
-  //
-  // 11.10 Sorted-Range Algorithms
-  //
-  // The following algorithms search certain values in sorted ranges. Checking
-  // Whether One Element Is Present
-  //
-  // bool binary_search (ForwardIterator beg, ForwardIterator end, const T&
-  // value)
-  //
-  // bool binary_search (ForwardIterator beg, ForwardIterator end, const T&
-  // value, BinaryPredicate op)
-  {
-    //                     0  1  2  3   4   5   6   7   8   9  10  11  12
-    std::vector<int> coll1{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
-    EXPECT_THAT(std::binary_search(coll1.cbegin(), coll1.cend(), 15), true);
-    EXPECT_THAT(std::binary_search(coll1.cbegin(), coll1.cend(), 32), false);
-
-    //                     0  1  2  3
-    std::vector<int> coll2{1, 3, 5, 6};
-    EXPECT_THAT(std::binary_search(coll2.cbegin(), coll2.cend(), 5), true);
-    EXPECT_THAT(std::binary_search(coll2.cbegin(), coll2.cend(), 2), false);
-  }
-
-  //                    0  1  2  3
-  std::vector<int> coll{1, 3, 5, 6};
-
-  // GT(Greater) version, use iterator, return bool.
-  {
-    EXPECT_THAT(my_binary_search_1_1(coll.cbegin(), coll.cend(), 5), true);
-    EXPECT_THAT(my_binary_search_1_1(coll.cbegin(), coll.cend(), 2), false);
-    EXPECT_THAT(my_binary_search_1_1(coll.cbegin(), coll.cend(), 7), false);
-    EXPECT_THAT(my_binary_search_1_1(coll.cbegin(), coll.cend(), 0), false);
-  }
-
-  {
-    EXPECT_THAT(my_binary_search_1_1_1(coll.cbegin(), coll.cend(), 5), true);
-    EXPECT_THAT(my_binary_search_1_1_1(coll.cbegin(), coll.cend(), 2), false);
-    EXPECT_THAT(my_binary_search_1_1_1(coll.cbegin(), coll.cend(), 7), false);
-    EXPECT_THAT(my_binary_search_1_1_1(coll.cbegin(), coll.cend(), 0), false);
-  }
-
-  // GT(Greater) version, use iterator, return index.
-  {
-    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 5), 2);
-    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 2), 1);
-    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 7), 4);
-    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 0), 0);
-  }
-
-  // GT(Greater) version, use index, return *bool*.
-  {
-    EXPECT_THAT(my_binary_search_1_4(coll, 5), true);
-    EXPECT_THAT(my_binary_search_1_4(coll, 2), false);
-    EXPECT_THAT(my_binary_search_1_4(coll, 7), false);
-    EXPECT_THAT(my_binary_search_1_4(coll, 0), false);
-  }
-
-  // EQ(Equality) version, use index, return bool
-  {
-    EXPECT_THAT(my_binary_search_2_2(coll, 5), true);
-    EXPECT_THAT(my_binary_search_2_2(coll, 2), false);
-    EXPECT_THAT(my_binary_search_2_2(coll, 7), false);
-    EXPECT_THAT(my_binary_search_2_2(coll, 0), false);
-  }
-
-  // EQ(Equality) version, use iterator, return bool
-  {
-    EXPECT_THAT(my_binary_search_2_3(coll.cbegin(), coll.cend(), 5), true);
-    EXPECT_THAT(my_binary_search_2_3(coll.cbegin(), coll.cend(), 2), false);
-    EXPECT_THAT(my_binary_search_2_3(coll.cbegin(), coll.cend(), 7), false);
-    EXPECT_THAT(my_binary_search_2_3(coll.cbegin(), coll.cend(), 0), false);
-  }
-
-  // EQ(Equality) version, use iterator, return index
-  {
-    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 5), 2);
-    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 2), 1);
-
-    // *cxx-undefined*
-    // EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 7), 4);
-
-    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 0), 0);
-  }
-}
 
 /*
 // ={=========================================================================
 GT(Greater) version, use index, return index found or to insert when not found
 as cxx-lower-bound
 
-o when return index that it's found or it's to insert if not found, requires 
-  [f, l) to consider.
+o GT(value > middle) is important. 
+  when "use value >= middle, value < middle", run infinite loop.
 
-o can use first or last both
+o loops ends when first >= last
+  so check if found or not when out from the loop
 
-o GT(value > middle) is important. when "use value >= middle, value < middle",
-  run infinite loop.
+o requires "0, size()" in middle calculation to have the same result when use
+  first or last to get index to insert
+
+  for example, search 7 on {1, 3, 5, 6};
+
+  when use 0, 3, ends (4, 3) and first and last are different. should use first
+  to get right index
+
+  when use 0. 4, ends (4, 4). first and last are the same.
+
+  so my_binary_search_1_3() fails and not always the case when first and last is
+  the same.
+
+o *cxx-overflow* for all GT and EQ version
+
+  this may cause overflow when high and low are both big number in additon.
+
+  mid = (low + high) / 2;
+
+  so as with stl version, can use distance():
+
+  mid = (low + (high-low)/2);
+
+  it has the same as distance() in iterator version or can use
+  length approach as stl version.
+
+  NOTE:
+  To sum, use EQ and index version and need extra care to return index which is
+  found and is to insert when not found.
+
+  If GT, bigger than the middle, moves to the right. If >=, moves to the left.
 
 */
 TEST(AlgoSearch, binary_search_greater_version)
@@ -17348,6 +17370,14 @@ TEST(AlgoSearch, binary_search_greater_version)
 
   //                    0  1  2  3
   std::vector<int> coll{1, 3, 5, 6};
+
+  // use iterator
+  {
+    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 5), 2);
+    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 2), 1);
+    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 7), 4);
+    EXPECT_THAT(my_binary_search_1_2(coll.cbegin(), coll.cend(), 0), 0);
+  }
 
   // fails when use [first, last-1]
   {
@@ -17377,7 +17407,7 @@ TEST(AlgoSearch, binary_search_greater_version)
     EXPECT_THAT(my_binary_search_1_3_2(coll, 0), 0);
   }
 
-  // // "first or last" both works when use [first, last)
+  // fails
   // {
   //   // ok
   //   EXPECT_THAT(my_binary_search_1_3_3(coll, 5), 2);
@@ -17386,11 +17416,49 @@ TEST(AlgoSearch, binary_search_greater_version)
   //   // EXPECT_THAT(my_binary_search_1_3_3(coll, 7), 4);
   //   // EXPECT_THAT(my_binary_search_1_3_3(coll, 0), 0);
   // }
+
+  // "return bool" works as well.
+  {
+    EXPECT_THAT(my_binary_search_1_4(coll, 5), true);
+    EXPECT_THAT(my_binary_search_1_4(coll, 2), false);
+    EXPECT_THAT(my_binary_search_1_4(coll, 7), false);
+    EXPECT_THAT(my_binary_search_1_4(coll, 0), false);
+  }
 }
 
 /*
 // ={=========================================================================
-Unlike GT version, cannot use "high" for the same result.
+EQ version
+
+ansic, p58
+cracking the coding interview, p120
+Programming Pearl, p46
+
+o *cxx-undefined* 
+  Only for EQ version. when use size_t since can be negative on this case:
+  
+  EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
+  
+  when mid is 0, "high = mid -1" becomes -1 when int but big number when
+  size_t
+
+o shall use "0, size()-1" in calculation and if not, fails on some cases.
+  also have to regardless of getting bool or getting index since can access 
+  out of range:
+
+  for example, search 7 on {1, 3, 5, 6};
+
+  when use "0, size()-1"
+  [0,3] [2.3] [3,3] [4,3], end loop
+
+  when use "0, size()"
+  [0,4] [3,4] [4,4] [5,4], end loop. 5 is wrong index for insertion and also
+  access [4] would cause core.
+
+o Unlike GT version, the loop ends when "first > last", have to use first only
+  to get index to insert.
+
+o found in the loop and not found out of the loop
 
 */
 TEST(AlgoSearch, binary_search_equal_version)
@@ -17408,13 +17476,33 @@ TEST(AlgoSearch, binary_search_equal_version)
     EXPECT_THAT(my_binary_search_2_1(coll, 0), 0);
   }
 
-  // // same but reurn high
-  // {
-  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 5), 2);
-  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 2), 1);
-  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 7), 4);
-  //   EXPECT_THAT(my_binary_search_2_1_1(coll, 0), 0);
-  // }
+  // same but reurn high
+  {
+    EXPECT_THAT(my_binary_search_2_1_1(coll, 5), 2);
+    // fails
+    // EXPECT_THAT(my_binary_search_2_1_1(coll, 2), 1);
+    // EXPECT_THAT(my_binary_search_2_1_1(coll, 7), 4);
+    // EXPECT_THAT(my_binary_search_2_1_1(coll, 0), 0);
+  }
+
+  // return bool
+  {
+    EXPECT_THAT(my_binary_search_2_2(coll, 5), true);
+    EXPECT_THAT(my_binary_search_2_2(coll, 2), false);
+    EXPECT_THAT(my_binary_search_2_2(coll, 7), false);
+    EXPECT_THAT(my_binary_search_2_2(coll, 0), false);
+  }
+
+  // use iterator, return index
+  {
+    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 5), 2);
+    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 2), 1);
+
+    // *cxx-undefined*
+    // EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 7), 4);
+
+    EXPECT_THAT(my_binary_search_2_4(coll.cbegin(), coll.cend(), 0), 0);
+  }
 }
 
 namespace algo_binary_search
@@ -17570,6 +17658,30 @@ namespace algo_binary_search
 // ={=========================================================================
 TEST(AlgoSearch, binary_search_stl_version)
 {
+  // cxx-binary-search, stl version
+  //
+  // 11.10 Sorted-Range Algorithms
+  //
+  // The following algorithms search certain values in sorted ranges. Checking
+  // Whether One Element Is Present
+  //
+  // bool binary_search (ForwardIterator beg, ForwardIterator end, const T&
+  // value)
+  //
+  // bool binary_search (ForwardIterator beg, ForwardIterator end, const T&
+  // value, BinaryPredicate op)
+  {
+    //                     0  1  2  3   4   5   6   7   8   9  10  11  12
+    std::vector<int> coll1{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+    EXPECT_THAT(std::binary_search(coll1.cbegin(), coll1.cend(), 15), true);
+    EXPECT_THAT(std::binary_search(coll1.cbegin(), coll1.cend(), 32), false);
+
+    //                     0  1  2  3
+    std::vector<int> coll2{1, 3, 5, 6};
+    EXPECT_THAT(std::binary_search(coll2.cbegin(), coll2.cend(), 5), true);
+    EXPECT_THAT(std::binary_search(coll2.cbegin(), coll2.cend(), 2), false);
+  }
+
   //  0  1  2  3  4  5  6  7  8  9  0  1  2
   // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
   //                          ^^^^^^^
@@ -17717,13 +17829,16 @@ namespace leetcode_easy_278
   // provided by the test. use "bad" to emulate
   bool isBadVersion(int value, const int bad)
   {
-    if (value >= bad)
+    if (value == bad)
       return true;
     else
       return false;
   }
 
-  // so why use GT version? since use ">=" case as one but not two.
+  // o so why use GT version? since isBadVersion() has only one case, equal,
+  //   so the "else" should cover two cases.
+  //
+  // o bad value is value to find
   int first_bad_version(int n, const int bad)
   {
     int first{1};
@@ -17737,20 +17852,19 @@ namespace leetcode_easy_278
 
       middle = first + (last - first) / 2;
 
-      // not bad version, like GT(). middle < bad
+      // not bad version, like GT(). middle < bad(value)
       if (false == isBadVersion(middle, bad))
       {
         first = ++middle;
       }
-      // bad version
+      // middle >= bad version
       // The only scenario left is where isBadVersion(mid) return true where
-      // middle >= bad
       //
       // G G G G G G G B B B B B B B
       //
       // This tells us that mid "may or may not" be the first bad version, but
       // we can tell for sure that all versions after mid can be discarded.
-      // Therefore we set right = mid as the new search space of interval
+      // Therefore we set last = mid as the new search space of interval
       // [left,mid] (inclusive).
       else
       {
@@ -17849,7 +17963,8 @@ SYNOPSIS
 
 namespace leetcode_easy_017
 {
-  // use binary search to get "floor" square root
+  // use EQ version to get "floor" square root. where "floor" comes from? it
+  // comes from example2 explanation.
   //
   // https://www.geeksforgeeks.org/square-root-of-an-integer/
   //
@@ -17895,11 +18010,11 @@ namespace leetcode_easy_017
     return ans;
   }
 
-  // Note: _1() can be further optimized to start with ‘start’ = 0
+  // NOTE: _1() can be further optimized to start with ‘start’ = 0
   // and ‘end’ = x/2.
   // Floor of square root of x cannot be more than x/2 when x > 1.
   //
-  // cxx-error-overflow
+  // cxx-overflow
   //
   // Line 18: Char 15: runtime error: signed integer
   // overflow: 536848899 * 536848899 cannot be represented in type 'int'
@@ -17956,10 +18071,8 @@ namespace leetcode_easy_017
     return ans;
   }
 
-  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
-  // Sqrt(x).
+  // Runtime: 24 ms, faster than 21.88% of C++ online submissions
+  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions
 
   int get_sqrt_3(int x)
   {
@@ -18000,10 +18113,8 @@ namespace leetcode_easy_017
 
   // NOTE: having square variable for mid * mid causes performance penalty?
   //
-  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
-  //
-  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
-  // Sqrt(x).
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions
+  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions
 
   int get_sqrt_4(int x)
   {
@@ -18040,6 +18151,38 @@ namespace leetcode_easy_017
     // when the loop ends, return "floor" value than "not found"
     return ans;
   }
+
+  // gets ceil() value
+  int get_sqrt_5(int x)
+  {
+    int first{0};
+    int last{x / 2};
+
+    // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    while (first <= last)
+    {
+      long long mid = (first + last) / 2;
+
+      // equal and it's perfect square root
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // discard [1, mid]
+        first = mid + 1;
+      }
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
+    }
+
+    return first;
+  }
 } // namespace leetcode_easy_017
 
 TEST(AlgoSearch, binary_search_sqrt)
@@ -18055,6 +18198,9 @@ TEST(AlgoSearch, binary_search_sqrt)
 
     EXPECT_DOUBLE_EQ(sqrt(4), 2);
     EXPECT_NEAR(sqrt(8), 2.82843, 0.00001);
+
+    EXPECT_THAT(floor(sqrt(8)), 2);
+    EXPECT_THAT(ceil(sqrt(8)), 3);
 
     // Expected equality of these values:
     //   sqrt(10)
@@ -18090,6 +18236,24 @@ TEST(AlgoSearch, binary_search_sqrt)
       EXPECT_THAT(f(2147395599), 46339);
       EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
     }
+  }
+
+  // floor
+  {
+    auto f = get_sqrt_4;
+
+    EXPECT_THAT(f(4), 2);
+    EXPECT_THAT(f(8), 2);
+    EXPECT_THAT(f(10), 3);
+  }
+
+  // ceil
+  {
+    auto f = get_sqrt_5;
+
+    EXPECT_THAT(f(4), 2);
+    EXPECT_THAT(f(8), 3);
+    EXPECT_THAT(f(10), 4);
   }
 }
 
@@ -18285,6 +18449,7 @@ namespace leetcode_easy_374
       return 1;
   };
 
+  // EQ version
   // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Guess Number Higher or Lower.
   // Memory Usage: 6.2 MB, less than 100.00% of C++ online submissions for Guess Number Higher or Lower.
 
@@ -18333,6 +18498,116 @@ TEST(AlgoSearch, binary_search_guess_number)
   EXPECT_THAT(f(2, guess<1>), 1);
   EXPECT_THAT(f(2, guess<2>), 2);
   EXPECT_THAT(f(2147483647, guess<2126753390>), 2126753390);
+}
+
+/*
+={=========================================================================
+algo-search-binary-search algo-leetcode-441. Arranging Coins Easy
+
+You have a total of n coins that you want to form in a staircase shape, where
+every k-th row must have exactly k coins.
+
+Given n, find the total number of full staircase rows that can be formed.
+
+n is a non-negative integer and fits within the range of a 32-bit signed
+integer.
+
+Example 1:
+
+n = 5
+
+The coins can form the following rows:
+¤
+¤ ¤
+¤ ¤
+
+Because the 3rd row is incomplete, we return 2.
+
+Example 2:
+
+n = 8
+
+The coins can form the following rows:
+¤
+¤ ¤
+¤ ¤ ¤
+¤ ¤
+
+Because the 4th row is incomplete, we return 3.
+
+*/
+
+namespace leetcode_easy_441
+{
+  // Runtime: 8 ms, faster than 46.54% of C++ online submissions for Arranging Coins.
+  // Memory Usage: 6.1 MB, less than 86.10% of C++ online submissions for Arranging Coins.
+  int arrange_coins_1(int n)
+  {
+    int count{};
+
+    for (int i = 1; i <= n; i++)
+    {
+      n -= i;
+      count++;
+    }
+
+    return count;
+  } // namespace algo_palindrome
+
+  // Runtime: 0 ms, faster than 100.00% of C++ online submissions for Arranging Coins.
+  // Memory Usage: 6.2 MB, less than 36.26% of C++ online submissions for Arranging Coins.
+  //
+  // exactly same as int get_sqrt_4(int x);
+  // it's floor since it's moving to right.
+
+  int arrange_coins_2(int n)
+  {
+    int first{0};
+    int last{n};
+    int ans{};
+
+    // base cases
+    if (n == 0 || n == 1)
+      return n;
+
+    while (first <= last)
+    {
+      long long mid = (first + last) / 2;
+
+      int coins = mid * (mid + 1) / 2;
+
+      // equal and it's perfect square root
+      if (coins == n)
+        return mid;
+      else if (coins < n)
+      {
+        // discard [1, mid]
+        first = mid + 1;
+
+        // to return "floor" value
+        ans = mid;
+      }
+      else
+      {
+        // discard [mid, last]
+        last = mid - 1;
+      }
+    }
+
+    return ans;
+  }
+} // namespace leetcode_easy_441
+
+TEST(AlgoSearch, binary_search_arranging_coins)
+{
+  using namespace leetcode_easy_441;
+  {
+    auto f = arrange_coins_2;
+
+    EXPECT_THAT(f(5), 2);
+    EXPECT_THAT(f(8), 3);
+    EXPECT_THAT(f(1), 1);
+  }
 }
 
 /*

@@ -1,6 +1,7 @@
-#if 0
+/*
+NOTE: uses standone app than gtest since example replace global operator new.
 
-NOTE: from cxx-17
+example1:
 
 #include <iostream>
 #include <string>
@@ -30,11 +31,12 @@ int main() {
 
 
 This approach uses temporary std::string when use contains_very with literal.
+
 string_view can do better since it only "read" and do not own string. so no
 allocation happens when create string_view with std::string or literals.
 
-if underlying string that string_view refers to is gone but string_view tries to
-access then it is undefined.
+NOTE if underlying string that string_view refers to is gone but string_view
+tries to access then it is undefined.
 
 
 ./test_string_view
@@ -77,20 +79,25 @@ int main() {
 Also, string_view do not allocate when use substr.
 
 ./test_string_view
+
 string -----
 30 bytes allocates
 --------------------
-21 bytes allocates
+21 bytes allocates          // allocates for substr
 sometimes string is
 
 string_view -----
 --------------------
 sometimes string is
 
-#endif
+*/
 
 #include <cassert>
-#include <experimental/string_view>
+
+// if not use "add_compile_options("-std=c++17")" then use
+// #include <experimental/string_view>
+#include <string_view>
+
 #include <iostream>
 
 void *operator new(std::size_t count)
@@ -107,7 +114,8 @@ int main()
   std::cout << s.substr(0, 20) << std::endl << std::endl;
 
   std::cout << "string_view -----" << std::endl;
-  std::experimental::string_view sv = s;
+  //std::experimental::string_view sv = s;
+  std::string_view sv = s;
   std::cout << "--------------------" << std::endl;
   std::cout << sv.substr(0, 20) << std::endl;
 }

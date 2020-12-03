@@ -108,8 +108,20 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-Wall;-g;-D_GLIBCXX_DEBUG")
+# add_compile_options("-Wall;-g;-D_GLIBCXX_DEBUG")
 
+# https://gcc.gnu.org/projects/cxx-status.html#cxx1z
+# C++17 Support in GCC
+# GCC has almost full support for the latest revision of the C++ standard, which
+# was published in 2017. Some library features are missing or incomplete, as
+# described in the library documentation.
+
+# C++17 features are available since GCC 5. This mode is the default in GCC 11;
+# it can be explicitly selected with the -std=c++17 command-line flag, or
+# -std=gnu++17 to enable GNU extensions as well.
+
+# add_compile_options("-O2;-std=c++17")
+add_compile_options("-std=c++17")
 
 # string_01
 add_executable(${PROJECT_NAME}_1 test_string_1.cpp)
@@ -123,7 +135,7 @@ target_link_libraries(${PROJECT_NAME}_2 gmock_main Boost::regex)
 add_executable(${PROJECT_NAME}_3 test_string_3.cpp)
 target_link_libraries(${PROJECT_NAME}_3 gmock_main)
 
-# string_view
+# string_view standalone app
 add_executable(test_string_view test_string_view.cpp)
 target_link_libraries(test_string_view)
 

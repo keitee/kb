@@ -155,15 +155,18 @@ done
 
 # note: have to use `bash` but not `sh`
 #
-# keitee@kit-hdebi:~/git/kb/code-sh$ bash array.sh
+# $ bash array.sh
 # fruit1 = apple
 # fruit1 = apple, banana, orange
 # fruit2 = apple, banana, orange
+
 # fruit1 expansion = apple banana orange
 # fruit1 expansion = apple banana orange
 # fruit1 expansion = banana orange
+
 # fruit3 expansion = apple banana orange
 # fruit3 expansion = apple banana orange
+
 # fruit1 has apple
 # fruit1 has banana
 # fruit1 has orange
@@ -183,3 +186,31 @@ done
 #     darwin_0019fbb71c47_c4130c208206b80b3963ee05c861b5c3
 #     darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398
 # )
+
+COMMANDS=(
+    "list"
+    "search"
+    "show" "showsrc"
+    "install" "remove" "purge" "autoremove"
+    "update"
+    "upgrade" "full-upgrade" "dist-upgrade"
+    "edit-sources"
+    "help"
+    "source" "build-dep"
+    "clean" "autoclean"
+    "download" "changelog"
+    "moo"
+    "depends" "rdepends"
+    "policy")
+
+words=("myfoo" "install")
+
+# no echo since "myfoo" is not in the COMMAND array
+if [[ ${COMMANDS[@]} =~ ${words[0]} ]]; then
+  echo "words = ${words[0]}"
+fi
+
+# do echo since "install" is in the COMMAND array
+if [[ ${COMMANDS[@]} =~ ${words[1]} ]]; then
+  echo "words = ${words[1]}"
+fi

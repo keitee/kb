@@ -133,6 +133,7 @@ TEST(CxxIterator, invalidated)
 //       std::char_traits<char>, std::allocator<char> > const, int> > >' @
 //       0x0x7ffcae5ac600 }
 
+// ={=========================================================================
 TEST(CxxIterator, DISABLED_invalidated_on_map)
 {
   std::map<std::string, int> coll{{"one", 1},
@@ -442,7 +443,7 @@ TEST(CxxIterator, distance)
     std::set<int> coll{1, 2, 3, 4, 5};
 
     auto first = coll.find(1);
-    auto last = coll.find(3);
+    auto last  = coll.find(3);
 
     EXPECT_THAT(std::distance(first, last), 2);
   }
@@ -564,6 +565,20 @@ TEST(CxxIterator, array)
     copy(begin(vec), end(vec), ostream_iterator<int>(cout, " "));
     cout << endl;
   }
+}
+
+// ={=========================================================================
+TEST(CxxIterator, output_stream_iterator)
+{
+  std::vector<std::string> coll{"eng", "ita", "fra"};
+
+  std::ostringstream os{};
+
+  std::copy(coll.cbegin(),
+            coll.cend(),
+            std::ostream_iterator<std::string>(os, ", "));
+
+  EXPECT_THAT(os.str(), "eng, ita, fra, ");
 }
 
 // ={=========================================================================
@@ -2454,7 +2469,7 @@ std::set<Key,Compare,Allocator>::lower_bound
 TEST(CxxSet, equal_range)
 {
   {
-    std::set<int> coll{1,2,3,4,5,6};
+    std::set<int> coll{1, 2, 3, 4, 5, 6};
 
     // Returns an iterator to the first element `with key not less than val.`
     EXPECT_THAT(*coll.lower_bound(3), 4);
@@ -2670,13 +2685,25 @@ TEST(CxxMap, find)
       // since it's *cxx-algo-non-modifying* ?
 
       // *cxx-decltype*
-      auto it = find_if(coll.cbegin(),
-                        coll.cend(),
-                        // [] ( const pair<float,float> &elem )
-                        // [] ( const map<float,float>::value_type &elem )
-                        [](const decltype(coll)::value_type &elem) {
-                          return elem.second == 3.0;
-                        });
+      auto it = std::find_if(coll.cbegin(),
+                             coll.cend(),
+                             // [] ( const pair<float,float> &elem )
+                             // [] ( const map<float,float>::value_type &elem )
+                             [](const decltype(coll)::value_type &elem) {
+                               return elem.second == 3.0;
+                             });
+      EXPECT_THAT(it->first, Eq(4));
+      EXPECT_THAT(it->second, Eq(3));
+    }
+
+    // find with value
+    {
+      auto it =
+        std::find_if(coll.cbegin(),
+                     coll.cend(),
+                     // [] ( const pair<float,float> &elem )
+                     // [] ( const map<float,float>::value_type &elem )
+                     [](const auto &elem) { return elem.second == 3.0; });
       EXPECT_THAT(it->first, Eq(4));
       EXPECT_THAT(it->second, Eq(3));
     }
@@ -5416,12 +5443,13 @@ o Associative containers provide equivalent "member functions" that provide
 // cxx-include
 TEST(CxxAlgoSortedRange, include)
 {
-  std::list<int> coll{1,2,3,4,5,6,7,8,9};
-  std::vector<int> search{3,4,7};
+  std::list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+  std::vector<int> search{3, 4, 7};
 
   // check whether all elements in search are also in coll
-  EXPECT_THAT(std::includes(coll.cbegin(), coll.cend(),
-        search.cbegin(), search.cend()), true);
+  EXPECT_THAT(
+    std::includes(coll.cbegin(), coll.cend(), search.cbegin(), search.cend()),
+    true);
 }
 
 // ={=========================================================================
@@ -5431,10 +5459,10 @@ TEST(CxxAlgoSortedRange, lower_bound)
   // since it's set, duplicates are removed and it becomes:
   // std::set<int> coll{1,2,4,5,6};
   {
-    std::set<int> coll{1,2,4,4,4,5,6};
+    std::set<int> coll{1, 2, 4, 4, 4, 5, 6};
 
     auto range_begin = coll.find(4);
-    auto range_end = coll.find(5);
+    auto range_end   = coll.find(5);
 
     EXPECT_THAT(std::distance(coll.begin(), range_begin), 2);
     EXPECT_THAT(std::distance(coll.begin(), range_end), 3);
@@ -5449,7 +5477,7 @@ TEST(CxxAlgoSortedRange, lower_bound)
     std::multiset<int> coll{1, 2, 4, 4, 4, 5, 6};
 
     auto range_begin = coll.lower_bound(4);
-    auto range_end = coll.upper_bound(4);
+    auto range_end   = coll.upper_bound(4);
 
     EXPECT_THAT(*range_begin, 4);
     EXPECT_THAT(*range_end, 5);
@@ -5459,7 +5487,7 @@ TEST(CxxAlgoSortedRange, lower_bound)
     EXPECT_THAT(coll.equal_range(4), std::make_pair(range_begin, range_end));
   }
 
-  // use a element which is not in the coll 
+  // use a element which is not in the coll
   {
     std::multiset<int> coll{1, 2, 4, 4, 4, 5, 6};
 

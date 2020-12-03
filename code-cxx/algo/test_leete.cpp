@@ -3857,7 +3857,8 @@ namespace leetcode_easy_414
   }
 } // namespace leetcode_easy_414
 
-// ={=========================================================================
+// Runtime: 0 ms, faster than 100.00% of C++ online submissions for Number of Segments in a String.
+// Memory Usage: 6.3 MB, less than 69.98% of C++ online submissions for Number of Segments in a String.
 TEST(AlgoLeetCode, count_segments)
 {
   using namespace leetcode_easy_414;
@@ -3870,6 +3871,394 @@ TEST(AlgoLeetCode, count_segments)
   {
     auto count = split_6("");
     EXPECT_THAT(count, 0);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-453. Minimum Moves to Equal Array Elements Easy
+
+Given a non-empty integer array of size n, find the minimum number of moves
+required to make all array elements equal, where a move is incrementing n - 1
+elements by 1.
+
+Example:
+
+Input:
+[1,2,3]
+
+Output:
+3
+
+Explanation:
+Only three moves are needed (remember each move increments two elements):
+
+[1,2,3]  =>  [2,3,3]  =>  [3,4,3]  =>  [4,4,4]
+
+*/
+
+namespace leetcode_easy_453
+{
+  // https://leetcode.com/problems/minimum-moves-to-equal-array-elements/discuss/881567/Simple-solution-with-description-of-the-intuitive-approach
+  //
+  //
+  // If we observe some sample arrays we will see that the minimum number has to
+  // equal the maximum number so that they are equal
+  // However during this time (n - 2) elements will also increase by 1 for each
+  // step where n is the length of the array.
+  //
+  // Example [1, 2, 3]
+  //
+  // For 1 to increase to 3 it will take exactly 2 steps but during these 2
+  // steps 2 will also increase by 2 taking it to 4. Thus we would have to again
+  // take the two resulting 3s and make them into 4s in the next step.
+  //
+  // Example [2, 2, 4]
+  //
+  // Let us now see the pattern. If we do abs(4 - 2) + abs (2 - 2) + abs (2 -
+  // 2) we get 2.
+  //
+  // For [1, 2, 3] its abs(1 - 1) + abs(1 - 2) + abs(1 - 3) = 3
+  //
+  // After the pattern is decoded, the implementation becomes simple.
+  //
+  // Runtime: 80 ms, faster than 31.13% of C++ online submissions
+  // Memory Usage: 28.5 MB, less than 87.50% of C++ online submissions
+
+  int min_moves_1(vector<int> &nums)
+  {
+    int result{};
+
+    auto min = *std::min_element(nums.cbegin(), nums.cend());
+
+    for (const auto e : nums)
+    {
+      result += std::abs(e - min);
+    }
+
+    return result;
+  }
+
+  // Nice, you can also write: num - min_num and save the call to abs, since
+  // min_num is the minimum you will never have a negative answer
+  //
+  // Runtime: 72 ms, faster than 72.92% of C++ online submissions
+  // Memory Usage: 28.6 MB, less than 87.50% of C++ online submissions
+
+  int min_moves_2(vector<int> &nums)
+  {
+    int result{};
+
+    auto min = *std::min_element(nums.cbegin(), nums.cend());
+
+    for (const auto e : nums)
+    {
+      result += (e - min);
+    }
+
+    return result;
+  }
+} // namespace leetcode_easy_453
+
+TEST(AlgoLeetCode, minimum_moves)
+{
+  using namespace leetcode_easy_453;
+
+  {
+    auto f = min_moves_1;
+
+    std::vector<int> coll{1, 2, 3};
+
+    EXPECT_THAT(f(coll), 3);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-455. Assign Cookies Easy
+
+Assume you are an awesome parent and want to give your children some cookies.
+But, you should give each child at most one cookie.
+
+Each child i has a greed factor g[i], which is the minimum size of a cookie that
+the child will be content with; and each cookie j has a size s[j]. If s[j] >=
+g[i], we can assign the cookie j to the child i, and the child i will be
+content. Your goal is to maximize the number of your content children and output
+the maximum number.
+
+Example 1:
+
+Input: g = [1,2,3], s = [1,1]
+Output: 1
+
+Explanation: You have 3 children and 2 cookies. The greed factors of 3 children
+are 1, 2, 3.  And even though you have 2 cookies, since their size is both 1,
+you could only make the child whose greed factor is 1 content.  You need to
+output 1.
+
+Example 2:
+
+Input: g = [1,2], s = [1,2,3]
+Output: 2
+
+Explanation: You have 2 children and 3 cookies. The greed factors of 2 children
+are 1, 2.  You have 3 cookies and their sizes are big enough to gratify all of
+the children, You need to output 2.
+ 
+Constraints:
+
+1 <= g.length <= 3 * 104
+0 <= s.length <= 3 * 104
+1 <= g[i], s[j] <= 231 - 1
+
+*/
+
+namespace leetcode_easy_455
+{
+  // fails on [1,2,3], []
+  // fails on [1,2,3], [3] expected 1. WHY? since it consumes cookies
+  int find_content_children_1(vector<int> &g, vector<int> &s)
+  {
+    int children{};
+
+    if (s.empty())
+      return children;
+
+    auto minmax = std::minmax_element(s.cbegin(), s.cend());
+
+    for (const auto e : g)
+    {
+      if ((e <= *(minmax.first)) || (e <= *(minmax.second)))
+        children++;
+    }
+
+    return children;
+  }
+
+  // {1,2,3}, {3} expected 1 but return 2. WHY? it turns out that cannot use the
+  // same cookie again.
+  //
+  // NOTE: the problem seems not clear since
+  //
+  // "Your goal is to maximize the number of your content children and output
+  // the maximum number."
+  //
+  // so can use the same cookie again to get max children?
+
+  int find_content_children_2(vector<int> &g, vector<int> &s)
+  {
+    int children{};
+
+    if (s.empty() || g.empty())
+      return children;
+
+    auto size = s.size();
+
+    for (const auto e : g)
+    {
+      for (size_t i = 0; i < size; i++)
+      {
+        if (e <= s[i])
+        {
+          s[i] -= e;
+          children++;
+          break;
+        }
+      }
+    }
+
+    return children;
+  }
+
+  // https://leetcode.com/problems/assign-cookies/discuss/930597/shortest-and-easy-solution-in-c%2B%2B-oror-98-faster
+  // Runtime: 68 ms, faster than 77.25% of C++ online submissions
+  // Memory Usage: 18 MB, less than 14.97% of C++ online submissions
+  //
+  // why needs sort()? if not, fails on:
+  //
+  // std::vector<int> coll1{10,9,8,7};
+  // std::vector<int> coll2{5,6,7,8};
+
+  int find_content_children_3(vector<int> &g, vector<int> &s)
+  {
+    sort(g.begin(), g.end());
+    sort(s.begin(), s.end());
+
+    // i for cookie g vector and j for s vector
+    size_t i = 0, j = 0, c = 0;
+
+    while (i < g.size() && j < s.size()) // loop till the end
+    {
+      if (
+        g[i] <=
+        s[j]) // if we find a cookie of size greater than or equal g[i] to then increment count and i,j
+      {
+        i++;
+        j++;
+        c++;
+      }
+      else if (
+        g[i] >
+        s[j]) // finding a cookie of size g[i] by only incrementing the j variable
+      {
+        j++;
+      }
+    }
+
+    return c;
+  }
+} // namespace leetcode_easy_455
+
+TEST(AlgoLeetCode, assign_cookies)
+{
+  using namespace leetcode_easy_455;
+
+  {
+    auto f = find_content_children_3;
+
+    std::vector<int> coll1{10, 9, 8, 7};
+    std::vector<int> coll2{5, 6, 7, 8};
+
+    EXPECT_THAT(f(coll1, coll2), 2);
+  }
+}
+
+/*
+={=========================================================================
+algo-leetcode-459. Repeated Substring Pattern Easy
+
+Given a non-empty string check if it can be constructed by taking a substring of
+it and appending multiple copies of the substring together. You may assume the
+given string consists of lowercase English letters only and its length will not
+exceed 10000.
+
+Example 1:
+
+Input: "abab"
+Output: True
+
+Explanation: It's the substring "ab" twice.
+
+Example 2:
+
+Input: "aba"
+Output: False
+
+Example 3:
+
+Input: "abcabcabcabc"
+Output: True
+
+Explanation: It's the substring "abc" four times. (And the substring "abcabc"
+twice.)
+
+*/
+
+namespace leetcode_easy_459
+{
+  bool repeat_substring_pattern_1(std::string s)
+  {
+    // lower case letters only
+    size_t table[26]{0};
+    size_t ans{};
+
+    if (s.size() < 2)
+      return false;
+
+    for (const auto e : s)
+    {
+      ans = ++table[e - 'a'];
+    }
+
+    for (size_t i = 0; i < 26; ++i)
+    {
+      if ((table[i] != 0) && (ans != table[i]))
+        return false;
+    }
+
+    return true;
+  }
+
+  // https://leetcode.com/problems/repeated-substring-pattern/discuss/937448/4-Solutions-or-Detailed-Steps
+  // Two Pointer
+  //
+  // o try to start from the even middle and if not, decrease "l"
+  // o compare char by char while moving two indexes; i and i+l. two pointers.
+  // o repeate this until see "return true". if not, do "return false"
+  //
+  // that is, the right input string should be:
+  // "a b a b"  N=4, l=2
+  //  0 1 2 3
+  //  *   *
+  //
+  // o so can have quick optimisation?
+  //
+  // if (n % 2 != 0)
+  //   return false;
+  //
+  // NO since it fails on
+  // EXPECT_THAT(f("babbabbabbabbab"), false);
+  //
+  // o odd time repetition? yes so supports even and odd repetition.
+  //
+  // "a b a b a b" N=6, l=3
+  //  *   *        l=2
+  //        *   *  i=4, l=2, 4+2=6, true
+
+  // Runtime: 16 ms, faster than 94.12% of C++ online submissions
+  // Memory Usage: 9.7 MB, less than 91.76% of C++ online submissions
+
+  bool repeat_substring_pattern_2(std::string s)
+  {
+    int n = s.length();
+
+    for (int l = n / 2; l > 0; l--)
+    {
+      if (n % l == 0)
+      {
+        int i = 0;
+
+        while (i + l < n && s[i] == s[i + l])
+          i++;
+
+        if (i + l == n)
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+  // there are other one-line solution but don't get it yet
+
+} // namespace algo_leetcode_448
+
+TEST(AlgoLeetCode, repeat_substring)
+{
+  using namespace leetcode_easy_459;
+
+  {
+    auto f = repeat_substring_pattern_1;
+
+    EXPECT_THAT(f(std::string("abab")), true);
+    EXPECT_THAT(f("aba"), false);
+    EXPECT_THAT(f("abcabcabcabc"), true);
+    // failed case from submission and fixed
+    EXPECT_THAT(f("a"), false);
+    // failed since the order matters
+    // EXPECT_THAT(f("ababba"), false);
+  }
+
+  {
+    auto f = repeat_substring_pattern_2;
+
+    EXPECT_THAT(f(std::string("abab")), true);
+    EXPECT_THAT(f("aba"), false);
+    EXPECT_THAT(f("abcabcabcabc"), true);
+    EXPECT_THAT(f("a"), false);
+    EXPECT_THAT(f("ababba"), false);
+    EXPECT_THAT(f("babbabbabbabbab"), true);
+    EXPECT_THAT(f("ababab"), true);
   }
 }
 

@@ -1,3 +1,22 @@
+/*
+https://tiswww.cwru.edu/php/chet/readline/rltop.html
+
+The GNU Readline Library
+
+Documentation
+
+The documentation for the Readline and History libraries appears in the `doc'
+subdirectory. There are three texinfo files and two Unix-style manual pages
+describing the facilities available in the Readline and History libraries. The
+texinfo files include both user and programmer's manuals. The current manuals
+are:
+
+The GNU Readline Library
+
+https://tiswww.case.edu/php/chet/readline/readline.html
+
+*/
+
 #include <iostream>
 
 /* Standard readline include files. */

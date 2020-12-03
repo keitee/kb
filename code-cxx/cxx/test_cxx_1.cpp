@@ -23,94 +23,34 @@ using namespace std::placeholders;
 using namespace testing;
 
 /*
+={=========================================================================
+warning: variable ‘first’ set but not used [-Wunused-but-set-variable]
 
-175:TEST(Arith, Comparison)
-189:TEST(CxxStatement, switch)
-304:TEST(Cxx, If)
-335:TEST(Pair, MakePair)
-404:TEST(Pair, PackReference)
-438:TEST(Pair, Initialisation)
-526:TEST(Pair, Comparison)
-975:TEST(Ctor, CtorInitForms)
-1055:TEST(Ctor, CtorInitFromMore)
-1101:TEST(Ctor, CtorInitFromExplicit)
-1220:TEST(Initialise, List)
-1329:TEST(Ctor, Access)
-1427:TEST(Dtor, NoVirtualDtorProblem)
-1538:TEST(Dtor, AbstractBaseClassNoCompileError)
-1575:TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
-1649:TEST(CxxCopyControl, PrivateAndDelete)
-1728:TEST(Enum, ScopedAndUnscoped)
-1841:TEST(Enum, InClass)
-1958:TEST(Enum, ScopeAndType)
-2030:TEST(RVO, OnSingle)
-2037:TEST(RVO, OnVector)
-2044:TEST(RVO, OnArg)
-2051:TEST(RVO, OnAssignment)
-2103:TEST(Reference, UseConstReference)
-2140:TEST(Reference, Swap)
-2202:TEST(Reference, CString)
-2275:TEST(Reference, AccessOnReference)
-2298:TEST(Ratio, Ratio)
-3190:TEST(CxxFeaturesTest, UseIsspace)
-3201:// Q: If run it standalone, it runs slower than on in GTEST. WHY?
-4257:TEST(CxxSmartPointerShared, construct)
-4296:TEST(CxxSmartPointerShared, copy)
-4324:TEST(CxxSmartPointer, reset)
-4407:TEST(CxxSmartPointerShared, example1)
-4450:TEST(CxxSmartPointer, bool)
-4503:TEST(SharedPointer, UniqueDoNotSupportCopy)
-4516:TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
-4527:TEST(CxxSmartPointerUnique, construct)
-4579:TEST(CxxSmartPointerUnique, moveAssign)
-4668:TEST(SmartPointer, UniqueSinkSource)
-4757:TEST(CxxSmartPointer, Deleter)
-4849:TEST(SmartPointer, DeleteTime)
-4915:TEST(SmartPointer, UniqueDeleteReleaseReset)
-4973:TEST(SmartPointer, UseCount)
-5018:TEST(SmartPointer, WeakNotInReferenceCount)
-5282:TEST(SmartPointer, WeakCyclicReference)
-5366:TEST(SmartPointer, WeakCyclicReferenceSolution)
-5476:TEST(SmartPointer, WeakResourceManagerSolution)
-5682:TEST(SmartPointer, OwnUnique)
-5864:TEST(SmartPointer, OwnShared)
-5918:// TEST(CxxFeaturesTest, DISABLED_UseRangeForOnInteger)
-5934:TEST(CxxFeaturesTest, UseHashOnString)
-5994:TEST(CxxBool, LogicalNot)
-6015:TEST(Bool, CheckBoolDefault)
-6070:TEST(Bool, CheckUsage)
-6435:TEST(Override, Condition_1)
-6497:TEST(Override, Condition_2)
-6550:TEST(Override, Condition_3)
-6604:// TEST(Override, Condition_4)
-6690:TEST(Override, PureVirtual)
-6744:TEST(Rtti, UseTypeid)
-6762:TEST(Rtti, DynamicCast)
-7017:TEST(Bit, BitSetCtor)
-7058:TEST(Bit, SizeConsideration)
-7088:TEST(Bit, RightShift)
-7208:TEST(Bit, MaxNegagiveIsSpecial)
-7271:TEST(Bit, BitVectors)
-7306:TEST(Bit, BitSet)
-7384:TEST(Bit, Overflow)
-7395:TEST(MinMax, Order)
-7603:// TEST(Operator, MinMax)
-7616:TEST(Operator, PrefixPostfix)
-8553:TEST(Const, NoViaConstReference)
-8566:TEST(Const, NoConstToNonConst)
-8694:TEST(Const, ForMemberFunction)
-8722:TEST(Exception, OwnException)
-8785:TEST(Exception, Noexcept)
-8839:TEST(TypeConversion, Double)
-8861:TEST(CxxPrintf, Formats)
-9238:TEST(Assert, StaticAssert)
-9249:TEST(Numeric, Abs)
-9282:TEST(Typedef, Alias)
-9385:TEST(Class, ColonDoesMatter)
-9431:TEST(Class, Nested_1)
-9478:TEST(Class, Nested_2)
+https://stackoverflow.com/questions/23998283/variable-warning-set-but-not-used
+
+because
+
+int none[5];        // declared, not set to anything
+
+And then:
+
+none[i] = number1;  // a value has been set, but it's not being used for anything
+
+as the code is, you have: "none" set but not used; exactly what the compiler said.
 
 */
+
+TEST(CxxErrorWarning, not_used)
+{
+  {
+    // warning: variable ‘first’ set but not used [-Wunused-but-set-variable]
+    size_t first{0};
+    first = 1;
+
+    // this make the warning go away
+    // std::cout << first << std::endl;
+  }
+}
 
 /*
 // ={=========================================================================
@@ -442,25 +382,30 @@ TEST(CxxType, sizes)
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
 
+/*
 // ={=========================================================================
-// cxx-limits
-// ushort max   : 65535
-// ushort min   : 0
-// short  max   : 32767
-// short  min   : -32768
-// u     max    : 4294967295
-// u     min    : 0
-// uint   max   : 4294967295
-// uint   min   : 0
-//  int   max   : 2147483647
-//  int   min   : -2147483648
-// long long max: 9223372036854775807
-// long long min: -9223372036854775808
-// int64 max    : 9223372036854775807
-// int64 min    : -9223372036854775808
-// uint64 max   : 18446744073709551615
-// uint64 min   : 0
+cxx-limits
 
+ushort max   : 65535
+ushort min   : 0
+short  max   : 32767
+short  min   : -32768
+u     max    : 4294967295
+u     min    : 0
+uint   max   : 4294967295
+uint   min   : 0
+ int   max   : 2147483647
+ int   min   : -2147483648
+ long max    : 9223372036854775807
+ long min    : -9223372036854775808
+long long max: 9223372036854775807
+long long min: -9223372036854775808
+int64 max    : 9223372036854775807
+int64 min    : -9223372036854775808
+uint64 max   : 18446744073709551615
+uint64 min   : 0
+
+*/
 TEST(CxxType, limits)
 {
   std::cout << "ushort max: " << std::numeric_limits<unsigned short>::max()
@@ -483,6 +428,9 @@ TEST(CxxType, limits)
 
   std::cout << " int  max: " << std::numeric_limits<int>::max() << std::endl;
   std::cout << " int  min: " << std::numeric_limits<int>::min() << std::endl;
+
+  std::cout << " long max: " << LONG_MAX << std::endl;
+  std::cout << " long min: " << LONG_MIN << std::endl;
 
   std::cout << "long long max: " << std::numeric_limits<long long>::max()
             << std::endl;
@@ -720,6 +668,7 @@ TEST(CxxType, check_types)
 // explicitly zero, no decimal-point character appears.  If a decimal
 // point appears, at least one digit appears before it.
 
+// ={=========================================================================
 TEST(CxxType, check_types_double)
 {
   // cxx-double
@@ -762,6 +711,55 @@ TEST(CxxType, check_types_double)
       printf("double value is > 0\n");
     else
       printf("double value is not < or > 0\n");
+  }
+}
+
+/*
+// ={=========================================================================
+https://docs.microsoft.com/en-us/cpp/cpp/type-conversions-and-type-safety-modern-cpp?view=msvc-160
+
+Signed - unsigned conversions
+
+A signed integral type and its unsigned counterpart are always the same size,
+but they differ in how the bit pattern is "interpreted" for value transformation.
+The following code example demonstrates what happens when the same bit pattern
+is interpreted as a signed value and as an unsigned value. The bit pattern
+stored in both num and num2 never changes from what is shown in the earlier
+illustration.
+
+*/
+
+TEST(CxxType, narrow_conversion)
+{
+  // warnings
+  {
+    int x{100};
+    int y{200};
+
+    // warning: narrowing conversion of ‘x’ from ‘int’ to ‘unsigned int’ inside { } [-Wnarrowing]
+    //      unsigned int ux{x};
+    //
+    // warning: narrowing conversion of ‘y’ from ‘int’ to ‘unsigned int’ inside { } [-Wnarrowing]
+    //      unsigned int uy{y};
+
+    unsigned int ux{x};
+    unsigned int uy{y};
+
+    EXPECT_THAT(ux, 100);
+    EXPECT_THAT(uy, 200);
+  }
+
+  // no warnings. so it is because *cxx-uniform-init* but not actual narrow
+  // conversion (data loss) warning.
+  {
+    int x{100};
+    int y{200};
+
+    unsigned int ux = x;
+    unsigned int uy = y;
+
+    EXPECT_THAT(ux, 100);
+    EXPECT_THAT(uy, 200);
   }
 }
 
@@ -1163,6 +1161,7 @@ case example to build dbus message, "a(sa{sv})"
 }
 */
 
+// ={=========================================================================
 TEST(CxxTypeVariant, variant_and_visitor_1)
 {
   using namespace cxx_variant_1;
@@ -1452,7 +1451,7 @@ TEST(CxxTypeVariant, cxx_variant)
 // cxx-tuple
 // Unlike std::variant, can have the same T type in multiple times.
 
-TEST(CxxTypeTuple, check_make_tuple)
+TEST(CxxTypeTuple, make_tuple)
 {
   // tup1
   std::tuple<int, float, std::string> tup1{41, 6.3, "nico"};
@@ -1468,37 +1467,81 @@ TEST(CxxTypeTuple, check_make_tuple)
   EXPECT_THAT(std::get<1>(tup2), 44);
   EXPECT_THAT(std::get<2>(tup2), "two");
 
+  // assign
   std::get<1>(tup1) = std::get<1>(tup2);
 
-  // tup1
+  // see tup1<1> is updated
   EXPECT_THAT(std::get<0>(tup1), 41);
   EXPECT_THAT(std::get<1>(tup1), 44);
   EXPECT_THAT(std::get<2>(tup1), "nico");
 
-  // can compare
+  // support compare
   EXPECT_THAT(tup1 > tup2, true);
 
-  // can copy
+  // support copy
   tup1 = tup2;
 
-  // tup1
   EXPECT_THAT(std::get<0>(tup1), 22);
   EXPECT_THAT(std::get<1>(tup1), 44);
   EXPECT_THAT(std::get<2>(tup1), "two");
 }
 
-TEST(CxxTypeTuple, check_tie)
+/*
+// ={=========================================================================
+template< class... Types >
+tuple<Types&...> tie( Types&... args ) noexcept;
+*/
+
+TEST(CxxTypeTuple, tie)
 {
   {
     std::tuple<int, float, string> tup1{41, 6.3, "nico"};
+
     int i;
     float f;
     string s;
 
     auto tup = make_tuple(std::ref(i), std::ref(f), std::ref(s));
 
-    // if prints out tup here before assigning value, then do not get tup1's
-    // value and see undefined value instead. referece?
+    // if prints out tup here before assigning value, then get undefined value
+
+    // copied
+    tup = tup1;
+
+    EXPECT_THAT(get<0>(tup), 41);
+    EXPECT_THAT(get<1>(tup), 6.3);
+    EXPECT_THAT(get<2>(tup), "nico");
+
+    EXPECT_THAT(i, 41);
+    EXPECT_THAT(f, 6.3);
+    EXPECT_THAT(s, "nico");
+
+    // when change i,f,s, changes tup as well
+
+    i = 51;
+    f = 7.3;
+    s = "nico nico";
+
+    EXPECT_THAT(get<0>(tup), 51);
+    EXPECT_THAT(get<1>(tup), 7.3);
+    EXPECT_THAT(get<2>(tup), "nico nico");
+
+    // more convenient way to access
+
+    EXPECT_THAT(i, 51);
+    EXPECT_THAT(f, 7.3);
+    EXPECT_THAT(s, "nico nico");
+  }
+
+  // cxx-tie do the same
+  {
+    std::tuple<int, float, string> tup1{41, 6.3, "nico"};
+
+    int i;
+    float f;
+    string s;
+
+    auto tup = std::tie(i, f, s);
 
     tup = tup1;
 
@@ -1512,42 +1555,7 @@ TEST(CxxTypeTuple, check_tie)
     EXPECT_THAT(f, 6.3);
     EXPECT_THAT(s, "nico");
 
-    // when make change, changes both tup and i,f,s
-
-    i = 51;
-    f = 7.3;
-    s = "nico nico";
-
-    EXPECT_THAT(get<0>(tup), 51);
-    EXPECT_THAT(get<1>(tup), 7.3);
-    EXPECT_THAT(get<2>(tup), "nico nico");
-
-    EXPECT_THAT(i, 51);
-    EXPECT_THAT(f, 7.3);
-    EXPECT_THAT(s, "nico nico");
-  }
-
-  // cxx-tie do the same
-  {
-    std::tuple<int, float, string> tup1{41, 6.3, "nico"};
-    int i;
-    float f;
-    string s;
-
-    auto tup = tie(i, f, s);
-    tup      = tup1;
-
-    // shows the same
-
-    EXPECT_THAT(get<0>(tup), 41);
-    EXPECT_THAT(get<1>(tup), 6.3);
-    EXPECT_THAT(get<2>(tup), "nico");
-
-    EXPECT_THAT(i, 41);
-    EXPECT_THAT(f, 6.3);
-    EXPECT_THAT(s, "nico");
-
-    // changes both tup and i,f,s
+    // when change i,f,s, changes tup as well
 
     i = 51;
     f = 7.3;
@@ -1565,9 +1573,10 @@ TEST(CxxTypeTuple, check_tie)
   }
 }
 
+// ={=========================================================================
 // cxx-17
 // "structured binding" provides easy access than using get<>
-TEST(CxxTypeTuple, check_structured_binding)
+TEST(CxxTypeTuple, structured_binding_on_tuple)
 {
   {
     std::tuple<int, float, std::string> tup1{41, 6.3, "nico"};
@@ -1591,11 +1600,12 @@ TEST(CxxTypeTuple, check_structured_binding)
     EXPECT_THAT(score, 6.3);
     EXPECT_THAT(name, "nico");
 
+    // support assign
     age = 51;
 
     EXPECT_THAT(age, 51);
 
-    // do not change
+    // do not change tup1
     EXPECT_THAT(std::get<0>(tup1), 41);
   }
 
@@ -1612,14 +1622,15 @@ TEST(CxxTypeTuple, check_structured_binding)
 
     EXPECT_THAT(age, 51);
 
-    // change as well
+    // change tup1 as well
     EXPECT_THAT(std::get<0>(tup1), 51);
   }
 }
 
+// ={=========================================================================
 // cxx-17
-// "structured binding" can be used on struct and pair
-TEST(CxxStructuredBinding, check_struct)
+// "structured binding" can be used on user type and pair
+TEST(CxxTypeTuple, structured_binding_on_other_type)
 {
   {
     struct Data
@@ -1648,13 +1659,238 @@ TEST(CxxStructuredBinding, check_struct)
   }
 }
 
-namespace cxxoptional
+/*
+// ={=========================================================================
+cxx-optional cxx-17
+
+https://devblogs.microsoft.com/cppblog/stdoptional-how-when-and-why/
+
+The need for “sometimes-a-thing”
+
+How do you write a function that "optionally" accepts or returns an object? The
+traditional solution is to choose one of the potential values as a sentinel to
+indicate the absence of a value:
+
+void maybe_take_an_int(int value = -1); // an argument of -1 means "no value"
+int maybe_return_an_int();              // a return value of -1 means "no value"
+
+This works reasonably well when one of the representable values of the type
+never occurs in practice. It’s less great when there’s no obvious choice of
+sentinel and you want to be able to pass all representable values. 
+
+
+// approach #1
+If that’s the case, the typical approach is to use a separate boolean to
+indicate whether the optional parameter holds a valid value:
+
+void maybe_take_an_int(int value = -1, bool is_valid = false);
+void or_even_better(pair<int,bool> param = std::make_pair(-1, false));
+
+This is also feasible, but awkward. The “two distinct parameters” technique of
+maybe_take_an_int requires the caller to pass two things instead of one to
+represent a single notion, and fails silently when the caller forgets the bool
+and simply calls maybe_take_an_int(42). 
+
+
+// approach #2
+pair<int, bool> maybe_return_an_int();
+
+The use of pair in the other two functions avoids those problems, but it’s
+possible for the user of the pair to forget to check the bool and potentially
+use a garbage value in the int. Passing std::make_pair(42, true) or
+std::make_pair(whatever, false) is also hugely different than passing 42 or
+nothing – we’ve made the interface hard to use.
+
+
+The need for “not-yet-a-thing”
+
+How do you write a class with a member object whose initialization is delayed,
+i.e., optionally contains an object? For whatever reason, you do not want to
+initialize this member in a constructor. The initialization may happen in a
+later mandatory call, or it may happen only on request. When the object is
+destroyed the member must be destroyed only if it has been initialized.
+
+Another possible solution to many of the above problems is to dynamically
+allocate the “optional” value and pass it via pointer – ideally std::unique_ptr.
+Given that we C++ programmers are accustomed to using pointers, this solution
+has good usability: a null pointer indicates the no-value condition, * is used
+to access the value, std::make_unique<int>(42) is only slightly awkward compared
+to return 42 and unique_ptr handles the deallocation for us automatically. Of
+course usability is not the only concern; readers accustomed to C++’s
+zero-overhead abstractions will immediately pounce upon this solution and
+complain that dynamic allocation is orders of magnitude more expensive than
+simply returning an integer. 
+
+We’d like to solve this class of problem without requiring dynamic allocation.
+
+
+You can initialize an optional with an actual T value, or default-initialize it
+(or initialize with std::nullopt) to put it in the “empty” state. 
+
+// so std::nullopt is not a value and is something to represent "state"
+// compile error
+// EXPECT_THAT(value1.value(), std::nullopt);
+
+Returning to the concrete example, your function that looks up a string given an
+integer can simply return optional<string>. This avoids the problems of the
+suggested solutions; we can
+
+o easily discern the no-value case from the value-found case, unlike for the
+  “return a default value” solution,
+
+o report the no-value case without using exception handling machinery, which is
+  likely too expensive if such cases are frequent rather than exceptional,
+
+o avoid leaking implementation details to the caller as would be necessary to
+  expose an “end” iterator with which they could compare a returned iterator.
+
+// Like GetValueFromMap example below
+
+Solving the delayed initialization problem is straightforward: we simply add an
+optional<T> member to our class. The standard library implementer is responsible
+for getting the placement new handling correct, and std::optional already
+handles all of the special cases for the copy/move constructors/assignment
+operators:
+
+using T = // some object type //
+
+struct S {
+  optional<T> maybe_T;    
+
+  void construct_the_T(int arg) {
+    // We need not guard against repeat initialization;
+    // optional's emplace member will destroy any 
+    // contained object and make a fresh one.        
+    maybe_T.emplace(arg);
+  }
+
+  T& get_the_T() { 
+    assert(maybe_T);
+    return *maybe_T;    
+    // Or, if we prefer an exception when maybe_T is not initialized:
+    // return maybe_T.value();
+  }
+
+  // ... No error-prone handwritten special member functions! ...
+};
+
+
+optional is particularly well-suited to the delayed initialization problem
+because it is itself an instance of delayed initialization. The contained T may
+be initialized at construction, or sometime later, or never. Any contained T
+must be destroyed when the optional is destroyed. The designers of optional have
+already answered most of the questions that arise in this context.
+
+Conclusions
+
+Any time you need a tool to express “value-or-not-value”, or “possibly an
+answer”, or “object with delayed initialization”, you should reach into your
+toolbox for std::optional. 
+
+Using a "vocabulary type" for these cases raises the level of abstraction, making
+it easier for others to understand what your code is doing. The declarations
+optional<T> f(); and void g(optional<T>); express intent more clearly and
+concisely than do pair<T, bool> f(); or void g(T t, bool is_valid);. Just as is
+the case with words, adding to our vocabulary of types increases our capacity to
+describe complex problems simply – it makes us more efficient.
+
+
+https://www.bfilipek.com/2018/05/using-optional.html
+
+By adding the boolean flag to other types, you can achieve a thing called
+“nullable types”. As mentioned, the flag is used to indicate whether the value
+is available or not. Such wrapper represents an object that might be empty in an
+expressive way (so not via comments :))
+
+While you can achieve “null-ability” by using unique values (-1, infinity,
+    nullptr), it’s not as clear as the separate wrapper type. Alternatively, you
+could even use std::unique_ptr<Type> and treat the empty pointer as not
+initialized - this works, but comes with the cost of allocating memory for the
+object.
+
+Optional types - that come from functional programming world - bring type safety
+and expressiveness. Most of other languages have something similar: for example
+std::option in Rust, Optional<T> in Java, Data.Maybe in Haskell.
+
+std::optional was added in C++17 and brings a lot of experience from
+boost::optional that was available for many years. Since C++17 you can just
+#include <optional> and use the type.
+
+Such wrapper is still a value type (so you can copy it, via deep copy). What’s
+more, std::optional doesn’t need to allocate any memory on the free store.
+
+std::optional is a part of C++ vocabulary types along with std::any,
+  std::variant and std::string_view.
+
+
+When to use
+
+Usually, you can use an optional wrapper in the following scenarios:
+
+o If you want to represent a nullable type nicely.
+  Rather than using unique values (like -1, nullptr, NO_VALUE or something) For
+  example, user’s middle name is optional. You could assume that an empty string
+  would work here, but knowing if a user entered something or not might be
+  important. With std::optional<std::string> you get more information.
+
+o Return a result of some computation (processing) that fails to produce a value
+  and is not an error.
+
+  For example finding an element in a dictionary: if there’s no element under a
+  key it’s not an error, but we need to handle the situation.
+
+o To perform lazy-loading of resources.
+
+  For example, a resource type has no default constructor, and the construction
+  is substantial. So you can define it as std::optional<Resource> (and you can
+      pass it around the system), and then load only if needed later.
+
+o To pass optional parameters into functions.
+
+While sometimes the decision to use optional might be blurry, you shouldn’t use
+it for error handling. As it best suits the cases when the value is empty and
+it’s a normal state of the program.
+
+
+Examples of std::optional
+
+Here are two a few longer examples where std::optional fits nicely.
+
+User name with an optional nickname and age
+
+#include <iostream>
+#include <optional>
+
+class UserRecord
+{
+  public:
+    UserRecord (const std::string& name, std::optional<std::string> nick, std::optional<int> age)
+      : mName{name}, mNick{nick}, mAge{age}
+    {
+    }
+
+    friend std::ostream& operator << (std::ostream& stream, const UserRecord& user);
+
+  private:
+    std::string mName;
+    std::optional<std::string> mNick;
+    std::optional<int> mAge;
+};
+
+{
+  UserRecord tim { "Tim", "SuperTim", 16 };
+  UserRecord nano { "Nathan", std::nullopt, std::nullopt };
+}
+
+*/
+
+namespace cxx_optional
 {
   // https://modoocode.com/309
 
-  // when key is not found in the map, returns default ctored std::string
+  // When key is not found in the map, returns default ctored std::string
   // However, the problem is that when there is element which has empty string,
-  // not able to distinguish between two cases; not found and value is empty.
+  // not able to distinguish between two cases; not found and stting is empty.
 
   std::string GetValueFromMap_1(const std::map<int, std::string> &m, int key)
   {
@@ -1667,6 +1903,7 @@ namespace cxxoptional
     return std::string();
   }
 
+  // use std::pair
   // can use boolean flag so that can distinguish. However, still create empty
   // std::string.
 
@@ -1697,23 +1934,217 @@ namespace cxxoptional
     }
 
     // std::nullopt is in #include <utility>
-    return std::nullopt;
+    // OK
+    // return std::nullopt;
+    // OK as well
+    return {};
   }
-} // namespace cxxoptional
+} // namespace cxx_optional
 
+// ={=========================================================================
 // cxx-17
-TEST(CxxTypeOptional, check_optional)
+TEST(CxxTypeOptional, used_on_return)
 {
-  using namespace cxxoptional;
+  using namespace cxx_optional;
 
   {
     std::map<int, std::string> coll{{1, "hi"}, {2, "hello"}, {3, "hiroo"}};
-    EXPECT_THAT(GetValueFromMap_3(coll, 2).value(), "hello");
+
+    auto ret = GetValueFromMap_3(coll, 2);
+
+    EXPECT_THAT(ret.value(), "hello");
 
     // if calls .value() when don't have, raise std::bad_optional_access
     // exception. so use .has_value() first.
 
-    EXPECT_THAT(GetValueFromMap_3(coll, 4).has_value(), false);
+    ret = GetValueFromMap_3(coll, 4);
+
+    EXPECT_THAT(ret.has_value(), false);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeOptional, init)
+{
+  // default is std::nullopt
+  {
+    std::optional<int> value1;
+    EXPECT_THAT(value1.has_value(), false);
+
+    std::optional<float> value2{std::nullopt};
+    EXPECT_THAT(value2.has_value(), false);
+  }
+
+  {
+    // direct
+    std::optional<int> value1{10};
+    EXPECT_THAT(value1.has_value(), true);
+
+    // use deduction
+    std::optional value2(10);
+    EXPECT_THAT(value2.has_value(), true);
+  }
+
+  {
+    auto value1 = std::make_optional(3.0);
+    auto value2 = std::make_optional<std::complex<double>>(3.0, 4.0);
+  }
+
+  // The “in_place” construction is also supported in other types like any and
+  // variant.
+  // and saves the creation of a temporary object.
+
+  {
+    std::optional<std::vector<int>> value1{{1, 2, 3}};
+    std::optional<std::vector<int>> value2{std::in_place, {1, 2, 3}};
+  }
+}
+
+// ={=========================================================================
+// support cxx-bool-conversion
+TEST(CxxTypeOptional, check_value)
+{
+  {
+    // direct
+    std::optional<int> value1{10};
+    EXPECT_THAT(value1.has_value(), true);
+
+    // direct
+    std::optional<int> value2{10};
+    EXPECT_THAT(!!value2, true);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeOptional, operations)
+{
+  {
+    std::optional<std::string> value1{};
+
+    EXPECT_THAT(value1.has_value(), false);
+
+    value1.emplace("value1");
+
+    EXPECT_THAT(value1.has_value(), true);
+
+    // access T
+    // a bad_optional_access exception if there is none,
+    // and not bother with checking:
+    EXPECT_THAT(value1.value(), "value1");
+    EXPECT_THAT(*value1, "value1");
+
+    // call dtor and do ctor
+    value1.emplace("mark");
+
+    EXPECT_THAT(value1.has_value(), true);
+
+    // call dtor for "mark". value1 = std::nullopt do the same
+    value1.reset();
+  }
+
+  {
+    std::optional<std::string> value1{};
+
+    EXPECT_THAT(value1.has_value(), false);
+
+    // compile error
+    // EXPECT_THAT(value1.value(), std::nullopt);
+
+    EXPECT_THAT(value1.value_or("default"), "default");
+  }
+
+  {
+    std::optional<std::string> value1{};
+
+    // assign new values
+    value1.emplace("fred");
+
+    // can use T
+    value1 = std::string("joe");
+    value1 = "joe";
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeOptional, cost)
+{
+  int value1{};
+  EXPECT_THAT(sizeof value1, 4);
+
+  std::optional<int> value2{};
+  EXPECT_THAT(sizeof value2, 8);
+}
+
+namespace cxx_optional
+{
+  template <typename Coll, typename Key>
+  auto lookup(const Coll &coll, const Key &key)
+  {
+    auto it = coll.find(key);
+    return it != coll.cend() ? std::make_optional(it->second) : std::nullopt;
+  }
+} // namespace cxx_optional
+
+// ={=========================================================================
+TEST(CxxTypeOptional, examples)
+{
+  // from TEST(StringConversion, string_to_number_max)
+  // long max    : 9223372036854775807
+  // long min    : -9223372036854775808
+
+  // std::stol uses exception
+  {
+    EXPECT_THAT(std::stol("9223372036854775806", nullptr, 10),
+                9223372036854775806);
+
+    EXPECT_THAT(std::stol("9223372036854775807", nullptr, 10),
+                9223372036854775807);
+
+    EXPECT_THROW(std::stol("92233720368547758077", nullptr, 10),
+                 std::out_of_range);
+  }
+
+  // strtol uses LONG_MAX and errno for overflow cases. use errno to discern the
+  // valid cases where input is LONG_MAX.
+  //
+  // so can use "optional" for this overflow case. not error case and is in
+  // "long int" return value range.
+  //
+  // RETURN VALUE
+  // The strtol() function returns the result of the conversion, unless the
+  // value would underflow or overflow.
+  //
+  // If an underflow occurs, strtol() returns LONG_MIN. If an overflow occurs,
+  // strtol() returns LONG_MAX.
+  //
+  // In both cases, errno is set to ERANGE. Precisely the same holds for
+  // strtoll() (with LLONG_MIN and LLONG_MAX instead of LONG_MIN and LONG_MAX).
+
+  {
+    EXPECT_THAT(std::strtol("9223372036854775806", nullptr, 10),
+                9223372036854775806);
+
+    EXPECT_THAT(std::strtol("9223372036854775807", nullptr, 10),
+                9223372036854775807);
+
+    // overflow
+    EXPECT_THAT(std::strtol("92233720368547758077", nullptr, 10),
+                9223372036854775807);
+  }
+
+  // Like GetValueFromMap_3(), "cleaner interface"
+  // https://www.bfilipek.com/2018/06/optional-examples-wall.html
+  // Cleaner interface for map.find
+
+  {
+    using namespace cxx_optional;
+
+    const std::map<int, int> squares{{1, 1}, {2, 4}, {3, 9}, {4, 16}};
+
+    if (const auto ret = lookup(squares, 2))
+      EXPECT_THAT(*ret, 4);
+    else
+      std::cout << "unknown square" << std::endl;
   }
 }
 
@@ -8305,8 +8736,9 @@ TEST(CxxSmartPointer, check_reset)
   }
 }
 
+// ={=========================================================================
 // common
-TEST(CxxSmartPointer, check_bool_support)
+TEST(CxxSmartPointer, bool_support)
 {
   {
     auto p = std::make_shared<int>(42);
@@ -8345,6 +8777,15 @@ TEST(CxxSmartPointer, check_bool_support)
     EXPECT_THAT(up != nullptr, true);
 
     EXPECT_THAT(*up, 100);
+  }
+
+  {
+    std::unique_ptr<int> up{};
+
+    EXPECT_FALSE(up);
+    EXPECT_THAT(!!up, false);
+
+    EXPECT_THAT(up == nullptr, true);
   }
 }
 
@@ -10814,7 +11255,9 @@ TEST(CxxStream, fstream_1)
   {
     std::ofstream file("charset_1.out");
 
-    // file opened?
+    EXPECT_THAT(file.is_open(), true);
+
+    // file opened check
     if (!file)
     {
       std::cerr << "can't open output file \""
@@ -10837,7 +11280,7 @@ TEST(CxxStream, fstream_2)
   {
     std::ofstream file("charset_2.out");
 
-    // file opened?
+    // file opened check and use function
     if (file.is_open() == false)
     {
       std::cerr << "can't open output file \""
@@ -11039,7 +11482,7 @@ TEST(CxxStream, fstream_flags)
   }
 }
 
-namespace fstream_write
+namespace cxx_stream
 {
   const std::string expected_2 = R"({
 	"documentId" : "1563970127340",
@@ -11079,13 +11522,50 @@ namespace fstream_write
 
 TEST(CxxStream, fstream_write_string)
 {
-  using namespace fstream_write;
+  using namespace cxx_stream;
 
   {
     // NOTE: if use "fstream", no error and no file gets created.
 
     std::ofstream ofs{"fstream_write_string.json"};
     ofs << expected_2;
+  }
+}
+
+// ={=========================================================================
+// read a file into a string in single line
+TEST(CxxStream, fstream_read_string_1)
+{
+  using namespace cxx_stream;
+
+  std::ifstream ifs{"fstream_write_string.json"};
+
+  if (ifs.is_open())
+  {
+    std::string contents{std::istreambuf_iterator<char>{ifs}, {}};
+    // std::cout << contents << std::endl;
+    EXPECT_THAT(contents, expected_2);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxStream, fstream_read_string_2)
+{
+  using namespace cxx_stream;
+
+  std::ifstream ifs{"fstream_write_string.json"};
+  std::stringstream ss{};
+
+  if (ifs.is_open())
+  {
+    // since cxx-stringstream has
+    // basic_ostream& operator<<( std::basic_streambuf<CharT, Traits>* sb); (9)
+
+    ss << ifs.rdbuf();
+
+    std::string contents{ss.str()};
+    // std::cout << contents << std::endl;
+    EXPECT_THAT(contents, expected_2);
   }
 }
 
@@ -12497,7 +12977,7 @@ TEST(CxxRegex, match_and_greedy)
   }
 
   {
-    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
 
     std::regex reg(R"(<(.*)>.*</\1>)");
 
@@ -12511,7 +12991,7 @@ TEST(CxxRegex, match_and_greedy)
   }
 
   {
-    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
 
     std::regex reg(R"(<(.*)>(.*)</\1>)");
 
@@ -12525,7 +13005,7 @@ TEST(CxxRegex, match_and_greedy)
   }
 
   {
-    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
 
     std::regex reg(R"(.*<(.*)>(.*)</\1>)");
 
@@ -12544,7 +13024,7 @@ TEST(CxxRegex, match_and_greedy)
   }
 
   {
-    std::string data {"Always look for the <b>bright</b> side of <b>life</b>"};
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
 
     std::regex reg(R"(.*<(.*?)>(.*?)</\1>)");
 
@@ -12706,52 +13186,53 @@ way:
 namespace cxx_regex
 {
   template <typename T>
-    std::string regexCode (T code)
+  std::string regexCode(T code)
+  {
+    switch (code)
     {
-      switch (code) {
-        case std::regex_constants::error_collate:
-          return "error_collate: "
-            "regex has invalid collating element name";
-        case std::regex_constants::error_ctype:
-          return "error_ctype: "
-            "regex has invalid character class name";
-        case std::regex_constants::error_escape:
-          return "error_escape: "
-            "regex has invalid escaped char. or trailing escape";
-        case std::regex_constants::error_backref:
-          return "error_backref: "
-            "regex has invalid back reference";
-        case std::regex_constants::error_brack:
-          return "error_brack: "
-            "regex has mismatched ’[’ and ’]’";
-        case std::regex_constants::error_paren:
-          return "error_paren: "
-            "regex has mismatched ’(’ and ’)’";
-        case std::regex_constants::error_brace:
-          return "error_brace: "
-            "regex has mismatched ’{’ and ’}’";
-        case std::regex_constants::error_badbrace:
-          return "error_badbrace: "
-            "regex has invalid range in {} expression";
-        case std::regex_constants::error_range:
-          return "error_range: "
-            "regex has invalid character range, such as ’[b-a]’";
-        case std::regex_constants::error_space:
-          return "error_space: "
-            "insufficient memory to convert regex into finite state";
-        case std::regex_constants::error_badrepeat:
-          return "error_badrepeat: "
-            "one of *?+{ not preceded by valid regex";
-        case std::regex_constants::error_complexity:
-          return "error_complexity: "
-            "complexity of match against regex over pre-set level";
-        case std::regex_constants::error_stack:
-          return "error_stack: "
-            "insufficient memory to determine regex match";
-      }
-      return "unknown/non-standard regex error code";
+      case std::regex_constants::error_collate:
+        return "error_collate: "
+               "regex has invalid collating element name";
+      case std::regex_constants::error_ctype:
+        return "error_ctype: "
+               "regex has invalid character class name";
+      case std::regex_constants::error_escape:
+        return "error_escape: "
+               "regex has invalid escaped char. or trailing escape";
+      case std::regex_constants::error_backref:
+        return "error_backref: "
+               "regex has invalid back reference";
+      case std::regex_constants::error_brack:
+        return "error_brack: "
+               "regex has mismatched ’[’ and ’]’";
+      case std::regex_constants::error_paren:
+        return "error_paren: "
+               "regex has mismatched ’(’ and ’)’";
+      case std::regex_constants::error_brace:
+        return "error_brace: "
+               "regex has mismatched ’{’ and ’}’";
+      case std::regex_constants::error_badbrace:
+        return "error_badbrace: "
+               "regex has invalid range in {} expression";
+      case std::regex_constants::error_range:
+        return "error_range: "
+               "regex has invalid character range, such as ’[b-a]’";
+      case std::regex_constants::error_space:
+        return "error_space: "
+               "insufficient memory to convert regex into finite state";
+      case std::regex_constants::error_badrepeat:
+        return "error_badrepeat: "
+               "one of *?+{ not preceded by valid regex";
+      case std::regex_constants::error_complexity:
+        return "error_complexity: "
+               "complexity of match against regex over pre-set level";
+      case std::regex_constants::error_stack:
+        return "error_stack: "
+               "insufficient memory to determine regex match";
     }
-}
+    return "unknown/non-standard regex error code";
+  }
+} // namespace cxx_regex
 
 // Because we use the grep grammar here but do escape the characters { and },
 // the program might have an output such as the following:
@@ -12760,12 +13241,12 @@ TEST(CxxRegex, exception)
 {
   using namespace cxx_regex;
 
-  try {
+  try
+  {
     // initialize regular expression with invalid syntax:
-    regex pat ("\\\\.*index\\{([^}]*)\\}",
-        regex_constants::grep|regex_constants::icase);
-  }
-  catch (const regex_error& e) 
+    regex pat("\\\\.*index\\{([^}]*)\\}",
+              regex_constants::grep | regex_constants::icase);
+  } catch (const regex_error &e)
   {
     // cerr << "regex_error: \n"
     //   << " what(): " << e.what() << "\n"
@@ -12794,8 +13275,7 @@ TEST(CxxRegex, match_class_1)
       found = std::regex_search(data, reg);
 
       EXPECT_TRUE(found);
-    }
-    catch(const regex_error &e)
+    } catch (const regex_error &e)
     {
       std::cout << "what: " << e.what() << ", code: " << e.code() << std::endl;
     }
@@ -12812,8 +13292,7 @@ TEST(CxxRegex, match_class_1)
       found = std::regex_search(data, reg);
 
       EXPECT_TRUE(found);
-    }
-    catch(const regex_error &e)
+    } catch (const regex_error &e)
     {
       std::cout << "what: " << e.what() << ", code: " << e.code() << std::endl;
     }
@@ -12823,12 +13302,10 @@ TEST(CxxRegex, match_class_1)
 // ={=========================================================================
 TEST(CxxRegex, match_class_2)
 {
-  std::vector<std::string> coll{
-    "/as/services/0/0",
-    "/as/services/10/20",
-    "/as/services/100/100",
-    "/as/services/234/0"
-  };
+  std::vector<std::string> coll{"/as/services/0/0",
+                                "/as/services/10/20",
+                                "/as/services/100/100",
+                                "/as/services/234/0"};
 
   {
     std::regex reg{"/as/services/\\d+/\\d+"};
@@ -13416,8 +13893,20 @@ TEST(CxxBit, bit_Overflow)
     cout << (bigrand() % 100) << endl;
 }
 
+/*
 // ={=========================================================================
-// cxx-min-cxx-max cxx-max-element
+cxx-min-cxx-max cxx-max-element
+
+template< class T >
+const T& min( const T& a, const T& b );
+
+template< class T >
+T min( std::initializer_list<T> ilist );
+
+template< class T >
+std::pair<T,T> minmax( std::initializer_list<T> ilist);
+
+*/
 
 TEST(CxxMinMax, check_order)
 {
@@ -13432,29 +13921,22 @@ namespace cxx_min_max
   bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
 } // namespace cxx_min_max
 
-TEST(CxxMinMax, check_on_list)
+TEST(CxxMinMax, use)
 {
   {
-    std::deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
-
-    // https://en.cppreference.com/w/cpp/algorithm/max
-    // template< class T >
-    // T max( std::initializer_list<T> ilist );
-
-    EXPECT_THAT(std::max({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), 6);
-    EXPECT_THAT(std::min({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), -3);
-  }
-
-  // same for vector
-  {
-    std::vector<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
-
     EXPECT_THAT(std::max({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), 6);
     EXPECT_THAT(std::min({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}), -3);
 
     // compile error so have to use xxx_element().
     // EXPECT_THAT(std::max(coll), 6);
     // EXPECT_THAT(std::min(coll), -3);
+  }
+
+  {
+    auto result = std::minmax({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6});
+
+    EXPECT_THAT(result.first, -3);
+    EXPECT_THAT(result.second, 6);
   }
 }
 

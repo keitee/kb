@@ -199,7 +199,7 @@ TEST(String, ctros_const)
   }
 }
 
-#if 0
+/*
 
 *os-coredump*
 
@@ -225,10 +225,11 @@ DrmController::DrmController(PlaybackService *service)
   ...
 }
 
-now, due to requirment change, have to make euid as string. so did that in code
-but when runs it on the box, keep crashing while cannot see why and when all
-changes looks okay. still see crash even when remove all codes changing euid.
-Sadly, no backtrace or useful from core since it crashes very early.
+now, due to requirment change, have to make euid as string. so did that in
+struct declaration but when runs it on the box, keep crashing while cannot see
+why and when all changes looks okay. still see crash even when remove all codes
+changing euid. Sadly, no backtrace or useful from core since it crashes very
+early.
 
 the fix:
 
@@ -246,7 +247,19 @@ DrmController::DrmController(PlaybackService *service)
 The problem is when init std::string with 0 which is left while makeing changes.
 WOW.
 
-#endif
+(gdb) bt
+#0  __GI_raise (sig=sig@entry=6) at ../sysdeps/unix/sysv/linux/raise.c:51
+#1  0x00007ff4e47a58b1 in __GI_abort () at abort.c:79
+#2  0x00007ff4e4dfa957 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#3  0x00007ff4e4e00ae6 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#4  0x00007ff4e4e00b21 in std::terminate() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#5  0x00007ff4e4e00d54 in __cxa_throw () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#6  0x00007ff4e4dfc79f in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#7  0x00007ff4e4e952dd in void std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_construct<char const*>(char const*, char const*, std::forward_iterator_tag) ()
+   from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#8  0x0000556c90344983 in main () at main.cpp:5
+
+*/
 
 // ={=========================================================================
 TEST(String, ctors_crash)
@@ -254,15 +267,26 @@ TEST(String, ctors_crash)
   std::string s = 0;
 }
 
+/*
 // ={=========================================================================
-// string-operations string-back
+string-operations string-back
 
-TEST(StringOperation, check_back)
+CharT& back();
+Returns reference to the last character in the string. The behavior is
+undefined if empty() == true.
+*/
+
+TEST(StringOperation, back)
 {
-  string s1{"zoo"};
-  EXPECT_EQ(s1.back(), 'o');
+  std::string s1{"zoo"};
+
+  EXPECT_THAT(s1.size(), 3);
+  EXPECT_THAT(s1.back(), 'o');
+  EXPECT_THAT(s1.size(), 3);
 
   // this fails as the same reason as string ctors shown above.
+  // error: invalid conversion from ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type 
+  // {aka char}’ to ‘const char*’ [-fpermissive]
   // EXPECT_EQ(string(s1.back()), "o");
 
   // /**
@@ -273,7 +297,7 @@ TEST(StringOperation, check_back)
   //  */
   // basic_string(size_type __n, _CharT __c, const _Alloc& __a = _Alloc());
 
-  EXPECT_EQ(string(1, s1.back()), "o");
+  EXPECT_EQ(std::string(1, s1.back()), "o");
 }
 
 // ={=========================================================================
@@ -838,17 +862,21 @@ TEST(CxxStringOperation, find_substring_3)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-string-substr
-// is to extract substring and use index
-//
-// basic_string substr( size_type pos = 0, size_type count = npos ) const; (until C++20)
-// constexpr basic_string substr( size_type pos = 0, size_type count = npos ) const; (since C++20)
-//
-// Returns a substring [pos, pos+count). If the requested substring extends past
-// the end of the string, or if count == npos, the returned substring is [pos,
-// size()).
+cxx-string-substr
+is to extract substring and use index
 
+basic_string substr( size_type pos = 0, size_type count = npos ) const; 
+(until C++20)
+constexpr basic_string substr( size_type pos = 0, size_type count = npos ) const; 
+(since C++20)
+
+Returns a substring [pos, pos+count). If the requested substring extends past
+the end of the string, or if count == npos, the returned substring is [pos,
+size()).
+
+*/
 TEST(StringOperation, substr)
 {
   {
@@ -1800,17 +1828,26 @@ unsigned long      stoul( const std::wstring& str, std::size_t* pos = 0, int bas
 unsigned long long stoull( const std::string& str, std::size_t* pos = 0, int base = 10 );
 unsigned long long stoull( const std::wstring& str, std::size_t* pos = 0, int base = 10 );
 
+
+Exceptions
+
+std::invalid_argument if no conversion could be performed
+
+std::out_of_range if the converted value would fall out of the range of the
+result type or if the underlying function (std::strtol or std::strtoll) sets
+errno to ERANGE.
+
+
+man strtol()
+
+#include <stdlib.h>
+long int strtol(const char *nptr, char **endptr, int base);
+long long int strtoll(const char *nptr, char **endptr, int base);
+
 */
 
 TEST(StringConversion, string_to_number_functions)
 {
-  // std::string to_string( int value );
-  // std::string to_string( long value ); ...
-  {
-    EXPECT_THAT(std::to_string(11), "11");
-    EXPECT_THAT(std::to_string(3301), "3301");
-  }
-
   // to hex
   {
     char buf[10];
@@ -1855,23 +1892,12 @@ TEST(StringConversion, string_to_number_functions)
   }
 
   {
-    // man strtol()
-    //
-    // #include <stdlib.h>
-    // long int strtol(const char *nptr, char **endptr, int base);
-    // long long int strtoll(const char *nptr, char **endptr, int base);
-    //
-    // The string may begin with an arbitrary amount of white space (as deter‐
-    // mined by isspace(3)) followed by a single optional '+' or '-' sign.
-    //
-    // If base is zero or 16, the string may then include a "0x" prefix, and
-    // the number will  be read in base 16;
+    // If the value of base is 0, the numeric base is auto-detected: if the
+    // prefix is 0, the base is octal, if the prefix is 0x or 0X, the base is
+    // hexadecimal, otherwise the base is decimal.
 
     EXPECT_EQ(std::stol("0x12AB", nullptr, 0), 4779);
     EXPECT_EQ(std::stol("12AB", nullptr, 16), 4779);
-
-    // otherwise, a zero base is taken as 10 (decimal) unless the next character
-    // is '0', in which case it  is taken as 8 (octal).
 
     EXPECT_EQ(std::stol("12345", nullptr, 0), 12345);
     EXPECT_EQ(std::stol("12345", nullptr, 10), 12345);
@@ -1888,9 +1914,61 @@ TEST(StringConversion, string_to_number_functions)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-stringstream
-// handles "type" automatically
+long max    : 9223372036854775807
+long min    : -9223372036854775808
+*/
+TEST(StringConversion, string_to_number_max)
+{
+  {
+    EXPECT_THAT(std::stol("9223372036854775806", nullptr, 10),
+                9223372036854775806);
+
+    EXPECT_THAT(std::stol("9223372036854775807", nullptr, 10),
+                9223372036854775807);
+
+    EXPECT_THROW(std::stol("92233720368547758077", nullptr, 10),
+                 std::out_of_range);
+
+    // try
+    // {
+    //   std::stol("92233720368547758077", nullptr, 10);
+    // }
+    // catch(const exception &e)
+    // {
+    //   std::cout << "exception : " << e.what() << std::endl;
+    //   std::cout << typeid(e).name() << std::endl;
+    // }
+  }
+
+  // RETURN VALUE
+  // The strtol() function returns the result of the conversion, unless the
+  // value would underflow or overflow.
+  //
+  // If an underflow occurs, strtol() returns LONG_MIN. If an overflow occurs,
+  // strtol() returns LONG_MAX.
+  //
+  // In both cases, errno is set to ERANGE. Precisely the same holds for
+  // strtoll() (with LLONG_MIN and LLONG_MAX instead of LONG_MIN and LONG_MAX).
+
+  {
+    EXPECT_THAT(std::strtol("9223372036854775806", nullptr, 10),
+                9223372036854775806);
+
+    EXPECT_THAT(std::strtol("9223372036854775807", nullptr, 10),
+                9223372036854775807);
+
+    EXPECT_THAT(std::strtol("92233720368547758077", nullptr, 10),
+                9223372036854775807);
+  }
+}
+
+/*
+// ={=========================================================================
+cxx-stringstream
+handles "type" automatically
+*/
 
 TEST(StringConversion, stringstream)
 {
@@ -2150,30 +2228,40 @@ namespace string_conversion
   /**
    * A conversion from int types to string.
    *
-   * @note This is only defined for int types. Specifically it's not defined for enums.
+   * @note This is only defined for int types. Specifically it's not defined 
+   * for enums.
    */
   //
   template <class T>
   inline typename std::enable_if<std::is_integral<T>::value, std::string>::type
   to_string_1(const T &val)
   {
-    std::ostringstream str;
-    str << val;
-    return str.str();
+    std::ostringstream ss{};
+    ss << val;
+    return ss.str();
   }
 
   static inline std::string to_string_2(uint32_t i)
   {
-    std::ostringstream ss;
+    std::ostringstream ss{};
     ss << i;
     return ss.str();
   }
 } // namespace string_conversion
 
+/*
 // ={=========================================================================
-TEST(StringConversion, string_to_number)
+std::string to_string( int value );
+std::string to_string( long value );
+*/
+TEST(StringConversion, to_string)
 {
   using namespace string_conversion;
+
+  {
+    EXPECT_THAT(std::to_string(11), "11");
+    EXPECT_THAT(std::to_string(3301), "3301");
+  }
 
   {
     EXPECT_THAT(to_string_1(100), "100");

@@ -5467,12 +5467,12 @@ ellipses. Typically, this is done in one of two ways:
 o One of the fixed parameters is used as a parameter count (this is the
     solution we use in the FindAverage example above)
 
-o The ellipse parameters are processed until a sentinel value is reached. A
-sentinel is a special value that is used to terminate a loop when it is
-encountered. For example, we could pick a sentinel value of 0, and continually
-process ellipse parameters until we find a 0 (which should be the last value).
-Sentinel values only work well if you can find a sentinel value that is not a
-legal data value. 
+o The ellipse parameters are processed until a *cxx-sentinel* value is reached.
+  A sentinel is a `special value` that is used to terminate a loop when it is
+  encountered. For example, we could pick a sentinel value of 0, and continually
+  process ellipse parameters until we find a 0 (which should be the last value).
+  Sentinel values only work well if you can find a sentinel value that is not a
+  legal data value. 
 
 However, even here we run into trouble. For example, consider the following call:
 
@@ -10307,12 +10307,13 @@ In other words, for operators that do not specify evaluation order, it is an
 note: in gcc, calls f, g, h, and j in order
 
 
-{cxx-shortcut-evaluation} *cxx-operator-logical*
+*cxx-shortcut-evaluation* *cxx-logical-operator*
 when the first argument of the AND function evaluates to false, the overall
 value must be false; and when the first argument of the OR function evaluates to
 true, the overall value must be true.
 
-the logical AND(&&) operator guarantees that its lhs operand is evaluated first.
+the logical AND(&&) operator guarantees that its left operand is evaluated
+first. that is left-to-right.
 
 {
   // check if time of entry is <= than rhs. 
@@ -12380,6 +12381,37 @@ int i;      // i has undefined value
 int j{};    // j is initialized by 0    *cxx-remember*
 int* p;     // p has undefined value
 int* q{};   // q is initialized by nullptr
+
+<ex>
+The `cxx-uniform-init` do not allow `cxx-narrow-conversion` of built-in type.
+
+TEST(StringConverison, NarrowNumericConversion)
+{
+  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
+  //    int x{5.0};
+  //            ^
+
+  int x{5.0};
+  EXPECT_EQ(x, 5);
+
+  // I am cramming an int into a short. On my (Windows XP) system, an int is
+  // four bytes and a short is two. A short is signed, which means that I have
+  // 15 bits to represent a number with and, therefore, 32,767 is the maximum
+  // positive value it can hold. The above piece of code goes off without a
+  // hitch, but when I increment i by one, it goes beyond the range of a short:
+
+  int i{32767};
+  EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
+  ++i;
+  EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
+}
+
+Worthwhile to use this property? Since unlikely to directly initialize an int
+from a long double? However such initialization might happen unintentionally
+in template. So YES.
+
+o use `single-form-of-init` whether it is built-in or class type
+o avoid vexing-parse
 
 
 <ex>
@@ -26642,12 +26674,12 @@ It's much harder to debug exceptions being 'hidden' like that, as what() is
 not always likely to include a useful what().
 
 
-<rethrow>
+*cxx-except-rethrow*
 Partially handle the exception and may decide that the exception must be
 handled by a function further up the call chain.
 
-  * Do not specify an expression; the current exception object is passed up
-  * Changes will be passed up only if catch uses a reference
+o Do not specify an expression; the current exception object is passed up
+o Changes will be passed up only if catch uses a reference
 
 catch (myerror& eobj) {
   eobj.status = errCodes::severeErr;
@@ -28334,7 +28366,7 @@ casting null pointers between pointers types (even between unrelated classes),
         and casting any pointer of any type to a void* pointer.
 
 
-*cxx-static-cast* converts 
+*cxx-static-cast* *cxx-cast-staic* converts 
 
   o between `related types` such as one pointer type to another in the same
     class hierarchy,
@@ -28351,7 +28383,7 @@ casting null pointers between pointers types (even between unrelated classes),
     resulting pointer value is the same.
 
 
-*cxx-reinterpret-cast* converts 
+*cxx-cast-reinterpret* converts 
 
   o between `unrelated types` such as integer to a pointer or a pointer to an
     unrelated pointer type.
@@ -28372,6 +28404,15 @@ casting null pointers between pointers types (even between unrelated classes),
 
     int *p;
     char *pc = reinterpret_cast<char*>(ip);
+
+
+https://docs.microsoft.com/en-us/cpp/cpp/type-conversions-and-type-safety-modern-cpp?view=msvc-160
+reinterpret_cast, for casts between unrelated types such as a pointer type and
+an int.
+
+Note
+This cast operator is not used as often as the others, and it's not guaranteed
+to be portable to other compilers.
 
 
 {cpp-cast-const-cast}
@@ -34704,15 +34745,15 @@ If do not know that there is a typedef, for example, it is in a file somewhere
 in huge source tree then may be a problem.
 
 
-{operator-new-and-delete}
-This is the C++ equivalent of calling malloc and free. What you can change is
-how the memory for an object is allocated. The name of the function that the
-new operator calls to allocate memory is operator new. Can rewrite or overload
-that function to change its behavior.
+*cxx-operator-new*
+`This is the C++ equivalent of calling malloc and free.` What you can change is
+how the memory for an object is allocated. The name of the function that the new
+operator calls to allocate memory is operator new. Can rewrite or overload that
+function to change its behavior.
 
 The operator new function is usually declared like this:
 
-void * operator new(size_t size);
+void *operator new(size_t size);
 
 The return type is void*, because this function returns a pointer to raw,
     uninitialized memory.
@@ -55980,38 +56021,6 @@ delete stringstream int
 delete boost::lexical_cast<int>
 
 
-{to-number-narrow-convertion}
-The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
-
-TEST(StringConverison, NarrowNumericConversion)
-{
-  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
-  //    int x{5.0};
-  //            ^
-
-  int x{5.0};
-  EXPECT_EQ(x, 5);
-
-  // I am cramming an int into a short. On my (Windows XP) system, an int is
-  // four bytes and a short is two. A short is signed, which means that I have
-  // 15 bits to represent a number with and, therefore, 32,767 is the maximum
-  // positive value it can hold. The above piece of code goes off without a
-  // hitch, but when I increment i by one, it goes beyond the range of a short:
-
-  int i{32767};
-  EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
-  ++i;
-  EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
-}
-
-Worthwhile to use this property? Since unlikely to directly initialize an int
-from a long double? However such initialization might happen unintentionally
-in template. So YES.
-
-  * use `single-form-of-init` whether it is built-in or class type
-  * avoid vexing-parse
-
-
 {cxx-string-print-char} *cxx-stream*
 
 How to print char value itself but not a printable char? Use +saved_input trick.
@@ -68046,5 +68055,5 @@ HealCalcFunc  <--- SlowHealthLoser
 http://eli.thegreenplace.net/
 
 
-==============================================================================
-Copyright: see |ktkb|  vim:tw=100:ts=3:ft=help:norl:
+={============================================================================
+Copyright: see |ktkb|  vim:tw=80:ts=3:ft=help:norl:

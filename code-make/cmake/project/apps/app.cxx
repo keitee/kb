@@ -1,14 +1,24 @@
-// TODO:
-// although app's CMakeLists.txt do not have `include` setting, able to find a
-// header
+// case1:
+// src/CMakeLists.txt
+// target_include_directories(student PUBLIC ../include)
 //
-// also, have to use "<>" and "<modern/..." since include setting is "include"
-// but not "inlcude/modern"
+// then here "apps/app.cxx" can use
 //
-// is that because it uses "student" library which has include setting and cmake
-// knows where to find header?
+// #include <modern/Student.h>
+// #include "modern/Student.h"
+//
+// case2:
+// src/CMakeLists.txt
+// target_include_directories(student PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+//
+// then here "apps/app.cxx" can use
+//
+// #include <../include/modern/Student.h>
+// #include "../include/modern/Student.h"
+//
+// the same applies to "src/Student.cxx"
 
-#include <modern/Student.h>
+#include "../include/modern/Student.h"
 
 int main(int argc, char *argv[])
 {

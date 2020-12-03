@@ -171,26 +171,80 @@ TEST(GtestAssert, DISABLED_shows_argument_order2)
 // [----------] 2 tests from Gtest (0 ms total)
 
 // for EXPECT_THROW()
+
+/*
+={=========================================================================
+
+1.
+
+[ RUN      ] GtestAssert.shows_check_exception
+unknown file: Failure
+C++ exception with description "vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)" thrown in the test body.
+[  FAILED  ] GtestAssert.shows_check_exception (0 ms)
+
+2. when use
+
+    EXPECT_THROW(coll.at(10), std::range_error);
+
+[ RUN      ] GtestAssert.shows_check_exception
+/home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:210: Failure
+Expected: coll.at(10) throws an exception of type std::range_error.
+  Actual: it throws a different type.
+vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)
+[  FAILED  ] GtestAssert.shows_check_exception (0 ms)
+
+3.
+
+[ RUN      ] GtestAssert.shows_check_exception
+vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)
+St12out_of_range
+[       OK ] GtestAssert.shows_check_exception (0 ms)
+*/
+
 TEST(GtestAssert, shows_check_exception)
 {
-  std::vector<int> coll{1, 2, 3};
-
-  EXPECT_THAT(coll.empty(), false);
-
-  EXPECT_THAT(coll.at(0), 1);
-  EXPECT_THAT(coll.at(2), 3);
-
-  // Expected: coll.at(10) throws an exception of type std::range_error.
-  //   Actual: it throws a different type.
-  // EXPECT_THROW(coll.at(10), std::range_error);
-
-  // vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)
-  try
   {
-    coll.at(10);
-  } catch (exception &e)
+    std::vector<int> coll{1, 2, 3};
+
+    EXPECT_THAT(coll.empty(), false);
+
+    EXPECT_THAT(coll.at(0), 1);
+    EXPECT_THAT(coll.at(2), 3);
+
+    // coll.at(10);
+  }
+
   {
-    std::cout << e.what() << std::endl;
+    std::vector<int> coll{1, 2, 3};
+
+    EXPECT_THAT(coll.empty(), false);
+
+    EXPECT_THAT(coll.at(0), 1);
+    EXPECT_THAT(coll.at(2), 3);
+
+    EXPECT_THROW(coll.at(10), std::out_of_range);
+  }
+
+  {
+    std::vector<int> coll{1, 2, 3};
+
+    EXPECT_THAT(coll.empty(), false);
+
+    EXPECT_THAT(coll.at(0), 1);
+    EXPECT_THAT(coll.at(2), 3);
+
+    try
+    {
+      coll.at(10);
+    } catch (exception &e)
+    {
+      std::cout << e.what() << std::endl;
+      std::cout << typeid(e).name() << std::endl;
+
+      // do not work
+      // #include <cxxabi.h>
+      // std::cout << __cxa_current_exception_type()->name() << std::endl;
+    }
   }
 }
 

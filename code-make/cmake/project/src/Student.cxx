@@ -1,6 +1,7 @@
 #include <iostream>
 // #include "Student.h"
-#include <modern/Student.h>
+// #include <modern/Student.h>
+#include <../include/modern/Student.h>
 
 using namespace std;
 
