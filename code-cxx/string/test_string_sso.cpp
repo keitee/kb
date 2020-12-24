@@ -31,11 +31,16 @@ the strings stores its data on the heap. But that is only true if the string
 exceeds an implementation-dependent size. This size for std::string is 15 for
 MSVC and GCC and 23 for Clang.
 
+Point1
 That means on the contrary, small strings are stored directly in the string
 object. Therefore, no memory allocation is required.
 
 From now on, my strings will always have at least 30 characters. So, I have not
 to reason about small string optimisation.
+
+Point2
+This also means that std::string() holds up space even when need small strings.
+less than SSO size.
 
 */
 

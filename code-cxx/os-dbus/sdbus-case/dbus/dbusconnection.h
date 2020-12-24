@@ -19,9 +19,9 @@ private:
   // DBusConnection();
 
   // NOTE:
-  // DBusConnection ctor is private since it's used from statc function
+  // DBusConnection ctor is private since it's used from static function
   // systemBus/sessionBus and user is expected to use this to get dbus.
-  // 
+  //
   // these static function creates dbus by calling ctor
   //
   // DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
@@ -57,8 +57,7 @@ public:
 
   DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
 
-  // TODO
-  // bool send(DBusMessage &&message) const;
+  bool send(DBusMessage &&message) const;
 
   // note: is not used outside of this class so why it's public?
   bool callWithCallback(DBusMessage &&message,

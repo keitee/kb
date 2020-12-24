@@ -33,6 +33,52 @@ DBusConnectionPrivate::~DBusConnectionPrivate()
   m_bus = sd_bus_flush_close_unref(m_bus);
 }
 
+/*
+https://www.freedesktop.org/software/systemd/man/sd_bus_send.html#
+
+int sd_bus_send(
+ sd_bus *bus,
+ sd_bus_message *m,
+ uint64_t *cookie);
+ 
+int sd_bus_send_to(
+ sd_bus *bus,
+ sd_bus_message *m,
+ const char *destination,
+ uint64_t *cookie);
+
+sd_bus_send() queues the bus message object m for transfer. If bus is NULL, the
+bus that m is attached to is used. bus only needs to be set when the message is
+sent to a different bus than the one it's attached to, for example when
+forwarding messages. 
+
+If the output parameter cookie is not NULL, it is set to the message identifier.
+This value can later be used to match incoming replies to their corresponding
+messages. 
+
+If cookie is set to NULL and the message is not sealed, sd_bus_send() assumes
+the message m doesn't expect a reply and adds the necessary headers to indicate
+this.
+
+Note that in most scenarios, sd_bus_send() should not be called directly.
+Instead, use higher level functions such as sd_bus_call_method(3) and
+sd_bus_reply_method_return(3) which call sd_bus_send() internally.
+
+"unicast signal messages" 
+
+sd_bus_send_to() is a shorthand for sending a message to a specific destination.
+It's main use case is to simplify sending "unicast signal messages" (signals that
+only have a single receiver). It's behavior is similar to calling
+sd_bus_message_set_destination(3) followed by calling sd_bus_send().
+
+sd_bus_send()/sd_bus_send_to() will write the message directly to the underlying
+transport (e.g. kernel socket buffer) if possible. If the connection is not set
+up fully yet the message is queued locally. If the transport buffers are
+congested any unwritten message data is queued locally, too. If the connection
+has been closed or is currently being closed the call fails. sd_bus_process(3)
+should be invoked to write out any queued message data to the transport.
+
+*/
 bool DBusConnectionPrivate::send(DBusMessage &&message) const
 {
   // take the message data.
@@ -59,14 +105,10 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
     {
       if (messageData->m_service.empty())
       {
-        // int sd_bus_send(sd_bus *bus, sd_bus_message *m,
-        //  uint64_t *cookie);
         rc = sd_bus_send(m_bus, msg.get(), nullptr);
       }
       else
       {
-        // int sd_bus_send_to(sd_bus *bus, sd_bus_message *m,
-        //  const char *destination, uint64_t *cookie);
         rc = sd_bus_send_to(m_bus,
                             msg.get(),
                             messageData->m_service.c_str(),
@@ -92,7 +134,7 @@ bool DBusConnectionPrivate::send(DBusMessage &&message) const
     }
 
     return true;
-  };
+  }; // lambda end
 
   // calling thread and a thread running event loop are the same
   if (m_eventloop.onEventLoopThread())
@@ -151,7 +193,7 @@ int DBusConnectionPrivate::methodCallCallback_(sd_bus_message *reply,
 }
 
 // 1. the first use case.
-// used from ::call() when it's called from other than event loop thread. the
+// called from ::call() when it's called from other than event loop thread. the
 // supplied callable that has code to release `sem` and to move reply message.
 //
 // so send the `call` to eventloop if sd_message is constructed from the input
@@ -187,7 +229,7 @@ bool DBusConnectionPrivate::callWithCallback(
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
 
-  // {
+  // { f2
   auto call = [this, messageData, callback, errorCallback, timeout]() {
     // must be true since it's called on the other thread
     assert(m_eventloop.onEventLoopThread());
@@ -425,7 +467,7 @@ it will block the event loop until complete
 otherwise it will post a message to the event loop and send the dbus
 message within that. 
 
-the async case:
+the async case when it is called from non-event-loop thread:
 
 o create f1 which do sem_post and copy "reply" from a dbus call. 
   send it to Private::callWithCallback
@@ -444,9 +486,11 @@ o return the reply
 use input message to make a call and return newly created message from reply
 to the call.
 
-https://freedesktop.org/software/systemd/man/sd_bus_call_method_async.html
+NOTE:
 
 NOTE: sync and async?
+
+https://freedesktop.org/software/systemd/man/sd_bus_call_method_async.html
 
 sd_bus_call_method() is a convenience function for initializing a bus message
 object and calling the corresponding D-Bus method. It combines the
@@ -488,12 +532,13 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
     return DBusMessage(DBusMessage::ErrorType::Failed);
   }
 
+  // check we're connected
   // NOTE: why use get()?
   // can access private member, m_bus, since they are in friendship.
   auto *priv = m_private.get();
   if (!priv || !priv->m_bus)
   {
-    logWarning("sd_bus not connected");
+    logWarning("dbus not connected");
     return DBusMessage(DBusMessage::ErrorType::NoNetwork);
   }
 
@@ -558,6 +603,7 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
   sem_init(&sem, 0, 0);
 
+  // f1
   std::function<void(DBusMessage)> f = [&](DBusMessage &&reply) {
     // must be true since expects it runs on other thread
     assert(priv->m_eventloop.onEventLoopThread());
@@ -584,4 +630,34 @@ DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
 
   logWarning("call:: return replyMessage");
   return replyMessage;
+}
+
+/*
+send the message over this connection, without waiting for a reply. This is
+suitable only for signals and method calls whose return values are not
+necessary.
+
+return true if the message was queued successfully, false otherwise.
+
+*/
+
+bool DBusConnection::send(DBusMessage &&message) const
+{
+  // check on call type
+  if (DBusMessage::MethodCallMessage != message.type() &&
+      DBusMessage::SignalMessage != message.type())
+  {
+    logWarning("trying to call with non-method call or signal message");
+    return false;
+  }
+
+  // check we're connected
+  auto *priv = m_private.get();
+  if (!priv || !priv->m_bus)
+  {
+    logWarning("dbus not connected");
+    return false;
+  }
+
+  return priv->send(std::move(message));
 }

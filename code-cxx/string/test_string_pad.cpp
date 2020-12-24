@@ -23,12 +23,37 @@ using testing::StrEq;
 // ={=========================================================================
 // *cxx-string-ctor*
 
+namespace cxx_string
+{
+  void foo1(const std::string &text)
+  {
+    // do some processing on input text.
+    std::string token = text.substr(0, 3);
+  }
+
+  void foo4(std::string_view text)
+  {
+    // do some processing on input text.
+    std::string_view token = text.substr(0, 3);
+  }
+}
+
 TEST(StringPad, parse_ids)
 {
-  {
-    std::string s{"this is string"};
+  using namespace cxx_string;
 
-    auto found = s.find('i');
+  {
+    const char *input = "this is input";
+
+    foo1("this is input");
+    foo1(input);
+  }
+
+  {
+    const char *input = "this is input";
+
+    foo4("this is input");
+    foo4(input);
   }
 }
 

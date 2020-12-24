@@ -116,7 +116,7 @@ TEST(String, ctors)
 }
 
 // ={=========================================================================
-TEST(String, ctros_const)
+TEST(String, ctros_and_char)
 {
   {
     // /** *cxx-cstring*
@@ -125,14 +125,15 @@ TEST(String, ctros_const)
     //  *  @param  __a  Allocator to use (default is default allocator).
     //  */
     // basic_string(`const` _CharT* __s, const _Alloc& __a = _Alloc());
-
+    //
     // not a problem to construct string from const char*
+    //
     // const char s1[] = "this is first message";
     // const char *s2 = "this is first message";
-
-    // both cause error
     //
-    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const
+    // both cause error since "char"
+    //
+    // :29:49: error: invalid conversion from ‘char’ to ‘const
     // char*’ [-fpermissive]
     //
     // const char const_letter = 'A';
@@ -142,33 +143,33 @@ TEST(String, ctros_const)
     // string string_from_non_const_letter(non_const_letter);
   }
 
-  // *cxx-string-const-ctor-const*
+  {
+    // ctor and string-append cause error:
+    //
+    // {
+    //   char letter = 'A';
+    //
+    //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
+    //   // char*’ [-fpermissive]
+    //   //      string s(letter);
+    //
+    //   string s(letter);
+    // }
+    //
+    // {
+    //   char letter = 'A';
+    //
+    //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
+    //   // char*’ [-fpermissive]
+    //   //         s.append(letter);
+    //
+    //   string s;
+    //   s.append(letter);
+    // }
+  }
 
-  // ctor and string-append cause error:
+  // HOW TO GET AROUND? use operator+=()
   //
-  // {
-  //   char letter = 'A';
-  //
-  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
-  //   // char*’ [-fpermissive]
-  //   //      string s(letter);
-  //
-  //   string s(letter);
-  // }
-  //
-  // {
-  //   char letter = 'A';
-  //
-  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
-  //   // char*’ [-fpermissive]
-  //   //         s.append(letter);
-  //
-  //   string s;
-  //   s.append(letter);
-  // }
-
-  // HOW TO GET AROUND?
-
   // /**
   //  *  @brief  Append a character.
   //  *  @param __c  The character to append.
@@ -182,7 +183,7 @@ TEST(String, ctros_const)
   // }
 
   {
-    string s;
+    std::string s;
     char letter = 'A';
 
     s += letter;
@@ -191,7 +192,7 @@ TEST(String, ctros_const)
   }
 
   {
-    string s;
+    std::string s;
     char letter = 'A';
 
     s.append(1, letter);
@@ -1302,6 +1303,40 @@ TEST(StringOperation, swap)
 }
 
 // ={=========================================================================
+// cxx-string-clear
+//
+// void clear(); (until C++11)
+// void clear() noexcept;
+
+TEST(StringOperation, clear)
+{
+  // it is safe to call clear() on empty coll
+  {
+    std::string coll{};
+
+    EXPECT_THAT(coll.empty(), true);
+
+    coll.clear();
+    coll.clear();
+    coll.clear();
+
+    EXPECT_THAT(coll.size(), 0);
+  }
+
+  {
+    std::string coll{};
+
+    coll = "string add";
+
+    EXPECT_THAT(coll.size(), 10);
+
+    coll.clear();
+
+    EXPECT_THAT(coll.size(), 0);
+  }
+}
+
+// ={=========================================================================
 // string-compare
 //
 // int compare( const basic_string& str ) const; (until C++11)
@@ -1552,45 +1587,74 @@ TEST(StringCompare, check_traits)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-string-clear
-//
-// void clear(); (until C++11)
-// void clear() noexcept;
+string-cstring
 
-TEST(String, StringClear)
+CPR 114 Character Arrarys Are Special
+Can initialise character array from a string literal. It is important to
+remember that string literals ends with a null character.
+
+CPR 122
+C-style strings are not a type. Instead, they are a convention for how to
+represent and use character strings. Strings that follow this convention are
+stored in character arrays and are "null terminated"
+
+*/
+
+TEST(String, cstring_char_array_1)
 {
-  // it is safe to call clear() on empty coll
+  // list initialise and no null char
   {
-    std::string coll{};
-
-    EXPECT_THAT(coll.empty(), true);
-
-    coll.clear();
-    coll.clear();
-    coll.clear();
-
-    EXPECT_THAT(coll.size(), 0);
+    char a1[] = {'C', '+', '+'};
+    EXPECT_THAT(sizeof a1, 3);
   }
 
+  // list initialise and explicit null char
   {
-    std::string coll{};
+    char a1[] = {'C', '+', '+', '\0'};
+    EXPECT_THAT(sizeof a1, 4);
+  }
 
-    coll = "string add";
+  // null char is added automatically
+  {
+    char a1[] = "C++";
+    EXPECT_THAT(sizeof a1, 4);
+  }
 
-    EXPECT_THAT(coll.size(), 10);
+  // error. no space for the null.
+  // error: initializer-string for array of chars is too long [-fpermissive]
+  //     char a1[3] = "C++";
+  // {
+  //   char a1[3] = "C++";
+  // }
 
-    coll.clear();
-
-    EXPECT_THAT(coll.size(), 0);
+  // since has a null char
+  {
+    char a1[] = "";
+    EXPECT_THAT(sizeof a1, 1);
   }
 }
 
 // ={=========================================================================
-// string-cstring
 
-// check null char, '\0', which is actually integer 0.
-TEST(StringForC, check_null)
+TEST(String, cstring_char_array_2)
+{
+  // null char is added automatically
+  {
+    char a1[] = "C++";
+
+    // cxx-sizeof gets space used and of course, include null char
+    EXPECT_THAT(sizeof a1, 4);
+
+    // However, strlen do not since it is "string-aware" function.
+    EXPECT_THAT(strlen(a1), 3);
+  }
+}
+
+// ={=========================================================================
+// null char, '\0', is actually integer 0.
+TEST(String, cstring_null_char)
 {
   {
     std::ostringstream os;
@@ -1612,19 +1676,17 @@ TEST(StringForC, check_null)
 
     os << std::hex << (int)'\0';
     EXPECT_THAT(os.str(), "0");
-  }
 
-  // nullptr is not same
-  {
-    const char *p1 = "";
-    const char *p2 = nullptr;
+    // reset os
+    os.str("");
 
-    EXPECT_NE(p1, p2);
+    os << std::hex << (int)NULL;
+    EXPECT_THAT(os.str(), "0");
   }
 }
 
 // ={=========================================================================
-TEST(StringForC, check_cstring_1)
+TEST(String, cstring_and_string)
 {
   {
     // std::string do not include a null
@@ -1656,14 +1718,6 @@ TEST(StringForC, check_cstring_1)
   }
 
   {
-    // cstring include a null
-    const char cs[] = "zoo";
-    EXPECT_EQ(strlen(cs), 3); // excludes null
-    EXPECT_EQ(sizeof(cs), 4); // +1 for null
-    EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
-  }
-
-  {
     // there is std::string ctor(const char*)
     const char s1[] = "0123456789012345";
     std::string coll{s1};
@@ -1680,14 +1734,9 @@ TEST(StringForC, check_cstring_1)
     EXPECT_THAT(memcmp(s1, coll.c_str(), 17), 0);
     EXPECT_THAT(memcmp(s1, coll.c_str(), coll.size() + 1), 0);
   }
-}
 
-// ={=========================================================================
-// when construct a string from array, it will copy up to null? yes
-TEST(StringForC, check_cstring_2)
-{
+  // when construct a string from array, only copys chars. no null char
   {
-    // src_len is 14 which includes a null since std::string.data()
     //                "0123456789012"
     std::string input{"&streamtype=1"};
     char output[256] = {0};
@@ -1710,33 +1759,6 @@ TEST(StringForC, check_cstring_2)
 
     EXPECT_THAT(result.size(), 13);
     EXPECT_THAT(strlen(result.c_str()), 13);
-  }
-
-  {
-    //                "0123456789012"
-    std::string input{"&streamtype=1"};
-    char output[256] = {0};
-
-    EXPECT_THAT(input.size(), 13);
-    EXPECT_THAT(strlen(input.c_str()), 13);
-
-    EXPECT_THAT(sizeof(output), 256);
-
-    // char *strcpy(char *dest, const char *src);
-    // which understand a cstring.
-    strcpy(output, input.c_str());
-
-    EXPECT_THAT(sizeof(output), 256);
-
-    // when use stringstream, it has the same result as using std::string
-    std::ostringstream oss{};
-
-    oss << output;
-
-    EXPECT_THAT(input, oss.str());
-
-    EXPECT_THAT(oss.str().size(), 13);
-    EXPECT_THAT(strlen(oss.str().c_str()), 13);
   }
 }
 
@@ -1784,7 +1806,7 @@ namespace stringcstring
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 
-TEST(StringForC, check_strend)
+TEST(String, cstring_strend)
 {
   using namespace stringcstring;
 
@@ -2968,12 +2990,14 @@ namespace stringsplit
 
     for (; end != std::string::npos;)
     {
-      coll.push_back(s.substr(start, end - start));
+      // coll.push_back(s.substr(start, end - start));
+      coll.emplace_back(s.substr(start, end - start));
       start = end + 1;
       end   = s.find_first_of(delim, start);
     }
 
-    coll.push_back(s.substr(start));
+    // coll.push_back(s.substr(start));
+    coll.emplace_back(s.substr(start));
   }
 
   // to support that not to add empty result

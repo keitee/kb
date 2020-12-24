@@ -24,8 +24,8 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
+// ={=========================================================================
 // copy of sdbus_client_1.cpp and refer to it for more details
-
 TEST(Sdbus, check_call_and_read_1)
 {
   sd_bus_error error{SD_BUS_ERROR_NULL};
@@ -96,6 +96,7 @@ finish:
   sd_bus_unref(bus);
 }
 
+// ={=========================================================================
 // refer to listnames.cpp and show to parse(demarshall) message using sd-bus
 
 TEST(Sdbus, check_call_and_read_2)
@@ -220,6 +221,7 @@ finish:
   sd_bus_unref(bus);
 }
 
+// ={=========================================================================
 // same as client_2 but use sd_dbus_call()
 //
 // This means that any synchronous remote operation (such as sd_bus_call(3),
@@ -389,10 +391,8 @@ finish:
   sd_bus_unref(bus);
 }
 
+// ={=========================================================================
 // same as client_3 but use sd_dbus_call_async()
-//
-// This means that any synchronous remote operation (such as sd_bus_call(3),
-// sd_bus_add_match(3) or sd_bus_request_name(3)),
 //
 // int sd_bus_call_async(
 //  sd_bus *bus,
@@ -497,6 +497,7 @@ namespace
   }
 } // namespace
 
+// ={=========================================================================
 // NOTE: do not work as expected since there is no event loop running to call
 // back `handler`
 TEST(DISABLED_Sdbus, sdbus_client_4)
@@ -524,32 +525,6 @@ TEST(DISABLED_Sdbus, sdbus_client_4)
     LOG_SERR(-r, "failed to connect to system bus");
     goto finish;
   }
-
-  // issue the method call and store the reply message in m
-
-  // int sd_bus_call_method(
-  //  sd_bus *bus, const char *destination, const char *path, const char *interface,
-  //  const char *member, sd_bus_error *ret_error, sd_bus_message **reply,
-  //  const char *types, ...);
-  //
-  // int sd_bus_call_method_async(
-  //  sd_bus *bus, sd_bus_slot **slot, const char *destination, const char *path, const char *interface,
-  //  const char *member, sd_bus_message_handler_t callback, void *userdata,
-  //  const char *types, ...);
-  //
-  // r = sd_bus_call_method(bus,
-  //                        "org.freedesktop.DBus",  // service
-  //                        "/org/freedesktop/DBus", // object path
-  //                        "org.freedesktop.DBus",  // interface
-  //                        "ListNames",             // method
-  //                        &error,                  // object to return error in
-  //                        &m,                      // return message on success
-  //                        nullptr);
-  // if (r < 0)
-  // {
-  //   LOG_SERR(-r, "failed to issue method call");
-  //   goto finish;
-  // }
 
   r = sd_bus_message_new_method_call(bus,
                                      &m,
@@ -626,6 +601,7 @@ finish:
 // Instead, use higher level functions such as sd_bus_call_method and
 // sd_bus_reply_method_return which call sd_bus_send() internally.
 
+// ={=========================================================================
 TEST(Sdbus, check_send) {}
 
 // int sd_bus_is_server(sd_bus *bus);
@@ -681,6 +657,7 @@ TEST(Sdbus, check_send) {}
 // queued service job as /org/freedesktop/systemd1/job/8447
 // [       OK ] Sdbus.check_client_and_server_1 (6023 ms)
 
+// ={=========================================================================
 TEST(Sdbus, check_client_and_server_1)
 {
   sd_bus_error error{SD_BUS_ERROR_NULL};

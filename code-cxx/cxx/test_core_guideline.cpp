@@ -23,7 +23,6 @@ using namespace testing;
 
 /*
 P: Philosophy
-
 ={=========================================================================
 P.9: Don't waste time or space
 https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#Rp-waste
@@ -175,8 +174,216 @@ TEST(CxxCoreP, 9_dont_waste)
 }
 
 /*
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#i-interfaces
+
+I: Interfaces
+
+An interface is a contract between two parts of a program. Precisely stating
+what is expected of a supplier of a service and a user of that service is
+essential. Having good (easy-to-understand, encouraging efficient use, not
+error-prone, supporting testing, etc.) interfaces is probably the most important
+single aspect of code organization.
+
+={=========================================================================
+I.12: Declare a pointer that must not be null as not_null
+
+Reason To help avoid dereferencing nullptr errors. To improve performance by
+avoiding redundant checks for nullptr.Example
+
+int length(const char* p);            // it is not clear whether length(nullptr) is valid
+
+length(nullptr);                      // OK?
+
+int length(not_null<const char*> p);  // better: we can assume that p cannot be nullptr
+
+int length(const char* p);            // we must assume that p can be nullptr
+
+By stating the intent in source, implementers and tools can provide better
+diagnostics, such as finding some classes of errors through static analysis, and
+perform optimizations, such as removing branches and null tests.
+
+Note not_null is defined in the guidelines support library.Note The assumption
+that the pointer to char pointed to a C-style string (a zero-terminated string
+of characters) was still implicit, and a potential source of confusion and
+errors. Use czstring in preference to const char*.
+
+// we can assume that p cannot be nullptr
+// we can assume that p points to a zero-terminated array of characters
+int length(not_null<zstring> p);
+
+Note: length() is, of course, std::strlen() in disguise.
+
+*/
+
+/*
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#f-functions
+
+F: Functions
+
+A function specifies an action or a computation that takes the system from one
+consistent state to the next. It is the fundamental building block of programs.
+
+It should be possible to name a function meaningfully, to specify the
+requirements of its argument, and clearly state the relationship between the
+arguments and the result. An implementation is not a specification. Try to think
+about what a function does as well as about how it does it. Functions are the
+most critical part in most interfaces, so see the interface rules.
+
+={=========================================================================
+F.20: For “out” output values, prefer return values to output parameters
+
+Reason 
+A return value is self-documenting, whereas a & could be either in-out or
+out-only and is liable to be misused. This includes large objects like standard
+containers that use implicit move operations for performance and to avoid
+explicit memory management.
+
+If you have multiple values to return, use a tuple or similar multi-member type.
+
+Example
+
+// OK: return pointers to elements with the value x
+vector<const int*> find_all(const vector<int>&, int x);
+
+// Bad: place pointers to elements with value x in-out
+void find_all(const vector<int>&, vector<const int*>& out, int x);
+
+Note A struct of many (individually cheap-to-move) elements may be in aggregate
+expensive to move. 
+
+
+It is not recommended to return a const value. Such older advice is now
+obsolete; it does not add value, and it interferes with move semantics.
+
+const vector<int> fct();    // bad: that "const" is more trouble than it is worth
+
+vector<int> g(const vector<int>& vx)
+{
+    // ...
+    fct() = vx;   // prevented by the "const"
+    // ...
+    return fct(); // expensive copy: move semantics suppressed by the "const"
+}
+
+The argument for adding const to a return value is that it prevents (very rare)
+accidental access to a temporary. The argument against is prevents (very
+frequent) use of move semantics.
+
+Exceptions
+For non-value types, such as types in an inheritance hierarchy, return the object by unique_ptr or shared_ptr.
+If a type is expensive to move (e.g., array<BigPOD>), consider allocating it on the free store and return a handle (e.g., unique_ptr), or passing it in a reference to non-const target object to fill (to be used as an out-parameter).
+To reuse an object that carries capacity (e.g., std::string, std::vector) across multiple calls to the function in an inner loop: treat it as an in/out parameter and pass by reference.
+Example
+struct Package {      // exceptional case: expensive-to-move object
+    char header[16];
+    char load[2024 - 16];
+};
+
+Package fill();       // Bad: large return value
+void fill(Package&);  // OK
+
+int val();            // OK
+void val(int&);       // Bad: Is val reading its argument
+Enforcement
+Flag reference to non-const parameters that are not read before being written to and are a type that could be cheaply returned; they should be “out” return values.
+Flag returning a const value. To fix: Remove const to return a non-const value instead.
+
+
+={=========================================================================
+F.21: To return multiple “out” values, prefer returning a struct or tuple
+
+Reason 
+
+A return value is self-documenting as an “output-only” value. Note that C++ does
+have multiple return values, by convention of using a tuple (including pair),
+possibly with the extra convenience of tie or structured bindings (C++17) at the
+  call site. 
+
+Prefer using a named struct where there are "semantics" to the returned value.
+Otherwise, a "nameless tuple" is useful in generic code.
+
+Example
+
+// BAD: output-only parameter documented in a comment
+int f(const string& input,
+    string& output_data // output only
+    )
+{
+    // ...
+    output_data = something();
+    return status;
+}
+
+// GOOD: self-documenting
+tuple<int, string> f(const string& input)
+{
+    // ...
+    return make_tuple(status, something());
+}
+
+C++98’s standard library already used this style, because a pair is like a two-element tuple. For example, given a set<string> my_set, consider:
+
+// C++98
+result = my_set.insert("Hello");
+if (result.second) do_something_with(result.first);    // workaround
+With C++11 we can write this, putting the results directly in existing local variables:
+
+Sometype iter;                                // default initialize if we haven't already
+Someothertype success;                        // used these variables for some other purpose
+
+tie(iter, success) = my_set.insert("Hello");   // normal return value
+if (success) do_something_with(iter);
+With C++17 we are able to use “structured bindings” to declare and initialize the multiple variables:
+
+if (auto [ iter, success ] = my_set.insert("Hello"); success) do_something_with(iter);
+Exception Sometimes, we need to pass an object to a function to manipulate its state. In such cases, passing the object by reference T& is usually the right technique. Explicitly passing an in-out parameter back out again as a return value is often not necessary. For example:
+istream& operator>>(istream& is, string& s);    // much like std::operator>>()
+
+for (string s; cin >> s; ) {
+    // do something with line
+}
+Here, both s and cin are used as in-out parameters. We pass cin by (non-const) reference to be able to manipulate its state. We pass s to avoid repeated allocations. By reusing s (passed by reference), we allocate new memory only when we need to expand s’s capacity. This technique is sometimes called the “caller-allocated out” pattern and is particularly useful for types, such as string and vector, that needs to do free store allocations.
+
+To compare, if we passed out all values as return values, we would something like this:
+
+pair<istream&, string> get_string(istream& is)  // not recommended
+{
+    string s;
+    is >> s;
+    return {is, s};
+}
+
+for (auto p = get_string(cin); p.first; ) {
+    // do something with p.second
+}
+We consider that significantly less elegant with significantly less performance.
+
+For a truly strict reading of this rule (F.21), the exception isn’t really an exception because it relies on in-out parameters, rather than the plain out parameters mentioned in the rule. However, we prefer to be explicit, rather than subtle.
+
+Note In many cases, it may be useful to return a specific, user-defined type. For example:
+struct Distance {
+    int value;
+    int unit = 1;   // 1 means meters
+};
+
+Distance d1 = measure(obj1);        // access d1.value and d1.unit
+auto d2 = measure(obj2);            // access d2.value and d2.unit
+auto [value, unit] = measure(obj3); // access value and unit; somewhat redundant
+                                    // to people who know measure()
+auto [x, y] = measure(obj4);        // don't; it's likely to be confusing
+The overly-generic pair and tuple should be used only when the value returned represents independent entities rather than an abstraction.
+
+Another example, use a specific type along the lines of variant<T, error_code>, rather than using the generic tuple.
+
+Enforcement
+Output parameters should be replaced by return values. An output parameter is one that the function writes to, invokes a non-const member function, or passes on as a non-const.
+
+*/
+
+/*
 
 ES: Expressions and statements
+={=========================================================================
 
 Expressions and statements are the lowest and most direct way of expressing
 actions and computation. Declarations in local scopes are statements.
@@ -380,7 +587,7 @@ TEST(CxxCoreEs, 79_switch_and_enum)
 }
 
 /*
-// ={=========================================================================
+={=========================================================================
 ES.78: Don't rely on implicit fallthrough in switch statements
 
 

@@ -50,10 +50,7 @@ namespace
   }
 } // namespace
 
-/* ={=========================================================================
-// cxx-thread
-*/
-
+// ={=========================================================================
 namespace cxx_thread
 {
   void hello(ostringstream &os) { os << "Hello Concurrent World"; }
@@ -71,6 +68,8 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_identity)
 {
   using namespace cxx_thread;
@@ -140,6 +139,8 @@ TEST(CConThread, check_identity)
   }
 }
 
+// ={=========================================================================
+// cxx-thread
 // [ RUN      ] CConThread.check_hardware_concurrency
 // hardware concurrency: 12
 // [       OK ] CConThread.check_hardware_concurrency (0 ms)
@@ -167,6 +168,8 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 // std::this_thread::get_id() is != gettid();
 // shows tid and pid
 TEST(CConThread, check_tid_and_pid)
@@ -202,17 +205,22 @@ TEST(CConThread, check_tid_and_pid)
   }
 }
 
-// as with TEST(CConAsync, check_launch_policy_1), thread starts `immediately`
-// and there is no `start the thread` operation.
-// TEST(CConThread, check_launch_policy)
-// {
-// }
+/*
+// ={=========================================================================
+cxx-thread
 
-// true if the thread object identifies an active thread of execution, false
-// otherwise
-//
-// the test shows that even if thread is finished, thread object is still valid
-// and joinable() still return true.
+as with TEST(CConAsync, check_launch_policy_1), thread starts `immediately`
+and there is no `start the thread` operation.
+TEST(CConThread, check_launch_policy)
+{
+}
+
+true if the thread object identifies an active thread of execution, false
+otherwise
+
+the test shows that even if thread is finished, thread object is still valid
+and joinable() still return true.
+*/
 
 TEST(CConThread, check_joinable)
 {
@@ -222,7 +230,8 @@ TEST(CConThread, check_joinable)
 
     EXPECT_THAT(t.joinable(), false);
 
-    // C++ exception with description "Invalid argument" thrown in the test body.
+    // C++ exception with description "Invalid argument" thrown 
+    // in the test body.
     //
     // try
     // {
@@ -286,7 +295,10 @@ TEST(CConThread, check_joinable)
   }
 }
 
-// when use the same std::thread for multiple times.
+// ={=========================================================================
+// cxx-thread
+// when use the same std::thread for multiple times. this is something we cannot
+// do when use cxx-async
 TEST(CConThread, check_thread_structure)
 {
   std::thread t{};
@@ -341,6 +353,8 @@ namespace cxx_thread
   };
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_exit_method)
 {
   // use `exit` message and return. do not see "thread end" message
@@ -511,6 +525,8 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_thread_name)
 {
   using namespace cxx_thread;
@@ -541,9 +557,11 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 // show how arg and return value from thread are used
 
-TEST(CConThread, check_arg)
+TEST(CConThread, argument_and_return)
 {
   using namespace cxx_thread;
 
@@ -619,7 +637,7 @@ TEST(CConThread, check_arg)
   {
     int value{1};
 
-    // *cxx-ref*
+    // *cxx-ref* to solve this error
     std::thread t(use_reference, std::ref(value));
     t.join();
 
@@ -645,6 +663,9 @@ TEST(CConThread, check_arg)
     EXPECT_THAT(data, "updated data");
   }
 }
+
+// ={=========================================================================
+// cxx-thread
 
 TEST(CConThread, check_run_many_thread)
 {
@@ -685,13 +706,19 @@ TEST(CConThread, check_run_many_thread)
   }
 }
 
-// 42.2.3
-// To prevent a system thread from accidently outliving its thread, the thread
-// destructor calls terminate()
-//
-// [ RUN      ] CConThread.terminate_thread
-// terminate called without an active exception
-// Aborted
+/*
+// ={=========================================================================
+// cxx-thread
+
+42.2.3
+To prevent a system thread from accidently outliving its thread, the thread
+destructor calls terminate()
+
+[ RUN      ] CConThread.terminate_thread
+terminate called without an active exception
+Aborted
+
+*/
 
 TEST(CConThread, DISABLED_terminate_thread)
 {
@@ -722,7 +749,9 @@ namespace cxx_thread
 
 } // namespace cxx_thread
 
-TEST(CConThread, check_membur_function)
+// ={=========================================================================
+// cxx-thread
+TEST(CConThread, use_member_function)
 {
   using namespace cxx_thread;
 
@@ -761,6 +790,8 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_priority_1)
 {
   using namespace cxx_thread;
@@ -797,6 +828,8 @@ TEST(CConThread, check_priority_1)
   t2.join();
 }
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_priority_2)
 {
   using namespace cxx_thread;
@@ -948,6 +981,8 @@ namespace cxx_thread
   }
 } // namespace cxx_thread
 
+// ={=========================================================================
+// cxx-thread
 TEST(CConThread, check_parallel_accumulate_1)
 {
   using namespace cxx_thread;
@@ -967,6 +1002,8 @@ TEST(CConThread, check_parallel_accumulate_1)
   std::cout << "f(1000)= " << f(1000) << std::endl;
 }
 
+// ={=========================================================================
+// cxx-thread
 // [ RUN      ] CConThread.check_parallel_accumulate_2
 // 913 milliseconds passed
 // 5995 milliseconds passed
@@ -1117,6 +1154,7 @@ namespace cxx_async
 
 } // namespace cxx_async
 
+// ={=========================================================================
 TEST(CConAsync, check_member_function)
 {
   using namespace cxx_async;
@@ -1187,6 +1225,7 @@ namespace cxx_async
 // that two threads concurrently use the same data resulting in undefined
 // behavior
 
+// ={=========================================================================
 TEST(CConAsync, check_launch_policy_1)
 {
   using namespace cxx_async;
@@ -1213,6 +1252,7 @@ TEST(CConAsync, check_launch_policy_1)
   EXPECT_THAT(sum, 10);
 }
 
+// ={=========================================================================
 TEST(CConAsync, check_launch_policy_2)
 {
   using namespace cxx_async;
@@ -1236,6 +1276,7 @@ TEST(CConAsync, check_launch_policy_2)
   EXPECT_THAT(sum, 100);
 }
 
+// ={=========================================================================
 // async runs sequentially
 TEST(CConAsync, check_launch_policy_3)
 {
@@ -1255,6 +1296,7 @@ TEST(CConAsync, check_launch_policy_3)
   EXPECT_THAT(sum, 10);
 }
 
+// ={=========================================================================
 // still async runs sequentially
 TEST(CConAsync, check_launch_policy_4)
 {
@@ -1312,7 +1354,7 @@ TEST(CConAsync, check_launch_policy_4)
 // cxx-async with no option
 //
 // `std::launch::deferred | std::launch::async` to indicate that the
-// implementation may choose. This last option is `the default`
+// implementation may choose. This is `the default`
 
 // If async() couldn’t start func1(), it will run after func2(), when get() gets
 // called, so that the program will have the following output:
@@ -1324,6 +1366,7 @@ TEST(CConAsync, check_launch_policy_4)
 //
 // this is `sequential` so can see either sequential or parallel output.
 
+// ={=========================================================================
 // run parallel on workstation
 TEST(CConAsync, check_launch_policy_11)
 {
@@ -1351,6 +1394,7 @@ TEST(CConAsync, check_launch_policy_11)
 // +++++
 // [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
+// ={=========================================================================
 // run parallel on workstation
 TEST(CConAsync, check_launch_policy_12)
 {
@@ -1391,6 +1435,7 @@ TEST(CConAsync, check_launch_policy_12)
 // ++++++++++
 // [       OK ] CConAsync.check_launch_policy3 (7062 ms)
 
+// ={=========================================================================
 // run serial on workstation
 TEST(CConAsync, check_launch_policy_13)
 {
@@ -1399,6 +1444,7 @@ TEST(CConAsync, check_launch_policy_13)
   doSomething('+');
 }
 
+// ={=========================================================================
 // parallel on workstation
 // not use future return but have future to make it runs parallel
 TEST(CConAsync, check_launch_policy_14)
@@ -1427,6 +1473,7 @@ TEST(CConAsync, check_launch_policy_14)
 //
 // done
 
+// ={=========================================================================
 // both runs parallel on workstation
 TEST(CConAsync, check_launch_policy_21)
 {
@@ -1468,6 +1515,7 @@ TEST(CConAsync, check_launch_policy_21)
   }
 }
 
+// ={=========================================================================
 TEST(CConAsync, check_launch_policy_22)
 {
   {
@@ -1517,6 +1565,7 @@ namespace cxx_async
   void make_async() { auto f = std::async(std::launch::async, do_long); }
 } // namespace cxx_async
 
+// ={=========================================================================
 // if think that make_async() makes a thread and then execute next line right
 // after make_async(), that's wrong. make_asymc() waits for async thread ends so
 // sum is always 20.
@@ -1534,9 +1583,6 @@ TEST(CConAsync, check_scope)
 
   EXPECT_THAT(sum, 20);
 }
-
-// ={=========================================================================
-// cxx-sync
 
 namespace cxx_sync
 {
@@ -1568,6 +1614,9 @@ namespace cxx_sync
     return NULL;
   }
 } // namespace cxx_sync
+
+// ={=========================================================================
+// cxx-sync
 
 TEST(CConSync, check_race_1)
 {

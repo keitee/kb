@@ -121,7 +121,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 # -std=gnu++17 to enable GNU extensions as well.
 
 # add_compile_options("-O2;-std=c++17")
-add_compile_options("-std=c++17")
+add_compile_options("-g;-std=c++17")
 
 # string_01
 add_executable(${PROJECT_NAME}_1 test_string_1.cpp)

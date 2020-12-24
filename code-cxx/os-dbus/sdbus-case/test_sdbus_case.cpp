@@ -1130,7 +1130,7 @@ result: 35
 
 */
 
-TEST(DBusMessage, message_1)
+TEST(DBusMessage, create_message)
 {
   DBusMessage message =
     DBusMessage::createMethodCall("net.poettering.Calculator",  // service
@@ -1148,7 +1148,9 @@ TEST(DBusMessage, message_1)
   EXPECT_THAT(message.signature(), "ii");
 }
 
-TEST(DBusMessage, message_call_1)
+// ={=========================================================================
+// should run Calculator service before running this test
+TEST(DBusMessage, call_message_1)
 {
   // create event loop
   EventLoop loop;
@@ -1188,6 +1190,70 @@ TEST(DBusMessage, message_call_1)
 
     loop.quit(0);
   });
+
+  // blocks here
+  std::cout << "event loops blocks on here" << std::endl;
+  loop.run();
+}
+
+/*
+// ={=========================================================================
+if use call() before event loop runs then it blocks on sem_wait in call().
+
+$ gdb --args ./test_sdbus_case --gtest_filter=*call_message_2*
+
+[ RUN      ] DBusMessage.call_message_2
+0000454821.629976 WRN: < M:dbusconnection.cpp F:call L:555 > DBusConnection::call() is called on the other thread
+0000454821.629988 WRN: < M:dbusconnection.cpp F:callWithCallback L:265 > callWithCallback::call() place a call on the event loop thread
+^C
+Program received signal SIGINT, Interrupt.
+0x00007ffff79426e6 in futex_abstimed_wait_cancelable (private=0, abstime=0x0, expected=0, futex_word=0x7fffffffd450) at ../sysdeps/unix/sysv/linux/futex-internal.h:205
+205     ../sysdeps/unix/sysv/linux/futex-internal.h: No such file or directory.
+(gdb) bt
+#0  0x00007ffff79426e6 in futex_abstimed_wait_cancelable (private=0, abstime=0x0, expected=0, futex_word=0x7fffffffd450) at ../sysdeps/unix/sysv/linux/futex-internal.h:205
+#1  do_futex_wait (sem=sem@entry=0x7fffffffd450, abstime=0x0) at sem_waitcommon.c:111
+#2  0x00007ffff79427d8 in __new_sem_wait_slow (sem=0x7fffffffd450, abstime=0x0) at sem_waitcommon.c:181
+#3  0x00005555555cc615 in DBusConnection::call (this=0x7fffffffd530, message=..., msTimeout=-1) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/dbus/dbusconnection.cpp:580
+#4  0x000055555556f5f3 in DBusMessage_call_message_2_Test::TestBody (this=0x5555558a4a80) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/test_sdbus_case.cpp:1223
+ 
+*/
+
+TEST(DBusMessage, call_message_2)
+{
+  // create event loop
+  EventLoop loop;
+
+  // connect to dbus
+  DBusConnection conn = DBusConnection::sessionBus(loop);
+  EXPECT_THAT(conn.isConnected(), true);
+
+  int result;
+
+  // wait for some time
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  DBusMessage message =
+    DBusMessage::createMethodCall("net.poettering.Calculator",  // service
+        "/net/poettering/Calculator", // object path
+        "net.poettering.Calculator",  // interface
+        "Multiply");                  // method
+
+  message << 5;
+  message << 7;
+
+  DBusMessage reply = conn.call(std::move(message));
+
+  if ( reply.isError() )
+  {
+    std::cout << "reply error " << reply.errorName() << " " << reply.errorMessage() << std::endl;
+  }
+
+  EXPECT_THAT(reply.isError(), false);
+
+  reply >> result;
+  std::cout << "result: " << result << std::endl;
+
+  loop.quit(0);
 
   // blocks here
   std::cout << "event loops blocks on here" << std::endl;

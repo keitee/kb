@@ -42,12 +42,12 @@ interchangeable with programming languages also be based on these structures.
 
 In JSON, they take on these forms:
 
-An "object" is an unordered set of name/value pairs.
+o An "object" is an unordered set of name/value pairs.
 
 An object begins with "{left brace" and ends with "}right brace". Each name is
 followed by :colon and the name/value pairs are separated by ,comma.
 
-An "array" is an ordered collection of values. 
+o An "array" is an ordered collection of values. 
 
 An array begins with "[left bracket" and ends with "]right bracket". Values are
 separated by ,comma.
@@ -203,6 +203,132 @@ IStream& operator>>(IStream& sin, Value& root) {
   }
   return sin;
 }
+
+
+
+jq tool
+https://stedolan.github.io/jq/tutorial/
+
+
+you can install jq which is faster (written in C) from your package manager
+(e.g. sudo apt install jq in Ubuntu/Debian, sudo dnf install jq on
+ Fedora/RHEL/CentOS) or from source and then in vim, type:
+
+:%!jq .
+
+
+{
+	"documentId" : "1607619413",
+	"services" : 
+	[
+		{
+			"c" : "5003",
+			"dvbtriplet" : "9018.8197.8261",
+			"servicetypes" : 
+			[
+				"DTT"
+			],
+			"sf" : "sd",
+			"sid" : "M233a-2005-2045-686",
+			"t" : "ITV",
+			"xsg" : 8
+		},
+		{
+			"adult" : false,
+			"dvbtriplet" : "",
+			"local" : false,
+			"schedule" : false,
+			"servicetype" : "OTT",
+			"servicetypes" : 
+			[
+				"DSAT"
+			],
+			"sf" : "sd",
+			"sg" : 0,
+			"sid" : "1151",
+			"sk" : 1151,
+			"startover" : null,
+			"startoverents" : false,
+			"t" : "IEPG data 1",
+			"timeshifted" : false,
+			"xsg" : 0
+		}
+  ]
+}
+
+$ cat dtt_list_llama_after.json | jq '.["services"][] | {channel: .c, title: .t, type: .servicetype, servicetypes: .servicetypes}'
+
+$ cat dtt_list_llama_after.json | jq '.["services"][] | select(.servicetypes == ["DTT"])'
+$ cat dtt_list_llama_after.json | jq '[.["services"][] | select(.servicetypes == ["DTT"])] | length'
+
+get total services
+$ cat uk_after.json | jq '[.["services"][]] | length'
+609
+
+get total services which has OTT
+$ cat uk_after.json | jq '[.["services"][] | select(.servicetypes | contains(["OTT"]))] | length'
+169
+
+get total services which only has DSAT
+$ cat uk_after.json | jq '[.["services"][] | select(.servicetypes == ["DSAT"])]'
+$ cat uk_after.json | jq '[.["services"][] | select(.servicetypes == ["DSAT"])] | length'
+440
+
+>>> 440+169
+609
+
+
+$ cat dtt_list_llama_after.json | jq '.["services"][] | select(.servicetypes | contains(["OTT"])) | {channel: .c, title: .t, type: .servicetype, servicetypes: .servicetypes}'
+$ cat dtt_list_llama_after.json | jq '.["services"][] | select(.servicetypes | contains(["OTT"])) | {channel: .c, title: .t, type: .servicetype, servicetypes: .servicetypes}' > out.json
+
+{
+  "channel": "103",
+  "title": "ITV",
+  "type": "OTT",
+  "servicetypes": [
+    "DSAT",
+    "OTT"
+  ]
+}
+{
+  "channel": "104",
+  "title": "Channel 4",
+  "type": "OTT",
+  "servicetypes": [
+    "DSAT",
+    "OTT"
+  ]
+}
+...
+
+If you want to get the output as a single array, you can tell jq to "collect" all of the answers by wrapping the filter in square brackets:
+
+$ cat dtt_list_llama_after.json | jq '[.["services"][] | select(.servicetypes | contains(["OTT"])) | {channel: .c, title: .t, type: .servicetype, servicetypes: .servicetypes}]' > out.json
+
+[
+  {
+    "channel": "103",
+    "title": "ITV",
+    "type": "OTT",
+    "servicetypes": [
+      "DSAT",
+      "OTT"
+    ]
+  },
+  {
+    "channel": "104",
+    "title": "Channel 4",
+    "type": "OTT",
+    "servicetypes": [
+      "DSAT",
+      "OTT"
+    ]
+  },
+...
+]
+
+$ cat dtt_list_llama_after.json | jq '[.["services"][] | select(.servicetypes | contains(["OTT"])) | {channel: .c, title: .t, type: .servicetype, servicetypes: .servicetypes}] | length'
+169
 
 */
 
@@ -536,7 +662,7 @@ namespace cxx_json
    "year2" : "1865"
 }
 )";
-}
+} // namespace cxx_json
 
 // ={=========================================================================
 // construct json from code
@@ -625,9 +751,9 @@ TEST(CxxJSON, assign_and_append)
     // create the main object
     Json::Value val;
 
-    val["book"]       = "Alice in Wonderland";
-    val["year1"]      = 1865;
-    val["year2"]      = "1865";
+    val["book"]  = "Alice in Wonderland";
+    val["year1"] = 1865;
+    val["year2"] = "1865";
 
     // val["characters"] = ch;
 
@@ -663,9 +789,9 @@ TEST(CxxJSON, assign_and_append)
     // create the main object
     Json::Value val;
 
-    val["book"]       = "Alice in Wonderland";
-    val["year1"]      = 1865;
-    val["year2"]      = "1865";
+    val["book"]  = "Alice in Wonderland";
+    val["year1"] = 1865;
+    val["year2"] = "1865";
 
     val["characters"] = Json::Value(Json::arrayValue);
     val["characters"].append(ch);
@@ -1121,7 +1247,28 @@ namespace
 }
 )JSON";
 
-} // namespace cxx_json
+  const std::string ConfigJson2 = R"({
+   "book" : "Alice in Wonderland",
+   "characters" : [
+      {
+         "chapter" : 1,
+         "name" : "Jabberwock"
+      },
+      {
+         "chapter" : 6,
+         "name" : "Cheshire Cat"
+      },
+      {
+         "chapter" : 7,
+         "name" : "Mad Hatter"
+      }
+   ],
+   "year1" : 1865,
+   "year2" : "1865"
+}
+)";
+
+} // namespace
 
 /*
 // ={=========================================================================
@@ -1343,6 +1490,95 @@ TEST(CxxJSON, read_from_string_3)
   EXPECT_THAT(uris.size(), 4);
 }
 
+/*
+// ={=========================================================================
+does parse() remove duplicates? Yes, no errors but
+
+https://stackoverflow.com/questions/32480121/parsing-json-with-duplicate-keys-json-cpp
+
+Like the JSON RFC sad the object names (keys) should be unique.
+
+The names within an object SHOULD be unique.
+
+Also the RFC defines if they are not, the behavior is unpredictable.
+
+See this quote from the RFC:
+
+An object whose names are all unique is interoperable in the sense that all
+software implementations receiving that object will agree on the name-value
+mappings. When the names within an object are not unique, the behavior of
+software that receives such an object is unpredictable. Many implementations
+report the last name/value pair only. Other implementations report an error or
+fail to parse the object, and some implementations report all of the name/value
+pairs, including duplicates.
+
+*/
+
+TEST(CxxJSON, read_from_string_4)
+{
+  std::string input{ConfigJson};
+
+  EXPECT_THAT(input.size(), ConfigJson.size());
+  EXPECT_THAT(input.size(), 459);
+
+  input.append(ConfigJson);
+
+  EXPECT_THAT(input.size(), 2 * ConfigJson.size());
+  EXPECT_THAT(input.size(), 2 * 459);
+
+  Json::Reader reader;
+  Json::Value root;
+
+  // parse the json
+  if (!reader.parse(ConfigJson, root))
+  {
+    std::cout << "failed to parse config json" << std::endl;
+    return;
+  }
+
+  if (!root.isObject())
+  {
+    std::cout << "invalid root config object" << std::endl;
+    return;
+  }
+
+  const Json::Value uris = root["uris"];
+
+  EXPECT_THAT(uris.isArray(), true);
+  EXPECT_THAT(uris.size(), 4);
+}
+
+TEST(CxxJSON, read_from_string_5)
+{
+  std::vector<std::string> expected{"book", "characters", "year1", "year2"};
+  std::vector<std::string> coll{};
+
+  std::string input{ConfigJson};
+
+  Json::Reader reader{};
+  Json::Value root{};
+
+  // parse the json
+  if (!reader.parse(ConfigJson2, root))
+  {
+    std::cout << "failed to parse config json" << std::endl;
+    return;
+  }
+
+  // Return a list of the member names.
+  // getMemberNames()
+  // Value::Members Json::Value::getMemberNames() const
+  //
+  // typedef std::vector< std::string > Json::Value::Members
+  for (const auto &e : root.getMemberNames())
+  {
+      // std::cout << e << std::endl;
+      coll.push_back(e);
+  }
+
+  EXPECT_THAT(coll, expected);
+}
+
 //  {
 //    "dvbtriplet": "318.4.8583",
 //    "servicetypes": [
@@ -1454,7 +1690,7 @@ namespace json_write
 	],
 	"version" : 1
 })";
-}
+} // namespace json_write
 
 // ={=========================================================================
 TEST(CxxJSON, write_to_json_using_writer)
@@ -1961,7 +2197,7 @@ TEST(CxxJSON, time_output)
   std::cout << "current utc in ms: " << now_to_ms_2 << std::endl;
   std::cout << "sizeof  utc in ms: " << sizeof now_to_ms_2 << std::endl;
 
-  uint64_t now_to_ms_3 = now*1000;
+  uint64_t now_to_ms_3 = now * 1000;
   std::cout << "current utc in ms: " << now_to_ms_3 << std::endl;
 
   // error: conversion from ‘long int’ to ‘Json::Value’ is ambiguous

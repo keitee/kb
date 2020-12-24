@@ -21,13 +21,11 @@ using namespace testing;
 // ={=========================================================================
 TEST(StlStack, check_implemented_in_terms_of)
 {
-  // While std::string do not support cxx-bool-conversion, std::optional does.
-  // Have used "!!" to use that in EXPECT_.
-  {
-    std::optional<std::string> option{};
+  int value1{100};
+  size_t value2{200};
 
-    EXPECT_THAT(!!option, false);
-  }
+  printf("%s: value is {%d, %d}\n", __func__, value1, value2);
+  printf("%s: value is {%u, %u}\n", __func__, value1, value2);
 }
 
 // ={=========================================================================

@@ -1,3 +1,4 @@
+#include <any>
 #include <boost/lexical_cast.hpp>
 #include <chrono>
 #include <cstdarg>
@@ -1407,7 +1408,7 @@ TEST(CxxTypeVariant, variant_and_visitor_2)
 }
 
 // ={=========================================================================
-// cxx-17
+// cxx-variant cxx-17
 // #include <variant>
 // std::variant is implementation of "one-of"
 
@@ -1642,11 +1643,11 @@ TEST(CxxTypeTuple, structured_binding_on_other_type)
 
     Data data{41, 6.3, "nico"};
 
-    auto [age, score, name] = data;
+    auto [yourage, yourscore, yourname] = data;
 
-    EXPECT_THAT(age, 41);
-    EXPECT_THAT(score, 6.3);
-    EXPECT_THAT(name, "nico");
+    EXPECT_THAT(yourage, 41);
+    EXPECT_THAT(yourscore, 6.3);
+    EXPECT_THAT(yourname, "nico");
   }
 
   {
@@ -1699,7 +1700,7 @@ The use of pair in the other two functions avoids those problems, but it’s
 possible for the user of the pair to forget to check the bool and potentially
 use a garbage value in the int. Passing std::make_pair(42, true) or
 std::make_pair(whatever, false) is also hugely different than passing 42 or
-nothing – we’ve made the interface hard to use.
+nothing - we’ve made the interface hard to use.
 
 
 The need for “not-yet-a-thing”
@@ -1741,10 +1742,12 @@ o easily discern the no-value case from the value-found case, unlike for the
 o report the no-value case without using exception handling machinery, which is
   likely too expensive if such cases are frequent rather than exceptional,
 
+
+// Like GetValueFromMap example below
+
 o avoid leaking implementation details to the caller as would be necessary to
   expose an “end” iterator with which they could compare a returned iterator.
 
-// Like GetValueFromMap example below
 
 Solving the delayed initialization problem is straightforward: we simply add an
 optional<T> member to our class. The standard library implementer is responsible
@@ -1755,7 +1758,37 @@ operators:
 using T = // some object type //
 
 struct S {
+  bool is_initialized = false;
+  alignas(T) unsigned char maybe_T[sizeof(T)];
+
+  void construct_the_T(int arg) {
+    assert(!is_initialized);
+    new (&maybe_T) T(arg);
+    is_initialized = true;
+  }
+
+  T& get_the_T() {
+    assert(is_initialized);
+    return reinterpret_cast<T&>(maybe_T);
+  }
+
+  ~S() {
+    if (is_initialized) {
+      get_the_T().~T(); // destroy the T
+    }
+  }
+
+  // ... lots of code ...
+};
+
+
+using T = // some object type //
+
+struct S {
+
   optional<T> maybe_T;    
+
+  // note: not use S() ctor to build a member so "delayed initialization"
 
   void construct_the_T(int arg) {
     // We need not guard against repeat initialization;
@@ -1792,7 +1825,7 @@ it easier for others to understand what your code is doing. The declarations
 optional<T> f(); and void g(optional<T>); express intent more clearly and
 concisely than do pair<T, bool> f(); or void g(T t, bool is_valid);. Just as is
 the case with words, adding to our vocabulary of types increases our capacity to
-describe complex problems simply – it makes us more efficient.
+describe complex problems simply - it makes us more efficient.
 
 
 https://www.bfilipek.com/2018/05/using-optional.html
@@ -1809,7 +1842,7 @@ initialized - this works, but comes with the cost of allocating memory for the
 object.
 
 Optional types - that come from functional programming world - bring type safety
-and expressiveness. Most of other languages have something similar: for example
+and "expressiveness" Most of other languages have something similar: for example
 std::option in Rust, Optional<T> in Java, Data.Maybe in Haskell.
 
 std::optional was added in C++17 and brings a lot of experience from
@@ -1881,6 +1914,169 @@ class UserRecord
   UserRecord tim { "Tim", "SuperTim", 16 };
   UserRecord nano { "Nathan", std::nullopt, std::nullopt };
 }
+
+
+https://www.bfilipek.com/2018/04/refactoring-with-c17-stdoptional.html
+Refactoring with C++17 std::optional
+
+1.
+
+bool CheckSelectionVer1(const ObjSelection &objList, 
+                        bool *pOutAnyCivilUnits, 
+                        bool *pOutAnyCombatUnits, 
+                        int *pOutNumAnimating);
+
+ObjSelection sel;
+
+bool anyCivilUnits { false };
+bool anyCombatUnits {false};
+int numAnimating { 0 };
+if (CheckSelectionVer1(sel, &anyCivilUnits, &anyCombatUnits, &numAnimating))
+{
+  // ...
+}
+
+Cons:
+
+o Look at the caller’s code: we have to create all the variables that will hold
+the outputs. For sure it looks like a code duplication if you call the function
+is many places.
+
+o Output parameters: Core guidelines suggests not to use them.
+F.20: For “out” output values, prefer return values to output parameters
+
+o If you have raw pointers you have to check if they are valid.
+
+o What about extending the function? What if you need to add another output
+param?
+
+
+2. use tuple and structured bindings
+
+std::tuple<bool, bool, bool, int> 
+CheckSelectionVer2(const ObjSelection &objList)
+{
+    if (!objList.IsValid())
+        return {false, false, false, 0};
+
+    // local variables:
+    int numCivilUnits = 0;
+    int numCombat = 0;
+    int numAnimating = 0;
+
+    // scan...
+
+    return {true, numCivilUnits > 0, numCombat > 0, numAnimating };
+}
+
+auto [ok, anyCivil, anyCombat, numAnim] = CheckSelectionVer2(sel);
+if (ok)
+{
+  // ...
+}
+
+Pros:
+
+o No need to check raw pointers
+o Code is quite expressive
+
+Cons:
+
+o easy to forget the order of outputs from the tuple.
+o when you’d like to add another output value, you have to extend this tuple and
+the caller site.
+
+
+3. use structure
+
+struct SelectionData
+{
+    bool anyCivilUnits { false };
+    bool anyCombatUnits { false };
+    int numAnimating { 0 };
+};
+
+std::pair<bool, SelectionData> CheckSelectionVer3(const ObjSelection &objList)
+{
+    SelectionData out;
+
+    if (!objList.IsValid())
+        return {false, out};
+
+    // scan...
+
+    return {true, out};
+}
+
+if (auto [ok, selData] = CheckSelectionVer3(sel); ok)
+{
+    // ...
+} 
+
+Pros:
+
+o the code is the logical structure and extensibility. If you want to add a new
+parameter then just extend the structure.
+
+
+4. use std::optional
+
+From cppreference - std::optional:
+
+The class template std::optional manages an optional contained value, i.e. a
+value that may or may not be present.  A common use case for optional is the
+return value of a function that may fail. As opposed to other approaches, such
+as std::pair<T,bool>, optional handles "expensive-to-construct objects well" and
+is more readable, as the intent is expressed explicitly.
+
+std::optional<SelectionData> CheckSelection(const ObjSelection &objList)
+{   
+    if (!objList.IsValid())
+        return { };
+
+    SelectionData out;   
+
+    // scan...
+
+    return {out};
+}
+
+
+if (auto ret = CheckSelection(sel); ret.has_value())
+or
+if (auto ret = CheckSelection(sel))
+{
+    // access via *ret or even ret->
+    // ret->numAnimating
+}
+
+Pros:
+
+o Clean and expressive form
+
+o Efficient: Implementations of optional are not permitted to use additional
+storage, such as dynamic memory, to allocate its contained value. The contained
+value shall be allocated in a region of the optional storage suitably aligned
+for the type T. Don’t worry about extra memory allocations.
+
+
+Wrap up
+
+On the other hand, this new implementation omits one important aspect: error
+handling. Now, there’s no way to know what was the reason why a value wasn’t
+computed. With the previous version, where std::pair was used, we had a chance
+to return some error code to indicate the reason.
+
+Here’s what I’ve found in Boost:
+
+  It is recommended to use optional<T> in situations where there is exactly one,
+  clear (to all parties) reason for having no value of type T, and where the
+  lack of value is as natural as having any regular value of T
+
+In other words, std::optional version looks ok, only when we accept invalid
+selection as a “natural” case in the app
+
+// no error handing is required.
 
 */
 
@@ -2002,7 +2198,7 @@ TEST(CxxTypeOptional, init)
 
 // ={=========================================================================
 // support cxx-bool-conversion
-TEST(CxxTypeOptional, check_value)
+TEST(CxxTypeOptional, bool_conversion)
 {
   {
     // direct
@@ -2012,8 +2208,48 @@ TEST(CxxTypeOptional, check_value)
     // direct
     std::optional<int> value2{10};
     EXPECT_THAT(!!value2, true);
+
+    // /home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp:2211: Failure
+    // Value of: value3
+    // Expected: is equal to 8-byte object <01-00 00-00 01-00 00-00>
+    //   Actual: 8-byte object <0A-00 00-00 01-00 00-00> (of type std::optional<int>)
+    //
+    // std::optional<int> value3{10};
+    // EXPECT_THAT(value3, true);
+
+    // must be ture on if
+    std::optional<int> value4{10};
+    if (value4)
+      EXPECT_THAT(true, true);
+    else
+      EXPECT_THAT(true, false);
+
+    // must be false on if since std::nullopt is default
+    std::optional<int> value5{};
+    if (value5)
+      EXPECT_THAT(true, false);
+    else
+      EXPECT_THAT(true, true);
   }
 }
+
+// ={=========================================================================
+// NO compile error
+//
+// TEST(CxxTypeOptional, can_use_reference)
+// {
+//   std::string coll{"reference"};
+
+//   std::optional<std::string &> value{coll};
+
+//   EXPECT_THAT(value.has_value(), true);
+
+//   EXPECT_THAT(*value, "reference");
+
+//   value.emplace("can use reference");
+
+//   EXPECT_THAT(coll, "can use reference");
+// }
 
 // ={=========================================================================
 TEST(CxxTypeOptional, operations)
@@ -2148,37 +2384,158 @@ TEST(CxxTypeOptional, examples)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-array cxx-sizeof *cxx-init*
+cxx-any cxx-17
+
+I believe in a lot of cases we can limit the set of supported types, and that’s
+why std::variant might be a better choice. Of course, it gets tricky when you
+implement a library without knowing the final applications - so you don’t know
+the possible types that will be stored in an object.
+
+*/
+
+// ={=========================================================================
+TEST(CxxTypeAny, examples)
+{
+  std::any a{12};
+
+  // set any value
+  a = std::string{"std::any"};
+  a = 16;
+
+  // read it as int but not as std::string
+  EXPECT_THAT(std::any_cast<int>(a), 16);
+  EXPECT_THROW(std::any_cast<std::string>(a), std::bad_any_cast);
+
+  // reset and check if it has any value
+  a.reset();
+  EXPECT_THAT(a.has_value(), false);
+
+  // can use it in a collection
+  std::map<std::string, std::any> coll;
+  coll["integer"] = 10;
+  coll["string"] = std::string{"Hello"};
+  coll["float"] = 1.0f;
+
+  // *cxx-structured-binding* *cxx-typeid*
+  for (auto &[key, value] : coll)
+  {
+    if (value.type() == typeid(int))
+      EXPECT_THAT(std::any_cast<int>(value), 10);
+    else if (value.type() == typeid(std::string))
+      EXPECT_THAT(std::any_cast<std::string>(value), "Hello");
+    else if (value.type() == typeid(float))
+      EXPECT_THAT(std::any_cast<float>(value), 1.0f);
+  }
+}
+
+namespace cxx_any
+{
+  struct MyType
+  {
+    MyType(int value1, int value2) : value1_(value1), value2_(value2) {}
+    int value1_;
+    int value2_;
+  };
+} // namespace cxx_any
+
+// ={=========================================================================
+TEST(CxxTypeAny, init)
+{
+  using namespace cxx_any;
+
+  // default init; it's empty
+  {
+    std::any a;
+    EXPECT_THAT(a.has_value(), false);
+  }
+
+  // init with an object
+  {
+    std::any a1{10};
+    EXPECT_THAT(a1.has_value(), true);
+
+    std::any a2{MyType(10,11)};
+  }
+
+  // in_place
+  {
+    std::any a1{std::in_place_type<MyType>, 10, 11};
+    std::any a2{std::in_place_type<std::string>, "Hello"};
+  }
+
+  // make_any
+  {
+    std::any a1 = std::make_any<std::string>("Hello");
+  }
+}
+
+// ={=========================================================================
+// to change the currently stored value, two options.
+TEST(CxxTypeAny, change_value)
+{
+  using namespace cxx_any;
+
+  std::any a{};
+
+  // assign
+  // The crucial part of being safe for std::any is not to leak any resources.
+  // To achieve this behaviour std::any will destroy any active object before
+  // assigning a new value.
+
+  a = MyType{10, 11};
+  a = std::string{"Hello"};
+
+  // emplace
+  a.emplace<float>(1.5f);
+  a.emplace<std::vector<int>>({10, 11, 12, 13});
+  a.emplace<MyType>(10, 11);
+}
+
+/*
+// ={=========================================================================
+cxx-array cxx-sizeof cxx-init
+
+CPR 114 Explicitly Initialising Array Elements
+
+*/
 TEST(CxxArray, init_form)
 {
   {
     int arr_1[10]{};
     int arr_1_expected[10]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    // if the dimension is greater than the number of initialisers, any
+    // remanining elements are value initialised.
+
     int arr_2[10]{1};
     int arr_2_expected[10]{1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    // if we omit the dimension, the compiler infers it from the the number of
+    // initialisers
+
+    int arr_3[10]{1};
+    int arr_3_expected[]{1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    EXPECT_THAT(sizeof arr_1_expected, 10);
+    EXPECT_THAT(sizeof arr_2_expected, 10);
+    EXPECT_THAT(sizeof arr_3_expected, 10);
 
     EXPECT_THAT(
       memcmp((const void *)arr_1, (const void *)arr_1_expected, sizeof arr_1),
       0);
+
     EXPECT_THAT(
       memcmp((const void *)arr_2, (const void *)arr_2_expected, sizeof arr_2),
       0);
+
+    EXPECT_THAT(
+      memcmp((const void *)arr_3, (const void *)arr_3_expected, sizeof arr_3),
+      0);
   }
 
-  {
-    char s2[]   = "012345678901234567890";
-    int arr[20] = {33};
-
-    // includes a null
-    EXPECT_THAT(sizeof(s2), 22);
-    EXPECT_THAT(sizeof s2, 22);
-
-    EXPECT_THAT(sizeof(arr), 20 * 4);
-    EXPECT_THAT(sizeof arr, 20 * 4);
-  }
-
-  // `cxx-uniform-initialization`
+  // *cxx-uniform-initialization*
   {
     char s2[]{"012345678901234567890"};
     int arr[20]{33};
@@ -2282,7 +2639,7 @@ TEST(CxxArray, size)
   // char *s1 = "this is first message"; is a pointer
   // }
 
-  // 21 chars
+  // 21 chars, [0, 20]
   char s2[]   = "012345678901234567890";
   int arr[20] = {33};
 
@@ -2290,11 +2647,10 @@ TEST(CxxArray, size)
     // sizeof (type)
     // sizeof expression/object
 
-    // includes a null
     EXPECT_EQ(sizeof(s2), 22);
     EXPECT_EQ(sizeof s2, 22);
 
-    // "*s2" is object
+    // "*s2" is a char object
     EXPECT_THAT(sizeof(*s2), 1);
     EXPECT_THAT(sizeof *s2, 1);
   }
@@ -2306,28 +2662,6 @@ TEST(CxxArray, size)
 
     EXPECT_EQ(sizeof(arr), 20 * 4);
     EXPECT_EQ(sizeof(arr) / sizeof(arr[0]), 20);
-  }
-
-  {
-    // includes a null
-    EXPECT_EQ(sizeof(s2), 22);
-    EXPECT_EQ(sizeof s2, 22);
-
-    // strlen do not count '\0'
-    EXPECT_EQ(strlen(s2), 21);
-
-    // echo includes null
-    // $ echo "012345678901234567890" | wc
-    //       1       1      22
-
-    std::string s{s2};
-    EXPECT_EQ(s.size(), 21);
-
-    char coll1[100];
-    EXPECT_EQ(sizeof(coll1), 100);
-
-    char coll2[] = {1, 2, 3, 4, 5, 6, 7};
-    EXPECT_EQ(sizeof(coll2), 7);
   }
 
   // pointer size
@@ -2543,8 +2877,6 @@ TEST(CxxExpression, show_switch)
 }
 
 // ={=========================================================================
-// cxx-if
-
 namespace cxx_if
 {
   bool f1(std::string &s, bool flag)
@@ -2566,7 +2898,9 @@ namespace cxx_if
   }
 } // namespace cxx_if
 
-TEST(CxxExpression, check_if_chain)
+// ={=========================================================================
+// cxx-if
+TEST(CxxExpression, if_chain)
 {
   using namespace cxx_if;
 
@@ -2599,9 +2933,10 @@ TEST(CxxExpression, check_if_chain)
   }
 }
 
+// ={=========================================================================
 // "else if(0 == (e % 2))" means effectively
 // "else if((e >= 3) && (0 == (e % 2))) so has "implicit" condition.
-TEST(CxxExpression, check_if_else)
+TEST(CxxExpression, if_else)
 {
   std::vector<int> coll{1, 2, 3, 4, 5, 6, 7};
   std::vector<int> result1{};
@@ -2618,6 +2953,28 @@ TEST(CxxExpression, check_if_else)
   EXPECT_THAT(result2, ElementsAre(4, 6));
 }
 
+/*
+// ={=========================================================================
+cxx-if cxx-17
+
+Init statement for if/switch
+
+New versions of the if and switch statements for C++:
+
+if (init; condition) and switch (init; condition).
+
+variable in init section is visible only inside the if and else statements, so
+it doesn't leak.
+
+*/
+
+TEST(CxxExpression, if_init)
+{
+  if (int value = 1; value)
+    EXPECT_THAT(true, true);
+}
+
+// ={=========================================================================
 TEST(CxxExpression, show_loop)
 {
   const std::string input{"A man, a plan, a canal: Panama"};
@@ -6906,7 +7263,7 @@ TEST(CxxCallable, function_template)
 // generate a callable object. The callable generated by `mem_fn` can be
 // called on either an object or a pointer.
 //
-// mem_fn() needs target but not flexible as std::bind().
+// mem_fn() *always*needs target and not flexible as std::bind().
 //
 // std::bind(&foo::closeConsole, this, std::placeholders::_1);
 //
@@ -7358,6 +7715,9 @@ TEST(CxxCallable, bind_and_member_function)
     auto call = std::bind(&Foo::update_10, &foo);
 
     // see that no target object
+    // NOTE: depending on how a callable is used; call() or call(foo), callable
+    // has also a different form.
+
     call();
 
     EXPECT_THAT(foo.get_value(), 110);
@@ -11782,6 +12142,41 @@ TEST(CxxMove, rvalue_and_lvalue)
     int &&r4 = i * 42;
     (r4);
   }
+}
+
+namespace cxx_move
+{
+  std::string foo()
+  {
+    return std::string("foo");
+  }
+}
+
+/*
+// ={=========================================================================
+
+Functions that return a non-reference type, along with the arithmetic,
+relational, bitwise, and `cxx-postfix` operations, all yield rvalues.
+
+string f();
+string &r2{f()};
+
+error when f() returns rvalue since returns a value and cannot bind rvalue to
+lvalue reference.
+
+NO. NO error and works
+
+[ RUN      ] CxxMove.rvalue_and_return
+[       OK ] CxxMove.rvalue_and_return (0 ms)
+
+*/
+TEST(CxxMove, rvalue_and_return)
+{
+  using namespace cxx_move;
+
+  std::string coll{foo()};
+
+  EXPECT_THAT(coll, "foo");
 }
 
 // ={=========================================================================

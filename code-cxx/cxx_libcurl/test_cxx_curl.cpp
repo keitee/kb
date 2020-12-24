@@ -879,16 +879,25 @@ namespace curl_case
   // so gets called many times to give the full data transferred.
   static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream)
   {
-    // printf("size {%ld}, nemeb{%ld}\n", size, nmemb);
+    std::cout << "response size: " << response.size() << ", size: " << size
+              << ", nemeb: " << nmemb << std::endl;
 
     std::string coll{(char *)ptr};
 
     response.append(coll);
 
-    // std::cout << "response size: " << response.size() << ", coll: " << coll.size() << std::endl;
+    std::cout << "response size: " << response.size() << ", coll: " << coll.size() << std::endl;
 
     return coll.size();
   }
+
+  // this can be simplified to:
+  //
+  // static size_t writeData_(void *ptr, size_t size, size_t nmemb, void *stream)
+  // {
+  //   response.append((char *)ptr, (size * nmemb));
+  //   return size * nmemb;
+  // }
 };
 
 // use the following command to code output:
