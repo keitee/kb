@@ -656,6 +656,32 @@ TBD
 strings are C strings, not C++ string objects
 
 
+// -{-------------------------------------------------------------------------
+https://curl.se/libcurl/c/example.html
+
+https://curl.se/libcurl/c/getinfo.html
+
+
+// -{-------------------------------------------------------------------------
+Desktop version:
+
+/usr/include/x86_64-linux-gnu/curl
+
+keitee@kit-ubuntu:/usr/include/x86_64-linux-gnu/curl$ ls
+curl.h  curlver.h  easy.h  mprintf.h  multi.h  stdcheaders.h  system.h  typecheck-gcc.h
+
+keitee@kit-ubuntu:/usr/include/x86_64-linux-gnu/curl$ ag LIBCURL
+curlver.h
+29:#define LIBCURL_COPYRIGHT "1996 - 2017 Daniel Stenberg, <daniel@haxx.se>."
+33:#define LIBCURL_VERSION "7.58.0"
+37:#define LIBCURL_VERSION_MAJOR 7
+38:#define LIBCURL_VERSION_MINOR 58
+39:#define LIBCURL_VERSION_PATCH 0
+42:   parsing and comparions by programs. The LIBCURL_VERSION_NUM define will
+60:#define LIBCURL_VERSION_NUM 0x073a00
+71:#define LIBCURL_TIMESTAMP "2018-01-24"
+75:  (LIBCURL_VERSION_NUM >= CURL_VERSION_BITS(x, y, z))
+
 */
 
 /*
@@ -930,8 +956,8 @@ TEST(CxxCurl, case_2)
   slist1 = curl_slist_append(slist1, "X-SkyOTT-Provider: SKY");
   slist1 = curl_slist_append(slist1, "X-SkyOTT-Proposition: SKYQ");
   slist1 = curl_slist_append(slist1, "X-SkyOTT-Territory: GB");
-  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: IPSETTOPBOX");
-  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: SKYQ-RDK");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: MOBILE");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: ANDROID");
  
   /* init the curl session */ 
   curl_handle = curl_easy_init();
@@ -983,6 +1009,329 @@ TEST(CxxCurl, case_2)
  
   curl_global_cleanup();
 }
+
+/*
+when there is no internet connection that is out of vpn since the url used is in
+coporate vpn, easy_perform returns error when run on PC but not on a embedded
+box. Returns CURLE_OK (0) and has 27 bytes response.
+
+[ RUN      ] CxxCurl.case_2_2
+before curl_easy_perform(), response size 0
+response size: 0, size: 1, nemeb: 27
+response size: 27, coll: 27
+curl_easy_perform() failed Unknown error
+return
+after curl_easy_perform(), response size 27, response: {Content-Type: text/html
+
+}
+[       OK ] CxxCurl.case_2_2 (7 ms)
+
+Or 
+
+[ RUN      ] CxxCurl.case_2_2
+before curl_easy_perform(), response size 0
+curl_easy_perform() failed Unknown error
+return
+We received response code: 0
+after curl_easy_perform(), response size 0, response: {}
+[       OK ] CxxCurl.case_2_2 (29 ms)
+
+*/
+
+TEST(CxxCurl, case_2_2)
+{
+  using namespace curl_case;
+
+  CURL *curl_handle;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  response.clear();
+
+  // https://curl.haxx.se/libcurl/c/curl_slist_append.html
+  // curl_slist_append - add a string to an slist
+
+  struct curl_slist *slist1;
+
+  slist1 = NULL;
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Provider: SKY");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Proposition: SKYQ");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Territory: GB");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: MOBILE");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: ANDROID");
+ 
+  /* init the curl session */ 
+  curl_handle = curl_easy_init();
+ 
+  /* set URL to get here */ 
+  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
+
+  // curl_easy_setopt(curl_handle,
+  //                  CURLOPT_URL,
+  //                  "http://atlantis.epg.bskyb.com/as/services/4101/1");
+
+  curl_easy_setopt(curl_handle,
+                   CURLOPT_URL,
+                   "http://atlantis.epg.bskyb.com/as/services/4096/1");
+
+  /* disable progress meter, set to 0L to enable it */ 
+  curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+
+  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, slist1);
+  curl_easy_setopt(curl_handle, CURLOPT_BUFFERSIZE, 102400L);
+  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "curl/7.58.0");
+  curl_easy_setopt(curl_handle, CURLOPT_MAXREDIRS, 50L);
+  curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+  curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+
+  /* send all data to this function  */
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
+ 
+  std::cout << "before curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* get it! */
+  CURLcode res;
+  curl_easy_perform(curl_handle);
+  if (res != CURLE_OK)
+  {
+    std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
+    std::cout << "return" << std::endl;
+  }
+
+  {
+    long response_code;
+    res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    if (CURLE_OK == res)
+      std::cout << "We received response code: " << response_code << std::endl;
+  }
+
+  std::cout << "after curl_easy_perform(), response size " << response.size()
+            << ", response: {" << response << "}" << std::endl;
+
+  /* cleanup curl stuff */ 
+  curl_easy_cleanup(curl_handle);
+ 
+  curl_global_cleanup();
+}
+
+/*
+Again, when use invalid url, easy_perform returns error when run on 
+PC but not on a embedded box. Returns CURLE_OK (0) and has developer error message.
+
+This is PC version and see curl_easy_perform() fails.
+[ RUN      ] CxxCurl.case_2_3
+before curl_easy_perform(), response size 0
+response size: 0, size: 1, nemeb: 83
+response size: 83, coll: 83
+curl_easy_perform() failed Unknown error
+return
+after curl_easy_perform(), response size 83, response: {{"errorCode":"404","developerMessage":"Invalid bouquet 9999 or/and subbouquet 999"}}
+[       OK ] CxxCurl.case_2_3 (64 ms)
+
+
+NOTE:
+thought that this comes from libcurl version differences. turns out that the
+libcurl on PC version is older than one on the box. The newer version returns ok
+since requset is transmitted.
+
+https://stackoverflow.com/questions/20487162/i-cant-get-http-code-404-with-libcurl
+
+libcurl returns CURLE_OK when the transfer went fine. Getting a 404 from a HTTP
+server is considered a fine transfer. You can make >=4xx HTTP response codes
+cause a libcurl error by setting the CURLOPT_FAILONERROR option.
+
+Alternatively, and this may be the nicer way, you extract the HTTP response code
+after the transfer, with for example curl_easy_getinfo() to figure out the HTTP
+response code to see what the HTTP server thought about the resource you
+requested.
+
+When use "response code":
+
+[ RUN      ] CxxCurl.case_2_3
+before curl_easy_perform(), response size 0
+response size: 0, size: 1, nemeb: 83
+response size: 83, coll: 83
+curl_easy_perform() failed Unknown error
+return
+We received response code: 404
+after curl_easy_perform(), response size 83, response: {{"errorCode":"404","developerMessage":"Invalid bouquet 9999 or/and subbouquet 999"}}
+[       OK ] CxxCurl.case_2_3 (53 ms)
+
+
+So can cover this case when use this option on the box to cover this case.
+
+*/
+
+TEST(CxxCurl, case_2_3)
+{
+  using namespace curl_case;
+
+  CURL *curl_handle;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  response.clear();
+
+  // https://curl.haxx.se/libcurl/c/curl_slist_append.html
+  // curl_slist_append - add a string to an slist
+
+  struct curl_slist *slist1;
+
+  slist1 = NULL;
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Provider: SKY");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Proposition: SKYQ");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Territory: GB");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: MOBILE");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: ANDROID");
+ 
+  /* init the curl session */ 
+  curl_handle = curl_easy_init();
+ 
+  /* set URL to get here */ 
+  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
+
+  curl_easy_setopt(curl_handle,
+                   CURLOPT_URL,
+                   "http://atlantis.epg.bskyb.com/as/services/9999/999");
+
+  /* disable progress meter, set to 0L to enable it */ 
+  curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+
+  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, slist1);
+  curl_easy_setopt(curl_handle, CURLOPT_BUFFERSIZE, 102400L);
+  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "curl/7.58.0");
+  curl_easy_setopt(curl_handle, CURLOPT_MAXREDIRS, 50L);
+  curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+  curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+
+  /* send all data to this function  */
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
+ 
+  std::cout << "before curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* get it! */
+  CURLcode res;
+  curl_easy_perform(curl_handle);
+  if (res != CURLE_OK)
+  {
+    std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
+    std::cout << "return" << std::endl;
+  }
+
+  {
+    // https://curl.se/libcurl/c/curl_easy_getinfo.html
+    // ask for the content-type
+    // char *ct;
+    // res = curl_easy_getinfo(curl_handle, CURLINFO_CONTENT_TYPE, &ct);
+    // if((CURLE_OK == res) && ct)
+    //   std::cout << "We received Content-Type: " << ct << std::endl;
+
+    long response_code;
+    res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    if (CURLE_OK == res)
+      std::cout << "We received response code: " << response_code << std::endl;
+  }
+
+  std::cout << "after curl_easy_perform(), response size " << response.size()
+            << ", response: {" << response << "}" << std::endl;
+
+  /* cleanup curl stuff */ 
+  curl_easy_cleanup(curl_handle);
+ 
+  curl_global_cleanup();
+}
+
+/*
+when use the CURLOPT_FAILONERROR option.
+
+https://curl.se/libcurl/c/CURLOPT_FAILONERROR.html
+
+A long parameter set to 1 tells the library to fail the request if the HTTP code
+returned is equal to or larger than 400. The default action would be to return
+the page normally, ignoring that code.
+
+[ RUN      ] CxxCurl.case_2_4
+before curl_easy_perform(), response size 0
+curl_easy_perform() failed Unknown error
+return
+We received response code: 0
+after curl_easy_perform(), response size 0, response: {}
+[       OK ] CxxCurl.case_2_4 (17 ms)
+
+Now, no error on response code
+
+*/
+
+TEST(CxxCurl, case_2_4)
+{
+  using namespace curl_case;
+
+  CURL *curl_handle;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  response.clear();
+
+  // https://curl.haxx.se/libcurl/c/curl_slist_append.html
+  // curl_slist_append - add a string to an slist
+
+  struct curl_slist *slist1;
+
+  slist1 = NULL;
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Provider: SKY");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Proposition: SKYQ");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Territory: GB");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: MOBILE");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: ANDROID");
+ 
+  /* init the curl session */ 
+  curl_handle = curl_easy_init();
+ 
+  /* set URL to get here */
+  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
+
+  curl_easy_setopt(curl_handle,
+                   CURLOPT_URL,
+                   "http://atlantis.epg.bskyb.com/as/services/9999/999");
+
+  /* disable progress meter, set to 0L to enable it */ 
+  curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+
+  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, slist1);
+  curl_easy_setopt(curl_handle, CURLOPT_BUFFERSIZE, 102400L);
+  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "curl/7.58.0");
+  curl_easy_setopt(curl_handle, CURLOPT_MAXREDIRS, 50L);
+  curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+  curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+  curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
+
+  /* send all data to this function  */
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
+ 
+  std::cout << "before curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* get it! */
+  CURLcode res;
+  curl_easy_perform(curl_handle);
+  if (res != CURLE_OK)
+  {
+    std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
+    std::cout << "return" << std::endl;
+  }
+
+  {
+    long response_code;
+    res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    if (CURLE_OK == res)
+      std::cout << "We received response code: " << response_code << std::endl;
+  }
+
+  std::cout << "after curl_easy_perform(), response size " << response.size()
+            << ", response: {" << response << "}" << std::endl;
+
+  /* cleanup curl stuff */ 
+  curl_easy_cleanup(curl_handle);
+ 
+  curl_global_cleanup();
+}
+
 
 /*
 // ={=========================================================================

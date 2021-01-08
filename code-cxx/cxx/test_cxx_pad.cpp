@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <variant>
 
 #include <sys/prctl.h>
 
@@ -19,13 +20,10 @@ using namespace std;
 using namespace testing;
 
 // ={=========================================================================
-TEST(StlStack, check_implemented_in_terms_of)
+TEST(CxxTypeVariant, custom_variant)
 {
-  int value1{100};
-  size_t value2{200};
-
-  printf("%s: value is {%d, %d}\n", __func__, value1, value2);
-  printf("%s: value is {%u, %u}\n", __func__, value1, value2);
+  // specify types to hold
+  std::variant<int, std::string, double> v = 1;
 }
 
 // ={=========================================================================

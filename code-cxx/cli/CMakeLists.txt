@@ -76,14 +76,14 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-find_package(Qt5Core)
-find_package(Qt5Test)
+# find_package(Qt5Core)
+# find_package(Qt5Test)
 
-# find_package(Qt5.12 COMPONENTS Core)
-# find_package(Qt5.12 COMPONENTS Test)
+# # find_package(Qt5.12 COMPONENTS Core)
+# # find_package(Qt5.12 COMPONENTS Test)
 
-set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR "5")
-set_property(DIRECTORY PROPERTY QT_VERSION_MINOR "12")
+# set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR "5")
+# set_property(DIRECTORY PROPERTY QT_VERSION_MINOR "12")
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
@@ -120,9 +120,9 @@ target_link_libraries(test_scli gmock_main ${LIBS} ${CMAKE_DL_LIBS})
 # target_link_libraries(test_scli Qt5::Core Qt5::Test ${LIBS})
 
 # readline standalone
-add_executable(readline_app readline_app.cpp)
-target_link_libraries(readline_app ${LIBS} ${CMAKE_DL_LIBS} readline)
+add_executable(test_readline test_readline.cpp)
+target_link_libraries(test_readline ${LIBS} ${CMAKE_DL_LIBS} readline)
 
 # console abd use readline.so
-add_executable(test_console scli.cpp test_console.cpp console.cpp readline.cpp)
-target_link_libraries(test_console Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})
+# add_executable(test_console scli.cpp test_console.cpp console.cpp readline.cpp)
+# target_link_libraries(test_console Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})

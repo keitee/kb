@@ -771,8 +771,49 @@ cxx-variant
 */
 namespace cxx_variant
 {
-  struct Argument
+  struct Variant
   {
+    // 1. use cxx-union to save space for built-in types than having each.
+    // int integer_;
+    // double double_;
+    //
+    // 2. default ctor is necessary since "string" type do not set "base_" part
+    // and need it default ctored.
+    //
+    // 3. cannot use in-class init for union
+    //
+    // 4. cxx-error: initializations for multiple members of since it's cxx-union
+    //
+    // explicit Base(bool b)
+    //     : bool_(b)
+    //     , i_(0)
+    //     , ui_(0)
+    //     , real_(0.0f)
+    // {}
+
+    union Base
+    {
+      bool b_;
+      int i_;
+      unsigned int ui_;
+      double d_;
+
+      explicit Base()
+          : d_(0.0f)
+      {}
+      explicit Base(int i)
+          : i_(i)
+      {}
+      explicit Base(unsigned int ui)
+          : ui_(ui)
+      {}
+      explicit Base(double d)
+          : d_(d)
+      {}
+    } base_;
+
+    std::string string_;
+
     enum class Type
     {
       Bool,
@@ -780,132 +821,98 @@ namespace cxx_variant
       UInt,
       Double,
       String
-    } _type;
+    } type_;
 
-    // NOTE:
-    // 1. cannot use in-class init for union
-    // 2.
-    // cxx-error: initializations for multiple members of
-    // since it's cxx-union
-    // explicit Base(bool b)
-    //     : bool_(b)
-    //     , i_(0)
-    //     , ui_(0)
-    //     , real_(0.0f)
-    // {}
-    union Base
-    {
-      bool _b;
-      int _i;
-      unsigned int _ui;
-      double _d;
-
-      // default ctor is necessary since `string` type needs it and otherwise
-      // it's error
-      explicit Base()
-          : _d(0.0f)
-      {}
-      explicit Base(bool b)
-          : _b(b)
-      {}
-      explicit Base(int i)
-          : _i(i)
-      {}
-      explicit Base(unsigned int ui)
-          : _ui(ui)
-      {}
-      explicit Base(double d)
-          : _d(d)
-      {}
-    } _base;
-
-    std::string _string;
-
-    explicit Argument(bool value)
-        : _type(Type::Bool)
-        , _base(value)
+    // ctors
+    explicit Variant(bool value)
+        : base_(value)
+        , type_(Type::Bool)
     {}
 
-    explicit Argument(int value)
-        : _type(Type::Int)
-        , _base(value)
+    explicit Variant(int value)
+        : base_(value)
+        , type_(Type::Int)
     {}
 
-    explicit Argument(unsigned int value)
-        : _type(Type::UInt)
-        , _base(value)
+    explicit Variant(unsigned int value)
+        : base_(value)
+        , type_(Type::UInt)
     {}
 
-    explicit Argument(double value)
-        : _type(Type::Double)
-        , _base(value)
+    explicit Variant(double value)
+        : base_(value)
+        , type_(Type::Double)
     {}
 
-    explicit Argument(const std::string &value)
-        : _type(Type::String)
-        , _string(value)
+    explicit Variant(const std::string &value)
+        : string_(value)
+        , type_(Type::String)
     {}
 
     // getters *cxx-conversion-op* cxx-operator-conversion
+    // conversion operators
+    // NOTE
+    // needs "type" information since needs to know which has "valid" value.
+    // may use cxx-optional here?
+
     operator bool() const
     {
-      if (_type != Type::Bool)
+      if (type_ != Type::Bool)
       {
-        // std::cout << "the type saved is not bool\n";
+        // NOTE: How do we discern between false when type is wrong and false
+        // when value is false? cxx-optional.
         return false;
       }
 
-      return _base._b;
+      return base_.b_;
     }
 
     operator int() const
     {
-      if (_type != Type::Int)
+      if (type_ != Type::Int)
       {
-        // std::cout << "the type saved is not int\n";
+        // can use cxx-optional here.
         return std::numeric_limits<int>::max();
       }
 
-      return _base._i;
+      return base_.i_;
     }
 
     operator unsigned int() const
     {
-      if (_type != Type::UInt)
+      if (type_ != Type::UInt)
       {
-        // std::cout << "the type saved is not unsigned int\n";
+        // can use cxx-optional here.
         return std::numeric_limits<unsigned int>::max();
       }
 
-      return _base._ui;
+      return base_.ui_;
     }
 
     operator double() const
     {
-      if (_type != Type::Double)
+      if (type_ != Type::Double)
       {
-        // std::cout << "the type saved is not double int\n";
         return std::nan("");
       }
 
-      return _base._d;
+      return base_.d_;
     }
 
     operator std::string() const
     {
-      if (_type != Type::String)
+      if (type_ != Type::String)
       {
-        // std::cout << "the type saved is not string\n";
-        return "";
+        return {};
       }
 
-      return _string;
+      return string_;
     }
-  }; // struct
+  };
 } // namespace cxx_variant
 
 // ={=========================================================================
-TEST(CxxTypeVariant, custom_variant)
+TEST(CxxTypeVariant, basic)
 {
   using namespace cxx_variant;
 
@@ -915,28 +922,28 @@ TEST(CxxTypeVariant, custom_variant)
   }
 
   {
-    Argument arg(true);
+    Variant arg(true);
     EXPECT_THAT((bool)arg, true);
   }
 
   {
-    Argument arg(3301);
+    Variant arg(3301);
     EXPECT_THAT((bool)arg, false);
   }
 
   {
-    Argument arg(3301);
+    Variant arg(3301);
     EXPECT_THAT((int)arg, 3301);
   }
 
   {
-    Argument arg(3301.0);
+    Variant arg(3301.0);
     EXPECT_THAT((double)arg, 3301.0);
   }
 
   {
     // since ctor is explicit
-    Argument arg(std::string("string variant"));
+    Variant arg(std::string("string variant"));
     EXPECT_THAT((std::string)arg, std::string("string variant"));
   }
 }
@@ -1163,7 +1170,7 @@ case example to build dbus message, "a(sa{sv})"
 */
 
 // ={=========================================================================
-TEST(CxxTypeVariant, variant_and_visitor_1)
+TEST(CxxTypeVariant, map_and_visitor_1)
 {
   using namespace cxx_variant_1;
 
@@ -1235,9 +1242,10 @@ TEST(CxxTypeVariant, variant_and_visitor_1)
                           "{key6:variant2}"));
 }
 
+// Use template operator<<() than insert() for each T and use std::list<> than
+// std::map.
 namespace cxx_variant_2
 {
-  // with operator<<() interface and use std::list<> instead
   class VariantMap
   {
   private:
@@ -1362,7 +1370,7 @@ namespace cxx_variant_2
 } // namespace cxx_variant_2
 
 // ={=========================================================================
-TEST(CxxTypeVariant, variant_and_visitor_2)
+TEST(CxxTypeVariant, map_and_visitor_2)
 {
   using namespace cxx_variant_2;
 
@@ -1407,21 +1415,39 @@ TEST(CxxTypeVariant, variant_and_visitor_2)
     ElementsAre("{b}", "{b}", "{i}", "{i}", "{s:variant1}", "{s:variant2}"));
 }
 
-// ={=========================================================================
-// cxx-variant cxx-17
-// #include <variant>
-// std::variant is implementation of "one-of"
+/*
+={=========================================================================
+cxx-variant cxx-17
 
-TEST(CxxTypeVariant, cxx_variant)
+https://www.bfilipek.com/2018/06/variant.html
+
+#include <variant>
+std::variant is implementation of "one-of"
+
+The class template std::variant represents a type-safe union. An instance of
+std::variant at any given time either holds a value of one of its alternative
+types, or in the case of error - no value
+
+*/
+
+TEST(CxxTypeVariant, cxx17)
 {
   {
-    // specify types to hold
+    // specify "alternative types" to hold
+    //
+    // template< class T >
+    // constexpr variant( T&& t ) noexcept(/* see below */);
+
     std::variant<int, std::string, double> v = 1;
 
     // v is std::string
     v = "abc";
 
     // v.index() is used to know which type it currently holds.
+    // Returns the zero-based index of "the alternative(type)" that is
+    // currently held by the variant.
+    // 1 since it's string
+
     EXPECT_THAT(v.index(), 1);
 
     // to get values, use type or index
@@ -1437,14 +1463,172 @@ TEST(CxxTypeVariant, cxx_variant)
     EXPECT_THAT(std::get<2>(v), 3.14);
   }
 
+  // If you don’t initialize a variant with a value, then the variant is
+  // initialized with the first type. In that case the first alternative type
+  // must have a default constructor. "int" in this case.
+  //
+  // also as with std::optional, do not cause dynamic allocation and
+  // std::variant size follows the biggest of T param types.
   {
-    // if not set value, use ctor of the first type. "int" in this case.
-    // also as with std::optional, do not cause dynamic allocation and
-    // std::variant size follows the biggest of T param types.
     std::variant<int, std::string, double> v;
 
     EXPECT_THAT(v.index(), 0);
     EXPECT_THAT(std::get<0>(v), 0);
+  }
+
+  {
+    std::variant<int, float, std::string> v;
+
+    // variant_size
+    // variant_size_v
+    // (C++17)
+    // obtains the size of the variant's list of alternatives at compile time
+    //
+    // Helper variable template
+    // template <class T>
+    // inline constexpr std::size_t variant_size_v = std::variant_size<T>::value;
+
+    static_assert(std::variant_size<decltype(v)>::value == 3);
+    static_assert(std::variant_size_v<decltype(v)> == 3);
+
+    // Defined in header <variant>
+    // template <class Visitor, class... Variants>
+    // constexpr /*see below*/ visit( Visitor&& vis, Variants&&... vars );
+    //
+    // Now cxx-variant provides visitor.
+
+    struct Visitor
+    {
+      void operator()(int i) const { std::cout << "int: " << i << "\n"; }
+
+      void operator()(float f) const { std::cout << "float: " << f << "\n"; }
+
+      void operator()(const std::string &s) const
+      {
+        std::cout << "string: " << s << "\n";
+      }
+    };
+
+    std::visit(Visitor{}, v);
+  }
+
+  // get_if
+  // obtains a pointer to the value of a pointed-to variant given the index or
+  // the type (if unique), returns null on error
+  //
+  // holds_alternative (C++17)
+  // checks if a variant currently holds a given type
+
+  {
+    std::variant<int, float> v{12};
+
+    auto pval = std::get_if<int>(&v);
+
+    if (pval)
+      std::cout << "variant value : " << *pval << "\n";
+
+    EXPECT_THAT(std::holds_alternative<int>(v), true);
+
+    // currently holds "int" and throw "bad_variant_access"
+    EXPECT_THROW(std::get<float>(v), std::bad_variant_access);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeVariant, ctors)
+{
+  {
+    std::variant<int, float, std::string> v;
+
+    EXPECT_THAT(std::holds_alternative<int>(v), true);
+  }
+
+  {
+    std::variant<int, float, std::string> v{12};
+
+    EXPECT_THAT(std::holds_alternative<int>(v), true);
+  }
+
+  {
+    std::variant<int, float, std::string> v{"variant"};
+
+    EXPECT_THAT(std::holds_alternative<int>(v), false);
+    EXPECT_THAT(std::holds_alternative<std::string>(v), true);
+
+    struct Visitor
+    {
+      void operator()(int i) const { std::cout << "int: " << i << "\n"; }
+
+      void operator()(float f) const { std::cout << "float: " << f << "\n"; }
+
+      void operator()(const std::string &s) const
+      {
+        std::cout << "string: " << s << "\n";
+      }
+    };
+
+    std::visit(Visitor{}, v);
+  }
+
+  {
+    // do not have default ctor
+    class NotSimple
+    {
+    public:
+      NotSimple(int, float) {}
+    };
+
+    // error: use of deleted function ‘std::variant<_Types>::variant()
+    // [with _Types = {CxxTypeVariant_ctors_Test::TestBody()::NotSimple, int}]’
+    //      std::variant<NotSimple, int> v;
+    //
+    // std::variant<NotSimple, int> v;
+
+    // About std::monostate
+    // In the example you might notice a special type called std::monostate.
+    // It’s just an empty type that can be used with variants to represent empty
+    // state. The type might be handy when the first alternative doesn’t have a
+    // default constructor. In that situation you can place std::monostate as
+    // the first alternative.
+
+    std::variant<std::monostate, NotSimple, int> v;
+  }
+
+  // ambiguity
+  // double might convert to float or int, so the compiler cannot decide
+  //
+  // /usr/include/c++/7/variant:953:2: note:   template argument deduction/substitution failed:
+  // /usr/include/c++/7/variant:951:6: error: invalid use of incomplete type ‘struct std::variant<int, float, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >::__to_type_impl<18446744073709551615, false>’
+  //          typename = enable_if_t<__exactly_once<__accepted_type<_Tp&&>>
+  //                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //       && is_constructible_v<__accepted_type<_Tp&&>, _Tp&&>>>
+  //       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // /usr/include/c++/7/variant:924:9: note: declaration of ‘struct std::variant<int, float, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >::__to_type_impl<18446744073709551615, false>’
+  //   struct __to_type_impl;
+  //          ^~~~~~~~~~~~~~
+  // /usr/include/c++/7/variant:951:6: error: invalid use of incomplete type ‘struct std::variant<int, float, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >::__to_type_impl<18446744073709551615, false>’
+  //          typename = enable_if_t<__exactly_once<__accepted_type<_Tp&&>>
+  //                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //       && is_constructible_v<__accepted_type<_Tp&&>, _Tp&&>>>
+  //       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  // You can initialize it with a value, and then the best matching type is used
+  //
+  // if there’s an ambiguity, then you can use a version std::in_place_index to
+  // explicitly mention what type should be used.
+  //
+  // std::in_place also allows you to create more complex types and pass more
+  // parameters to the constructor
+
+  {
+    // std::variant<int, float, std::string> v{10.5};
+
+    // ambiguity resolved by in_place
+    std::variant<int, float, std::string> v{std::in_place_index<1>, 10.5};
+
+    // in_place for complex types
+    std::variant<std::vector<int>, std::string> vecStr{std::in_place_index<0>,
+                                                       {0, 1, 2, 3}};
   }
 }
 
@@ -2388,15 +2572,55 @@ TEST(CxxTypeOptional, examples)
 // ={=========================================================================
 cxx-any cxx-17
 
+https://www.bfilipek.com/2018/06/any.html
+
+While I perceive void* as an extremely unsafe pattern with some limited use
+cases, std::any adds type-safety, and that’s why it has some real use cases.
+
 I believe in a lot of cases we can limit the set of supported types, and that’s
 why std::variant might be a better choice. Of course, it gets tricky when you
 implement a library without knowing the final applications - so you don’t know
 the possible types that will be stored in an object.
 
+o std::any is not a template class like std::optional or std::variant.
+
+o by default it contains no value, and you can check it via .has_value(). 
+
+o std::any might be considered ‘heavy’, but offers a lot of flexibility and
+type-safety.
+
+o you can access the currently stored value by using any_cast that offers a few
+“modes”: for example it might throw an exception or just return nullptr.
+
+o use it when you don’t know the possible types, in other cases consider
+std::variant.
+
+o std::any uses Small Buffer Optimization, so it will not dynamically allocate
+memory for simple types like ints, doubles… but for larger types it will use
+extra new.
+
+std::variant and std::optional don’t require any extra memory allocations but
+this is because they know which type (or types) will be stored in the object.
+std::any has no knowledge and that why it might use some heap memory.
+
+Let’s check what’s the size of std::any:
+
+Here are the results from the three compilers:
+
+Compiler                sizeof(any)
+GCC 8.1 (Coliru)        16
+Clang 7.0.0 (Wandbox)   32
+MSVC 2017 15.7.0 32-bit 40
+MSVC 2017 15.7.0 64-bit 64
+
+In general, as you see, std::any is not a “simple” type and it brings a lot of
+overhead. It’s usually not small - due to SBO - it takes 16 or 32 bytes (GCC or
+Clang… or even 64 bytes in MSVC!)
+
 */
 
 // ={=========================================================================
-TEST(CxxTypeAny, examples)
+TEST(CxxTypeAny, play)
 {
   std::any a{12};
 
@@ -2406,6 +2630,8 @@ TEST(CxxTypeAny, examples)
 
   // read it as int but not as std::string
   EXPECT_THAT(std::any_cast<int>(a), 16);
+
+  // throw exception
   EXPECT_THROW(std::any_cast<std::string>(a), std::bad_any_cast);
 
   // reset and check if it has any value
@@ -2415,8 +2641,8 @@ TEST(CxxTypeAny, examples)
   // can use it in a collection
   std::map<std::string, std::any> coll;
   coll["integer"] = 10;
-  coll["string"] = std::string{"Hello"};
-  coll["float"] = 1.0f;
+  coll["string"]  = std::string{"Hello"};
+  coll["float"]   = 1.0f;
 
   // *cxx-structured-binding* *cxx-typeid*
   for (auto &[key, value] : coll)
@@ -2434,10 +2660,18 @@ namespace cxx_any
 {
   struct MyType
   {
-    MyType(int value1, int value2) : value1_(value1), value2_(value2) {}
+    MyType(int value1, int value2)
+        : value1_(value1)
+        , value2_(value2)
+    {}
     int value1_;
     int value2_;
   };
+
+  bool operator==(const MyType &lhs, const MyType &rhs)
+  {
+    return (lhs.value1_ == rhs.value1_) && (lhs.value2_ == rhs.value2_);
+  }
 } // namespace cxx_any
 
 // ={=========================================================================
@@ -2456,7 +2690,10 @@ TEST(CxxTypeAny, init)
     std::any a1{10};
     EXPECT_THAT(a1.has_value(), true);
 
-    std::any a2{MyType(10,11)};
+    std::any a2{MyType(10, 11)};
+
+    MyType expected(10, 11);
+    EXPECT_THAT(std::any_cast<MyType>(a2), expected);
   }
 
   // in_place
@@ -12146,11 +12383,8 @@ TEST(CxxMove, rvalue_and_lvalue)
 
 namespace cxx_move
 {
-  std::string foo()
-  {
-    return std::string("foo");
-  }
-}
+  std::string foo() { return std::string("foo"); }
+} // namespace cxx_move
 
 /*
 // ={=========================================================================

@@ -216,6 +216,136 @@ Note: length() is, of course, std::strlen() in disguise.
 */
 
 /*
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#cunion-unions
+
+C.union: Unions
+
+A union is a struct where all members start at the same address so that it can
+hold only one member "at a time". A union does not keep track of which member is
+stored so the programmer has to get it right; this is inherently error-prone,
+but there are ways to compensate.
+
+A type that is a union plus an indicator of which member is currently held is
+called a tagged union, a discriminated union, or a "variant".
+
+Union rule summary:
+
+C.180: Use unions to save Memory
+C.181: Avoid “naked” unions
+C.182: Use anonymous unions to implement tagged unions
+C.183: Don’t use a union for type punning
+
+={=========================================================================
+C.180: Use unions to save memory
+
+Reason 
+A union allows a single piece of memory to be used for different types of
+objects at different times. Consequently, it can be used to save memory when we
+have several objects that are never used at the same time.Example
+
+union Value {
+    int x;
+    double d;
+};
+
+Value v = { 123 };  // now v holds an int
+cout << v.x << '\n';    // write 123
+
+v.d = 987.654;  // now v holds a double
+cout << v.d << '\n';    // write 987.654
+
+But heed the warning: Avoid “naked” unions
+
+
+={=========================================================================
+C.181: Avoid “naked” unions
+
+Reason 
+A naked union is a union without an associated "indicator" which member (if any)
+it holds, so that the programmer has to keep track. Naked unions are a source of
+type errors.Example, bad
+
+union Value {
+    int x;
+    double d;
+};
+
+Value v;
+v.d = 987.654;  // v holds a double
+
+So far, so good, but we can easily misuse the union:
+
+// BAD, undefined behavior: v holds a double, but we read it as an int
+cout << v.x << '\n';    
+
+Note that the type error happened without any explicit cast. When we tested that
+program the last value printed was 1683627180 which is the integer value for the
+bit pattern for 987.654. What we have here is an “invisible” type error that
+happens to give a result that could easily look innocent.
+
+And, talking about “invisible”, this code produced no output:
+
+v.x = 123;
+cout << v.d << '\n';    // BAD: undefined behavior
+
+Alternative 
+Wrap a union in a class together with a type field.  The C++17 variant type
+(found in <variant>) does that for you:
+
+variant<int, double> v;
+v = 123;        // v holds an int
+int x = get<int>(v);
+
+v = 123.456;    // v holds a double
+w = get<double>(v);
+
+
+={=========================================================================
+C.183: Don’t use a union for type punning
+
+Reason 
+It is undefined behavior to read a union member with a different type from the
+one with which it was written. Such punning is invisible, or at least harder to
+spot than using a named cast. Type punning using a union is a source of
+errors.
+
+Example, bad
+
+union Pun {
+    int x;
+    unsigned char c[sizeof(int)];
+};
+
+The idea of Pun is to be able to look at the character representation of an int.
+
+void bad(Pun& u)
+{
+    u.x = 'x';
+    cout << u.c[0] << '\n';     // undefined behavior
+}
+
+If you wanted to see the bytes of an int, use a (named) cast:
+
+void if_you_must_pun(int& x)
+{
+    auto p = reinterpret_cast<unsigned char*>(&x);
+    cout << p[0] << '\n';     // OK; better
+    // ...
+}
+
+Accessing the result of an reinterpret_cast to a different type from the objects
+declared type is "defined behavior" (even though reinterpret_cast is discouraged),
+but at least we can see that something tricky is going on.
+
+Note 
+Unfortunately, unions are commonly used for type punning. We don’t consider
+“sometimes, it works as expected” a conclusive argument. C++17 introduced a
+distinct type std::byte to facilitate operations on raw object representation.
+Use that type instead of unsigned char or char for these operations.
+
+*/
+
+/*
 https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#f-functions
 
 F: Functions
