@@ -1386,12 +1386,21 @@ TEST(StringCompare, check_member_function)
     std::string coll3{"h"};
 
     // help and h
+    // positive value if *this appears after the character sequence specified by
+    // the arguments, in lexicographical order
+    // so "*this" is "help" and "elp" is "after" "". 3 chars difference
+
     EXPECT_THAT(coll1.compare("h"), 3);
 
     // helphelp and h
+    // so "*this" is "helphelp" and 7 chars difference
     EXPECT_THAT(coll2.compare("h"), 7);
 
     // h and help
+    // negative value if *this appears before the character sequence specified
+    // by the arguments, in lexicographical order
+    // "*this" is "h" and "" is before "elp" so minus and 3.
+
     EXPECT_THAT(coll3.compare("help"), -3);
   }
 
@@ -1410,6 +1419,7 @@ TEST(StringCompare, check_member_function)
   }
 
   // int compare( size_type pos1, size_type count1, const CharT* s ) const;
+  //
   // 5) Compares a [pos1, pos1+count1) substring of this string to the
   // null-terminated character sequence beginning at the character pointed to by
   // s with length Traits::length(s) If count1 > size() - pos1 the substring is
@@ -1421,6 +1431,16 @@ TEST(StringCompare, check_member_function)
     EXPECT_THAT(coll1.compare(0, 2, "h"), 1);
     EXPECT_THAT(coll1.compare(0, 3, "h"), 2);
     EXPECT_THAT(coll1.compare(0, 4, "h"), 3);
+  }
+
+  // cxx-string-compare when count is 0
+  {
+    std::string coll1{"help"};
+
+    // (0, 0) makes *this is ""
+    EXPECT_THAT(coll1.compare(0, 0, "hel"), -3);
+    EXPECT_THAT(coll1.compare(0, 0, "help"), -4);
+    EXPECT_THAT(coll1.compare(0, 0, ""), 0);
   }
 }
 

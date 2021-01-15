@@ -25,7 +25,7 @@
 *kt_linux_bash_001* sh-looping-construct-getopt sh-parse-arg
 *kt_linux_bash_001* sh-conditional-construct sh-regex
 *kt_linux_bash_001* sh-conditional-expression
-*kt_linux_bash_001* sh-pattern-match
+*kt_linux_bash_001* sh-match
 *kt_linux_bash_001* sh-function
 *kt_linux_bash_001* sh-variable sh-variable-no-space
 *kt_linux_bash_001* sh-variable-positional-parameters
@@ -2593,7 +2593,7 @@ test
     Any part of the pattern may be quoted to force the quoted portion to be
     matched as a string.
 
-    *sh-regex*
+    *sh-regex* *sh-match*
     An additional binary operator, ‘=~’, is available, with the same precedence
     as ‘==’ and ‘!=’. When it is used, the string to the right of the operator
     is considered an `extended-regular-expression` and matched accordingly (as
@@ -2763,7 +2763,7 @@ $ echo [SP]*.LOG
       
 
 ={============================================================================
-*kt_linux_bash_001* sh-pattern-match *sh-glob*
+*kt_linux_bash_001* sh-match *sh-glob*
 
 <ex>
 Suppose that there are shell scipts files to be run at boot up and which are
@@ -3570,7 +3570,7 @@ EOF
 uri="$1"
 [[ $uri =~ [1-9][0-9]* ]] && uri="${urls[$uri]}"
 
-
+*sh-array-size*
 ${#name[subscript]} expands to the length of ${name[subscript]}. If subscript is
 ‘@’ or ‘*’, the expansion is the number of elements in the array. Referencing an
 array variable without a subscript is equivalent to referencing with a
@@ -5988,6 +5988,426 @@ Once you've found the command you have several options:
 you've typed.
 3. <C-g> to quit the search and back to the command line empty-handed
 4. Press ESC to take one and edit the command.
+
+
+={============================================================================
+*kt_linux_bash_032* sh-command-completion
+
+https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion.html
+8.6 Programmable Completion
+
+When `word completion is attempted for an argument to a command` for which a
+completion specification (a `compspec`) has been defined using the `complete`
+builtin, the programmable completion facilities are invoked.
+
+First, the command name is identified. If a compspec has been defined for that
+command, `the compspec is used to generate the list of possible completions` for
+the word. 
+
+If the command word is the empty string (completion attempted at the beginning
+    of an empty line), any compspec defined with the -E option to complete is
+used. If the command word is a full pathname, a compspec for the full pathname
+is searched for first. If no compspec is found for the full pathname, an
+attempt is made to find a compspec for the portion following the final slash.
+If those searches do not result in a compspec, any compspec defined with the
+-D option to complete is used as the default. 
+
+If there is no default compspec, Bash attempts `alias expansion` on the command
+word as a final resort, and attempts to find a compspec for the command word
+from any successful expansion
+
+Next, the string specified as the argument to the `-W option` is considered.
+The string is first split using the characters in the IFS special variable as
+delimiters. Shell quoting is honored within the string, in order to provide a
+mechanism for the words to contain shell metacharacters or characters in the
+value of IFS. Each word is then expanded using brace expansion, tilde
+expansion, parameter and variable expansion, command substitution, and
+arithmetic expansion, as described above (see Shell Expansions). The results
+are split using the rules described above (see Word Splitting). The results of
+the expansion are prefix-matched against the word being completed, and the
+matching words become the possible completions.
+
+
+https://www.gnu.org/software/bash/manual/html_node/Programmable-Completion-Builtins.html
+8.7 Programmable Completion Builtins
+
+compgen
+compgen [option] [word]
+
+`Generate possible completion matches for word` according to the options, which
+may be any option accepted by the complete builtin with the exception of -p
+and -r, and write the matches to the standard output. When using the -F or -C
+options, the various shell variables set by the programmable completion
+facilities, while available, will not have useful values.
+
+The matches will be generated in the same way as if the programmable
+completion code had generated them directly from a completion specification
+with the same flags. `If word is specified,` only those completions matching
+word will be displayed.
+
+
+complete
+complete [-abcdefgjksuv] [-o comp-option] [-DEI] [-A action] [-G globpat]
+[-W wordlist] [-F function] [-C command] [-X filterpat]
+[-P prefix] [-S suffix] name [name ...]
+complete -pr [-DEI] [name ...]
+
+-A action (NOTE: matches to [-abcdefgjksuv])
+The action may be one of the following to generate a list of possible
+completions:
+
+directory
+Directory names. May also be specified as -d.
+
+file
+File names. May also be specified as -f.
+
+
+-F function
+The shell function function is executed in the current shell environment. When
+it is executed, `$1` is the name of the command whose arguments are being
+completed, `$2` is the word being completed, and $3 is the word preceding the
+word being completed, as described above (see Programmable Completion). When
+it finishes, the possible completions are retrieved from the value of the
+COMPREPLY array variable.
+
+
+-W wordlist
+The wordlist is split using the characters in the IFS special variable as
+delimiters, and each resultant word is expanded. The possible completions are
+the members of the resultant list which match the word being completed.
+
+
+Specify how arguments to each name should be completed. If the -p option is
+supplied, or 
+`if no options are supplied, existing completion specifications are printed` 
+in a way that allows them to be reused as input. 
+
+The process of applying `these completion specifications` when word completion
+is attempted is described above (see Programmable Completion).
+
+
+https://www.linuxjournal.com/content/more-using-bash-complete-command
+
+$ # Create a dummy command:
+$ touch ~/bin/myfoo
+$ chmod +x ~/bin/myfoo
+
+$ # Create some files:
+$ touch a.bar a.foo b.bar b.foo
+
+$ # Use the command and try auto-completion.
+$ # Note that all files are displayed:
+$ myfoo <TAB><TAB>
+a.bar a.foo b.bar b.foo
+
+$ # Now tell bash that we only want foo files.
+$ # This command tells bash args to myfoo are completed
+$ # by generating a list of files and then excluding
+$ # everything # that doesn't match *.foo:
+$ complete -f -X '!*.foo' myfoo
+
+$ # Tray again:
+$ myfoo <TAB><TAB>
+a.foo b.foo
+
+
+For more complex cases where you need more control over how things are
+completed you can tell bash to call a function for doing the completion work.
+This is a function that you supply, that you would probably source from your
+.profile file. The function name is then supplied as an argument to the -F
+option of complete:
+
+$ complete -F _mycomplete_ myfoo
+
+
+A basic version of _mycomplete, which at this point doesn't do anything more
+than our simple command line usage of complete above, would be something like:
+
+function _mycomplete_()
+{
+    local cmd="${1##*/}"
+    local word=${COMP_WORDS[COMP_CWORD]}
+    local line=${COMP_LINE}
+    local xpat='!*.foo'
+
+    COMPREPLY=($(compgen -f -X "$xpat" -- "${word}"))
+}
+
+complete -F _mycomplete_ myfoo
+
+
+In the first three lines of the function body we create some useful local
+variables, here mainly for showing what's available since most of them aren't
+used in the function. 
+
+The first, cmd, gets the command that's being executed, this can be used if
+your completion function can handle multiple commands. 
+
+The second, word, gets the word that is `being completed`, this can be used if
+your completion strategy changes based on the word that's being expanded, it's
+also needed so that only matching values are returned. 
+
+'COMP_WORDS'
+     An array variable consisting of `the individual words` in the current
+     command line.  The line is split into words as Readline would split
+     it, using 'COMP_WORDBREAKS' as described above.  This variable is
+     available only in shell functions invoked by the programmable
+     completion facilities (*note Programmable Completion::).
+
+'COMP_CWORD'
+     An index into '${COMP_WORDS}' of the word containing the current
+     cursor position.  This variable is available only in shell
+     functions invoked by the programmable completion facilities (*note
+     Programmable Completion::).
+
+
+The third, line, gets the entire command line that is being completed. 
+
+The fourth variable, xpat, is our exclusion pattern, the same one used in the
+simple example above. Check the bash man page for other useful COMP_*
+variables.
+
+'COMP_LINE'
+     The current command line.  This variable is available only in shell
+     functions and external commands invoked by the programmable
+     completion facilities (*note Programmable Completion::).
+
+The only real code in the function is the last line that sets the variable
+COMPREPLY, which is `our reply to bash's request` to expand something. This
+line uses compgen to generate the expansion. The compgen command accepts most
+of the same options that complete does but it generates results rather than
+just storing the rules for future use. 
+
+Here we tell compgen to create a list of files with -f. Then we tell it to
+exclude all the files that match our exclusion pattern with -X "$xpat". And
+finally, we pass in the word being completed so that only items that match it
+are returned.
+
+Now, let's consider a slightly more complex example. Let's use our complete
+function to complete multiple commands and let's also change it so that it
+expands things for the myfoo command differently depending on the command line
+arguments given to myfoo.
+
+Specifically, let's assume that myfoo can both foo things and unfoo them, so
+myfoo -f myfile creates myfile.foo and myfoo -u myfile.foo creates myfile.
+Think of the -d option to gzip or bunzip2. So, in this case we only want to
+show non foo files if -f has been specified, and only foo files if -u has been
+specified.
+
+Further, let's add one more enhancement, let's make our completion function
+include directory names so that directory names can be used to complete the
+argument, thereby allowing us to navigate to sub-directories for fooing and
+unfooing files in subdirectories. Our new function would be:
+
+function _mycomplete_()
+{
+    local cmd="${1##*/}"
+    local word=${COMP_WORDS[COMP_CWORD]}
+    local line=${COMP_LINE}
+    local xpat
+
+    # Check to see what command is being executed.
+    case "$cmd" in
+    myfoo)
+        # See if we are fooing or unfooing.
+        case "$line" in
+        *-f*)
+            xpat='*.foo'
+            ;;
+        *-u*)
+            xpat='!*.foo'
+            ;;
+        *)
+            xpat='*.foo'
+            ;;
+        esac
+        ;;
+    mybar)
+        xpat='!*.bar'
+        ;;
+    *)
+        xpat='!*'
+        ;;
+    esac
+
+    COMPREPLY=($(compgen -f -X "$xpat" -- "${word}"))
+}
+
+complete -d -X '.[^./]*' -F _mycomplete_ myfoo mybar
+
+Here, we use the cmd variable to see which command we are completing and
+`change our pattern based on it.` When handling the myfoo command, we use the
+line variable to see if the command line includes the -f or -u option for
+determining whether we should exclude or include foo files.
+
+To include directories in our output we simply modify the complete command
+that installs our function by including the arguments -d -X '.[^./]*', which
+generates a list of directories and then excludes ./ and ../ (the current
+    directory and the parent directory). The directory list is then added to
+the result returned by calling our completion funtion. We also add our second
+command mybar to the commands handled by our function.
+
+Now when we run it:
+
+$ # Source our completion function:
+$ . bcomp2.sh
+
+$ # Make some files:
+$ touch a b a.bar a.foo b.bar b.foo
+
+$ # Make a directory for checking directory inclusion:
+$ mkdir astuff
+
+$ # See what we get when we want to foo something
+$ myfoo -f <TAB><TAB>
+a  a.bar  astuff/  b  b.bar  bcomp2.sh  bcomp.sh
+
+$ # See what we get when we want to unfoo something
+$ myfoo -u <TAB><TAB>
+a.foo  astuff/  b.foo
+
+Once you've digested all of this, check the file /etc/profile.d/complete.bash
+to see the default completions that come with bash. You'll notice in that file
+that there are numerous complications that we've ignored here, such as what
+happens when somebody is trying to complete a word such as ${ABC or $(ca. In
+    these cases the completion needs to return, respectively, a variable name
+    and a command name and not a data file name.
+
+<ex>
+
+# _init_completion is a function from /usr/share/bash-completion/bash_completion
+#
+# Initialize completion and deal with various general things: do file
+# and variable completion where appropriate, and adjust prev, words,
+# and cword as if no redirections exist so that completions do not
+# need to deal with them.  Before calling this function, make sure
+# cur, prev, words, and cword are local, ditto split if you use -s.
+
+# systemctl status sky-asproxy
+# systemctl stop sky-asproxy
+# systemctl start sky-asproxy
+#
+# systemctl status sky-asplayer
+# systemctl start sky-asplayer
+# systemctl stop sky-asplayer
+#
+# systemctl stop mediarite.service
+# systemctl start mediarite.service
+# systemctl status mediarite.service
+
+# mount-copybind /opt/asrdkplayer /usr/sbin/asrdkplayer
+# mount-copybind /opt/asproxy /usr/sbin/asproxy
+
+# complete -F _mycomplete_ systemctl
+# complete -F _mycomplete_ mount-copybind
+#
+# NOTE: _mycomplete_ gets called whenever press <TAB>
+
+function _mycomplete_()
+{
+    # local cur prev words cword
+    # _init_completion || return
+
+    # use COMP_WORDS instead of "words" for "embedded" since "bash_completion" 
+    # script shows error and do not work well on
+    # GNU bash, version 3.2.57(1)-release (arm-rdk-linux-gnueabi)
+
+    local cur=${COMP_WORDS[COMP_CWORD]}
+
+    # see if the user selected a command already
+    local SERVICES=(
+        "sky-asproxy"
+        "sky-asplayer"
+        "mediarite.service"
+        "/usr/sbin/asproxy"
+        "/usr/sbin/asrdkplayer")
+
+    # see if the user selected a command already
+    local COMMANDS=(
+        "status"
+        "start"
+        "stop"
+        "/opt/asproxy"
+        "/opt/asrdkplayer")
+
+    # case 3
+    # systemctl start <TAB>
+    # $words is "systemctl start" and "start" matches so $command is "start"
+
+    # ${#COMP_WORDS[@]} is size of array
+    # [[ ${COMMANDS[@]} =~ ${COMP_WORDS[i]} ]] see if words[i] is in command
+    # array. if so, save it to command.
+
+    local command i
+    for (( i=0; i < ${#COMP_WORDS[@]}-1; i++ )); do
+        if [[ ${COMMANDS[@]} =~ ${COMP_WORDS[i]} ]]; then
+            command=${COMP_WORDS[i]}
+            break
+        fi
+    done
+
+    # specific command arguments
+    #
+    # case 3
+    # systemctl start <TAB> or
+    # systemctl start sky<TAB>
+    #
+    # to show up possible options from "systemctl start"
+    #
+    
+    # if command is not null and is in match, generate reply with service array
+    if [[ -n $command ]]; then
+        case $command in
+            status|stop|start|/opt/*)
+              COMPREPLY=( $( compgen -W '${SERVICES[@]}' -- "$cur" ) )
+                return 0
+                ;;
+        esac
+    fi
+
+    # no command yet, show what commands we have
+    #
+    # case 1
+    # systemctl <TAB>
+    # $comamnd and $cur are null and shows all available options
+    #
+    # case 2
+    # systemctl st<TAB>
+    # $command is null but $cur is "st" and shows only match which is
+    # "install"
+    if [ "$command" = "" ]; then
+        COMPREPLY=( $( compgen -W '${COMMANDS[@]}' -- "$cur" ) )
+    fi
+
+    return 0
+}
+
+complete -F _mycomplete_ systemctl
+complete -F _mycomplete_ mount-copybind
+
+
+# proxy
+alias pxstatus="systemctl status sky-asproxy"
+alias pxstop="systemctl stop sky-asproxy"
+alias pxstart="systemctl start sky-asproxy"
+alias pxmm="mount-copybind /opt/asproxy /usr/sbin/asproxy"
+alias pxum="umount /usr/sbin/asproxy"
+
+# player
+alias plstatus="systemctl status sky-asplayer"
+alias plstop="systemctl stop sky-asplayer"
+alias plstart="systemctl start sky-asplayer"
+alias plmm="mount-copybind /opt/asrdkplayer /usr/sbin/asrdkplayer"
+alias plum="umount /usr/sbin/asrdkplayer"
+
+# mr
+alias mrstatus="systemctl status mediarite.service"
+alias mrstop="systemctl stop mediarite.service"
+alias mrstart="systemctl start mediarite.service"
+
+#
+alias sl="systemctl list-units 'sky*'"
 
 
 ={============================================================================

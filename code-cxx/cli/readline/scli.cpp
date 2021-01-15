@@ -1,5 +1,6 @@
-#include <iostream>
 #include "scli.h"
+#include <iostream>
+#include <readline/readline.h>
 
 void CommandHandler::addCommand(const char *name,
                                 const char *description,

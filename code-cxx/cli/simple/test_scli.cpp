@@ -28,6 +28,7 @@ static bool quitCommand(std::string const &command, void *data)
 {
   bool *running = static_cast<bool *>(data);
   *running      = false;
+  std::cout << "quit command : " << command << std::endl;
   return true;
 }
 
@@ -82,6 +83,7 @@ TEST(SimpleCli, doCommand)
   EXPECT_THAT(running, false);
 }
 
+// use return value to see if command is handled or not.
 TEST(SimpleCli, checkReturnValueFromCommand)
 {
   CommandHandler handler;

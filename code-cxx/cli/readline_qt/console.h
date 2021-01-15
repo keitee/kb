@@ -2,6 +2,7 @@
 #define CONSOLE_H
 
 #include "readline.h"
+#include <thread>
 
 class Console : public QObject
 {
@@ -16,6 +17,7 @@ public:
 
 private slots:
   void onSampleCommand(const QStringList &args);
+  void onChange(const QStringList &args);
 
 private:
   void initReadLine();

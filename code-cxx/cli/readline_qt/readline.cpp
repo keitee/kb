@@ -1,6 +1,5 @@
 
 #include "readline.h"
-#include "slog.h"
 
 #include <QAbstractEventDispatcher>
 #include <QCoreApplication>
@@ -29,48 +28,56 @@ bool QEventDispatcherGlib::processEvents(QEventLoop::ProcessEventsFlags flags)
 /Qt/5.12.3/Src/qtbase/src/corelib/kernel/qeventloop.cpp
 int QEventLoop::exec(ProcessEventsFlags flags)
 
+dtt >
+Program received signal SIGINT, Interrupt.
+0x00007ffff6293cc4 in __GI___poll (fds=0x5555557cda00, nfds=2, timeout=-1) at ../sysdeps/unix/sysv/linux/poll.c:29
+29      ../sysdeps/unix/sysv/linux/poll.c: No such file or directory.
 (gdb) bt
-#0  0x00007ffff66968a0 in __poll_nocancel () at ../sysdeps/unix/syscall-template.S:84
-#1  0x00007ffff3a809f6 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
-#2  0x00007ffff3a80b0c in g_main_context_iteration () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
-#3  0x00007ffff74bd54f in QEventDispatcherGlib::processEvents (this=0x55555578c610, flags=...) at kernel/qeventdispatcher_glib.cpp:422
-#4  0x00007ffff7464b3a in QEventLoop::exec (this=this@entry=0x7fffffffdc20, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
-#5  0x00007ffff746d4e0 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1363
-#6  0x00005555555653eb in main (argc=1, argv=0x7fffffffdda8) at /home/keitee/git/kb/code-cxx/cli/test_console.cpp:18
-
+#0  0x00007ffff6293cc4 in __GI___poll (fds=0x5555557cda00, nfds=2, timeout=-1) at ../sysdeps/unix/sysv/linux/poll.c:29
+#1  0x00007ffff34c35c9 in ?? () from /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0
+#2  0x00007ffff34c36dc in g_main_context_iteration () from /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0
+#3  0x00007ffff6ddd81f in QEventDispatcherGlib::processEvents (this=0x5555557ab340, flags=...) at kernel/qeventdispatcher_glib.cpp:422
+#4  0x00007ffff6d84cca in QEventLoop::exec (this=this@entry=0x7fffffffd9e0, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
+#5  0x00007ffff6d8d710 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1389
+#6  0x000055555556e504 in main (argc=1, argv=0x7fffffffdbd8) at /media/keitee/ssd2/dtt/cli/test_dtt.cpp:68
+(gdb)
 
 when enter is pressed:
 
+dtt > help
+
+Breakpoint 1, ReadLinePrivate::commandLineHandler_ (this=0x5555557b06f0, line=...) at /media/keitee/ssd2/dtt/cli/readline.cpp:530
+530     {
 (gdb) bt
-#0  ReadLinePrivate::commandLineHandler_ (this=0x55555578e060, line="") at /home/keitee/git/kb/code-cxx/cli/readline.cpp:408
-#1  0x0000555555567dfe in ReadLinePrivate::commandLineHandler (line=0x5555557a6710 "") at /home/keitee/git/kb/code-cxx/cli/readline.cpp:400
-#2  0x00007ffff35a5ac3 in rl_callback_read_char () from /usr/lib/x86_64-linux-gnu/libreadline.so
-#3  0x00005555555688cc in ReadLinePrivate::onStdinActivated (this=0x55555578e060, fd=0) at /home/keitee/git/kb/code-cxx/cli/readline.cpp:536
-#4  0x000055555556c52b in QtPrivate::FunctorCall<QtPrivate::IndexesList<0>, QtPrivate::List<int>, void, void (ReadLinePrivate::*)(int)>::call (f=
-    (void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x5555555688a6 <ReadLinePrivate::onStdinActivated(int)>, o=0x55555578e060, arg=0x7fffffffd950) at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:152
-#5  0x000055555556c1f0 in QtPrivate::FunctionPointer<void (ReadLinePrivate::*)(int)>::call<QtPrivate::List<int>, void> (f=(void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x5555555688a6 <ReadLinePrivate::onStdinActivated(int)>,
-    o=0x55555578e060, arg=0x7fffffffd950) at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:185
-#6  0x000055555556bbba in QtPrivate::QSlotObject<void (ReadLinePrivate::*)(int), QtPrivate::List<int>, void>::impl (which=1, this_=0x55555578f580, r=0x55555578e060, a=0x7fffffffd950, ret=0x0)
-    at /home/keitee/Qt/5.12.3/gcc_64/include/QtCore/qobjectdefs_impl.h:414
-#7  0x00007ffff7491f26 in QtPrivate::QSlotObjectBase::call (a=0x7fffffffd950, r=0x55555578e060, this=<optimized out>) at ../../include/QtCore/../../src/corelib/kernel/qobjectdefs_impl.h:394
-#8  QMetaObject::activate (sender=sender@entry=0x55555578f450, signalOffset=<optimized out>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd950) at kernel/qobject.cpp:3776
-#9  0x00007ffff7492507 in QMetaObject::activate (sender=sender@entry=0x55555578f450, m=m@entry=0x7ffff797dbc0 <QSocketNotifier::staticMetaObject>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd950)
-    at kernel/qobject.cpp:3648
-#10 0x00007ffff749e358 in QSocketNotifier::activated (this=this@entry=0x55555578f450, _t1=0, _t2=...) at .moc/moc_qsocketnotifier.cpp:140
-#11 0x00007ffff749e6ab in QSocketNotifier::event (this=0x55555578f450, e=<optimized out>) at kernel/qsocketnotifier.cpp:266
-#12 0x00007ffff74661c3 in doNotify (event=0x7fffffffda10, receiver=0x55555578f450) at kernel/qcoreapplication.cpp:1150
-#13 QCoreApplication::notify (event=<optimized out>, receiver=<optimized out>, this=<optimized out>) at kernel/qcoreapplication.cpp:1136
-#14 QCoreApplication::notifyInternal2 (receiver=0x55555578f450, event=0x7fffffffda10) at kernel/qcoreapplication.cpp:1060
-#15 0x00007ffff746638e in QCoreApplication::sendEvent (receiver=<optimized out>, event=event@entry=0x7fffffffda10) at kernel/qcoreapplication.cpp:1450
-#16 0x00007ffff74be188 in socketNotifierSourceDispatch (source=0x55555578cd30) at kernel/qeventdispatcher_glib.cpp:106
-#17 0x00007ffff3a807f7 in g_main_context_dispatch () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
-#18 0x00007ffff3a80a60 in ?? () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
-#19 0x00007ffff3a80b0c in g_main_context_iteration () from /lib/x86_64-linux-gnu/libglib-2.0.so.0
-#20 0x00007ffff74bd54f in QEventDispatcherGlib::processEvents (this=0x55555578c610, flags=...) at kernel/qeventdispatcher_glib.cpp:422
-#21 0x00007ffff7464b3a in QEventLoop::exec (this=this@entry=0x7fffffffdc20, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
-#22 0x00007ffff746d4e0 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1363
-#23 0x00005555555653eb in main (argc=1, argv=0x7fffffffdda8) at /home/keitee/git/kb/code-cxx/cli/test_console.cpp:18
-(
+#0  ReadLinePrivate::commandLineHandler_ (this=0x5555557b06f0, line=...) at /media/keitee/ssd2/dtt/cli/readline.cpp:530
+#1  0x00005555555802cb in ReadLinePrivate::commandLineHandler (line=0x5555557dc0b0 "help") at /media/keitee/ssd2/dtt/cli/readline.cpp:526
+#2  0x00007ffff2d0af9e in rl_callback_read_char () from /usr/lib/x86_64-linux-gnu/libreadline.so
+#3  0x0000555555580c80 in ReadLinePrivate::onStdinActivated (this=0x5555557b06f0, fd=0) at /media/keitee/ssd2/dtt/cli/readline.cpp:662
+#4  0x0000555555584c75 in QtPrivate::FunctorCall<QtPrivate::IndexesList<0>, QtPrivate::List<int>, void, void (ReadLinePrivate::*)(int)>::call (f=
+    (void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x555555580c5a <ReadLinePrivate::onStdinActivated(int)>, o=0x5555557b06f0, arg=0x7fffffffd710) at /home/keitee/Qt/5.12.6/gcc_64/include/QtCore/qobjectdefs_impl.h:152
+#5  0x0000555555584902 in QtPrivate::FunctionPointer<void (ReadLinePrivate::*)(int)>::call<QtPrivate::List<int>, void> (f=
+    (void (ReadLinePrivate::*)(ReadLinePrivate * const, int)) 0x555555580c5a <ReadLinePrivate::onStdinActivated(int)>, o=0x5555557b06f0, arg=0x7fffffffd710) at /home/keitee/Qt/5.12.6/gcc_64/include/QtCore/qobjectdefs_impl.h:185
+#6  0x0000555555584298 in QtPrivate::QSlotObject<void (ReadLinePrivate::*)(int), QtPrivate::List<int>, void>::impl (which=1, this_=0x5555557b3b60, r=0x5555557b06f0, a=0x7fffffffd710, ret=0x0)
+    at /home/keitee/Qt/5.12.6/gcc_64/include/QtCore/qobjectdefs_impl.h:414
+#7  0x00007ffff6db21f6 in QtPrivate::QSlotObjectBase::call (a=0x7fffffffd710, r=0x5555557b06f0, this=<optimised out>) at ../../include/QtCore/../../src/corelib/kernel/qobjectdefs_impl.h:394
+#8  QMetaObject::activate (sender=sender@entry=0x5555557b3ac0, signalOffset=<optimised out>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd710) at kernel/qobject.cpp:3783
+#9  0x00007ffff6db27d7 in QMetaObject::activate (sender=sender@entry=0x5555557b3ac0, m=m@entry=0x7ffff72a3bc0 <QSocketNotifier::staticMetaObject>, local_signal_index=local_signal_index@entry=0, argv=argv@entry=0x7fffffffd710)
+    at kernel/qobject.cpp:3656
+#10 0x00007ffff6dbe628 in QSocketNotifier::activated (this=this@entry=0x5555557b3ac0, _t1=0, _t2=...) at .moc/moc_qsocketnotifier.cpp:140
+#11 0x00007ffff6dbe97b in QSocketNotifier::event (this=0x5555557b3ac0, e=<optimised out>) at kernel/qsocketnotifier.cpp:266
+#12 0x00007ffff6d863f3 in doNotify (event=0x7fffffffd7d0, receiver=0x5555557b3ac0) at kernel/qcoreapplication.cpp:1178
+#13 QCoreApplication::notify (event=<optimised out>, receiver=<optimised out>, this=<optimised out>) at kernel/qcoreapplication.cpp:1164
+#14 QCoreApplication::notifyInternal2 (receiver=0x5555557b3ac0, event=0x7fffffffd7d0) at kernel/qcoreapplication.cpp:1088
+#15 0x00007ffff6d865be in QCoreApplication::sendEvent (receiver=<optimised out>, event=event@entry=0x7fffffffd7d0) at kernel/qcoreapplication.cpp:1476
+#16 0x00007ffff6dde458 in socketNotifierSourceDispatch (source=0x5555557ae050) at kernel/qeventdispatcher_glib.cpp:106
+#17 0x00007ffff34c3417 in g_main_context_dispatch () from /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0
+#18 0x00007ffff34c3650 in ?? () from /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0
+#19 0x00007ffff34c36dc in g_main_context_iteration () from /usr/lib/x86_64-linux-gnu/libglib-2.0.so.0
+#20 0x00007ffff6ddd81f in QEventDispatcherGlib::processEvents (this=0x5555557ab340, flags=...) at kernel/qeventdispatcher_glib.cpp:422
+#21 0x00007ffff6d84cca in QEventLoop::exec (this=this@entry=0x7fffffffd9e0, flags=..., flags@entry=...) at kernel/qeventloop.cpp:225
+#22 0x00007ffff6d8d710 in QCoreApplication::exec () at kernel/qcoreapplication.cpp:1389
+#23 0x000055555556e504 in main (argc=1, argv=0x7fffffffdbd8) at /media/keitee/ssd2/dtt/cli/test_dtt.cpp:68
+(gdb)
 
 */
 
@@ -171,7 +178,7 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
   m_libHandle = dlopen("libreadline.so", RTLD_NOW);
   if (!m_libHandle)
   {
-    LOG_MSG("failed to open 'libreadline.so' (%s)", dlerror());
+    printf("failed to open 'libreadline.so' (%s)", dlerror());
     return;
   }
 
@@ -184,7 +191,7 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
     m_##f = reinterpret_cast<f##_t>(dlsym(m_libHandle, "" #f ""));             \
     if (!m_##f)                                                                \
     {                                                                          \
-      LOG_MSG("failed to get symbol '" #f "' (%s)", dlerror());                \
+      printf("failed to get symbol '" #f "' (%s)", dlerror());                 \
       dlclose(m_libHandle);                                                    \
       m_libHandle = nullptr;                                                   \
       return;                                                                  \
@@ -375,12 +382,6 @@ void ReadLinePrivate::start(const QString &prompt)
   m_rl_callback_handler_install(prompt.toLatin1().constData(),
                                 commandLineHandler);
 
-  // m_rl_callback_handler_install(prompt.toLatin1().constData(),
-  //     [](char *line) -> void
-  //     {
-  //       printf("sleeps for 10s\n");
-  //     });
-
   m_stdinListener->setEnabled(true);
 
   // https://doc.qt.io/qt-5/qtglobal.html#qInstallMessageHandler
@@ -456,9 +457,9 @@ need, readline can also be invoked as a `callback' function from an event loop.
 There are functions available to make this easy.
 
 
-Function: 
-void rl_callback_handler_install (const char *prompt, 
-  rl_vcpfunc_t *lhandler) 
+Function:
+void rl_callback_handler_install (const char *prompt,
+  rl_vcpfunc_t *lhandler)
 
 Set up the terminal for readline I/O and display the initial expanded value of
 prompt. Save the value of lhandler to use as a handler function to call when a
@@ -466,15 +467,15 @@ complete line of input has been entered. The handler function receives the text
 of the line as an argument. As with readline(), the handler function should free
 the line when it it finished with it.
 
-Function: 
+Function:
 void rl_callback_read_char (void)
 
 Whenever an application determines that keyboard input is available, it should
 call rl_callback_read_char(), which will read the next character from the
-current input source. 
+current input source.
 
 If that character completes the line, rl_callback_read_char will invoke `the
-lhandler function` installed by rl_callback_handler_install to process the line. 
+lhandler function` installed by rl_callback_handler_install to process the line.
 
 Before calling the lhandler function, the terminal settings are reset to the
 values they had before calling rl_callback_handler_install. If the lhandler
@@ -509,13 +510,16 @@ void ReadLinePrivate::commandLineHandler_(const QString &line)
   QRegularExpression regex(R"regex([^\"\'\s]\S*|\".*?\"|\'.*?\')regex");
   QRegularExpressionMatchIterator it = regex.globalMatch(line);
 
+  // printf("::commandLineHandler_: line: %s\n", line.toLatin1().constData());
+
   QStringList args;
 
   while (it.hasNext())
   {
-
     // get the match and strip any leading and trailing quotes
     QString match = it.next().captured(0);
+
+    // printf("::commandLineHandler_: match: %s\n", match.toLatin1().constData());
 
     int matchLen = match.length();
     if (matchLen <= 0)
@@ -741,11 +745,12 @@ void ReadLinePrivate::qtMessageHandler(QtMsgType type,
   Q_UNUSED(type);
   Q_UNUSED(context);
 
+  // printf("%s\n", message.toLatin1().constData());
+  // printf("\n");
+
   fputs(message.toLatin1().constData(), stdout);
   fputc('\n', stdout);
   fflush(stdout);
-  // printf("%s\n", message.toLatin1().constData());
-  // printf("\n");
 
   ReadLinePrivate *readline = instance();
   if (readline && readline->m_rl_on_new_line && readline->isRunning())

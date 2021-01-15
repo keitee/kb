@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_cli VERSION 0.1 LANGUAGES CXX)
+project(test_readline VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -28,7 +28,7 @@ enable_testing()
 # 
 #   to your CMakeLists.txt file.
 
-set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
+# set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
 
 # Include the directory source_dir in your project. This directory must contain
@@ -54,7 +54,7 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 # This variable holds the path to the top level binary output directory, i.e.
 # the directory in which you ran the cmake command
 
-add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
+# add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
@@ -76,18 +76,9 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-# find_package(Qt5Core)
-# find_package(Qt5Test)
-
-# # find_package(Qt5.12 COMPONENTS Core)
-# # find_package(Qt5.12 COMPONENTS Test)
-
-# set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR "5")
-# set_property(DIRECTORY PROPERTY QT_VERSION_MINOR "12")
-
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-ldl")
+add_compile_options("-ggdb;-ldl")
 
 
 # to use libs static library
@@ -99,30 +90,19 @@ add_compile_options("-g;-ldl")
 # Adds the paths in which the linker should search for libraries. Relative paths
 # given to this command are interpreted as relative to the current source
 # directory, see CMP0015.
-set(LIBS_DIR "../libs")
+set(LIBS_DIR "../../libs")
 set(LIBS libcxx.a)
 link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
-
-# to gnerate signal/slot codes
-set(CMAKE_AUTOMOC ON)
 
 # CMAKE_DL_LIBS
 # The name of the library that has dlopen and dlclose in it, usually -ldl on
 # most UNIX machines.
 
-# simple cli
-add_executable(test_scli scli.cpp test_scli.cpp)
-target_link_libraries(test_scli gmock_main ${LIBS} ${CMAKE_DL_LIBS})
+# readline standalone 1
+add_executable(test_readline_1 scli.cpp test_readline_1.cpp)
+target_link_libraries(test_readline_1 ${LIBS} ${CMAKE_DL_LIBS} readline)
 
-# scli standalone
-# add_executable(test_scli scli.cpp test_scli.cpp)
-# target_link_libraries(test_scli Qt5::Core Qt5::Test ${LIBS})
-
-# readline standalone
-add_executable(test_readline test_readline.cpp)
-target_link_libraries(test_readline ${LIBS} ${CMAKE_DL_LIBS} readline)
-
-# console abd use readline.so
-# add_executable(test_console scli.cpp test_console.cpp console.cpp readline.cpp)
-# target_link_libraries(test_console Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})
+# readline standalone 2
+add_executable(test_readline_2 readline.cpp console.cpp test_readline_2.cpp)
+target_link_libraries(test_readline_2 ${LIBS} ${CMAKE_DL_LIBS} readline)

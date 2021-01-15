@@ -889,7 +889,8 @@ Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
 Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 1434} return {1434}
 Sep 28 20:30:48 skyxione com.sky.as.player[10990]: input {1, 497} return {1434}
 Sep 28 20:30:48 skyxione com.sky.as.player[10990]: curl_easy_perform() failed: {Error}
-Sep 28 20:30:48 skyxione com.sky.as.player[10990]: HTTP GET request http://atlantis.epgsky.com/as/services/4096/1 {Failed writing body (1434 != 497)} and response is 200
+Sep 28 20:30:48 skyxione com.sky.as.player[10990]: HTTP GET request http://atlantis.epgsky.com/as/services/4096/1 
+{Failed writing body (1434 != 497)} and response is 200
  
 */
 
@@ -905,16 +906,19 @@ namespace curl_case
   // so gets called many times to give the full data transferred.
   static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream)
   {
-    std::cout << "response size: " << response.size() << ", size: " << size
-              << ", nemeb: " << nmemb << std::endl;
+    // std::cout << "response size: " << response.size() << ", size: " << size
+    //           << ", nemeb: " << nmemb << std::endl;
 
     std::string coll{(char *)ptr};
 
     response.append(coll);
 
-    std::cout << "response size: " << response.size() << ", coll: " << coll.size() << std::endl;
+    // std::cout << "response size: " << response.size() << ", coll: " << coll.size() << std::endl;
 
-    return coll.size();
+    // this is WRONG
+    // return coll.size();
+
+    return size * nmemb;
   }
 
   // this can be simplified to:
@@ -926,19 +930,22 @@ namespace curl_case
   // }
 };
 
-// use the following command to code output:
-//
-// curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" -H
-// "X-SkyOTT-Territory: GB" http://atlantis.epg.bskyb.com/as/services/4101/1
-// --libcurl -
-//
-// curl 
-// -H "X-SkyOTT-Provider: SKY" 
-// -H "X-SkyOTT-Proposition: SKYQ" 
-// -H "X-SkyOTT-Territory: GB" 
-// -H "X-SkyOTT-Device: IPSETTOPBOX" 
-// -H "X-SkyOTT-Platform: SKYQ-RDK" http://atlantis.epg.bskyb.com/as/services/4096/1
+/*
+curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" \
+-H "X-SkyOTT-Territory: GB" \
+-H "X-SkyOTT-Device: MOBILE" \
+-H "X-SkyOTT-Platform: ANDROID" http://atlantis.epgsky.com/as/services/4096/1
 
+[ RUN      ] CxxCurl.case_2
+failed to parse config json
+number of services: 102
+[       OK ] CxxCurl.case_2 (90 ms)
+
+WHY failes on parse()?
+
+*/
+
+// ={=========================================================================
 TEST(CxxCurl, case_2)
 {
   using namespace curl_case;
@@ -946,6 +953,7 @@ TEST(CxxCurl, case_2)
   CURL *curl_handle;
 
   curl_global_init(CURL_GLOBAL_ALL);
+  response.clear();
 
   // https://curl.haxx.se/libcurl/c/curl_slist_append.html
   // curl_slist_append - add a string to an slist
@@ -962,16 +970,9 @@ TEST(CxxCurl, case_2)
   /* init the curl session */ 
   curl_handle = curl_easy_init();
  
-  /* set URL to get here */ 
-  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
-
-  // curl_easy_setopt(curl_handle,
-  //                  CURLOPT_URL,
-  //                  "http://atlantis.epg.bskyb.com/as/services/4101/1");
-
   curl_easy_setopt(curl_handle,
                    CURLOPT_URL,
-                   "http://atlantis.epg.bskyb.com/as/services/4096/1");
+                   "http://atlantis.epgsky.com/as/services/4096/1");
 
   /* disable progress meter, set to 0L to enable it */ 
   curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
@@ -1004,41 +1005,63 @@ TEST(CxxCurl, case_2)
   const Json::Value services = root["services"];
   std::cout << "number of services: "<< services.size() << std::endl;
 
-  /* cleanup curl stuff */ 
+  /* cleanup curl stuff */
   curl_easy_cleanup(curl_handle);
  
   curl_global_cleanup();
 }
 
 /*
-when there is no internet connection that is out of vpn since the url used is in
-coporate vpn, easy_perform returns error when run on PC but not on a embedded
-box. Returns CURLE_OK (0) and has 27 bytes response.
+when use the right addresss
 
-[ RUN      ] CxxCurl.case_2_2
+curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" \
+-H "X-SkyOTT-Territory: GB" \
+-H "X-SkyOTT-Device: MOBILE" \
+-H "X-SkyOTT-Platform: ANDROID" http://atlantis.epgsky.com/as/services/4096/1
+
+[ RUN      ] CxxCurl.case_2_1
+before curl_easy_perform(), response size 0
+We received response code: 200
+after curl_easy_perform(), response size 147849
+[       OK ] CxxCurl.case_2_1 (53 ms)
+
+
+when there is no internet connection easy_perform returns CURLE_OK (0) and has
+27 bytes response.
+
+$curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" -H "X-SkyOTT-Territory: GB" -H "X-SkyOTT-Device: MOBILE" -H "X-SkyOTT-Platform: ANDROID" http://atlantis.epgsky.com/as/services/4096/1
+Content-Type: text/html
+
+$
+
+[ RUN      ] CxxCurl.case_2_1
 before curl_easy_perform(), response size 0
 response size: 0, size: 1, nemeb: 27
 response size: 27, coll: 27
-curl_easy_perform() failed Unknown error
-return
+We received response code: 200
 after curl_easy_perform(), response size 27, response: {Content-Type: text/html
 
 }
-[       OK ] CxxCurl.case_2_2 (7 ms)
+after curl_easy_perform(), response size 27
+[       OK ] CxxCurl.case_2_1 (53 ms)
 
-Or 
+https://curl.se/libcurl/c/CURLOPT_CONNECTTIMEOUT.html
 
-[ RUN      ] CxxCurl.case_2_2
-before curl_easy_perform(), response size 0
-curl_easy_perform() failed Unknown error
-return
-We received response code: 0
-after curl_easy_perform(), response size 0, response: {}
-[       OK ] CxxCurl.case_2_2 (29 ms)
+if use  
+curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT, 10L);
+then 
+
+We received response code: 302
+
+Once used CURLOPT_CONNECTTIMEOUT then gets 302 even if not use this option. 
+
+So if use this option, case check "response code" when connection fails than
+checking the response size.
 
 */
 
-TEST(CxxCurl, case_2_2)
+// ={=========================================================================
+TEST(CxxCurl, case_2_1)
 {
   using namespace curl_case;
 
@@ -1062,12 +1085,96 @@ TEST(CxxCurl, case_2_2)
   /* init the curl session */ 
   curl_handle = curl_easy_init();
  
-  /* set URL to get here */ 
-  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
+  curl_easy_setopt(curl_handle,
+                   CURLOPT_URL,
+                   "http://atlantis.epgsky.com/as/services/4096/1");
 
-  // curl_easy_setopt(curl_handle,
-  //                  CURLOPT_URL,
-  //                  "http://atlantis.epg.bskyb.com/as/services/4101/1");
+  /* disable progress meter, set to 0L to enable it */ 
+  curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+
+  curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, slist1);
+  curl_easy_setopt(curl_handle, CURLOPT_BUFFERSIZE, 102400L);
+  curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "curl/7.58.0");
+  curl_easy_setopt(curl_handle, CURLOPT_MAXREDIRS, 50L);
+  curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_2TLS);
+  curl_easy_setopt(curl_handle, CURLOPT_TCP_KEEPALIVE, 1L);
+  // curl_easy_setopt(curl_handle, CURLOPT_CONNECTTIMEOUT, 10L);
+
+  /* send all data to this function  */
+  curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
+ 
+  std::cout << "before curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* get it! */
+  CURLcode res;
+  res = curl_easy_perform(curl_handle);
+  if (res != CURLE_OK)
+  {
+    std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
+    std::cout << "return" << std::endl;
+  }
+
+  {
+    long response_code;
+    res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    if (CURLE_OK == res)
+      std::cout << "We received response code: " << response_code << std::endl;
+  }
+
+  std::cout << "after curl_easy_perform(), response size " << response.size()
+            << ", response: {" << response << "}" << std::endl;
+
+  std::cout << "after curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* cleanup curl stuff */
+  curl_easy_cleanup(curl_handle);
+ 
+  curl_global_cleanup();
+}
+
+/*
+when not found server (when use wrong address)
+
+keitee@kit-ubuntu:~/git/kb/code-cxx/cxx$ curl -H "X-SkyOTT-Provider: SKY" -H "X-SkyOTT-Proposition: SKYQ" \
+> -H "X-SkyOTT-Territory: GB" \
+> -H "X-SkyOTT-Device: MOBILE" \
+> -H "X-SkyOTT-Platform: ANDROID" http://atlantis.epg.bskyb.com/as/services/4096/1
+curl: (6) Could not resolve host: atlantis.epg.bskyb.com
+
+[ RUN      ] CxxCurl.case_2_2
+before curl_easy_perform(), response size 0
+curl_easy_perform() failed Couldn't resolve host name
+return
+We received response code: 0
+after curl_easy_perform(), response size 0
+[       OK ] CxxCurl.case_2_2 (13 ms)
+
+*/
+
+// ={=========================================================================
+TEST(CxxCurl, case_2_2)
+{
+  using namespace curl_case;
+
+  CURL *curl_handle;
+
+  curl_global_init(CURL_GLOBAL_ALL);
+  response.clear();
+
+  // https://curl.haxx.se/libcurl/c/curl_slist_append.html
+  // curl_slist_append - add a string to an slist
+
+  struct curl_slist *slist1;
+
+  slist1 = NULL;
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Provider: SKY");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Proposition: SKYQ");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Territory: GB");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Device: MOBILE");
+  slist1 = curl_slist_append(slist1, "X-SkyOTT-Platform: ANDROID");
+ 
+  /* init the curl session */ 
+  curl_handle = curl_easy_init();
 
   curl_easy_setopt(curl_handle,
                    CURLOPT_URL,
@@ -1090,7 +1197,7 @@ TEST(CxxCurl, case_2_2)
 
   /* get it! */
   CURLcode res;
-  curl_easy_perform(curl_handle);
+  res = curl_easy_perform(curl_handle);
   if (res != CURLE_OK)
   {
     std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
@@ -1104,34 +1211,19 @@ TEST(CxxCurl, case_2_2)
       std::cout << "We received response code: " << response_code << std::endl;
   }
 
-  std::cout << "after curl_easy_perform(), response size " << response.size()
-            << ", response: {" << response << "}" << std::endl;
+  // std::cout << "after curl_easy_perform(), response size " << response.size()
+  //           << ", response: {" << response << "}" << std::endl;
 
-  /* cleanup curl stuff */ 
+  std::cout << "after curl_easy_perform(), response size " << response.size() << std::endl;
+
+  /* cleanup curl stuff */
   curl_easy_cleanup(curl_handle);
  
   curl_global_cleanup();
 }
 
 /*
-Again, when use invalid url, easy_perform returns error when run on 
-PC but not on a embedded box. Returns CURLE_OK (0) and has developer error message.
-
-This is PC version and see curl_easy_perform() fails.
-[ RUN      ] CxxCurl.case_2_3
-before curl_easy_perform(), response size 0
-response size: 0, size: 1, nemeb: 83
-response size: 83, coll: 83
-curl_easy_perform() failed Unknown error
-return
-after curl_easy_perform(), response size 83, response: {{"errorCode":"404","developerMessage":"Invalid bouquet 9999 or/and subbouquet 999"}}
-[       OK ] CxxCurl.case_2_3 (64 ms)
-
-
-NOTE:
-thought that this comes from libcurl version differences. turns out that the
-libcurl on PC version is older than one on the box. The newer version returns ok
-since requset is transmitted.
+when use right address but with wrong bouquet ids.
 
 https://stackoverflow.com/questions/20487162/i-cant-get-http-code-404-with-libcurl
 
@@ -1156,11 +1248,9 @@ We received response code: 404
 after curl_easy_perform(), response size 83, response: {{"errorCode":"404","developerMessage":"Invalid bouquet 9999 or/and subbouquet 999"}}
 [       OK ] CxxCurl.case_2_3 (53 ms)
 
-
-So can cover this case when use this option on the box to cover this case.
-
 */
 
+// ={=========================================================================
 TEST(CxxCurl, case_2_3)
 {
   using namespace curl_case;
@@ -1184,13 +1274,10 @@ TEST(CxxCurl, case_2_3)
  
   /* init the curl session */ 
   curl_handle = curl_easy_init();
- 
-  /* set URL to get here */ 
-  // curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
 
   curl_easy_setopt(curl_handle,
                    CURLOPT_URL,
-                   "http://atlantis.epg.bskyb.com/as/services/9999/999");
+                   "http://atlantis.epgsky.com/as/services/9999/999");
 
   /* disable progress meter, set to 0L to enable it */ 
   curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
@@ -1209,7 +1296,7 @@ TEST(CxxCurl, case_2_3)
 
   /* get it! */
   CURLcode res;
-  curl_easy_perform(curl_handle);
+  res = curl_easy_perform(curl_handle);
   if (res != CURLE_OK)
   {
     std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;
@@ -1260,6 +1347,7 @@ Now, no error on response code
 
 */
 
+// ={=========================================================================
 TEST(CxxCurl, case_2_4)
 {
   using namespace curl_case;
@@ -1289,7 +1377,7 @@ TEST(CxxCurl, case_2_4)
 
   curl_easy_setopt(curl_handle,
                    CURLOPT_URL,
-                   "http://atlantis.epg.bskyb.com/as/services/9999/999");
+                   "http://atlantis.epgsky.com/as/services/9999/999");
 
   /* disable progress meter, set to 0L to enable it */ 
   curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
@@ -1309,7 +1397,7 @@ TEST(CxxCurl, case_2_4)
 
   /* get it! */
   CURLcode res;
-  curl_easy_perform(curl_handle);
+  res = curl_easy_perform(curl_handle);
   if (res != CURLE_OK)
   {
     std::cout << "curl_easy_perform() failed " << curl_easy_strerror(res) << std::endl;

@@ -1,5 +1,6 @@
 #include <any>
 #include <boost/lexical_cast.hpp>
+// #include <charconv>
 #include <chrono>
 #include <cstdarg>
 #include <forward_list>
@@ -1428,6 +1429,15 @@ The class template std::variant represents a type-safe union. An instance of
 std::variant at any given time either holds a value of one of its alternative
 types, or in the case of error - no value
 
+
+Object Lifetime
+
+When you use union, you need to manage the internal state: call constructors or
+destructors. This is error prone and easy to shoot yourself in the foot. But
+std::variant handles object lifetime as you expect. That means that if it’s
+about to change the currently stored type then a destructor of the underlying
+type is called.
+
 */
 
 TEST(CxxTypeVariant, cxx17)
@@ -1476,42 +1486,6 @@ TEST(CxxTypeVariant, cxx17)
     EXPECT_THAT(std::get<0>(v), 0);
   }
 
-  {
-    std::variant<int, float, std::string> v;
-
-    // variant_size
-    // variant_size_v
-    // (C++17)
-    // obtains the size of the variant's list of alternatives at compile time
-    //
-    // Helper variable template
-    // template <class T>
-    // inline constexpr std::size_t variant_size_v = std::variant_size<T>::value;
-
-    static_assert(std::variant_size<decltype(v)>::value == 3);
-    static_assert(std::variant_size_v<decltype(v)> == 3);
-
-    // Defined in header <variant>
-    // template <class Visitor, class... Variants>
-    // constexpr /*see below*/ visit( Visitor&& vis, Variants&&... vars );
-    //
-    // Now cxx-variant provides visitor.
-
-    struct Visitor
-    {
-      void operator()(int i) const { std::cout << "int: " << i << "\n"; }
-
-      void operator()(float f) const { std::cout << "float: " << f << "\n"; }
-
-      void operator()(const std::string &s) const
-      {
-        std::cout << "string: " << s << "\n";
-      }
-    };
-
-    std::visit(Visitor{}, v);
-  }
-
   // get_if
   // obtains a pointer to the value of a pointed-to variant given the index or
   // the type (if unique), returns null on error
@@ -1530,12 +1504,17 @@ TEST(CxxTypeVariant, cxx17)
     EXPECT_THAT(std::holds_alternative<int>(v), true);
 
     // currently holds "int" and throw "bad_variant_access"
+    // The first option is std::get<Type|Index>(variant) which is a non member
+    // function. It returns a reference to the desired type if it’s active (You
+    // can pass a Type or Index). If not then you’ll get std::bad_variant_access
+    // exception.
+
     EXPECT_THROW(std::get<float>(v), std::bad_variant_access);
   }
 }
 
 // ={=========================================================================
-TEST(CxxTypeVariant, ctors)
+TEST(CxxTypeVariant, cxx17_ctors)
 {
   {
     std::variant<int, float, std::string> v;
@@ -1629,6 +1608,416 @@ TEST(CxxTypeVariant, ctors)
     // in_place for complex types
     std::variant<std::vector<int>, std::string> vecStr{std::in_place_index<0>,
                                                        {0, 1, 2, 3}};
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeVariant, cxx17_conversion)
+{
+  {
+    std::variant<std::string, bool, int> v{42};
+    EXPECT_THAT(std::holds_alternative<int>(v), true);
+  }
+
+  // Do you know what’s the current state of the variant after v = "Hello
+  // World"; ? Is that std::string?
+  //
+  // "Hello World" has a type of const char* and the C++ compiler will convert
+  // that to bool and not to std::string! See c++ - boost::variant - why is
+  // “const char*” converted to “bool”? - Stack Overflow.
+
+  {
+    std::variant<std::string, bool, int> v{"Hello"};
+    EXPECT_THAT(std::holds_alternative<std::string>(v), false);
+    EXPECT_THAT(std::holds_alternative<bool>(v), true);
+
+    v = "Hello Variant";
+    EXPECT_THAT(std::holds_alternative<std::string>(v), false);
+    EXPECT_THAT(std::holds_alternative<bool>(v), true);
+  }
+
+  // You can fix the code by using the actual types or
+  // using namespace std::string_literals;
+
+  {
+    std::variant<std::string, bool, int> v{"Hello"s};
+    EXPECT_THAT(std::holds_alternative<std::string>(v), true);
+
+    v = "Hello Variant"s;
+    EXPECT_THAT(std::holds_alternative<std::string>(v), true);
+  }
+}
+
+// ={=========================================================================
+TEST(CxxTypeVariant, cxx17_visitor)
+{
+  {
+    std::variant<int, float, std::string> v{33};
+
+    // variant_size
+    // variant_size_v
+    // (C++17)
+    // obtains the size of the variant's list of alternatives at compile time
+    //
+    // Helper variable template
+    // template <class T>
+    // inline constexpr std::size_t variant_size_v = std::variant_size<T>::value;
+
+    static_assert(std::variant_size<decltype(v)>::value == 3);
+    static_assert(std::variant_size_v<decltype(v)> == 3);
+
+    // Defined in header <variant>
+    // template <class Visitor, class... Variants>
+    // constexpr /*see below*/ visit( Visitor&& vis, Variants&&... vars );
+    //
+    // Now cxx-variant provides visitor.
+
+    struct Visitor
+    {
+      void operator()(int i) const { std::cout << "int: " << i << "\n"; }
+
+      void operator()(float f) const { std::cout << "float: " << f << "\n"; }
+
+      void operator()(const std::string &s) const
+      {
+        std::cout << "string: " << s << "\n";
+      }
+    };
+
+    std::visit(Visitor{}, v);
+  }
+
+  {
+    std::variant<int, float, std::string> v{33};
+
+    // a generic lambda is used to generate all possible overloads. Since all of
+    // the types in the variant supports << then we can print them.
+
+    auto Visitor = [](const auto &t) { std::cout << "type: " << t << "\n"; };
+
+    std::visit(Visitor, v);
+  }
+
+  {
+    // std::variant<int, float, std::string> v{33};
+    std::variant<int, float> v{33};
+
+    // can use a visitor to change the value. However, gets error when use:
+    //
+    // std::variant<int, float, std::string> v{33};
+    //
+    // since std::string and int cannot do "t *= 2;"
+    //
+    // that is, Generic lambdas can work if our types share the same “interface”
+
+    auto Visitor = [](auto &t) { t *= 2; };
+
+    EXPECT_THAT(std::get<0>(v), 33);
+
+    std::visit(Visitor, v);
+
+    EXPECT_THAT(std::get<0>(v), 66);
+  }
+
+  {
+    // might notice that I’ve used a state to hold the desired scaling factor
+    // value.
+
+    struct MultiplyVisitor
+    {
+      float mFactor;
+
+      MultiplyVisitor(float factor)
+          : mFactor(factor)
+      {}
+
+      void operator()(int &i) const { i *= static_cast<int>(mFactor); }
+
+      void operator()(float &f) const { f *= mFactor; }
+
+      void operator()(std::string &) const
+      {
+        // nothing to do here...
+      }
+    };
+
+    // see that it has std::string
+    std::variant<int, float, std::string> v{33};
+
+    std::visit(MultiplyVisitor(0.5f), v);
+  }
+}
+
+/*
+// ={=========================================================================
+
+In the first case - with the assignment operator - the exception is thrown in
+the constructor of the type. This happens before the old value is replaced in
+the variant, so the variant state is unchanged. As you can see we can still
+access int and print it.
+
+However, in the second case - emplace - the exception is thrown after the old
+state of the variant is destroyed. Emplace calls operator int to replace the
+value, but that throws. After that, the variant is in a wrong state, as we
+cannot recover.
+
+note that a variant that is “valueless by exception” is in an invalid state.
+Accessing a value from such variant is not possible. That’s why variant::index
+returns variant_npos, and std::get and std::visit will throw bad_variant_access.
+
+std::variant<Types...>::valueless_by_exception
+Returns false if and only if the variant holds a value.
+(that is, true when variant is valueless)
+
+*/
+
+TEST(CxxTypeVariant, cxx17_exception_safety)
+{
+  class ThrowingClass
+  {
+  public:
+    explicit ThrowingClass(int i)
+    {
+      if (i == 0)
+        throw int(10);
+    }
+    operator int() { throw int(10); }
+  };
+
+  std::variant<int, ThrowingClass> v{33};
+
+  // change the value
+  try
+  {
+    v = ThrowingClass(0);
+  } catch (...)
+  {
+    EXPECT_THAT(v.valueless_by_exception(), false);
+    EXPECT_THAT(std::get<int>(v), 33);
+  }
+
+  // inside emplace. emplace to change value
+  try
+  {
+    v.emplace<0>(ThrowingClass(10)); // calls the operator int
+  } catch (...)
+  {
+    // the old state was destroyed, so we're not in invalid state!
+    EXPECT_THAT(v.valueless_by_exception(), true);
+  }
+}
+
+/*
+// ={=========================================================================
+std::variant uses the memory in a similar way to union: so it will take the max
+size of the underlying types. But since we need something that will know what’s
+the currently active alternative, then we need to add some more space.
+
+Plus everything needs to honour the alignment rules.
+
+On GCC 8.1, 32 bit I have:
+
+sizeof string: 32
+sizeof variant<int, string>: 40
+sizeof variant<int, float>: 8
+sizeof variant<int, double>: 16
+
+What’s more interesting is that std::variant won’t allocate any extra space! No
+dynamic allocation happens to hold variants. and the discriminator.
+
+While you pay some extra space for all the type-safe functionality, it shouldn’t
+cost you regarding runtime performance.
+
+[ RUN      ] CxxTypeVariant.memory_considerations
+sizeof string: 32
+sizeof variant<int, string>: 40
+sizeof variant<int, float>: 8
+sizeof variant<int, double>: 16
+[       OK ] CxxTypeVariant.memory_considerations (0 ms)
+
+*/
+
+TEST(CxxTypeVariant, cxx17_memory_considerations)
+{
+  std::cout << "sizeof string: " << sizeof(std::string) << "\n";
+
+  std::cout << "sizeof variant<int, string>: "
+            << sizeof(std::variant<int, std::string>) << "\n";
+
+  std::cout << "sizeof variant<int, float>: "
+            << sizeof(std::variant<int, float>) << "\n";
+
+  std::cout << "sizeof variant<int, double>: "
+            << sizeof(std::variant<int, double>) << "\n";
+}
+
+// ={=========================================================================
+namespace cxx_variant
+{
+  // Error Handling
+  // The basic idea is to wrap the possible return type with some ErrorCode, and
+  // that way allow to output more information about the errors. Without using
+  // exceptions or output parameters.
+
+  enum class ErrorCode
+  {
+    Ok,
+    SystemError,
+    IoError,
+    NetworkError
+  };
+
+  std::variant<std::string, ErrorCode> FetchNameFromNetwork(int i)
+  {
+    if (i == 0)
+      return ErrorCode::SystemError;
+
+    if (i == 1)
+      return ErrorCode::NetworkError;
+
+    return std::string("Hello World!");
+  }
+
+  // Computing Roots of an Equation
+  // Sometimes the computation might give us several options, for example, real
+  // roots of the equation. With variant, we can wrap all the available options
+  // and express clearly how many roots can we find.
+
+  using DoublePair    = std::pair<double, double>;
+  using EquationRoots = std::variant<DoublePair, double, std::monostate>;
+
+  // NOTE on returning variant
+  EquationRoots FindRoots(double a, double b, double c)
+  {
+    auto d = b * b - 4 * a * c;
+
+    if (d > 0.0)
+    {
+      auto p = sqrt(d) / (2 * a);
+      return std::make_pair(-b + p, -b - p);
+    }
+    else if (d == 0.0)
+      return (-1 * b) / (2 * a);
+
+    return std::monostate();
+  }
+
+  struct RootPrinterVisitor
+  {
+    void operator()(const DoublePair &arg)
+    {
+      std::cout << "2 roots: " << arg.first << " " << arg.second << '\n';
+    }
+    void operator()(double arg) { std::cout << "1 root: " << arg << '\n'; }
+    void operator()(std::monostate) { std::cout << "No real roots found.\n"; }
+  };
+
+  // Parsing a Command Line
+  // Command line might contain text arguments that might be interpreted in a
+  // few ways:
+  //
+  // as integer
+  // as boolean flag
+  // as a string (not parsed)
+  // ...
+  //
+  // So we can build a variant that will hold all the possible options.
+  // Here’s a simple version with int and string:
+
+  // class CmdLine
+  // {
+  //   public:
+  //     using Arg = std::variant<int, std::string>;
+  // 
+  //   private:
+  //     std::map<std::string, Arg> mParsedArgs;
+  //
+  //   public:
+  //     explicit CmdLine(int argc, char** argv) { ParseArgs(argc, argv); }
+  //     // ...
+  // };
+
+  // And the parsing code:
+  //
+  // CmdLine::Arg TryParseString(char* arg)
+  // {
+  //   // try with int first
+  //   int iResult = 0;
+  //
+  //    auto res = std::from_chars(arg, arg+strlen(arg), iResult);
+  //    if (res.ec == std::errc::invalid_argument)
+  //    {
+  //      // if not possible, then just assume it's a string
+  //      return std::string(arg);
+  //    }
+  //
+  //   return iResult;
+  // }
+
+  // void CmdLine::ParseArgs(int argc, char** argv)
+  // {
+  //   // the form: -argName value -argName value
+  //   // unnamed? later...
+  //   for (int i = 1; i < argc; i+=2)
+  //   {
+  //     if (argv[i][0] != '-') // super advanced pattern matching! :)
+  //       throw std::runtime_error("wrong command name");
+  //
+  //     mParsedArgs[argv[i]+1] = TryParseString(argv[i+1]);
+  //   }
+  // }
+
+  // At the moment of writing, std::from_chars in GCC only supports integers, in
+  // MSVC floating point support is on the way. But the idea of the
+  // TryParseString is to try with parsing the input string to the best matching
+  // type. So if it looks like an integer, then we try to fetch integer.
+  // Otherwise, we’ll return an unparsed string. Of course, we can extend this
+  // approach.  
+  //
+  // Example how we can use it:
+
+  // try
+  // {
+  //   CmdLine cmdLine(argc, argv);
+  //
+  //   auto arg = cmdLine.Find("paramInt");
+  //   if (arg && std::holds_alternative<int>(*arg))
+  //     std::cout << "paramInt is " 
+  //       << std::get<int>(*arg) << "\n";
+  //
+  //   arg = cmdLine.Find("textParam");
+  //   if (arg && std::holds_alternative<std::string>(*arg))
+  //     std::cout << "textParam is " 
+  //       << std::get<std::string>(*arg) << "\n";    
+  // }
+  // catch (std::runtime_error &err)
+  // {
+  //   std::cout << err.what() << "\n";
+  // }
+
+} // namespace cxx_variant
+
+TEST(CxxTypeVariant, cxx17_examples)
+{
+  using namespace cxx_variant;
+
+  {
+    auto response = FetchNameFromNetwork(0);
+
+    // return errorcode
+    EXPECT_THAT(std::holds_alternative<std::string>(response), false);
+    EXPECT_THAT(std::holds_alternative<ErrorCode>(response), true);
+
+    response = FetchNameFromNetwork(10);
+
+    // return string
+    EXPECT_THAT(std::holds_alternative<std::string>(response), true);
+    EXPECT_THAT(std::holds_alternative<ErrorCode>(response), false);
+  }
+
+  {
+    std::visit(RootPrinterVisitor{}, FindRoots(10, 0, -2));
+    std::visit(RootPrinterVisitor{}, FindRoots(2, 0, -1));
   }
 }
 
@@ -7362,10 +7751,18 @@ namespace cxx_callable
 
   size_t print_value(Foo &foo) { return foo.get_value(); }
 
+  bool check_string_size(const std::string &s, int value)
+  {
+    if (s.size() == value)
+      return true;
+
+    return false;
+  }
 } // namespace cxx_callable
 
 /*
 // ={=========================================================================
+cxx-function
 NOTE NOTE on the syntax since "has to specify the target". 
 For example, update_10() takes no argument but has to say, "Foo &":
 
@@ -7378,7 +7775,7 @@ type ‘std::function<std::__cxx11::basic_string<char>()>’ requested
     std::function<std::string()> f = &Foo::return_mesg;
 */
 
-TEST(CxxCallable, function_template)
+TEST(CxxCallable, function_template_1)
 {
   using namespace cxx_callable;
 
@@ -7496,6 +7893,20 @@ TEST(CxxCallable, function_template)
 }
 
 // ={=========================================================================
+// cxx-function can be used with global function.
+TEST(CxxCallable, function_template_2)
+{
+  using namespace cxx_callable;
+
+  using handler = std::function<bool(const std::string &, int)>;
+
+  handler f = check_string_size;
+
+  EXPECT_THAT(f("handler", 7), true);
+  EXPECT_THAT(f("handler", 1), false);
+}
+
+// ={=========================================================================
 // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
 // generate a callable object. The callable generated by `mem_fn` can be
 // called on either an object or a pointer.
@@ -7582,6 +7993,7 @@ TEST(CxxCallable, memfn)
   //     return __result;
   //   }
   // } // namespace algo_code
+
   {
     std::vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
     std::vector<size_t> result{};
@@ -7963,6 +8375,7 @@ TEST(CxxCallable, bind_and_member_function)
   // void update(int value) noexcept;
   {
     Foo foo = Foo(100);
+
     std::function<void(int)> call =
       std::bind(&Foo::update, &foo, std::placeholders::_1);
 
@@ -8188,7 +8601,20 @@ namespace cxx_callable
 } // namespace cxx_callable
 
 // ={=========================================================================
-TEST(CxxCallable, bind_embedded_target)
+// cxx-bind can embed args
+TEST(CxxCallable, bind_embedded_args)
+{
+  using namespace cxx_callable;
+
+  EXPECT_THAT(check_size("hello", 4), true);
+
+  auto f = std::bind(check_size, "hello", 4);
+
+  EXPECT_THAT(f(), true);
+}
+
+// ={=========================================================================
+TEST(CxxCallable, bind_embedded_target_1)
 {
   using namespace cxx_callable;
 
@@ -8211,6 +8637,32 @@ TEST(CxxCallable, bind_embedded_target)
 
   // no since have to have target
   // loop.invokeMethod(&Target::setNameAndValue, "case", 200);
+}
+
+/*
+// ={=========================================================================
+
+when use:
+
+loop.invokeMethod(std::bind(Target::getValue, &t1));
+
+error: invalid use of non-static member function ‘int cxx_callable::Target::getValue()’
+   loop.invokeMethod(std::bind(Target::getValue, &t1));
+                                       ^~~~~~~~
+*/
+
+TEST(CxxCallable, bind_embedded_target_2)
+{
+  using namespace cxx_callable;
+
+  EventLoop loop;
+  Target t1("t1", 100);
+
+  // okay version
+  loop.invokeMethod(std::bind(&Target::getValue, &t1));
+
+  // error version
+  // loop.invokeMethod(std::bind(Target::getValue, &t1));
 }
 
 // ={=========================================================================
@@ -8949,7 +9401,7 @@ namespace cxx_smart_pointer
 
   std::shared_ptr<SmartFoo1> SmartFoo1::getFoo2()
   {
-    // NOTE:
+    // NOTE: *cxx-sp-make-shared*
     // error: ‘cxx_smart_pointer::SmartFoo1::SmartFoo1()’ is private within this context
     // return std::make_shared<SmartFoo1>();
 
@@ -9098,6 +9550,7 @@ TEST(CxxSmartPointer, check_ctor)
   }
 }
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_copy_1)
 {
   auto p = std::make_shared<int>(42);
@@ -9125,6 +9578,7 @@ TEST(CxxSmartPointer, check_copy_1)
   EXPECT_THAT(*r, 42);
 }
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_copy_2)
 {
   auto p = std::make_shared<int>(42);
@@ -9152,6 +9606,7 @@ TEST(CxxSmartPointer, check_copy_2)
   EXPECT_THAT(r.use_count(), 3);
 }
 
+// ={=========================================================================
 // it is okay to copy around as long as f1, f2 remains.
 
 TEST(CxxSmartPointer, check_copy_3)
@@ -9185,6 +9640,7 @@ TEST(CxxSmartPointer, check_copy_3)
   EXPECT_THAT(f2.use_count(), 2);
 }
 
+// ={=========================================================================
 // o Double delete *cxx-sp-shared-ownership*
 //
 // Have to ensure that only `one group of shared pointers` owns an object.
@@ -9259,6 +9715,7 @@ TEST(CxxSmartPointer, check_group_or_ownership)
   }
 }
 
+// ={=========================================================================
 // common for shared and unique
 TEST(CxxSmartPointer, check_reset)
 {
@@ -11739,6 +12196,8 @@ value: +3301, value: -3301
 */
 
 // ={=========================================================================
+// #include <iomanip> for std::setw
+
 TEST(CxxStream, manipulators_1)
 {
   // showpos Forces writing a positive sign on positive numbers
@@ -13502,6 +13961,9 @@ regular expression.
 regex_search() checks whether the character sequence *partially* matches a
 regular expression.
 
+Returns true if a match exists, false otherwise. In either case, the object m is
+updated, as follows:
+
 */
 TEST(CxxRegex, match_and_search)
 {
@@ -13566,114 +14028,6 @@ TEST(CxxRegex, match_2)
 
 /*
 // ={=========================================================================
-
-C++PL 37.1
-
-That last pattern is useful for parsing XML. It finds tag/end-of-tag markers.
-Note that I used a non-greedy match (a lazy match), .∗? , for the subpattern
-between the tag and the end tag. Had I used plain .∗ , this input would have
-caused a problem:
-
-Always look for the <b>bright</b> side of <b>life</b>.
-
-A greedy match for the first subpattern would match the first < with the last >
-. A greedy match on the second subpattern would match the first <b> with the
-last </b> . Both would be correct behavior, but unlikely what the programmer
-wanted.
-
-NOTE: NOT work as described??
-
-*/
-
-TEST(CxxRegex, match_and_greedy)
-{
-  {
-    std::string data{"<tag>value</tag>"};
-
-    // has only one sub_match
-    std::regex reg(R"(<(.*)>.*</\1>)");
-
-    std::smatch m;
-
-    auto found = std::regex_match(data, m, reg);
-
-    EXPECT_EQ(found, true);
-
-    EXPECT_THAT(m.size(), 2);
-
-    EXPECT_THAT(m[0].str(), "<tag>value</tag>");
-    EXPECT_THAT(m[1].str(), "tag");
-  }
-
-  {
-    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
-
-    std::regex reg(R"(<(.*)>.*</\1>)");
-
-    std::smatch m;
-
-    auto found = std::regex_match(data, m, reg);
-
-    EXPECT_EQ(found, false);
-
-    EXPECT_THAT(m.size(), 0);
-  }
-
-  {
-    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
-
-    std::regex reg(R"(<(.*)>(.*)</\1>)");
-
-    std::smatch m;
-
-    auto found = std::regex_match(data, m, reg);
-
-    EXPECT_EQ(found, false);
-
-    EXPECT_THAT(m.size(), 0);
-  }
-
-  {
-    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
-
-    std::regex reg(R"(.*<(.*)>(.*)</\1>)");
-
-    std::smatch m;
-
-    auto found = std::regex_match(data, m, reg);
-
-    EXPECT_EQ(found, true);
-
-    EXPECT_THAT(m.size(), 3);
-
-    EXPECT_THAT(m[0].str(),
-                "Always look for the <b>bright</b> side of <b>life</b>");
-    EXPECT_THAT(m[1].str(), "b");
-    EXPECT_THAT(m[2].str(), "life");
-  }
-
-  {
-    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
-
-    std::regex reg(R"(.*<(.*?)>(.*?)</\1>)");
-
-    std::smatch m;
-
-    auto found = std::regex_match(data, m, reg);
-
-    EXPECT_EQ(found, true);
-
-    EXPECT_THAT(m.size(), 3);
-
-    EXPECT_THAT(m[0].str(),
-                "Always look for the <b>bright</b> side of <b>life</b>");
-    EXPECT_THAT(m[1].str(), "b");
-    EXPECT_THAT(m[2].str(), "life");
-  }
-}
-
-/*
-// ={=========================================================================
 CXXSLR-14.2 Dealing with Subexpressions
 
 In this example, we can demonstrate the use of match_results objects, which can
@@ -13725,7 +14079,7 @@ TEST(CxxRegex, match_result)
     EXPECT_THAT(m.empty(), false);
 
     // size() yields the number of "sub_match" objects (including m[0]).
-
+    // number of marked subexpressions plus 1, that is, 1+e.mark_count()
     EXPECT_THAT(m.size(), 4);
 
     // member function str() to yield the matched string as a whole (calling
@@ -13748,6 +14102,7 @@ TEST(CxxRegex, match_result)
     // a whole (calling position() or position(0)) or the position of the nth
     // matched substring (calling length(n))
 
+    // 9 is where "<"
     EXPECT_THAT(m.position(), 9);
     EXPECT_THAT(m.position(0), 9);
     EXPECT_THAT(m.prefix().str(), "XML tag: ");
@@ -13790,6 +14145,157 @@ TEST(CxxRegex, match_result)
     EXPECT_THAT(os.str(),
                 "<tag-name>the value</tag-name>, 30\ntag-name, "
                 "8\nthe value, 9\ntag-name, 8\n");
+  }
+}
+
+/*
+// ={=========================================================================
+14.3 Regex Iterators
+
+sregex_iterator	regex_iterator<std::string::const_iterator>
+
+[ RUN      ] CxxRegex.iterators
+match: <first>Nico</first>
+ tag: first
+ value: Nico
+match: <last>Josuttis</last>
+ tag: last
+ value: Josuttis
+[       OK ] CxxRegex.iterators (0 ms)
+
+*/
+
+TEST(CxxRegex, iterators)
+{
+  std::string data = "<person>\n"
+                     " <first>Nico</first>\n"
+                     " <last>Josuttis</last>\n"
+                     "</person>\n";
+
+  std::regex reg("<(.*)>(.*)</(\\1)>");
+
+  // iterate over all matches using a regex_iterator
+  // initialize a regex iterator, iterating over data to search for matches of
+  // reg. The default constructor of this type defines a past-the-end iterator
+  //
+  // can now use this iterator as any other bidirectional iterator
+
+  std::sregex_iterator pos(data.cbegin(), data.cend(), reg);
+  std::sregex_iterator end{};
+
+  // str() is std::smatch interfaces
+  for (; pos != end; ++pos)
+  {
+    cout << "match: " << pos->str() << endl;
+    cout << " tag: " << pos->str(1) << endl;
+    cout << " value: " << pos->str(2) << endl;
+    cout << " tag: " << pos->str(3) << endl;
+  }
+
+  // use a regex_iterator to process each matched substring as element in an
+  // algorithm
+
+  std::sregex_iterator beg{data.cbegin(), data.cend(), reg};
+  std::for_each(beg, end, [](const smatch &m) {
+    cout << "match: " << m.str() << endl;
+    cout << " tag: " << m.str(1) << endl;
+    cout << " value: " << m.str(2) << endl;
+    cout << " tag: " << m.str(3) << endl;
+  });
+}
+
+/*
+// ={=========================================================================
+14.4 Regex Token Iterators cxx-token
+
+[ RUN      ] CxxRegex.token_iterators
+match : <first>Nico</first>
+match : Nico
+match : <last>Josuttis</last>
+match : Josuttis
+
+match : first
+match : Nico
+match : last
+match : Josuttis
+
+name: nico
+name: jim
+name: helmut
+name: paul
+name: tim
+name: john paul
+name: rita
+[       OK ] CxxRegex.token_iterators (1 ms)
+
+*/
+TEST(CxxRegex, token_iterators)
+{
+  std::string data = "<person>\n"
+                     " <first>Nico</first>\n"
+                     " <last>Josuttis</last>\n"
+                     "</person>\n";
+
+  std::regex reg("<(.*)>(.*)</(\\1)>");
+
+  {
+    // a list of two indexes (0 and 2): 0: full match, 2: second substring
+    // The list of indexes we are interested in defines that we are interested in
+    // all matches and the second substring of each match.
+
+    std::sregex_token_iterator pos{data.cbegin(), data.cend(), reg, {0, 2}};
+    std::sregex_token_iterator end{};
+
+    for (; pos != end; ++pos)
+    {
+      cout << "match : " << pos->str() << endl;
+    }
+    cout << endl;
+  }
+
+  {
+    // defines that we are interested in 1 and 2 substring of each match.
+
+    std::sregex_token_iterator pos{data.cbegin(), data.cend(), reg, {1, 2}};
+    std::sregex_token_iterator end{};
+
+    for (; pos != end; ++pos)
+    {
+      cout << "match : " << pos->str() << endl;
+    }
+    cout << endl;
+  }
+
+  // cxx-token
+  {
+    std::string names{"nico, jim, helmut, paul, tim, john paul, rita"};
+
+    // separated by ",; or ." and spaces
+    // defines what separates these names. Here, it is a comma or a semicolon or
+    // a period with optional whitespaces (spaces, tabs, and newlines) around:
+    // so get "john paul" but not "john" and "paul"
+
+    std::regex sep{"[ \t\n]*[,;.][ \t\n]*"};
+    // same as regex sep("[[:space:]]*[,;.][[:space:]]*");
+
+    // (2)	(since C++11)
+    // regex_token_iterator( BidirIt a, BidirIt b,
+    //                       const regex_type& re,
+    //                       int submatch = 0,
+    //                       std::regex_constants::match_flag_type m =
+    //                           std::regex_constants::match_default );
+    //
+    // submatch - the index of the submatch that should be returned. "0"
+    // represents the entire match, and "-1" represents the parts that are not
+    // matched (e.g, the stuff between matches).
+
+    std::sregex_token_iterator p{names.cbegin(), names.cend(), sep, -1};
+    std::sregex_token_iterator e{};
+
+    for (; p != e; ++p)
+    {
+      cout << "name: " << *p << endl;
+    }
   }
 }
 
@@ -13956,6 +14462,114 @@ TEST(CxxRegex, match_class_2)
 
       EXPECT_TRUE(found);
     }
+  }
+}
+
+/*
+// ={=========================================================================
+
+C++PL 37.1
+
+That last pattern is useful for parsing XML. It finds tag/end-of-tag markers.
+Note that I used a non-greedy match (a lazy match), .∗? , for the subpattern
+between the tag and the end tag. Had I used plain .∗ , this input would have
+caused a problem:
+
+Always look for the <b>bright</b> side of <b>life</b>.
+
+A greedy match for the first subpattern would match the first < with the last >
+. A greedy match on the second subpattern would match the first <b> with the
+last </b> . Both would be correct behavior, but unlikely what the programmer
+wanted.
+
+NOTE: NOT work as described??
+
+*/
+
+TEST(CxxRegex, match_and_greedy)
+{
+  {
+    std::string data{"<tag>value</tag>"};
+
+    // has only one sub_match
+    std::regex reg(R"(<(.*)>.*</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 2);
+
+    EXPECT_THAT(m[0].str(), "<tag>value</tag>");
+    EXPECT_THAT(m[1].str(), "tag");
+  }
+
+  {
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(<(.*)>.*</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, false);
+
+    EXPECT_THAT(m.size(), 0);
+  }
+
+  {
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(<(.*)>(.*)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, false);
+
+    EXPECT_THAT(m.size(), 0);
+  }
+
+  {
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(.*<(.*)>(.*)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 3);
+
+    EXPECT_THAT(m[0].str(),
+                "Always look for the <b>bright</b> side of <b>life</b>");
+    EXPECT_THAT(m[1].str(), "b");
+    EXPECT_THAT(m[2].str(), "life");
+  }
+
+  {
+    std::string data{"Always look for the <b>bright</b> side of <b>life</b>"};
+
+    std::regex reg(R"(.*<(.*?)>(.*?)</\1>)");
+
+    std::smatch m;
+
+    auto found = std::regex_match(data, m, reg);
+
+    EXPECT_EQ(found, true);
+
+    EXPECT_THAT(m.size(), 3);
+
+    EXPECT_THAT(m[0].str(),
+                "Always look for the <b>bright</b> side of <b>life</b>");
+    EXPECT_THAT(m[1].str(), "b");
+    EXPECT_THAT(m[2].str(), "life");
   }
 }
 

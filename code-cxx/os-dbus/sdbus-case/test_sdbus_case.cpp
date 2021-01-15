@@ -41,6 +41,22 @@ namespace
     std::string message("dangling");
     loop.invokeMethod(std::bind(f2, std::ref(message)));
   }
+
+  class Foo
+  {
+    private:
+      int m_value{};
+
+    public:
+      void w1(int v) 
+      {
+        m_value += 1;
+        std::cout << "Foo::w1: " << m_value << std::endl;
+      }
+
+      int get()
+      { return m_value; }
+  };
 } // namespace
 
 // ={=========================================================================
