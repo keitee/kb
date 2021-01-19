@@ -25,16 +25,32 @@ using testing::StrEq;
 
 namespace cxx_string
 {
-  void foo1(const std::string &text)
+  // if use iterators
+  void trim_2(std::string &s, const char c)
   {
-    // do some processing on input text.
-    std::string token = text.substr(0, 3);
-  }
+    if (s.empty())
+      return;
 
-  void foo4(std::string_view text)
-  {
-    // do some processing on input text.
-    std::string_view token = text.substr(0, 3);
+    auto end = s.end();
+
+    // skip `c` chars if there are and note that `end` is decreased and is
+    // checked. hence need to ++end at below.
+    //
+    // also note that ulike trim_1(), works on "ooo" since `end` is begin.
+
+    for (; end != s.begin() && *--end == c;)
+      ;
+
+    if (*end != c)
+      ++end;
+
+    if (end == s.end())
+      std::cout << "ends are equal\n";
+    else
+      std::cout << "ends are not equal\n";
+
+    // s.erase(end, s.end());
+    s.erase(end);
   }
 }
 
@@ -42,19 +58,9 @@ TEST(StringPad, parse_ids)
 {
   using namespace cxx_string;
 
-  {
-    const char *input = "this is input";
-
-    foo1("this is input");
-    foo1(input);
-  }
-
-  {
-    const char *input = "this is input";
-
-    foo4("this is input");
-    foo4(input);
-  }
+  string s1{"zzz"};
+  trim_2(s1, 'o');
+  EXPECT_EQ(s1, "zzz");
 }
 
 // ={=========================================================================

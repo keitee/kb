@@ -873,7 +873,7 @@ basic_string substr( size_type pos = 0, size_type count = npos ) const;
 constexpr basic_string substr( size_type pos = 0, size_type count = npos ) const; 
 (since C++20)
 
-Returns a substring [pos, pos+count). If the requested substring extends past
+Returns a "substring [pos, pos+count)" If the requested substring extends past
 the end of the string, or if count == npos, the returned substring is [pos,
 size()).
 
@@ -918,7 +918,7 @@ TEST(StringOperation, substr)
 
     auto pos = coll.find_first_of(',');
 
-    // see not "pos-1"
+    // see not "pos-1" and use of "pos" as "count" when substr(pos, count)
     auto id1 = coll.substr(0, pos);
 
     // see "pos+1"
@@ -1029,32 +1029,146 @@ TEST(StringOperation, check_add_char)
   }
 }
 
-// ={=========================================================================
-// string-erase, string-replace
-//
-// basic_string& replace( size_type pos, size_type count,
-//  const basic_string& str );
-//
-// str	-	string to use for replacement
-//
-// Replaces the part of the string indicated by either [pos, pos + count) or
-// [first, last) with a new string.
+/*
+={=========================================================================
+string-erase, string-replace
+
+basic_string& replace( 
+ size_type pos, size_type count, const basic_string& str );
+
+str	-	string to use for replacement
+
+Replaces the part of the string indicated by either [pos, pos + count) 
+or [first, last) with a new string.
+
+(1)
+basic_string& erase( size_type index = 0, size_type count = npos ); 
+(until C++20)
+constexpr basic_string& erase( size_type index = 0, size_type count = npos );
+(since C++20)
+
+2) Removes the character at position.
+iterator erase( const_iterator position );
+
+3) Removes the characters in the range [first, last).
+iterator erase( iterator first, iterator last );
+
+<ex>
+void trim_2(std::string &s, const char c)
+{
+  if (s.empty())
+    return;
+
+  auto end = s.end();
+
+  // skip `c` chars if there are and note that `end` is decreased and is
+  // checked. hence need to ++end at below.
+  //
+  // also note that ulike trim_1(), works on "ooo" since `end` is begin.
+
+  for (; end != s.begin() && *--end == c;)
+    ;
+
+  if (*end != c)
+    ++end;
+
+  // end and s.end becomes "equal"
+
+  1) s.erase(end, s.end());
+  2) s.erase(end);
+}
+
+1) works okay and 2) causes "cxx-core" on:
+
+string s1{"zzz"};
+trim_2(s1, 'o');
+EXPECT_EQ(s1, "zzz");
+
+Why it's problem to erase element end poinst to since erase(pos) 
+call "_M_erase" regardless?  
+
+  **
+   *  @brief  Remove a range of characters.
+   *  @param __first  Iterator referencing the first character to remove.
+   *  @param __last  Iterator referencing the end of the range.
+   *  @return  Iterator referencing location of first after removal.
+   *
+   *  Removes the characters in the range [first,last) from this string.
+   *  The value of the string doesn't change if an error is thrown.
+  *
+  iterator
+  erase(__const_iterator __first, __const_iterator __last)
+  {
+    _GLIBCXX_DEBUG_PEDASSERT(__first >= begin() && __first <= __last
+     && __last <= end());
+
+    const size_type __pos = __first - begin();
+
+    if (__last == end())
+      this->_M_set_length(__pos);
+    else
+      this->_M_erase(__pos, __last - __first);
+
+    return iterator(this->_M_data() + __pos);
+  }
+
+Why didn't get assert when use -D_GLIBCXX_DEBUG.
+
+when looked at source:
+
+**
+ *  @brief  Remove one character.
+ *  @param __position  Iterator referencing the character to remove.
+ *  @return  iterator referencing same location after removal.
+ *
+ *  Removes the character at @a __position from this string. The value
+ *  of the string doesn't change if an error is thrown.
+ *
+iterator
+  erase(iterator __position)
+  {
+    _GLIBCXX_DEBUG_PEDASSERT(__position >= begin()
+           && __position < end());
+
+    const size_type __pos = __position - begin();
+
+    this->_M_erase(__pos, size_type(1));
+
+    return iterator(_M_data() + __pos);
+  }
+
+Oh, it does have ASSERT How to enable? Use -D_GLIBCXX_DEBUG_PEDANTIC then
+gets assert rather than having a core only which need to debug further.
+
+/usr/include/c++/4.9/bits/basic_string.h:1399: std::basic_string<_CharT,
+_Traits, _Alloc>::iterator std::basic_string<_CharT, _Traits,
+_Alloc>::erase(std::basic_string<_CharT, _Traits, _Alloc>::iterator)
+[with _CharT = char; _Traits = std::char_traits<char>; _Alloc =
+std::allocator<char>; std::basic_string<_CharT, _Traits,
+_Alloc>::iterator = __gnu_cxx::__normal_iterator<char*,
+std::basic_string<char> >; typename
+_Alloc::rebind<_CharT>::other::pointer = char*]: Assertion '__position >=
+_M_ibegin() && __position < _M_iend()' failed.
+Aborted (core dumped)
+
+*/
 
 TEST(StringOperation, replace)
 {
   {
     std::string s = "i18n";
 
-    // replace sub starting from 1 and length 2 with the new string. see "s"
-    // changes its size
+    // replace sub with the given string. not use "pos, count" since the string
+    // is given.
+    // see "s" changes its size
     s.replace(1, 2, "nternationalizatio");
     EXPECT_EQ(s, "internationalization");
 
-    // s: international. erase from 13 to end
+    // s: international. erase from 13 "to the end"
     s.erase(13);
     EXPECT_EQ(s, "international");
 
-    s.erase(7, 5); // internaxxxxxl
+    s.erase(7, 5);
     EXPECT_EQ(s, "internal");
 
     // *cxx-string-pop-back*
@@ -1064,7 +1178,7 @@ TEST(StringOperation, replace)
     s.pop_back(); // s: interna (since C++11)
     EXPECT_EQ(s, "interna");
 
-    s.replace(0, 2, "ex"); // s: externa
+    s.replace(0, 1, "ex"); // s: externa
     EXPECT_EQ(s, "externa");
   }
 
@@ -1097,6 +1211,7 @@ TEST(StringOperation, replace)
     s.erase(it);
     EXPECT_THAT(s, "acde");
 
+    // since "it" wasn't changed
     s.erase(it);
     EXPECT_THAT(s, "ade");
   }
@@ -1336,22 +1451,24 @@ TEST(StringOperation, clear)
   }
 }
 
-// ={=========================================================================
-// string-compare
-//
-// int compare( const basic_string& str ) const; (until C++11)
-// int compare( const basic_string& str ) const noexcept; (since C++11)
-//
-// Return value
-// negative value if `*this` appears before the character sequence specified by
-// the arguments, in lexicographical order
-//
-// zero if both character sequences compare equivalent
-//
-// positive value if *this appears after the character sequence specified by the
-// arguments, in lexicographical order
-//
-// int compare(size_type pos1, size_type count1, const basic_string& str ) const;
+/*
+={=========================================================================
+string-compare
+
+int compare( const basic_string& str ) const; (until C++11)
+int compare( const basic_string& str ) const noexcept; (since C++11)
+
+Return value
+negative value if `*this` appears before the character sequence specified by
+the arguments, in lexicographical order
+
+zero if both character sequences compare equivalent
+
+positive value if *this appears after the character sequence specified by the
+arguments, in lexicographical order
+
+int compare(size_type pos1, size_type count1, const basic_string& str ) const;
+*/
 
 TEST(StringCompare, check_member_function)
 {
@@ -2215,6 +2332,9 @@ TEST(StringConversion, stringstream_to_hex)
 }
 
 // ={=========================================================================
+// is there a better way than scanf()?
+// cxx-token
+
 TEST(StringConversion, stringstream_and_scanf)
 {
   const char address[]{"AA:BB:CC:DD:EE:FF"};
@@ -2649,26 +2769,27 @@ TEST(StringPad, AppendNull)
   EXPECT_EQ(s1.length(), 0);
 }
 
-// ={=========================================================================
-// string-trim
-//
-// 4.2 Trimming a String
-//
-// void trim(std::string &s, char c);
-//
-// remove chars from the end which matches with the given char
-//
-// string s1{"zoo"};
-// rtrim(s1, 'o');
-// EXPECT_EQ(s1, "z");
-//
-// variations: trim whitespace, trim from the left.
+/*
+={=========================================================================
+string-trim
 
-// use single call to erase than removing one at a time.
+4.2 Trimming a String
+
+void trim(std::string &s, char c);
+
+remove chars "from the end" which matches with the given char
+
+string s1{"zoo"};
+rtrim(s1, 'o');
+EXPECT_EQ(s1, "z");
+
+variations: trim whitespace, trim from the left.
+
+use single call to erase than removing one at a time.
+*/
 
 namespace string_trim
 {
-
   void trim_1(string &s, const char c)
   {
     int start = s.size() - 1;
@@ -2738,45 +2859,7 @@ namespace string_trim
     // s.end(pos) is different from s.end(pos, pos) and that explains why it's
     // okay when use erase(pos, pos).
     //
-    // okay, understand why it's problem to erase element end poinst to. why
-    // didn't get assert when use -D_GLIBCXX_DEBUG.
-    //
-    // when looked at source:
-    //
-    // /**
-    //  *  @brief  Remove one character.
-    //  *  @param __position  Iterator referencing the character to remove.
-    //  *  @return  iterator referencing same location after removal.
-    //  *
-    //  *  Removes the character at @a __position from this string. The value
-    //  *  of the string doesn't change if an error is thrown.
-    //  */
-    // iterator
-    //   erase(iterator __position)
-    //   {
-    //     _GLIBCXX_DEBUG_PEDASSERT(__position >= _M_ibegin()
-    //         && __position < _M_iend());
-    //     const size_type __pos = __position - _M_ibegin();
-    //     _M_mutate(__pos, size_type(1), size_type(0));
-    //     _M_rep()->_M_set_leaked();
-    //     return iterator(_M_data() + __pos);
-    //   }
-    //
-    // Oh, it does have ASSERT How to enable? Use -D_GLIBCXX_DEBUG_PEDANTIC then
-    // gets assert rather than having a core only which need to debug further.
-    //
-    // /usr/include/c++/4.9/bits/basic_string.h:1399: std::basic_string<_CharT,
-    // _Traits, _Alloc>::iterator std::basic_string<_CharT, _Traits,
-    // _Alloc>::erase(std::basic_string<_CharT, _Traits, _Alloc>::iterator)
-    // [with _CharT = char; _Traits = std::char_traits<char>; _Alloc =
-    // std::allocator<char>; std::basic_string<_CharT, _Traits,
-    // _Alloc>::iterator = __gnu_cxx::__normal_iterator<char*,
-    // std::basic_string<char> >; typename
-    // _Alloc::rebind<_CharT>::other::pointer = char*]: Assertion '__position >=
-    // _M_ibegin() && __position < _M_iend()' failed.
-    // Aborted (core dumped)
   }
-
 } // namespace string_trim
 
 TEST(StringTrim, 2018_11)
@@ -2845,9 +2928,53 @@ TEST(StringTrim, 2018_11)
   }
 }
 
+namespace string_trim
+{
+  std::string trim_spaces_1(const std::string &s)
+  {
+    // copy s
+    std::string ret{s};
+
+    auto beg = ret.find_first_not_of(" \t");
+
+    // if "leading spaces" are found
+    if (std::string::npos != beg)
+      ret = ret.substr(beg);
+
+    auto end = ret.find_last_not_of(" \t");
+
+    // if "trailing spaces" are found. "end+1" to include the found char.
+    if (std::string::npos != end)
+      ret = ret.substr(0, end+1);
+
+    return ret;
+  }
+
+  std::string trim_spaces_2(const std::string &s)
+  {
+    std::stringstream ss{s};
+    std::string ret{};
+    ss >> ret;
+    return ret;
+  }
+} // namespace string_trim
+
 /* 
 ={=========================================================================
-cxx-string-split cxx-string-parse
+cxx-stringstream remove "spaces" at both ends.
+*/
+
+TEST(StringTrim, remove_spaces)
+{
+  using namespace string_trim;
+
+  EXPECT_THAT(trim_spaces_1("   trim_spaces    "), "trim_spaces");
+  EXPECT_THAT(trim_spaces_2("   trim_spaces    "), "trim_spaces");
+}
+
+/* 
+={=========================================================================
+cxx-string-parse cxx-parse cxx-token
 
 4.6 Splitting a String
 
@@ -2861,7 +2988,7 @@ CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
 make the original example short.
 
 */
-TEST(StringSplit, get_extension)
+TEST(StringParse, get_extension)
 {
   const string suffix{"tmp"};
   vector<string> coll1{"prog.dat", "mydir", "hello.", "opps.tmp", "end.dat"};
@@ -3051,7 +3178,7 @@ namespace stringsplit
 } // namespace stringsplit
 
 // ={=========================================================================
-TEST(StringSplit, use_delimeter)
+TEST(StringParse, custom_and_delimeter)
 {
   using namespace stringsplit;
 
@@ -3137,7 +3264,7 @@ TEST(StringSplit, use_delimeter)
 }
 
 // ={=========================================================================
-TEST(StringSplit, use_delimeter_is_any)
+TEST(StringParse, custom_and_delimeter_any)
 {
   using namespace stringsplit;
 
@@ -3161,7 +3288,7 @@ TEST(StringSplit, use_delimeter_is_any)
 }
 
 // ={=========================================================================
-TEST(StringSplit, use_delimeter_no_empty)
+TEST(StringParse, custom_and_delimeter_not_support_empty)
 {
   using namespace stringsplit;
 
@@ -3185,7 +3312,7 @@ used by the trim_if-style functions.
 
 */
 
-TEST(StringSplit, use_boost)
+TEST(StringParse, boost)
 {
   {
     vector<string> coll;
@@ -3237,23 +3364,173 @@ TEST(StringSplit, use_boost)
   }
 }
 
+/*
 // ={=========================================================================
-// string-token
-//
-// 4.7, tokenizing a string, C++ codebook
-//
-// int main( ) {
-//    string s = " razzle dazzle giddyup ";
-//    string tmp;
-//    StringTokenizer st(s);
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.hasMoreTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-//
-// * there are couple of points that are different from the book
+Copied from:
+
+14.4 Regex Token Iterators cxx-token
+
+[ RUN      ] CxxRegex.token_iterators
+match : <first>Nico</first>
+match : Nico
+match : <last>Josuttis</last>
+match : Josuttis
+
+match : first
+match : Nico
+match : last
+match : Josuttis
+
+name: nico
+name: jim
+name: helmut
+name: paul
+name: tim
+name: john paul
+name: rita
+
+name: nico,
+name: jim,
+name: helmut,
+name: paul,
+name: tim,
+name: john
+name: paul,
+name: rita
+[       OK ] CxxRegex.token_iterators (1 ms)
+
+*/
+// TEST(CxxRegex, token_iterators)
+TEST(StringParse, regex)
+{
+  std::string data = "<person>\n"
+                     " <first>Nico</first>\n"
+                     " <last>Josuttis</last>\n"
+                     "</person>\n";
+
+  std::regex reg("<(.*)>(.*)</(\\1)>");
+
+  {
+    // a list of two indexes (0 and 2): 0: full match, 2: second substring
+    // The list of indexes we are interested in defines that we are interested in
+    // all matches and the second substring of each match.
+
+    std::sregex_token_iterator pos{data.cbegin(), data.cend(), reg, {0, 2}};
+    std::sregex_token_iterator end{};
+
+    for (; pos != end; ++pos)
+    {
+      cout << "match : " << pos->str() << endl;
+    }
+    cout << endl;
+  }
+
+  {
+    // defines that we are interested in 1 and 2 substring of each match.
+
+    std::sregex_token_iterator pos{data.cbegin(), data.cend(), reg, {1, 2}};
+    std::sregex_token_iterator end{};
+
+    for (; pos != end; ++pos)
+    {
+      cout << "match : " << pos->str() << endl;
+    }
+    cout << endl;
+  }
+
+  // cxx-token
+  {
+    std::string names{"nico, jim, helmut, paul, tim, john paul, rita"};
+
+    // separated by ",; or ." and spaces
+    // defines what separates these names. Here, it is a comma or a semicolon or
+    // a period with optional whitespaces (spaces, tabs, and newlines) around:
+    // so get "john paul" but not "john" and "paul"
+
+    std::regex sep{"[ \t\n]*[,;.][ \t\n]*"};
+    // same as regex sep("[[:space:]]*[,;.][[:space:]]*");
+
+    // (2)	(since C++11)
+    // regex_token_iterator( BidirIt a, BidirIt b,
+    //                       const regex_type& re,
+    //                       int submatch = 0,
+    //                       std::regex_constants::match_flag_type m =
+    //                           std::regex_constants::match_default );
+    //
+    // submatch - the index of the submatch that should be returned. "0"
+    // represents the entire match, and "-1" represents the parts that are not
+    // matched (e.g, the stuff between matches).
+
+    std::sregex_token_iterator p{names.cbegin(), names.cend(), sep, -1};
+    std::sregex_token_iterator e{};
+
+    for (; p != e; ++p)
+    {
+      cout << "name: " << *p << endl;
+    }
+    cout << endl;
+  }
+
+  // cxx-stringstream cxx-iterator-stream only supports space delimeter.
+  {
+    std::string names{"nico, jim, helmut, paul, tim, john paul, rita"};
+    std::stringstream ss{names};
+
+    std::istream_iterator<std::string> beg{ss};
+    std::istream_iterator<std::string> end{};
+    std::vector<std::string> coll{beg, end};
+
+    for (auto const &e: coll)
+    {
+      cout << "name: " << e << endl;
+    }
+    cout << endl;
+  }
+
+  // how about leading spaces?
+  //
+  // name: [nico,]
+  // name: [jim]
+  // name: [,]
+  // name: [helmut,]
+  // name: [paul,]
+  // name: [tim,]
+  // name: [rita]
+
+  {
+    std::string names{"     nico, jim    ,      helmut, paul, tim, rita    "};
+    std::stringstream ss{names};
+
+    std::istream_iterator<std::string> beg{ss};
+    std::istream_iterator<std::string> end{};
+    std::vector<std::string> coll{beg, end};
+
+    for (auto const &e: coll)
+    {
+      cout << "name: [" << e << "]" << endl;
+    }
+  }
+}
+
+/*
+={=========================================================================
+string-token cxx-token
+
+4.7, tokenizing a string, C++ codebook
+
+int main( ) {
+   string s = " razzle dazzle giddyup ";
+   string tmp;
+   StringTokenizer st(s);
+   cout << "there are " << st.countTokens( ) << " tokens.\n";
+   while (st.hasMoreTokens( )) {
+       st.nextToken(tmp);
+       cout << "token = " << tmp << '\n';
+   }
+}
+
+there are couple of points that are different from the book
+*/
 
 namespace tokenizer_book
 {
@@ -3426,7 +3703,8 @@ namespace tokenizer_2018_05_29
 
 } // namespace tokenizer_2018_05_29
 
-TEST(MakeToken_0529, UseVariousInputs)
+// ={=========================================================================
+TEST(StringParse, token_0529)
 {
   using namespace tokenizer_2018_05_29;
 
@@ -3586,7 +3864,8 @@ namespace tokenizer_2018_06_06
 
 } // namespace tokenizer_2018_06_06
 
-TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
+// ={=======================================================================
+TEST(StringParse, token_0606)
 {
   using namespace tokenizer_2018_06_06;
 
@@ -3765,7 +4044,8 @@ namespace tokenizer_2018_11_split
 // "||Name"
 //  "||"
 
-TEST(StringTokenizer, 2018_11_split)
+// ={=======================================================================
+TEST(StringParse, token_2018_11)
 {
   using namespace tokenizer_2018_11_split;
 
@@ -4030,7 +4310,8 @@ namespace tokenizer_2018_11_find
 
 } // namespace tokenizer_2018_11_find
 
-TEST(StringTokenizer, 2018_11_find)
+// ={=======================================================================
+TEST(StringParse, token_2018_11_find)
 {
   using namespace tokenizer_2018_11_find;
 
@@ -4174,7 +4455,7 @@ TEST(StringTokenizer, 2018_11_find)
 }
 
 // ={=========================================================================
-// string-parse
+// string-parse cxx-parse
 
 namespace string_parse
 {
@@ -4252,7 +4533,8 @@ namespace string_parse
 
 } // namespace string_parse
 
-TEST(StringParse, Hex)
+// ={=======================================================================
+TEST(StringParse, hex)
 {
   using namespace string_parse;
 
@@ -4342,6 +4624,7 @@ TEST(StringParse, Hex)
   EXPECT_STREQ(filename, "/foo/bar");
 }
 
+// ={=======================================================================
 // want to get "GMT isdst=0 gmtoff=0" from the line:
 // "/etc/localtime  Sun Mar 29 01:00:00 2020 UT = Sun Mar 29 02:00:00 2020 BST isdst=1 gmtoff=3600"
 

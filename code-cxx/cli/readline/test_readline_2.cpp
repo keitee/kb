@@ -500,9 +500,15 @@ o To support global function and member function of any class:
 #include <readline/history.h>
 #include <readline/readline.h>
 
-bool testCommand1(const std::string &command, void *)
+bool testCommand1(const std::string &command,
+                  const std::vector<std::string> &args)
 {
-  std::cout << "command " << command << " runs\n";
+  std::cout << __func__ << ": cmds : " << command << " runs\n";
+
+  for (const auto &e: args)
+  {
+    std::cout << __func__ << ": args : " << e << " runs\n";
+  }
 }
 
 int main(int argc, char **argv)
@@ -511,18 +517,10 @@ int main(int argc, char **argv)
 
   Console console;
 
-  console.addCommand("test1",
-                     "command for global function",
-                     testCommand1,
-                     nullptr);
+  console.addCommand("test1", "command for global function", testCommand1, {});
 
   while ((buf = readline(">> ")) != nullptr)
   {
-    if (strlen(buf) > 0)
-    {
-      add_history(buf);
-    }
-
     // to see what's entered.
     // printf("[%s]\n", buf);
 

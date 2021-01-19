@@ -57724,17 +57724,17 @@ mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
 Solution?
 */
 
-TEST(SharedPointer, WeakCyclicReference)
+TEST(CxxSmartPointer, weak_cyclic_reference_problem)
 {
   using namespace cxx_sp_weak_problem;
 
-  // return kids, which is 'nico'
-  shared_ptr<Person> p = init_family("nico");
+  // return kids, which is nico
+  std::shared_ptr<Person> p = init_family("nico");
 
   cout << "nico's family exists" << endl;
   cout << "- nico is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of nico's mom: " 
-    << p->mother_->kids_[0]->name_ << endl;
+  cout << "- name of 1st kid of nico's mom: " << p->mother_->kids_[0]->name_
+       << endl;
 
   // cxx-cross-reference
   // assign op decrease count of p but no one from nico family is deleted since
@@ -57746,8 +57746,8 @@ TEST(SharedPointer, WeakCyclicReference)
 
   cout << "jim's family exists" << endl;
   cout << "- jim is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of jim's mom: " 
-    << p->mother_->kids_[0]->name_ << endl;
+  cout << "- name of 1st kid of jim's mom: " << p->mother_->kids_[0]->name_
+       << endl;
 }
 
 
@@ -57787,48 +57787,51 @@ namespace cxx_sp_weak_solution
 
 } // namespace
 
-// As soon as we lose our handle into a kid created - either by assigning a new
-// value to p or by leaving main() - the kid's object of the family loses its
-// last owner, which has the effect that both parents lose their last owner. So
-// 'all' objects, initially created by new, are deleted now so that their
-// destructors get called since weak pointer don't increase count.
+/*
+As soon as we lose our handle into a kid - either by assigning a new value to p
+or by leaving main() - the kid's object of the family loses its last owner,
+which has the effect that both parents lose their last owner. So 'all' objects,
+initially created by new, are deleted now so that their destructors get called
+since weak pointer don't increase count.
 
-// [ RUN      ] SharedPointerWeak.CyclicReferenceSolution
-// nico's family exists
-// - nico is shared 1 times
-// - name of 1st kid of nico's mom: nico
-// delete: nico
-// delete: nico's dad
-// delete: nico's mom
-// jim's family exists
-// - jim is shared 1 times
-// - name of 1st kid of jim's mom: jim
-// delete: jim
-// delete: jim's dad
-// delete: jim's mom
-// [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+[ RUN      ] SharedPointerWeak.CyclicReferenceSolution
+nico's family exists
+- nico is shared 1 times
+- name of 1st kid of nico's mom: nico
+delete: nico
+delete: nico's dad
+delete: nico's mom
 
-TEST(SharedPointer, WeakCyclicReferenceSolution)
+jim's family exists
+- jim is shared 1 times
+- name of 1st kid of jim's mom: jim
+delete: jim
+delete: jim's dad
+delete: jim's mom
+[       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+*/
+
+TEST(CxxSmartPointer, weak_cyclic_reference_solution)
 {
   using namespace cxx_sp_weak_solution;
 
   // return kids, which is 'nico'
-  shared_ptr<Person> p = init_family("nico");
+  std::shared_ptr<Person> p = init_family("nico");
 
   cout << "nico's family exists" << endl;
   cout << "- nico is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of nico's mom: "; 
+  cout << "- name of 1st kid of nico's mom: ";
 
-  // cout << p->mother_->kids_[0]->name_ << endl;
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 
   p = init_family("jim");
 
   cout << "jim's family exists" << endl;
   cout << "- jim is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of jim's mom: "; 
+  cout << "- name of 1st kid of jim's mom: ";
 
-  // cout << p->mother_->kids_[0]->name_ << endl;
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
@@ -59713,8 +59716,7 @@ RCLR 5.2.3
 
 * Cyclic reference shown above.
 
-
-o Double delete *cxx-sp-shared-ownership*
+o *cxx-double-free* *cxx-double-delete* *cxx-sp-shared-ownership*
 
 Have to ensure that only `one group of shared pointers` owns an object.
 
@@ -59729,85 +59731,92 @@ shared_ptr<int> sp1(new int);
 shared_ptr<int> sp2(sp1);     // OK
 
 
-{cxx-sp-shared-from-this} *cxx-sp-shared-from-this*
+*cxx-sp-enable-shared-from-this*
 Suppose that we want to introduce a member function for a Person that creates
 both the reference from a kid to the parent and a corresponding reference back:
 
-// *cxx-sp-weak-ex*
-//
-// shared_ptr<Person> initFamily (const string& name)
-// {
-//   shared_ptr<Person> mom(new Person(name+"'s mom"));
-//   shared_ptr<Person> dad(new Person(name+"'s dad"));
-//   shared_ptr<Person> kid(new Person(name, mom, dad));
-//   mom->kids.push_back(kid);
-//   dad->kids.push_back(kid);
-//   return kid;                              // return kid
-// }
+the original from *cxx-sp-weak-ex*
 
-shared_ptr<Person> initFamily (const string& name)
+std::shared_ptr<Person> initFamily (const string& name)
+{
+  shared_ptr<Person> mom(new Person(name+"'s mom"));
+  shared_ptr<Person> dad(new Person(name+"'s dad"));
+  shared_ptr<Person> kid(new Person(name, mom, dad));
+
+  mom->kids.push_back(kid);
+  dad->kids.push_back(kid);
+
+  return kid;                              // return kid
+}
+
+std::shared_ptr<Person> initFamily (const string& name)
 {
   shared_ptr<Person> mom(new Person(name+"'s mom"));
   shared_ptr<Person> dad(new Person(name+"'s dad"));
   shared_ptr<Person> kid(new Person(name));
+
   kid->setParentsAndTheirKids(mom, dad);
+
   return kid;                                 // return kid
 }
 
-`naive implementation` is:
+The naive implementation would be:
 
-void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, 
-    shared_ptr<Person> f = nullptr) 
+void Person::setParentsAndTheirKids (
+    std::shared_ptr<Person> m = nullptr, 
+    std::shared_ptr<Person> f = nullptr) 
 {
   mother_ = m;
   father_ = f;
 
   if (m != nullptr) {
-    m->kids.push_back(shared_ptr<Person>(this)); // *cxx-error* 
+    m->kids.push_back(std::shared_ptr<Person>(this)); // *cxx-error* 
   }
+
   if (f != nullptr) {
-    f->kids.push_back(shared_ptr<Person>(this)); // *cxx-error*
+    f->kids.push_back(std::shared_ptr<Person>(this)); // *cxx-error*
   }
 }
 
 Apart from cyclic reference issue, the problem is the creation of a shared
-pointer out of `this` pointer. 
+pointer out of `cxx-this` pointer. 
 
 Want to pass kid's shared pointer to mother and father but to do that, need a
 shared pointer from the kid, which we don't have at hand since this pointer is
 not shared pointer. 
 
 *cxx-sp-issue* *cxx-double-delete*
-So creates temporary shared pointer from `this` which is `new group of shared
-pointer.` Two shared pointer group to the kid and when mom and dad go free, will
-do `double delete`
+So if creates temporary shared pointer from `this`  then crates a new group of
+shared pointer shown above; Two shared pointer group to the kid and when mom
+and dad go free. `cxx-double-delete`
 
-One way to deal with this problem is to pass the shared pointer to the kid as a
-third argument. But the C++ standard library provides another option: class
-std::enable_shared_from_this<>.
+One way to deal with this problem is to pass the shared pointer to the kid as
+a third argument. But the C++ standard library provides another option: 
 
-Use class std::enable_shared_from_this<> `to derive your class`, representing
+class std::enable_shared_from_this<>
+
+Derive your class from class std::enable_shared_from_this<>, representing
 objects managed by shared pointers, with your class name passed as template
 argument. Doing so allows you to use a derived member function
-`shared_from_this()` to create a correct shared_ptr out of `this`
+`shared_from_this()` to create a correct shared_ptr out of `cxx-this`
 
-class Person : public std::enable_shared_from_this<Person> {
+class Person : `public std::enable_shared_from_this<Person>` 
+{
   public:
-    ...
-      void setParentsAndTheirKids (shared_ptr<Person> m = nullptr,
-          shared_ptr<Person> f = nullptr) {
+    void setParentsAndTheirKids (shared_ptr<Person> m = nullptr,
+        shared_ptr<Person> f = nullptr) {
 
-        mother_ = m;
-        father_ = f;
+      mother_ = m;
+      father_ = f;
 
-        if (m != nullptr) {
-          m->kids.push_back(`shared_from_this()`);
-        }
-
-        if (f != nullptr) {
-          f->kids.push_back(shared_from_this());
-        }
+      if (m != nullptr) {
+        m->kids.push_back(`std::shared_from_this()`);
       }
+
+      if (f != nullptr) {
+        f->kids.push_back(std::shared_from_this());
+      }
+    }
     ...
 };
 

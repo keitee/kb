@@ -106,10 +106,6 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF) 
 include_directories(${Boost_INCLUDE_DIRS}) 
 
-# do not work
-# add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-# add_compile_options("-Wall;-g;-D_GLIBCXX_DEBUG")
-
 # https://gcc.gnu.org/projects/cxx-status.html#cxx1z
 # C++17 Support in GCC
 # GCC has almost full support for the latest revision of the C++ standard, which
@@ -121,7 +117,9 @@ include_directories(${Boost_INCLUDE_DIRS})
 # -std=gnu++17 to enable GNU extensions as well.
 
 # add_compile_options("-O2;-std=c++17")
-add_compile_options("-g;-std=c++17")
+# add_compile_options("-g;-std=c++17")
+# add_compile_options("-g;-std=c++17;-D_GLIBCXX_DEBUG")
+add_compile_options("-g;-std=c++17;-D_GLIBCXX_DEBUG_PEDANTIC")
 
 # string_01
 add_executable(${PROJECT_NAME}_1 test_string_1.cpp)

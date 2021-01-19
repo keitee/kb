@@ -3119,6 +3119,45 @@ TEST(CxxTypeAny, change_value)
   a.emplace<MyType>(10, 11);
 }
 
+namespace cxx_temporary
+{
+  int ReturnInteger()
+  {
+    int value{3301};
+    return value;
+  }
+
+  struct StructValue
+  {
+    int value_;
+
+    StructValue(int value)
+      : value_(value)
+    {}
+
+    int operator++() { return ++value_; }
+  };
+
+  StructValue ReturnStruct()
+  {
+    StructValue value{3301};
+    return value;
+  }
+}
+
+// ={=========================================================================
+// cxx-temporary. show that not allowed to modify tempory
+TEST(CxxTemporary, not_modifiable)
+{
+  using namespace cxx_temporary;
+
+  // cxx.cpp:1539:45: error: lvalue required as increment operand
+  // EXPECT_THAT(++int(), 1);
+  // EXPECT_THAT(++ReturnInteger(), 3302);
+
+  EXPECT_THAT(++ReturnStruct(), 3302);
+}
+
 /*
 // ={=========================================================================
 cxx-array cxx-sizeof cxx-init
@@ -10829,6 +10868,7 @@ mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
 nico's family exists
 - nico is shared 3 times
 - name of 1st kid of nico's mom: nico
+
 jim's family exists
 - jim is shared 3 times
 - name of 1st kid of jim's mom: jim
@@ -10843,12 +10883,13 @@ referring to it. As a result, the destructor of each Person, which would print
 Solution?
 */
 
-TEST(SmartPointer, WeakCyclicReference)
+// ={=========================================================================
+TEST(CxxSmartPointer, weak_cyclic_reference_problem)
 {
   using namespace cxx_sp_weak_problem;
 
   // return kids, which is 'nico'
-  shared_ptr<Person> p = init_family("nico");
+  std::shared_ptr<Person> p = init_family("nico");
 
   cout << "nico's family exists" << endl;
   cout << "- nico is shared " << p.use_count() << " times" << endl;
@@ -10906,33 +10947,37 @@ namespace cxx_sp_weak_solution
 
 } // namespace cxx_sp_weak_solution
 
-// As soon as we lose our handle into a kid created - either by assigning a new
-// value to p or by leaving main() - the kid's object of the family loses its
-// last owner, which has the effect that both parents lose their last owner. So
-// 'all' objects, initially created by new, are deleted now so that their
-// destructors get called since weak pointer don't increase count.
+/*
+As soon as we lose our handle into a kid - either by assigning a new value to p
+or by leaving main() - the kid's object of the family loses its last owner,
+which has the effect that both parents lose their last owner. So 'all' objects,
+initially created by new, are deleted now so that their destructors get called
+since weak pointer don't increase count.
 
-// [ RUN      ] SharedPointerWeak.CyclicReferenceSolution
-// nico's family exists
-// - nico is shared 1 times
-// - name of 1st kid of nico's mom: nico
-// delete: nico
-// delete: nico's dad
-// delete: nico's mom
-// jim's family exists
-// - jim is shared 1 times
-// - name of 1st kid of jim's mom: jim
-// delete: jim
-// delete: jim's dad
-// delete: jim's mom
-// [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+[ RUN      ] SharedPointerWeak.CyclicReferenceSolution
+nico's family exists
+- nico is shared 1 times
+- name of 1st kid of nico's mom: nico
+delete: nico
+delete: nico's dad
+delete: nico's mom
 
-TEST(SmartPointer, WeakCyclicReferenceSolution)
+jim's family exists
+- jim is shared 1 times
+- name of 1st kid of jim's mom: jim
+delete: jim
+delete: jim's dad
+delete: jim's mom
+[       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+*/
+
+// ={=========================================================================
+TEST(CxxSmartPointer, weak_cyclic_reference_solution)
 {
   using namespace cxx_sp_weak_solution;
 
   // return kids, which is 'nico'
-  shared_ptr<Person> p = init_family("nico");
+  std::shared_ptr<Person> p = init_family("nico");
 
   cout << "nico's family exists" << endl;
   cout << "- nico is shared " << p.use_count() << " times" << endl;
@@ -14226,6 +14271,15 @@ name: paul
 name: tim
 name: john paul
 name: rita
+
+name: nico,
+name: jim,
+name: helmut,
+name: paul,
+name: tim,
+name: john
+name: paul,
+name: rita
 [       OK ] CxxRegex.token_iterators (1 ms)
 
 */
@@ -14295,6 +14349,22 @@ TEST(CxxRegex, token_iterators)
     for (; p != e; ++p)
     {
       cout << "name: " << *p << endl;
+    }
+    cout << endl;
+  }
+
+  // cxx-iterator-stream only supports space delimeter.
+  {
+    std::string names{"nico, jim, helmut, paul, tim, john paul, rita"};
+    std::stringstream ss{names};
+
+    std::istream_iterator<std::string> beg{ss};
+    std::istream_iterator<std::string> end{};
+    std::vector<std::string> coll{beg, end};
+
+    for (auto const &e: coll)
+    {
+      cout << "name: " << e << endl;
     }
   }
 }

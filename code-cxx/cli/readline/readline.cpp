@@ -49,7 +49,7 @@ ReadLinePrivate::ReadLinePrivate()
                                             this,
                                             std::placeholders::_1,
                                             std::placeholders::_2),
-                                  nullptr));
+                                  ""));
 }
 
 ReadLinePrivate::~ReadLinePrivate() {}
@@ -170,29 +170,38 @@ TODO: do not check if command is already exist or not
 
 */
 
-void ReadLinePrivate::addCommand(const char *name,
-                                 const char *description,
+void ReadLinePrivate::addCommand(const std::string &name,
+                                 const std::string &description,
                                  handler f,
-                                 void *data)
+                                 const std::string &args)
 {
-  m_commands.emplace_back(Command(name, description, f, data));
+  m_commands.emplace_back(Command(name, description, f, args));
 }
 
 /* ={==========================================================================
 return false if input command is empty or cannot find input command in commands
 vector.
 
-TODO: arguments?
+1. Since it's single call chain from console.runCommand, command ana args are
+reference.
+
+2. args in Command is just for displaying purpose if used since not used when
+run a command. args of running command comes from the input.
 
 */
-bool ReadLinePrivate::runCommand(const std::string &command)
+
+bool ReadLinePrivate::runCommand(const std::string &command,
+                                 const std::vector<std::string> &args)
 {
-  if (!command.empty())
+  if (command.size())
   {
     for (const auto &e : m_commands)
     {
-      if (e.isMatch(command))
-        return e.fire(command);
+      // comment out since it seems it's not necessary
+      // if (e.isMatch(command))
+      
+      if (e.name() == command)
+        return e.fire(command, args);
     }
   }
 
@@ -201,7 +210,8 @@ bool ReadLinePrivate::runCommand(const std::string &command)
 
 /* ={==========================================================================
 */
-bool ReadLinePrivate::helpCommand_(const std::string &command, void *)
+bool ReadLinePrivate::helpCommand_(const std::string &command,
+                                   const std::vector<std::string> &args)
 {
   std::ostringstream os{};
 
@@ -234,19 +244,20 @@ ReadLine::ReadLine()
 
 ReadLine::~ReadLine() {}
 
-void ReadLine::runCommand(const std::string &command)
+void ReadLine::runCommand(const std::string &command,
+                          const std::vector<std::string> &args)
 {
   assert(m_private);
 
-  m_private->runCommand(command);
+  m_private->runCommand(command, args);
 }
 
-void ReadLine::addCommand(const char *name,
-                          const char *description,
-                          handler f,
-                          void *data)
+void ReadLine::addCommand(const std::string &name,
+                  const std::string &description,
+                  handler f,
+                  const std::string &args)
 {
   assert(m_private);
 
-  m_private->addCommand(name, description, f, data);
+  m_private->addCommand(name, description, f, args);
 }

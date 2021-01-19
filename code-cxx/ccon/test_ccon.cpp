@@ -70,7 +70,7 @@ namespace cxx_thread
 
 // ={=========================================================================
 // cxx-thread
-TEST(CConThread, check_identity)
+TEST(CConThread, ids)
 {
   using namespace cxx_thread;
 
@@ -78,13 +78,20 @@ TEST(CConThread, check_identity)
   {
     std::ostringstream os1;
     std::ostringstream os2;
+    std::ostringstream os3;
 
     std::thread t([&] { function1(os1); });
     os2 << t.get_id();
 
     t.join();
 
+    os3 << t.get_id();
+
     EXPECT_THAT(os1.str(), os2.str());
+
+    // when thread is joined
+    EXPECT_THAT(os3.str(), "thread::id of a non-executing thread");
+    EXPECT_THAT(t.get_id(), std::thread::id{});
   }
 
   // see that t.get_id() equals to native_handle()
@@ -145,7 +152,7 @@ TEST(CConThread, check_identity)
 // hardware concurrency: 12
 // [       OK ] CConThread.check_hardware_concurrency (0 ms)
 
-TEST(CConThread, check_hardware_concurrency)
+TEST(CConThread, hardware_concurrency)
 {
   std::cout << "hardware concurrency: " << std::thread::hardware_concurrency()
             << std::endl;
@@ -172,7 +179,7 @@ namespace cxx_thread
 // cxx-thread
 // std::this_thread::get_id() is != gettid();
 // shows tid and pid
-TEST(CConThread, check_tid_and_pid)
+TEST(CConThread, tid_and_pid)
 {
   using namespace cxx_thread;
 
@@ -207,99 +214,279 @@ TEST(CConThread, check_tid_and_pid)
 
 /*
 // ={=========================================================================
-cxx-thread
+cxx-thread-joinable
 
 as with TEST(CConAsync, check_launch_policy_1), thread starts `immediately`
 and there is no `start the thread` operation.
 TEST(CConThread, check_launch_policy)
-{
-}
 
-true if the thread object identifies an active thread of execution, false
+"true" if the thread object identifies an active thread of execution, false
 otherwise
 
-the test shows that even if thread is finished, thread object is still valid
-and joinable() still return true.
+NOTE: what happens when do `join()` on t when thread is not running?
+exception happens so have to guard like
+
+if (t.joinable())
+t.join();
+
 */
 
-TEST(CConThread, check_joinable)
+TEST(CConThread, joinable_1)
 {
-  // what happens when do `join()` on t which is not running? 
   {
     std::thread t{};
 
     EXPECT_THAT(t.joinable(), false);
 
-    // C++ exception with description "Invalid argument" thrown 
-    // in the test body.
+    // C++ exception with description std::runtime_error("Invalid argument") thrown
     //
     // try
     // {
-    // t.join();
+    //    t.join();
     // } catch (const exception &e)
     // {
     //   std::cout << e.what() << std::endl;
     // }
 
     EXPECT_THROW(t.join(), std::runtime_error);
-
     // causes compile error
     // EXPECT_THROW(t.join(), std::runtime_error("Invalid argument"));
   }
-
-  {
-    std::thread t([] {
-        char c{'+'};
-
-        // *cxx-random*
-        std::default_random_engine dre(c);
-        std::uniform_int_distribution<int> id(10, 1000);
-
-        for (int i = 0; i < 10; ++i)
-        {
-          std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
-          std::cout.put(c).flush();
-        }
-
-        std::cout << "threads ends" << std::endl;
-        });
-
-    // wait for thread to finish
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-
-    // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
-    //           << std::endl;
-    EXPECT_THAT(t.joinable(), true);
-
-    // DO NOT WORK as hoped since while() do not ends.
-    //
-    // while (t.joinable())
-    // {
-    //   std::cout << "thread is still running" << std::endl;
-    //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    // }
-
-    // wait for thread to finish
-    std::this_thread::sleep_for(std::chrono::seconds(10));
-
-    // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
-    //           << std::endl;
-    EXPECT_THAT(t.joinable(), true);
-
-    t.join();
-
-    // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
-    //           << std::endl;
-    EXPECT_THAT(t.joinable(), false);
-    EXPECT_THAT(t.get_id(), std::thread::id{});
-  }
 }
 
+/*
 // ={=========================================================================
-// cxx-thread
-// when use the same std::thread for multiple times. this is something we cannot
-// do when use cxx-async
-TEST(CConThread, check_thread_structure)
+cxx-thread-joinable
+
+the test shows that even if thread is finished, thread object is still valid and
+joinable() still return true until join() gets called. 
+
+That should be since can check if that still runs from outside of a thread.
+
+*/
+
+TEST(CConThread, joinable_2)
+{
+  // take some time
+  std::thread t([] {
+    char c{'+'};
+
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    for (int i = 0; i < 10; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
+
+    std::cout << "threads ends" << std::endl;
+  });
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+  //           << std::endl;
+  EXPECT_THAT(t.joinable(), true);
+
+  // DO NOT WORK as hoped since while() do not ends.
+  //
+  // while (t.joinable())
+  // {
+  //   std::cout << "thread is still running" << std::endl;
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  // }
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  EXPECT_THAT(t.joinable(), true);
+
+  t.join();
+
+  // NOW it gets false since join() is called
+  EXPECT_THAT(t.joinable(), false);
+
+  EXPECT_THAT(t.get_id(), std::thread::id{});
+}
+
+/*
+As can see when use detach(), std::thread structure is not used at all.
+
+[ RUN      ] CConThread.joinable_3_1
+thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++thread is still running? true
+thread id? 139802643777280
++threads ends
+thread still run. expect true true    // 1
+thread id? 139802643777280
+thread still run. expect true true    // 2
+thread id? 139802643777280
+thread still run. expect true false   // 3 after join()
+thread id? thread::id of a non-executing thread
+[       OK ] CConThread.joinable_3_1 (20000 ms)
+
+[ RUN      ] CConThread.joinable_3_2
+thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++thread is still running? false
+thread id? thread::id of a non-executing thread
++threads ends
+thread still run. expect true false
+thread id? thread::id of a non-executing thread
+thread still run. expect true false
+thread id? thread::id of a non-executing thread
+unknown file: Failure
+C++ exception with description "Invalid argument" thrown in the test body.
+[  FAILED  ] CConThread.joinable_3_2 (20001 ms)
+
+*/
+
+TEST(CConThread, joinable_3_1)
+{
+  std::thread t = std::thread([&t] {
+    char c{'+'};
+
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    for (int i = 0; i < 10; ++i)
+    {
+      std::cout << "thread is still running? " << std::boolalpha << t.joinable() 
+      << std::endl;
+
+      std::cout << "thread id? " << t.get_id() << std::endl;
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
+
+    std::cout << "threads ends" << std::endl;
+  });
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // EXPECT_THAT(t.joinable(), true);
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // EXPECT_THAT(t.joinable(), true);
+  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
+            << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  t.join();
+
+  // NOW it gets false. EXPECT_THAT(t.joinable(), false);
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  EXPECT_THAT(t.get_id(), std::thread::id{});
+}
+
+TEST(CConThread, joinable_3_2)
+{
+  std::thread t = std::thread([&t] {
+    char c{'+'};
+
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    for (int i = 0; i < 10; ++i)
+    {
+      std::cout << "thread is still running? " << std::boolalpha << t.joinable() 
+      << std::endl;
+
+      std::cout << "thread id? " << t.get_id() << std::endl;
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
+
+    std::cout << "threads ends" << std::endl;
+  });
+
+  // detach
+  t.detach();
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // EXPECT_THAT(t.joinable(), true);
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  // wait for thread to finish
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  // EXPECT_THAT(t.joinable(), true);
+  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
+            << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  t.join();
+
+  // NOW it gets false. EXPECT_THAT(t.joinable(), false);
+  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
+            << std::endl;
+  std::cout << "thread id? " << t.get_id() << std::endl;
+
+  EXPECT_THAT(t.get_id(), std::thread::id{});
+}
+
+/*
+// ={=========================================================================
+cxx-thread-structure
+use "the same std::thread" for multiple times. this is something we cannot
+do when use cxx-async
+
+*/
+
+TEST(CConThread, thread_structure)
 {
   std::thread t{};
 
@@ -313,6 +500,7 @@ TEST(CConThread, check_thread_structure)
         std::this_thread::sleep_for(std::chrono::seconds{3});
         });
 
+    // waits
     t.join();
 
     EXPECT_THAT(t.joinable(), false);

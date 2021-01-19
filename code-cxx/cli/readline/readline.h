@@ -5,7 +5,8 @@
 #include <string>
 #include <vector>
 
-using handler = std::function<bool(const std::string &, void *)>;
+using handler =
+  std::function<bool(const std::string &, const std::vector<std::string> &)>;
 
 // ReadLinePrivate
 
@@ -15,22 +16,26 @@ private:
   class Command
   {
   private:
-    std::string m_name{};
-    std::string m_description{};
-    void *m_data{nullptr};
+    const std::string m_name{};
+    const std::string m_description{};
     handler m_handler{nullptr};
+    const std::string m_args{};
 
   public:
     Command(const std::string &name,
             const std::string &description,
             handler handler,
-            void *data)
+            const std::string &args)
         : m_name(name)
         , m_description(description)
         , m_handler(handler)
-        , m_data(data)
+        , m_args(args)
     {}
 
+    /*
+    comment out since the input command is trimmed when use stringstream
+    parse in console. so supports only exact match.
+    
     // the input `command` is what user has typed and m_name is the added entry.
     bool isMatch(const std::string &command) const
     {
@@ -55,10 +60,12 @@ private:
                                      m_name));
       }
     }
+    */
 
-    bool fire(const std::string &command) const
+    bool fire(const std::string &command,
+              const std::vector<std::string> &args) const
     {
-      return m_handler(command, m_data);
+      return m_handler(command, args);
     }
 
     const std::string &name() const { return m_name; }
@@ -70,12 +77,18 @@ private:
 
 private:
   ReadLinePrivate();
-  bool helpCommand_(const std::string &command, void *);
+
+  bool helpCommand_(const std::string &command,
+                    const std::vector<std::string> &args);
 
 public:
-  void
-  addCommand(const char *name, const char *description, handler f, void *data);
-  bool runCommand(const std::string &command);
+  void addCommand(const std::string &name,
+                  const std::string &description,
+                  handler f,
+                  const std::string &args);
+
+  bool runCommand(const std::string &command,
+                  const std::vector<std::string> &args);
 
   // static ReadLinePrivate *instance();
   static std::shared_ptr<ReadLinePrivate> instance();
@@ -102,7 +115,11 @@ public:
   ~ReadLine();
 
 public:
-  void
-  addCommand(const char *name, const char *description, handler f, void *data);
-  void runCommand(const std::string &command);
+  void addCommand(const std::string &name,
+                  const std::string &description,
+                  handler f,
+                  const std::string &args);
+
+  void runCommand(const std::string &command,
+                  const std::vector<std::string> &args);
 };

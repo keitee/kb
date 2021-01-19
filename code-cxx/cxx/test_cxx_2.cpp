@@ -233,6 +233,7 @@ TEST(CxxIterator, deque)
   }
 }
 
+// ={=========================================================================
 // /usr/include/c++/6/debug/safe_iterator.h:149:
 // Error: attempt to copy-construct an iterator from a singular iterator.
 //
@@ -250,7 +251,7 @@ TEST(CxxIterator, deque)
 //     }
 // Aborted
 
-TEST(DISABLED_Iterator, InvalidOnDeque_Errors)
+TEST(CxxIterator, DISABLED_InvalidOnDeque_Errors)
 {
   {
     deque<int> coll{1, 2, 3};
@@ -271,57 +272,6 @@ TEST(DISABLED_Iterator, InvalidOnDeque_Errors)
       cout << "it : " << *it << endl;
       coll.pop_back();
     }
-  }
-}
-
-int ReturnInteger()
-{
-  int value{3301};
-  return value;
-}
-
-struct StructValue
-{
-  int value_;
-
-  StructValue(int value)
-      : value_(value)
-  {}
-
-  int operator++() { return ++value_; }
-};
-
-StructValue ReturnStruct()
-{
-  StructValue value{3301};
-  return value;
-}
-
-TEST(Iterator, NativeAndStructTemporary)
-{
-  // show that not allowed to modify tempory
-
-  // cxx.cpp: In member function ‘virtual void
-  // Temporary_NativeAndStruct_Test::TestBody()’: cxx.cpp:1539:45: error: lvalue
-  // required as increment operand
-  //    cout << "return int: " << ++ReturnInteger() << endl;
-  // cout << "return int: " << ++ReturnInteger() << endl;
-
-  EXPECT_THAT(++ReturnStruct(), 3302);
-}
-
-TEST(Iterator, OperationOnTemporary)
-{
-  {
-    vector<int> coll{4, 2, 6, 3, 1, 5};
-    sort(++coll.begin(), coll.end());
-    EXPECT_THAT(coll, ElementsAre(4, 1, 2, 3, 5, 6));
-  }
-
-  {
-    string coll{"this is a string object"};
-    sort(++coll.begin(), coll.end());
-    EXPECT_THAT(coll, Eq("t    abceghiiijnorssstt"));
   }
 }
 
@@ -565,20 +515,6 @@ TEST(CxxIterator, array)
     copy(begin(vec), end(vec), ostream_iterator<int>(cout, " "));
     cout << endl;
   }
-}
-
-// ={=========================================================================
-TEST(CxxIterator, output_stream_iterator)
-{
-  std::vector<std::string> coll{"eng", "ita", "fra"};
-
-  std::ostringstream os{};
-
-  std::copy(coll.cbegin(),
-            coll.cend(),
-            std::ostream_iterator<std::string>(os, ", "));
-
-  EXPECT_THAT(os.str(), "eng, ita, fra, ");
 }
 
 // ={=========================================================================
@@ -867,7 +803,7 @@ TEST(CxxIterator, adaptor_reverse)
 // ={=========================================================================
 TEST(CxxIterator, adaptor_stream)
 {
-  // as gets from std::cin, use stream
+  // like when gets from std::cin, use stream
   {
     std::istringstream is{"1 2 3 4 5 6"};
     std::vector<int> coll;
@@ -880,15 +816,21 @@ TEST(CxxIterator, adaptor_stream)
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
-  // as gets from std::cin, use iterator
+  // like when gets from std::cin, use iterator
+  // end-of-stream iterator, which is created with the default constructor for
+  // istream iterators.
+  // If a read fails, every istream iterator becomes an end-of-stream iterator.
+  // Thus, after any read access, you should compare an istream iterator with an
+  // end-of-stream iterator to check whether the iterator has a valid value.
+
   {
     std::istringstream is{"1 2 3 4 5 6"};
     std::vector<int> coll;
 
-    std::istream_iterator<int> isi(is), eof;
+    std::istream_iterator<int> beg{is}, end;
 
-    while (isi != eof)
-      coll.push_back(*isi++);
+    for (; beg != end;)
+      coll.push_back(*beg++);
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
@@ -897,16 +839,16 @@ TEST(CxxIterator, adaptor_stream)
   {
     std::istringstream is{"1 2 3 4 5 6"};
 
-    std::istream_iterator<int> isi(is), eof;
+    std::istream_iterator<int> beg{is}, end;
 
     // *cxx-vector-ctor*
     // no loop and no isi++
-    std::vector<int> coll(isi, eof);
+    std::vector<int> coll(beg, end);
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 
-  // use iterator but direct
+  // same
   {
     std::istringstream is{"1 2 3 4 5 6"};
 
@@ -952,6 +894,18 @@ TEST(CxxIterator, adaptor_stream)
     EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
   }
 
+  // same but use std::copy
+  {
+    std::vector<int> coll{1, 2, 3, 4, 5, 6};
+    std::ostringstream os;
+
+    std::ostream_iterator<int> osi(os, ",");
+
+    std::copy(coll.cbegin(), coll.cend(), std::ostream_iterator<int>(os, ","));
+
+    EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
+  }
+
   // Table 9.9. Operations of ostream Iterators
   // same as cxx-inserter since ++ is nop.
   //
@@ -968,6 +922,7 @@ TEST(CxxIterator, adaptor_stream)
 
     EXPECT_THAT(os.str(), "Hello, world!");
   }
+
   {
     std::ostringstream os;
     std::ostream_iterator<string> osi(os);
