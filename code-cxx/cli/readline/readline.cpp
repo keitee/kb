@@ -199,7 +199,7 @@ bool ReadLinePrivate::runCommand(const std::string &command,
     {
       // comment out since it seems it's not necessary
       // if (e.isMatch(command))
-      
+
       if (e.name() == command)
         return e.fire(command, args);
     }
@@ -215,13 +215,15 @@ bool ReadLinePrivate::helpCommand_(const std::string &command,
 {
   std::ostringstream os{};
 
-  os << "size : " << m_commands.size() << "\n";
+  // os << "size : " << m_commands.size() << "\n";
 
   os.setf(std::ios::left);
 
   for (const auto &e : m_commands)
   {
-    os << std::setw(20) << e.name() << " - " << e.description() << "\n";
+    os << std::setw(20) << e.name() << " : " << e.description() << "\n";
+    os << std::setw(20) << " "
+       << " : " << e.args() << "\n";
   }
 
   std::cout << os.str() << std::endl;
@@ -253,9 +255,9 @@ void ReadLine::runCommand(const std::string &command,
 }
 
 void ReadLine::addCommand(const std::string &name,
-                  const std::string &description,
-                  handler f,
-                  const std::string &args)
+                          const std::string &description,
+                          handler f,
+                          const std::string &args)
 {
   assert(m_private);
 

@@ -20,10 +20,10 @@ void Console::registerCommands_()
                                   this,
                                   std::placeholders::_1,
                                   std::placeholders::_2),
-                        {});
+                        "-one -two -three");
 }
 
-// parse the command line and 
+// parse the command line and
 void Console::runCommand(const std::string &line)
 {
   if (false == line.empty())
@@ -57,7 +57,10 @@ void Console::runCommand(const std::string &line)
   }
 }
 
-void Console::addCommand(const std::string &name, const std::string &description, handler f, const std::string &args)
+void Console::addCommand(const std::string &name,
+                         const std::string &description,
+                         handler f,
+                         const std::string &args)
 {
   m_readLine.addCommand(name, description, f, args);
 }
@@ -67,7 +70,7 @@ bool Console::testCommand2(const std::string &command,
 {
   std::cout << __func__ << ": cmds : " << command << " runs\n";
 
-  for (const auto &e: args)
+  for (const auto &e : args)
   {
     std::cout << __func__ << ": args : " << e << " runs\n";
   }

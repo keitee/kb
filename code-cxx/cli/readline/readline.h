@@ -70,6 +70,7 @@ private:
 
     const std::string &name() const { return m_name; }
     const std::string &description() const { return m_description; }
+    const std::string &args() const { return m_args; }
   };
 
 private:

@@ -505,7 +505,7 @@ bool testCommand1(const std::string &command,
 {
   std::cout << __func__ << ": cmds : " << command << " runs\n";
 
-  for (const auto &e: args)
+  for (const auto &e : args)
   {
     std::cout << __func__ << ": args : " << e << " runs\n";
   }
@@ -517,7 +517,10 @@ int main(int argc, char **argv)
 
   Console console;
 
-  console.addCommand("test1", "command for global function", testCommand1, {});
+  console.addCommand("test1",
+                     "command for global function",
+                     testCommand1,
+                     "--f --w --x");
 
   while ((buf = readline(">> ")) != nullptr)
   {
