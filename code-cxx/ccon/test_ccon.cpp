@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <future>
@@ -63,8 +64,19 @@ namespace cxx_thread
 
   void function2(void)
   {
-    // std::cout << "function2 thread id " << std::this_thread::get_id() << std::endl;
+    // std::cout << "function2 thread id " << std::this_thread::get_id()
+    //   << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
+
+  void function3(void)
+  {
+    for (int i = 0; i < 5; ++i)
+    {
+      std::cout << "function3 thread id " << std::this_thread::get_id()
+                << ", gettid " << syscall(SYS_gettid) << std::endl;
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
   }
 } // namespace cxx_thread
 
@@ -109,10 +121,38 @@ TEST(CConThread, ids)
     EXPECT_THAT(os1.str(), os2.str());
   }
 
+  // see that t.get_id() NOT equals to syscall gettid()
+  //
+  // function3 thread id 139742419257088, gettid 20795
+  // function3 thread id 139742419257088, gettid 20795
+  // function3 thread id 139742419257088, gettid 20795
+  // function3 thread id 139742419257088, gettid 20795
+
+  {
+    std::ostringstream os1;
+    std::ostringstream os2;
+
+    std::thread t([&] { function3(); });
+
+    os1 << t.native_handle();
+    os2 << syscall(SYS_gettid);
+
+    t.join();
+
+    EXPECT_THAT(os1.str(), Ne(os2.str()));
+  }
+}
+
+// ={=========================================================================
+// cxx-thread
+TEST(CConThread, ids_and_joinable)
+{
+  using namespace cxx_thread;
+
   // see TEST(CConThread, check_joinable) as well
   // 42.2.1
   // a thread can have its id be id{} if is has not had a task assigned; that
-  // is, does not represent a thread of execution
+  // is, "does not represent a thread of execution"
   {
     std::thread t;
 
@@ -140,6 +180,20 @@ TEST(CConThread, ids)
     EXPECT_THAT(t.get_id(), Ne(std::thread::id{}));
 
     t.detach();
+
+    EXPECT_THAT(t.joinable(), false);
+    EXPECT_THAT(t.get_id(), std::thread::id{});
+  }
+
+  // 42.2.1
+  // can use id as joinable()
+  {
+    std::thread t([&] { function2(); });
+
+    EXPECT_THAT(t.joinable(), true);
+    EXPECT_THAT(t.get_id(), Ne(std::thread::id{}));
+
+    t.join();
 
     EXPECT_THAT(t.joinable(), false);
     EXPECT_THAT(t.get_id(), std::thread::id{});
@@ -265,7 +319,7 @@ That should be since can check if that still runs from outside of a thread.
 
 */
 
-TEST(CConThread, joinable_2)
+TEST(CConThread, joinable_2_1)
 {
   // take some time
   std::thread t([] {
@@ -310,6 +364,49 @@ TEST(CConThread, joinable_2)
   EXPECT_THAT(t.joinable(), false);
 
   EXPECT_THAT(t.get_id(), std::thread::id{});
+}
+
+/*
+// ={=========================================================================
+to use joinable() to check if thread creation succeeds or not
+
+RUN      ] CConThread.joinable_2_2
+thread is still running? true
+waits for thread to ends
+
+++++++++++threads ends
+[       OK ] CConThread.joinable_2_2 (3873 ms)
+*/
+TEST(CConThread, joinable_2_2)
+{
+  // take some time
+  std::thread t([] {
+    char c{'+'};
+
+    // *cxx-random*
+    std::default_random_engine dre(c);
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    for (int i = 0; i < 10; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+      std::cout.put(c).flush();
+    }
+
+    std::cout << "threads ends" << std::endl;
+  });
+
+  std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+            << std::endl;
+
+  EXPECT_THAT(t.joinable(), true);
+
+  std::cout << "waits for thread to ends\n" << std::endl;
+
+  t.join();
+
+  // NOW it gets false since join() is called
+  EXPECT_THAT(t.joinable(), false);
 }
 
 /*
@@ -377,6 +474,7 @@ C++ exception with description "Invalid argument" thrown in the test body.
 
 */
 
+// ={=========================================================================
 TEST(CConThread, joinable_3_1)
 {
   std::thread t = std::thread([&t] {
@@ -388,8 +486,8 @@ TEST(CConThread, joinable_3_1)
 
     for (int i = 0; i < 10; ++i)
     {
-      std::cout << "thread is still running? " << std::boolalpha << t.joinable() 
-      << std::endl;
+      std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+                << std::endl;
 
       std::cout << "thread id? " << t.get_id() << std::endl;
 
@@ -412,8 +510,8 @@ TEST(CConThread, joinable_3_1)
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
   // EXPECT_THAT(t.joinable(), true);
-  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
-            << std::endl;
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
   std::cout << "thread id? " << t.get_id() << std::endl;
 
   t.join();
@@ -426,6 +524,7 @@ TEST(CConThread, joinable_3_1)
   EXPECT_THAT(t.get_id(), std::thread::id{});
 }
 
+// ={=========================================================================
 TEST(CConThread, joinable_3_2)
 {
   std::thread t = std::thread([&t] {
@@ -437,8 +536,8 @@ TEST(CConThread, joinable_3_2)
 
     for (int i = 0; i < 10; ++i)
     {
-      std::cout << "thread is still running? " << std::boolalpha << t.joinable() 
-      << std::endl;
+      std::cout << "thread is still running? " << std::boolalpha << t.joinable()
+                << std::endl;
 
       std::cout << "thread id? " << t.get_id() << std::endl;
 
@@ -464,15 +563,15 @@ TEST(CConThread, joinable_3_2)
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
   // EXPECT_THAT(t.joinable(), true);
-  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
-            << std::endl;
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
   std::cout << "thread id? " << t.get_id() << std::endl;
 
   t.join();
 
   // NOW it gets false. EXPECT_THAT(t.joinable(), false);
-  std::cout << "thread still run. expect true " << std::boolalpha << t.joinable()
-            << std::endl;
+  std::cout << "thread still run. expect true " << std::boolalpha
+            << t.joinable() << std::endl;
   std::cout << "thread id? " << t.get_id() << std::endl;
 
   EXPECT_THAT(t.get_id(), std::thread::id{});
@@ -494,11 +593,10 @@ TEST(CConThread, thread_structure)
   {
     EXPECT_THAT(t.joinable(), false);
 
-    t = std::thread([i]
-        {
-        std::cout << "thread: << " << i << " runs\n";
-        std::this_thread::sleep_for(std::chrono::seconds{3});
-        });
+    t = std::thread([i] {
+      std::cout << "thread: << " << i << " runs\n";
+      std::this_thread::sleep_for(std::chrono::seconds{3});
+    });
 
     // waits
     t.join();
@@ -1297,6 +1395,7 @@ namespace cxx_thread_local
 //
 // [       OK ] CConThread.ThreadLocal (2 ms)
 
+// ={=========================================================================
 TEST(CConThread, check_thread_local)
 {
   using namespace cxx_thread_local;
@@ -1593,6 +1692,8 @@ TEST(CConAsync, check_launch_policy_12)
 
   int result = result1.get() + result2;
 
+  // to avoid warning
+  (void)result;
   // EXPECT_THAT(result, 89);
 }
 
@@ -1708,7 +1809,6 @@ TEST(CConAsync, check_launch_policy_22)
 {
   {
     string const waits{"\\|/-"};
-    int i{};
 
     cout << "starting 2 operations asynchronously" << endl;
 
@@ -1832,6 +1932,7 @@ TEST(CConSync, check_race_1)
   EXPECT_THAT(glob, Not(gloops));
 }
 
+// ={=========================================================================
 // still shows race
 TEST(CConSync, check_race_2)
 {
@@ -1882,6 +1983,7 @@ namespace cxx_sync
 
 } // namespace cxx_sync
 
+// ={=========================================================================
 TEST(CConSync, UsePthreadMutex)
 {
   using namespace cxx_sync;
@@ -2113,6 +2215,7 @@ namespace cxx_sync
   }
 } // namespace cxx_sync
 
+// ={=========================================================================
 TEST(CConSync, UseGCCAtomic)
 {
   using namespace cxx_sync;
@@ -2138,20 +2241,19 @@ TEST(CConSync, UseGCCAtomic)
 }
 
 // ={=========================================================================
-// cxx-sync os-mutex
-
+// cxx-sync cxx-mutex
 // CXXSLR 18.5 A First Complete Example for Using a Mutex and a Lock
 
 namespace cxx_mutex
 {
-  std::mutex print_mutex;
-
-  size_t i{};
+  // both threads use the same mutex
+  std::mutex print_mutex{};
 
   std::string print_use_lock_guard(std::string const &s)
   {
     std::lock_guard<std::mutex> l(print_mutex);
     std::string result{};
+    size_t i{};
 
     for (i = 0; i < s.size(); ++i)
     {
@@ -2166,6 +2268,7 @@ namespace cxx_mutex
   {
     std::unique_lock<std::mutex> l(print_mutex);
     std::string result{};
+    size_t i{};
 
     for (i = 0; i < s.size(); ++i)
     {
@@ -2179,8 +2282,8 @@ namespace cxx_mutex
   std::string print_use_no_lock(std::string const &s)
   {
     // std::lock_guard<std::mutex> l(print_mutex);
-
     std::string result{};
+    size_t i{};
 
     for (i = 0; i < s.size(); ++i)
     {
@@ -2191,9 +2294,63 @@ namespace cxx_mutex
     return result;
   }
 
+  // cxx-atomic
+  //
+  // The limited feature set makes std::atomic_flag ideally suited to use as a
+  // spin-lock mutex. Initially the flag is clear and the mutex is unlocked.
+  // To lock the mutex, loop on test_and_set() until the old value is false ,
+  // indicating that this thread set the value to true . Unlocking the mutex
+  // is simply a matter of clearing the flag. Such an implementation is shown
+  // in the following listing.
+  //
+  // Listing 5.1 Implementation of a spinlock mutex using std::atomic_flag
+
+  class SpinLock
+  {
+  private:
+    std::atomic_flag lock_;
+
+  public:
+    SpinLock()
+        : lock_(ATOMIC_FLAG_INIT)
+    {}
+
+    void lock()
+    {
+      while (lock_.test_and_set(std::memory_order_acquire))
+        ;
+    }
+
+    void unlock() { lock_.clear(std::memory_order_release); }
+
+    bool try_lock() { return lock_.test_and_set(std::memory_order_acquire); }
+  };
+
+  // use SpinLock
+
+  SpinLock spin_lock{};
+
+  std::string print_use_spin_lock(std::string const &s)
+  {
+    // both works
+    std::lock_guard<SpinLock> l(spin_lock);
+    // std::unique_lock<SpinLock> l(spin_lock);
+
+    std::string result{};
+    size_t i{};
+
+    for (i = 0; i < s.size(); ++i)
+    {
+      this_thread::sleep_for(chrono::milliseconds(20));
+    }
+
+    result = "waited for " + to_string(i * 20) + "ms and " + s;
+    return result;
+  }
 } // namespace cxx_mutex
 
-TEST(CConMutex, check_lock_type)
+// ={=========================================================================
+TEST(CConMutex, bool_conversion)
 {
   std::mutex m;
 
@@ -2208,17 +2365,171 @@ TEST(CConMutex, check_lock_type)
 
   {
     std::unique_lock<std::mutex> lock(m);
+
+    // locked
     EXPECT_THAT(!!lock, true);
 
+    // unlocked
     lock.unlock();
     EXPECT_THAT(!!lock, false);
 
+    // locked again
     lock.lock();
     EXPECT_THAT(!!lock, true);
   }
 }
 
-TEST(DISABLED_CConMutex, check_mutex_deadlock)
+/*
+// ={=========================================================================
+
+bool try_lock(); (since C++11)
+
+tries to lock (i.e., takes ownership of) the associated mutex, returns if the
+mutex is not available (public member function)
+
+__throw_system_error(int(errc::resource_deadlock_would_occur));
+
+try_lock_for
+ 
+attempts to lock (i.e., takes ownership of) the associated TimedLockable
+mutex, returns if the mutex has been unavailable for the specified time
+duration (public member function)
+
+try_lock_until
+
+tries to lock (i.e., takes ownership of) the associated TimedLockable mutex,
+returns if the mutex has been unavailable until specified time point has been
+reached
+
+*/
+
+// (gdb) b CConMutex_unique_lock_Test::TestBody()
+TEST(CConMutex, unique_lock)
+{
+  {
+    std::mutex m;
+
+    // locked
+    std::unique_lock<std::mutex> lock(m);
+
+    try
+    {
+      // EXPECT_THAT(lock.try_lock(), false);
+      EXPECT_THAT(lock.try_lock(), true);
+    }
+    catch(exception &e)
+    {
+      std::cout << "exception 1: " << e.what() << std::endl;
+    }
+
+    lock.unlock();
+
+    try
+    {
+      EXPECT_THAT(lock.try_lock(), true);
+    }
+    catch(exception &e)
+    {
+      std::cout << "exception 2: " << e.what() << std::endl;
+    }
+
+    try
+    {
+      lock.lock();
+    }
+    catch(exception &e)
+    {
+      std::cout << "exception 3: " << e.what() << std::endl;
+    }
+
+    // try
+    // {
+    //   EXPECT_THAT(lock.try_lock(), false);
+    // }
+    // catch(exception &e)
+    // {
+    //   std::cout << "exception 3: " << e.what() << std::endl;
+    // }
+  }
+
+  {
+    using namespace cxx_mutex;
+
+    SpinLock m;
+
+    // locked
+    std::unique_lock<SpinLock> lock(m);
+
+    try
+    {
+      // EXPECT_THAT(lock.try_lock(), true);
+      lock.try_lock();
+    }
+    catch(exception &e)
+    {
+      std::cout << "spin exception 1: " << e.what() << std::endl;
+    }
+
+    // lock.unlock();
+
+    // try
+    // {
+      // EXPECT_THAT(lock.try_lock(), true);
+    // }
+    // catch(exception &e)
+    // {
+      // std::cout << "exception 2: " << e.what() << std::endl;
+    // }
+
+    // try
+    // {
+      // lock.lock();
+    // }
+    // catch(exception &e)
+    // {
+      // std::cout << "exception 3: " << e.what() << std::endl;
+    // }
+
+    // try
+    // {
+    //   EXPECT_THAT(lock.try_lock(), false);
+    // }
+    // catch(exception &e)
+    // {
+    //   std::cout << "exception 3: " << e.what() << std::endl;
+    // }
+  }
+}
+
+/*
+// ={=========================================================================
+see deadlock when do doule lock
+
+$ gdb --args ./test_ccon --gtest_filter=*Mutex.*
+$ sudo gdb ./test_ccon -p `pgrep test_ccon`
+
+(gdb) bt
+#0  __lll_lock_wait () at ../sysdeps/unix/sysv/linux/x86_64/lowlevellock.S:135
+#1  0x00007ffff7bc0023 in __GI___pthread_mutex_lock (mutex=0x7fffffffd570) at ../nptl/pthread_mutex_lock.c:78
+#2  0x00005555556c585f in __gthread_mutex_lock (__mutex=0x7fffffffd570) at /usr/include/x86_64-linux-gnu/c++/7/bits/gthr-default.h:748
+#3  0x00005555557177d4 in std::mutex::lock (this=0x7fffffffd570) at /usr/include/c++/7/bits/std_mutex.h:103
+#4  0x00005555556cef01 in CConMutex_check_mutex_deadlock_Test::TestBody (this=0x555555a70db0) at /home/keitee/git/kb/code-cxx/ccon/test_ccon.cpp:2241
+#5  0x00005555557a1ec2 in void testing::internal::HandleSehExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
+#6  0x000055555579b7ad in void testing::internal::HandleExceptionsInMethodIfSupported<testing::Test, void>(testing::Test*, void (testing::Test::*)(), char const*) ()
+#7  0x0000555555777c04 in testing::Test::Run() ()
+#8  0x00005555557785ab in testing::TestInfo::Run() ()
+#9  0x0000555555778cad in testing::TestSuite::Run() ()
+#10 0x00005555557847f5 in testing::internal::UnitTestImpl::RunAllTests() ()
+#11 0x00005555557a2f8d in bool testing::internal::HandleSehExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) ()
+#12 0x000055555579c681 in bool testing::internal::HandleExceptionsInMethodIfSupported<testing::internal::UnitTestImpl, bool>(testing::internal::UnitTestImpl*, bool (testing::internal::UnitTestImpl::*)(), char const*) ()
+#13 0x000055555578308e in testing::UnitTest::Run() ()
+#14 0x000055555571b7dc in RUN_ALL_TESTS () at /home/keitee/works/googletest/googletest/include/gtest/gtest.h:2470
+#15 0x00005555556d8b5a in main (argc=1, argv=0x7fffffffdac8) at /home/keitee/git/kb/code-cxx/ccon/test_ccon.cpp:5006
+
+*/
+
+// TEST(CConMutex, DISABLED_deadlock_1)
+TEST(CConMutex, deadlock_1)
 {
   std::mutex print_mutex;
 
@@ -2242,20 +2553,34 @@ TEST(DISABLED_CConMutex, check_mutex_deadlock)
   EXPECT_THAT(result, true);
 }
 
-// LPI 30.1.7 Mutex Types
-//
-// "On Linux, both of these operations succeed for this mutex type and a
-// PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
+/*
+// ={=========================================================================
+LPI 30.1.7 Mutex Types
 
-// 1. this works while the above shows `deadlock` becuase the above calls lock()
-// twice already before running a thread which calls unlock().
-//
-// However, the below runs thread before which calls unlock and main blocks on
-// second lock().
-//
-// 2. this works without calling second unlock() since *cxx-raii* do m.unlock();
+"On Linux, both of these operations succeed for this mutex type and a
+PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
-TEST(CConMutex, check_mutex_lock_1)
+o deaklock_1 shows `deadlock` becuase the above calls lock() twice already
+before running a thread which calls unlock().
+
+However, the below runs thread before which calls unlock and main blocks on
+second lock().
+
+o deadlock_2 works without calling second unlock() since *cxx-raii* do
+m.unlock();
+
+[ RUN      ] CConMutex.deadlock_2
+unset
+set
+[       OK ] CConMutex.deadlock_2 (5000 ms)
+[ RUN      ] CConMutex.deadlock_3
+unset
+set
+[       OK ] CConMutex.deadlock_3 (5001 ms)
+
+*/
+
+TEST(CConMutex, deadlock_2)
 {
   std::mutex m;
   bool result{false};
@@ -2277,7 +2602,8 @@ TEST(CConMutex, check_mutex_lock_1)
   EXPECT_THAT(result, true);
 }
 
-TEST(CConMutex, check_mutex_lock_2)
+// ={=========================================================================
+TEST(CConMutex, deadlock_3)
 {
   std::mutex m;
   bool result{false};
@@ -2297,7 +2623,8 @@ TEST(CConMutex, check_mutex_lock_2)
   EXPECT_THAT(result, true);
 }
 
-TEST(CConMutex, show_mutex_types)
+// ={=========================================================================
+TEST(CConMutex, mutex_types)
 {
   using namespace cxx_mutex;
 
@@ -2311,8 +2638,10 @@ TEST(CConMutex, show_mutex_types)
                          print_use_lock_guard,
                          "Hello from a second thread");
 
+    // s.size is 25. 25 x 20 = 500
     EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
 
+    // s.size is 26. 26 x 20 = 525
     EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
   }
 
@@ -2331,24 +2660,48 @@ TEST(CConMutex, show_mutex_types)
     EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
   }
 
-  // sometimes pass or sometimes fail
+  // sometimes pass or sometimes fail since cxx-race
+  //
+  // mangled output when use stdout
+  //
+  // HHHeeellllllooo   fffrrrooommm   aaa   msfaeiicrnos nttd h trthehrared
+  // eaad
+  // d
+  //
   // {
   //   auto f1 = std::async(std::launch::async,
   //       print_no_lock, "Hello from a first thread");
-
+  //
   //   auto f2 = std::async(std::launch::async,
   //       print_no_lock, "Hello from a second thread");
-
+  //
   //   EXPECT_THAT(f1.get(),
   //       Ne("waited for 500ms and Hello from a first thread"));
-
+  //
   //   EXPECT_THAT(f2.get(),
   //       Ne("waited for 520ms and Hello from a second thread"));
   // }
+
+  // use SpinLock. see code-cxx/ccon/test_ccon_lock_1.cpp for more details
+  // about spinlock
+
+  {
+    auto f1 = std::async(std::launch::async,
+                         print_use_spin_lock,
+                         "Hello from a first thread");
+
+    auto f2 = std::async(std::launch::async,
+                         print_use_spin_lock,
+                         "Hello from a second thread");
+
+    EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
+
+    EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
+  }
 }
 
 // ={=========================================================================
-// cxx-sync os-sem
+// cxx-sync cxx-sem
 
 // CXXSLR 18.5 A First Complete Example for Using a Mutex and a Lock
 
@@ -2568,6 +2921,7 @@ consumer
 // A condition variable remedies this and allows a thread to sleep (wait) until
 // another thread notifies (signals) it that it must do something.
 
+// ={=========================================================================
 TEST(CConCondition, ProducerAndConsumer_LPI_No_CondVar)
 {
   using namespace cxx_condition_lpi;
@@ -2649,6 +3003,7 @@ TEST(CConCondition, ProducerAndConsumer_LPI_No_CondVar)
   EXPECT_THAT(numConsumed, 900);
 }
 
+// ={=========================================================================
 TEST(CConCondition, ProducerAndConsumer_LPI_CondVar)
 {
   using namespace cxx_condition_lpi;
@@ -2766,6 +3121,7 @@ namespace cxx_condition
 // 100 milliseconds passed
 // [       OK ] CConCondition.check_wait_for_implementation (100 ms)
 
+// ={=========================================================================
 TEST(CConCondition, check_wait_for_implementation)
 {
   using namespace cxx_condition;
@@ -2916,6 +3272,7 @@ namespace cxx_condition
   }
 } // namespace cxx_condition
 
+// ={=========================================================================
 // to see how wait() works between main and t
 
 TEST(CConCondition, see_wait1)
@@ -2959,6 +3316,7 @@ TEST(CConCondition, see_wait1)
   EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 0));
 }
 
+// ={=========================================================================
 TEST(CConCondition, see_wait2)
 {
   using namespace cxx_condition;
@@ -3003,6 +3361,7 @@ TEST(CConCondition, see_wait2)
   EXPECT_THAT(cw.q.size(), 9);
 }
 
+// ={=========================================================================
 TEST(CConCondition, see_wait3)
 {
   using namespace cxx_condition;
@@ -3043,6 +3402,7 @@ TEST(CConCondition, see_wait3)
   EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 0));
 }
 
+// ={=========================================================================
 // Called with a predicate as third argument, wait_for() and wait_until() return
 // the result of the predicate (whether the condition holds).
 
@@ -3204,6 +3564,7 @@ namespace cxx_condition
 // similar to linux-sync-cond-lpi-example
 // 3 producers and consumers which produces and consumes 20 items each
 
+// ={=========================================================================
 // no error
 TEST(CConCondition, see_condition_error_1)
 {
@@ -3246,6 +3607,7 @@ TEST(CConCondition, see_condition_error_1)
 //
 // not easy to see when 5 consumer and see even when 3 consumers
 
+// ={=========================================================================
 TEST(DISABLED_CConCondition, see_condition_error_2)
 {
   using namespace cxx_condition;
@@ -3372,6 +3734,7 @@ namespace cxx_condition_notify_all
   }
 } // namespace cxx_condition_notify_all
 
+// ={=========================================================================
 TEST(CConCondition, see_condition_error_3)
 {
   using namespace cxx_condition_notify_all;
@@ -3406,6 +3769,7 @@ TEST(CConCondition, see_condition_error_3)
   EXPECT_THAT(consumed_total, 60);
 }
 
+// ={=========================================================================
 TEST(DISABLED_CConCondition, see_condition_error_4)
 {
   using namespace cxx_condition_notify_all;
@@ -3486,6 +3850,7 @@ namespace cxx_condition_error
   }
 } // namespace cxx_condition_error
 
+// ={=========================================================================
 TEST(DISABLED_CConCondition, see_condition_error_5)
 {
   using namespace cxx_condition_error;
@@ -3502,8 +3867,63 @@ TEST(DISABLED_CConCondition, see_condition_error_5)
 
 /* ={=========================================================================
 cxx-eventfd
+
+Since kernel 2.6.22, Linux provides an additional, nonstandard synchronization
+mechanism via the eventfd() system call. This system call creates an eventfd
+object that has an associated 8-byte unsigned integer maintained by the kernel.
+
+The system call returns a file descriptor that refers to the object. Writing an
+integer to this file descriptor adds that integer to the object’s value. A
+read() from the file descriptor "blocks" if the object’s value is 0. If the
+object has a nonzero value, a read() returns that value and resets it to 0. 
+
+In addition, poll(), select(), or epoll can be used to test if the object has a
+nonzero value; if it does, the file descriptor indicates as being readable. An
+application that wishes to use an eventfd object for synchronization must first
+create the object using eventfd(), and then call fork() to create related
+processes that inherit file descriptors referring to the object. For further
+details, see the eventfd(2) manual page.
+
+
+int eventfd(unsigned int initval, int flags);
+
+RETURN VALUE
+
+On success, eventfd() returns a new eventfd file descriptor. On error, -1 is
+returned and errno is set to indicate the error.
+
+       The following values may be bitwise ORed in flags to change the behavior
+       of eventfd():
+
+       EFD_SEMAPHORE (since Linux 2.6.30)
+              Provide semaphore-like semantics for reads from the new file
+              descriptor.  See below.
+
+read(2)
+
+Each successful read(2) returns an 8-byte integer. A read(2) will fail with the
+error EINVAL if the size of the supplied buffer is less than 8 bytes.
+
+The semantics of read(2) depend on whether the eventfd counter currently has a
+nonzero value and whether the EFD_SEMAPHORE flag was specified when creating the
+eventfd file descriptor:
+
+o If EFD_SEMAPHORE was not specified and the eventfd counter has a nonzero
+  value, then a read(2) returns 8 bytes containing that value, and the counter's
+  value is "reset to zero."
+
+o If EFD_SEMAPHORE was specified and the eventfd counter has a nonzero value,
+  then a read(2) returns 8 bytes containing the value 1, and the counter's value
+  is decremented by 1.
+
+o If the eventfd counter is zero at the time of the call to read(2), then the
+  call either *blocks until* the counter becomes nonzero (at which time, the
+  read(2) proceeds as described  above)  or  fails  with  the  error EAGAIN if
+  the file descriptor has been made nonblocking.
+
 */
 
+// ={=========================================================================
 TEST(CConCondition, eventfd)
 {
   std::string result{};
@@ -3514,33 +3934,6 @@ TEST(CConCondition, eventfd)
     std::cout << "failed to create eventFd" << std::endl;
     ASSERT_THAT(true, false);
   }
-
-  // cxx-eventfd
-  //
-  // int eventfd(unsigned int initval, int flags);
-  //
-  // RETURN VALUE
-  //
-  // On success, eventfd() returns a new eventfd file descriptor. On error, -1
-  // is returned and errno is set to indicate the error.
-  //
-  // read(2)
-  //
-  // Each successful read(2) returns an 8-byte integer. A read(2) will fail with
-  // the error EINVAL if the size of the supplied buffer is less than 8 bytes.
-  //
-  //  The semantics of read(2) depend on whether the eventfd counter currently
-  //  has a nonzero value and whether the EFD_SEMAPHORE flag was specified when
-  //  creating the eventfd file descriptor:
-  //
-  //  * If EFD_SEMAPHORE was not specified and the eventfd counter has a nonzero
-  //  value, then a read(2) returns 8 bytes containing that value, and the
-  //  counter's value is "reset to zero."
-  //
-  //  *  If the eventfd counter is zero at the time of the call to read(2), then
-  //  the call either *blocks until* the counter becomes nonzero (at which time,
-  //  the read(2) proceeds as described  above)  or  fails  with  the  error
-  //  EAGAIN if the file descriptor has been made nonblocking.
 
   auto f1 = std::async(std::launch::async, [&] {
     uint64_t read_value{};
@@ -3672,6 +4065,7 @@ namespace U66_Text
 
 } // namespace U66_Text
 
+// ={=========================================================================
 TEST(CConCondition, case_U66_text)
 {
   using namespace U66_Text;
@@ -3793,6 +4187,7 @@ namespace cxx_ccon
 
 } // namespace cxx_ccon
 
+// ={=========================================================================
 TEST(CConRace, NotProtectWhole)
 {
   using namespace cxx_ccon;
@@ -3916,6 +4311,7 @@ namespace cxx_ccon
   };
 } // namespace cxx_ccon
 
+// ={=========================================================================
 TEST(CConRace, ThreadSafeStack)
 {
   using namespace cxx_ccon;
@@ -3955,6 +4351,7 @@ TEST(CConFuture, DISABLED_check_promise_1)
   auto value = f.get();
 }
 
+// ={=========================================================================
 TEST(CConFuture, check_promise_2)
 {
   {
@@ -3983,6 +4380,7 @@ TEST(CConFuture, check_promise_2)
   }
 }
 
+// ={=========================================================================
 // copied from "TEST(CConCondition, check_eventfd)" and to see cxx-future can do
 // the same
 
@@ -4045,6 +4443,7 @@ namespace cxx_future
 // The packaged_tasks are actually easier for the server to use than ordinary
 // functions because the handling of their exceptions has been taken care of.
 
+// ={=========================================================================
 TEST(CConFuture, PackagedTaskPoint)
 {
   using namespace cxx_future;
@@ -4103,6 +4502,7 @@ std::list<T> sequential_quick_sort(std::list<T> input)
   return result;
 }
 
+// ={=========================================================================
 TEST(CConFuture, SequentialQuickSort)
 {
   std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
@@ -4144,6 +4544,7 @@ std::list<T> parallel_quick_sort(std::list<T> input)
   return result;
 }
 
+// ={=========================================================================
 TEST(CConFuture, ParallelQuickSort)
 {
   std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
@@ -4288,6 +4689,7 @@ private:
 // searched value : 300
 // [       OK ] CconThreadTest.UseThreadSafeLookupTable (0 ms)
 
+// ={=========================================================================
 TEST(CconThreadTest, UseThreadSafeLookupTable)
 {
   threadsafe_lookup_table<string, int> tslt;
@@ -4302,6 +4704,37 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
 
 /* ={=========================================================================
 cxx-atomic
+
+First, we include the header file <atomic>, where atomics are declared:
+
+#include <atomic>
+
+Then, we declare an atomic object, using the std::atomic<> class template:
+
+std::atomic<bool> readyFlag(false);
+
+NOTE that you always should initialize atomic objects because the default
+constructor does not fully initialize it
+
+The two most important statements to deal with atomics are store() and load():
+
+The important point is that these operations are guaranteed to be atomic, so we
+don’t need a mutex to set the ready flag
+
+{
+  std::lock_guard<std::mutex> lg(readyMutex);
+  readyFlag = true;
+} // release lock
+
+we simply can program:
+
+readyFlag.store(true);
+
+
+For atomic types, you can still use the “useful,” “ordinary” operations, such as
+assignments, automatic conversions to integral types, increments, decrements,
+and so on:
+
 */
 
 namespace cxx_atomic_ex_1
@@ -4400,6 +4833,7 @@ namespace cxx_atomic_ex_1
   } // namespace atomic_ex
 } // namespace cxx_atomic_ex_1
 
+// ={=========================================================================
 TEST(CConAtomic, check_ex_1)
 {
   {
@@ -4415,6 +4849,180 @@ TEST(CConAtomic, check_ex_1)
     auto p = std::async(std::launch::async, provider);
     auto c = std::async(std::launch::async, consumer);
   }
+}
+
+/* ={=========================================================================
+cxx-atomic
+
+18.7 Atomics
+
+With a mutex, both problems are solved, but a mutex might be a relatively
+expensive operation in both necessary resources and latency of the exclusive
+access. So, instead of using mutexes and lock, it might be worth using atomics
+instead.
+
+I first introduce the high-level interface of atomics, which provides atomic
+operations using the default guarantee regarding the order of memory access.
+
+This default guarantee provides "sequential consistency", which means that in a
+thread, atomic operations are guaranteed to happen in the order as programmed.
+
+
+18.7.1 Example of Using Atomics
+
+First, we include the header file <atomic>, where atomics are declared:
+
+#include <atomic>
+
+Then, we declare an atomic object, using the std::atomic<> class template:
+
+std::atomic<bool> readyFlag(false);
+
+NOTE that you always should initialize atomic objects because the default
+constructor does not fully initialize it
+
+The two most important statements to deal with atomics are store() and load():
+
+The important point is that these operations are guaranteed to be atomic, so we
+don’t need a mutex to set the ready flag
+
+{
+  std::lock_guard<std::mutex> lg(readyMutex);
+  readyFlag = true;
+} // release lock
+
+we simply can program:
+
+readyFlag.store(true);
+
+
+For atomic types, you can still use the “useful,” “ordinary” operations, such
+as assignments, automatic conversions to integral types, increments,
+decrements, and so on:
+
+
+The store() operation performs a so-called "release operation" on the affected
+memory location, which by default ensures that all prior memory operations,
+whether atomic or not, become visible to other threads "before" the effect of
+the store operation.
+
+The load() operation performs a so-called "acquire operation" on the affected
+memory location, which by default ensures that all following memory
+operations, whether atomic or not, become visible to other threads "after" the
+load operation.
+
+  "As a consequence, because the setting of data happens before the provider()
+  stores true in the readyFlag and the processing of data happens after the
+  consumer() has loaded true as value of the readyFlag, the processing of data
+  is guaranteed to happen after the data was provided."
+
+This guarantee is provided because in all atomic operations, we use a default
+memory order named "memory_order_seq_cst", which stands for sequential
+consistent memory order.
+
+
+18.7.2 Atomics and Their High-Level Interface in Detail
+
+In <atomic>, the class template std::atomic<> provides the general abilities of
+atomic data types.  It can be used for any trivial type. Specializations are
+provided for bool, all integral types, and pointers:
+
+template<typename T> struct atomic;     // primary class template
+template<> struct atomic<bool>;         // explicit specializations
+template<> struct atomic<int>;
+...
+template<typename T> struct atomic<T*>; // partial specialization for pointers
+
+
+With is_lock_free(), you can check whether an atomic type "internally uses
+locks" to be atomic. If not, you have `native hardware support` for the atomic
+operations (which is a prerequisite for using atomics in signal handlers).
+
+
+Both compare_exchange_strong() and compare_exchange_weak() are so-called
+`compare-and-swap (CAS) operations.` CPUs often provide this atomic
+operation to compare the contents of a memory location to a given value
+and, only if they are the same, modify the contents of that memory location
+to a given new value. This guarantees that the new value is calculated
+based on up-to-date information.
+
+The effect is something like the following pseudocode:
+
+bool compare_exchange_strong (T& expected, T desired)
+{
+  if (this->load() == expected) {
+    this->store(desired);
+    return true;
+  }
+  else {
+    expected = this->load();
+    return false;
+  }
+}
+
+Thus, if the value had been updated by another thread in the meantime, it
+returns false "with the new value in expected."
+
+
+18.7.3 The C-Style Interface of Atomics
+
+#include <atomic>
+{
+  /// atomic_bool
+  typedef atomic<bool>			atomic_bool;
+
+  /// atomic_char
+  typedef atomic<char>			atomic_char;
+
+  ...
+}
+
+*/
+
+namespace cxx_atomic
+{
+  namespace memory_order_example
+  {
+    long data;
+    std::atomic<bool> readyFlag{false};
+
+    // void thread1()
+    void provider()
+    {
+      // after reading a character
+      std::cout << "press <return>" << std::endl;
+      std::cin.get();
+
+      // provide some data
+      data = 42;
+
+      // and signal readiness
+      readyFlag.store(true);
+    }
+
+    // void thread2()
+    void consumer()
+    {
+      // wait for readiness and do something else
+      while (!readyFlag.load())
+      {
+        std::cout.put('.').flush();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      }
+
+      // and process provided data
+      std::cout << "\nvalue : " << data << std::endl;
+    }
+  } // namespace memory_order_example
+} // namespace cxx_atomic
+
+// ={=========================================================================
+TEST(CConAtomic, memory_order_example)
+{
+  using namespace cxx_atomic::memory_order_example;
+
+  auto p = std::async(std::launch::async, provider);
+  auto c = std::async(std::launch::async, consumer);
 }
 
 // CXXCCON, Listing 5.4 Sequential consistency implies a total ordering
@@ -4511,6 +5119,7 @@ namespace cxx_atomic
 // z: 1
 // [       OK ] CConAtomic.Atomic (0 ms)
 
+// ={=========================================================================
 TEST(CConAtomic, Atomic)
 {
   using namespace cxx_atomic::use_atomic;
@@ -4537,6 +5146,7 @@ TEST(CConAtomic, Atomic)
   assert(z.load() != 0);
 }
 
+// ={=========================================================================
 TEST(CConAtomic, NoAtomic)
 {
   using namespace cxx_atomic::not_use_atomic;
@@ -4571,7 +5181,6 @@ namespace cxx_atomic
 {
   struct Counter
   {
-
     Counter()
         : value(0)
     {}
@@ -4596,7 +5205,6 @@ namespace cxx_atomic
 
   struct AtomicCounter
   {
-
     AtomicCounter()
         : value(0)
     {}
@@ -4629,7 +5237,6 @@ namespace cxx_atomic
 
   struct LockCounter
   {
-
     std::mutex m_;
 
     LockCounter()
@@ -4668,6 +5275,7 @@ namespace cxx_atomic
 
 } // namespace cxx_atomic
 
+// ={=========================================================================
 TEST(CConAtomic, CounterIsAtomic)
 {
   // atomic<bool> may not be lock-free depending on implementation/platform.
@@ -4681,6 +5289,7 @@ TEST(CConAtomic, CounterIsAtomic)
   EXPECT_THAT(value.is_lock_free(), true);
 }
 
+// ={=========================================================================
 TEST(CConAtomic, CounterRace)
 {
   using namespace cxx_atomic;
@@ -4702,6 +5311,7 @@ TEST(CConAtomic, CounterRace)
   // EXPECT_THAT(counter.get(), 120);
 }
 
+// ={=========================================================================
 TEST(CConAtomic, CounterAtomic)
 {
   using namespace cxx_atomic;
@@ -4722,6 +5332,7 @@ TEST(CConAtomic, CounterAtomic)
   ASSERT_THAT(counter.get(), 120);
 }
 
+// ={=========================================================================
 TEST(CConAtomic, CounterLock)
 {
   using namespace cxx_atomic;

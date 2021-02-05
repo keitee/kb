@@ -30,6 +30,7 @@
 // libc.cpp:699:23: error: ‘__NR_stat’ was not declared in this scope
 //  #define SYSCALL(name) __NR_##name
 //                        ^
+#include <string.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -43,344 +44,201 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
-// (gdb) b
-// PatternObserver_sendNotificationWithCallerDispatcherButRaiseException_Test::TestBody()
-//
-
 /*
-={=============================================================================
-os-time
 
-time() system call returns the number of seconds since the Epoch. i.e., the
-same value that gettimeofday() returns in the tv_sec field of its tv argument.
+*call-perror* *call-strerror*
 
-#include <time.h>
-time_t time(time_t *timep);
-Returns number of seconds since the Epoch,or (time_t) -1 on error
+https://man7.org/linux/man-pages/man3/strerror.3.html
 
-Since time() returns the same value in two ways, we often simply use the
-following call without error checking:
-
-t = time(NULL);
-
-
-struct tm *localtime(const time_t *timep);
-
-The *call-gmtime()* and *call-localtime()* functions convert a time_t value
-into a so-called brokendown time. The broken-down time is placed in a
-statically allocated structure whose address is returned as the function
-result.
-
-Unlike gmtime(), `localtime() takes into account timezone and DST settings` to
-return a broken-down time corresponding to the system's local time.
-
-
-size_t strftime(char *outstr, size_t maxsize, const char *format, const struct
-    tm *timeptr);
-
-The *call-strftime()* function provides us with more precise control when
-converting a broken-down time into printable form. Given a broken-down time
-pointed to by timeptr, strftime() places a corresponding null-terminated,
-date-plus-time string in the buffer pointed to by outstr.
-
-       %c     The preferred date and time representation for the current locale.
-       %T     The time in 24-hour notation (%H:%M:%S).  (SU)
-
-
-char * currTime(const char *format);
-Return a string containing the current time formatted according to the
-specification in 'format' (see strftime(3) for specifiers). If 'format' is
-NULL, we use "%c" as a specifier (which gives the date and time as for
-ctime(3), but without the trailing newline). Returns NULL on error.
-
-*/
-
-TEST(OsTime, check_time)
-{
-  // taken from
-  // char * currTime(const char *format);
-
-  auto currTime1 = [](const char *format) -> char * {
-    // #define BUF_SIZE 1000
-    const int BUF_SIZE = 1000;
-
-    char buf[BUF_SIZE]; /* Nonreentrant */
-    time_t t;
-    struct tm *tm;
-    size_t s;
-
-    // get time_t
-    t = time(NULL);
-
-    // convert time_t to tm which is broken-down time.
-    tm = localtime(&t);
-    if (tm == NULL)
-    {
-      errExit("localtime() failed");
-    }
-
-    s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
-
-    return (s == 0) ? NULL : buf;
-  };
-
-  // use gmtime()
-  auto currTime2 = [](const char *format) -> char * {
-    // #define BUF_SIZE 1000
-    const int BUF_SIZE = 1000;
-
-    char buf[BUF_SIZE]; /* Nonreentrant */
-    time_t t;
-    struct tm *tm;
-    size_t s;
-
-    // get time_t
-    t = time(NULL);
-
-    // convert time_t to tm which is broken-down time.
-    tm = gmtime(&t);
-    if (tm == NULL)
-    {
-      errExit("localtime() failed");
-    }
-
-    s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
-
-    return (s == 0) ? NULL : buf;
-  };
-
-  std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
-  std::cout << R"(currTime1("%T") : )" << currTime1("%T") << std::endl;
-
-  std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
-  std::cout << "currTime2(NULL) : " << currTime2(NULL) << std::endl;
-}
-
-/*
-={=============================================================================
-os-file-io
-
-*/
-
-TEST(OsIO, io_open)
-{
-  int fd;
-
-  fd = open("startup", O_RDONLY);
-  if (fd == -1)
-  {
-    errMsg("failed to open file");
-  }
-}
-
-/*
-={=============================================================================
-lpi-io call-writev
-
-5.7 Scatter-Gather I/O: readv() and writev()
-
-Instead of accepting a single buffer of data to be read or written, these
-functions transfer multiple buffers of data in a single system call. The set of
-buffers to be transferred is defined by the array iov.
-
-Each element of iov is a structure of the following form:
-
-struct iovec {
-  void *iov_base; // Start address of buffer
-  size_t iov_len; // Number of bytes to transfer to/from buffer
-};
-
-–––––––––––––––––––––––––––––––––––––––––––––––––––––––––– fileio/t_readv.c
-
-TODO:
-How can test it??
-
-Gather output
-
-The writev() system call performs gather output. It concatenates (“gathers”)
-data from all of the buffers specified by iov and writes them as a sequence of
-contiguous bytes to the file referred to by the file descriptor fd.
-
-The primary advantages of readv() and writev() are convenience and speed. For
-example, we could replace a call to writev() by either:
-
-o code that allocates a single large buffer, copies the data to be written from
-  other locations in the process’s address space into that buffer, and then
-  calls write() to output the buffer; or
-
-o a series of write() calls that output the buffers individually.
-
-The first of these options, while semantically equivalent to using writev(),
-leaves us with the inconvenience (and inefficiency) of allocating buffers and
-copying data in user space.
-
-The second option is not semantically equivalent to a single call to writev(),
-since the write() calls are not performed atomically. Furthermore, performing a
-single writev() system call is cheaper than performing multiple write() calls
-(refer to the discussion of system calls in Section 3.1).
-
-*/
-
-TEST(OsIO, io_readv)
-{
-  int fd;
-
-  struct iovec iov[3];
-
-  // 3 buffers
-  struct stat mystat;
-  int x;
-  // #define STR_SIZE 100
-  char str[100];
-
-  ssize_t numRead, totalRequired;
-
-  // fd = open(argv[1], O_RDONLY);
-  fd = open("some input", O_RDONLY);
-  if (fd == -1)
-    errExit("open failed");
-
-  totalRequired = 0;
-
-  iov[0].iov_base = &mystat;
-  iov[0].iov_len  = sizeof(struct stat);
-  totalRequired += iov[0].iov_len;
-
-  iov[1].iov_base = &x;
-  iov[1].iov_len  = sizeof(x);
-  totalRequired += iov[1].iov_len;
-
-  iov[2].iov_base = str;
-  iov[2].iov_len  = 100;
-  totalRequired += iov[2].iov_len;
-
-  numRead = readv(fd, iov, 3);
-  if (numRead == -1)
-    errExit("readv failed");
-
-  if (numRead < totalRequired)
-    errMsg("read fewer bytes than requested");
-
-  // The gtest macros return a stream for outputting diagnostic messages when a
-  // test fails.
-  EXPECT_TRUE(false) << "total bytes requested: " << totalRequired
-                     << ", bytes read: " << numRead;
-}
-
-/*
-={=============================================================================
-os-pipe
-
-The C standard I/O library popen(3) makes it easy for the application
-programmer to open a pipe to an external process.
+The strerror() function returns the error string corresponding to the error
+number `given in its errnum argument`
 
 #include <stdio.h>
-FILE *popen(const char *command, const char *mode);
-Returns file stream, or NULL on error
+void perror(const char *msg);
 
-int pclose(FILE *stream);
-Returns termination status of child process, or –1 on error
+#include <string.h>
+char *strerror(int errnum);
 
 
-keitee@kit-ubuntu:~/git/kb/code-cxx/cxx/build$ echo 'vgcassetid=100&vgctoken=200&streamtype=2' | base64
-dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
+This is error message that GCC uses with system_error
 
-since base64 add a new line to the output
+config/os/generic/error_constants.h:146:      resource_deadlock_would_occur =           EDEADLK,
 
-[ RUN      ] OsPipe.check_popen
-output: dmdjYXNzZXRpZD0xMDAmdmdjdG9rZW49MjAwJnN0cmVhbXR5cGU9Mgo=
-
-[       OK ] OsPipe.check_popen (7 ms)
+template<typename _Mutex>
+class unique_lock
+{
+  bool
+    try_lock()
+    {
+      if (!_M_device)
+        __throw_system_error(int(errc::operation_not_permitted));
+      else if (_M_owns)
+        __throw_system_error(int(errc::resource_deadlock_would_occur));
+      else
+      {
+        _M_owns = _M_device->try_lock();
+        return _M_owns;
+      }
+    }
+}
 
 */
 
-namespace ospipe
+TEST(OsGlibc, errno_message)
 {
-  constexpr auto BASE64_COMMAND{"/usr/bin/base64"};
-  constexpr int BASE64_MAX_SIZE{1000};
+  const std::string message{"Resource deadlock avoided"};
+  EXPECT_THAT(message, strerror(EDEADLK));
+}
 
-  std::string base64_encode(std::string &input)
-  {
-    std::ostringstream cmd{};
-    char encoded[BASE64_MAX_SIZE]{};
+/*
+// ={=========================================================================
+NOTE: "format" is different from format in printf
+call-scanf
 
-    cmd << "echo '" << input << "' | " << BASE64_COMMAND;
+       int sscanf(const char *str, const char *format, ...);
 
-    auto pfd = popen(cmd.str().c_str(), "r");
-    if (pfd)
-    {
-      // fgets()  reads  in  at most one less than size characters from stream
-      // and stores them into the buffer pointed to by s.  Reading stops after
-      // an EOF or a newline.  If a newline is read, it is stored into the
-      // buffer.
-      // A terminating null byte ('\0') is stored after the last character in
-      // the buffer.
+       The "format" string consists of a sequence of "directives" which describe
+       how to process the sequence of input characters.  If processing of a
+       directive fails, no further input is read, and scanf() returns.  A
+       "failure" can be either of the following: input failure, meaning that
+       input characters were unavailable, or matching failure, meaning that the
+       input was inappropriate (see below).
 
-      if (fgets(encoded, sizeof(encoded), pfd))
-      {
-        // std::cout << "encoded: " << encoded << std::endl;
-        // strip trailing newline, "\n"
-        encoded[strlen(encoded) - 1] = '\0';
-      }
+       A "directive" is one of the following:
 
-      pclose(pfd);
-    }
+       ·      A sequence of white-space characters (space, tab, newline, etc.;
+       see isspace(3)).  This directive matches any amount of white space,
+       including none, in the input.
 
-    return std::string{encoded};
-  }
-} // namespace ospipe
+       ·      An ordinary character (i.e., one other than white space or '%').
+       This character must exactly match the next character of input.
 
-TEST(OsPipe, check_popen)
+       ·      A  conversion specification, which commences with a '%' (percent)
+       character.  A sequence of characters from the input is converted
+       according to this specification, and the result is placed in the
+       corresponding pointer argument.  If the next item of input does not match
+       the conversion specification, the conversion fails—this is a matching
+       failure.
+
+       Each conversion specification in format begins with either the character
+       '%' or the character sequence "%n$" (see below for the distinction)
+       followed by:
+ 
+       ·      An optional decimal integer which specifies the maximum field
+       width.  Reading of characters stops "either" when this maximum is reached
+       or when a nonmatching character is found, whichever  happens  first.
+       Most conversions  discard  initial  white  space characters (the
+       exceptions are noted below), and these discarded characters don't count
+       toward the maximum field width.  String input conversions store a
+       terminating null byte ('\0') to mark the end of the input; the maximum
+       field width does not include this terminator.
+
+
+   Conversions
+       The following type modifier characters can appear in a conversion
+        specification:
+
+
+       [      
+
+       Matches a nonempty sequence of characters from the specified "set" of
+       accepted characters; the next pointer must be a pointer to char, and
+       there must be enough room for all the characters in the string,  plus a
+       terminating null byte. The usual skip of leading white space is
+       suppressed. The string is to be made up of characters in (or not in) a
+       particular set; the set is defined by the characters between the open
+       bracket [ character and a close bracket ] character. The set excludes
+       those characters if the first character after the open bracket is a
+       circumflex (^). To include a close bracket in the set,  make  it  the
+       first character after the open bracket or the circumflex; any other
+       position will end the set. The hyphen character - is also special; when
+       placed between two other characters, it adds all intervening charac‐ ters
+       to the set. 
+
+       To include a hyphen, make it the last character before the final close
+       bracket. For instance, [^]0-9-] means the set "everything except close
+       bracket, zero through nine,  and  hyphen".   The string ends with the
+       appearance of a character not in the (or, with a circumflex, in) set or
+       when the field width runs out.
+
+
+RETURN VALUE
+       On success, these functions return "the number of input items"
+       successfully matched and assigned; this can be fewer than provided for,
+       or even zero, in the event of an early matching failure.
+
+       The value EOF is returned if the end of input is reached before either
+       the first successful conversion or a matching failure occurs.  EOF is
+       also returned if a read error occurs, in which case the error indicator
+        for the stream (see ferror(3)) is set, and errno is set to indicate the
+        error.
+
+*/
+
+TEST(OsGlibc, check_scanf)
 {
-  using namespace ospipe;
-
-  // clang-format off
-  const char command1[]{"echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64"};
-  const char command2[]{"(echo 'vgcassetid=100&vgctoken=200&streamtype=2' | /usr/bin/base64)"};
-  // clang-format on
-
   {
-    char output[1000]{};
+    const char address[]{"AA:BB:CC:DD:EE:FF"};
 
-    auto pfd = popen(command1, "r");
-    if (pfd)
     {
-      fgets(output, sizeof(output), pfd);
-      std::cout << "output: " << output << std::endl;
-    }
+      int bytes[6]{};
+      int bytesConsumed{};
 
-    pclose(pfd);
+      auto bytesRead = sscanf(address,
+                              "%02X:%02X:%02X:%02X:%02X:%02X%n",
+                              &bytes[0],
+                              &bytes[1],
+                              &bytes[2],
+                              &bytes[3],
+                              &bytes[4],
+                              &bytes[5],
+                              &bytesConsumed);
+
+      EXPECT_THAT(strlen(address), 17);
+      EXPECT_THAT(bytesConsumed, 17);
+
+      EXPECT_THAT(bytesRead, 6);
+      EXPECT_THAT(bytes[0], 0xAA);
+      EXPECT_THAT(bytes[1], 0xBB);
+      EXPECT_THAT(bytes[2], 0xCC);
+    }
   }
 
   {
-    char output[1000]{};
+    const char input[]{"0r"};
+    int fd{};
+    char buf[10]{};
+    auto num_read = sscanf(input, "%d%2[rw]", &fd, buf);
 
-    auto pfd = popen(command2, "r");
-    if (pfd)
-    {
-      fgets(output, sizeof(output), pfd);
-      std::cout << "output: " << output << std::endl;
-    }
+    EXPECT_THAT(num_read, 2);
+    EXPECT_THAT(fd, 0);
+    EXPECT_THAT(strcmp(buf, "r"), 0);
 
-    pclose(pfd);
+    // cout << "fd: " << fd << ", buf: " << buf << endl;
   }
 
+  // expect the second conversion fails
   {
-    std::string input{"vgcassetid=100&vgctoken=200&streamtype=2"};
-    std::string output = base64_encode(input);
-    std::cout << "output size: " << output.size() << ", output: " << output
-              << std::endl;
+    const char input[]{"0x"};
+    int fd{};
+    char buf[10]{};
+    auto num_read = sscanf(input, "%d%2[rw]", &fd, buf);
+
+    EXPECT_THAT(num_read, 1);
+    EXPECT_THAT(fd, 0);
+    // EXPECT_THAT(strcmp(buf, "r"), 0);
+    // cout << "fd: " << fd << ", buf: " << buf << endl;
   }
 }
 
 /*
 ={=============================================================================
-os-memset os-bzero
+call-memset call-bzero
 
 man bzero
 
 CONFORMING TO
-       The bzero() function is deprecated (marked as LEGACY in POSIX.1-2001);
+       The bzero() function is "deprecated" (marked as LEGACY in POSIX.1-2001);
        use memset(3) in new programs.  POSIX.1-2008 removes the specification of
        bzero().  The bzero() function first appeared in 4.3BSD.
 
@@ -399,6 +257,7 @@ DESCRIPTION
 
 */
 
+// ={=========================================================================
 TEST(OsGlibc, check_memset)
 {
   char coll1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -422,6 +281,7 @@ TEST(OsGlibc, check_memset)
   EXPECT_THAT(0, memcmp(coll3, coll4, 10));
 }
 
+// ={=========================================================================
 TEST(OsGlibc, check_memcmp)
 {
   char coll1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -500,7 +360,7 @@ DESCRIPTION
 
 RETURN VALUE
        The strchr() and strrchr() functions return a pointer to the matched
-       character or NULL if the character is not found.  The terminating null
+       character or "NULL if the character is not found." The terminating null
        byte is considered part of the string, so that if c is specified as '\0',
        these functions return a pointer to the terminator.
 
@@ -510,6 +370,7 @@ RETURN VALUE
 
 */
 
+// ={=========================================================================
 TEST(OsGlibc, check_memchar)
 {
   char *start{};
@@ -538,6 +399,7 @@ TEST(OsGlibc, check_memchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
+// ={=========================================================================
 TEST(OsGlibc, check_strchar)
 {
   char *start{};
@@ -568,6 +430,7 @@ TEST(OsGlibc, check_strchar)
   EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
+// ={=========================================================================
 TEST(OsGlibc, check_strrchar)
 {
   char *start{};
@@ -595,6 +458,7 @@ namespace use_internal_strchr_01
 
 } // namespace use_internal_strchr_01
 
+// ={=========================================================================
 TEST(OsGlibc, check_strrchar_mine)
 {
   using namespace use_internal_strchr_01;

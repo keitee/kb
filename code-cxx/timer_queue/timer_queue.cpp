@@ -30,6 +30,9 @@ calls described in Section 23.6.
 
 The first of the new system calls is timerfd_create(), which creates a new timer
 
+The value of clockid can be either CLOCK_REALTIME or CLOCK_MONOTONIC (see Table
+23-1).
+
 TFD_CLOEXEC
 
 Set the close-on-exec flag (FD_CLOEXEC) for the new file descriptor. This flag
@@ -75,7 +78,6 @@ details, see the eventfd(2) manual page.
   for both cases, no need to call remove().
 
 */
-
 
 TimerQueue::TimerQueue()
   : callback_running_(false)
@@ -451,21 +453,52 @@ struct timespec TimerQueue::calcAbsTime_(struct timespec const &base,
   return ts;
 }
 
-
 /* 
 -{-----------------------------------------------------------------------------
 write the item on the head of the `expiry queue` into the timerfd for the next
 wake-up time. that is set timerfd with the next timer to run.
+
+        struct timeval {
+            time_t tv_sec;         // Seconds since 00:00:00, 1 Jan 1970 UTC
+            suseconds_t tv_usec;   // Additional `microseconds` (long int)
+        };
+
+        struct itimerval {
+          struct timeval it_interval; // Interval for periodic timer
+          struct timeval it_value;    // Current value (time until next expiration)
+        };
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h
+
+POSIX.1b structure for a time value.  This is like a `struct timeval' but
+has nanoseconds instead of microseconds.
+
+       struct timespec {
+           time_t tv_sec;                // Seconds
+           long   tv_nsec;               // Nanoseconds
+       };
+
+       struct itimerspec {
+           struct timespec it_interval;  // Interval for periodic timer 
+           struct timespec it_value;     // Initial expiration
+       };
+
+       int timerfd_settime(int fd, int flags,
+                           const struct itimerspec *new_value,
+                           struct itimerspec *old_value);
+
+       TFD_TIMER_ABSTIME
+              Interpret new_value.it_value as an absolute value on the timer's
+              clock.  The timer will expire when the value of the timer's
+              clock reaches the value specified in new_value.it_value.
+
+    TFD_TIMER_ABSTIME = 1 << 0,
+ 
 */
 
 void TimerQueue::updateTimerfd_() const 
 { 
   struct itimerspec its{};
-
-  // struct itimerval {
-  //   struct timeval it_interval; /* Interval for periodic timer */
-  //   struct timeval it_value;    /* Current value (time until next expiration) */
-  // };
 
   if (tqueue_.empty())
   {

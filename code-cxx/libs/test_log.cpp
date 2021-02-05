@@ -44,8 +44,8 @@ using namespace testing;
 
 #endif
 
-// ={=========================================================================
 /* LPI log
+// ={=========================================================================
 
 1. LPI log supports `errno`
 
@@ -62,9 +62,14 @@ ERROR [ENOENT No such file or directory], failed to open file
 ERROR [ENOENT No such file or directory], this is error message from errExit
 [       OK ] LPILog.useLogExit (0 ms)
 
+
+[ RUN      ] Log.lpi_usage_error
+Usage: signal pid num-sigs sig-num [sig-num-2]
+$
+
 */
 
-TEST(Log, lpi_errMsg)
+TEST(Log, lpi_err_msg)
 {
   {
     int value{10};
@@ -90,12 +95,22 @@ TEST(Log, lpi_errMsg)
   }
 }
 
-TEST(Log, lpi_errExit)
+TEST(Log, lpi_err_exit)
 {
   errMsg("this is error message from errExit");
 
   // since it do exit()
   // LOG_EXIT_ERROR("this is error message from errExit");
+}
+
+TEST(Log, lpi_usage_error)
+{
+  usageErr("%s pid num-sigs sig-num [sig-num-2]\n", "signal");
+}
+
+TEST(Log, lpi_print_message)
+{
+  prnMsg("%s pid num-sigs sig-num [sig-num-2]\n", "signal");
 }
 
 /*

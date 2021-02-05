@@ -478,6 +478,19 @@ with the "batteries included" philosophy. But YMMV.
 
 /*
 
+test_readline_1.cpp
+ 
+o simple app to see how readline works such as <TAB> and read stdin.
+o readline completion works on the pre-defined "words" vector
+o command handler from scli.cpp provides mapping <string, function>
+o however, both are not connected. that is, completion just do completion on
+  stdin but not run a function to handler map.
+
+How to solve? see test_readline_2
+
+
+test_readline_2.cpp
+
 o To link command completion and command execution, readline.cpp maintains
   command vector and an iterface to run the input command.
 
@@ -490,6 +503,17 @@ o To support global function and member function of any class:
   - to avoid this, use std::function<> out of any class so that can be used
   globally and use std::bind for any classes member function. so can have
   flexibility. see sample commands
+
+
+test_readline_2.cpp
+runs main thread and loop
+
+console.cpp
+provides command map and this is where user adds more <command, function>
+entries.
+
+readline.cpp
+provides readline features and default features.
 
 */
 

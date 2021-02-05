@@ -8,5 +8,6 @@
    Returns NULL on error. */
 
 char *currTime(const char *format);
+void printWaitStatus(const char *msg, int status);
 
 #endif // LPI_LIB_H

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_os VERSION 0.1 LANGUAGES CXX)
+project(os_signal VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -16,56 +16,8 @@ enable_testing()
 #
 # $ENV{FOO}
 
-set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
-
-
-# Include the directory source_dir in your project. This directory must contain
-# a CMakeLists.txt file. Note: We're omitting the optional second parameter.
-# This only works with subdirectories of the current directory. We will see how
-# to add external directories later.
-#
-# As checked: /home/keitee/works/googletest/googlemock/CMakeLists.txt
-#
-# add_subdirectory(source_dir [binary_dir])
-#
-# Add the directory source_dir to the current project with binary_dir as its
-# corresponding binary output directory. When adding a directory that is a
-# subdirectory of the current directory CMake will automatically determine what
-# the binary output directory should be, making the second argument optional.
-# However if you add a directory that isn't a subdirectory you need to specify
-# the binary output directory. 
-#
-#
-# CMAKE_BINARY_DIR 
-#
-# This variable holds the path to the top level binary output directory, i.e.
-# the directory in which you ran the cmake command
-
-add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
-
-
-# include_directories([AFTER|BEFORE] [SYSTEM] directory...)
-#
-# AFTER|BEFORE Specify whether or not these include directories should be
-# appended or prepended to the list of include directories. If omitted then the
-# default behavior is used. By default directories are appended to the list.
-# This behavior can be changed by setting CMAKE_INCLUDE_DIRECTORIES_BEFORE to
-# TRUE. 
-#
-# SYSTEM Specify that these directories are system include directories. This
-# only has an affect on compilers that support the distinction. This can change
-# the order in which the compiler searches include directories or the handling
-# of warnings from headers found in these directories. 
-#
-# directory...  The directories to be added to the list of include directories.
-
-include_directories(SYSTEM ${GMOCK_DIR}/include)
-
-
-# not ok, add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 # ok, add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
 add_compile_options(-g -D_GLIBCXX_DEBUG -lsystemd)
-
 
 # cmake help
 #
@@ -177,31 +129,26 @@ link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
 # test_os
-add_executable(${PROJECT_NAME} "test_os.cpp")
-## cause link errors to Boost::thread
-## target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
+# add_executable(${PROJECT_NAME} "test_os.cpp")
+# cause link errors to Boost::thread
+# target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 
 
-# lpi-socket-unix
-add_executable(lpi-socket-unix-server "lpi_socket_unix_server.cpp")
-target_link_libraries(lpi-socket-unix-server ${LIBS})
-add_executable(lpi-socket-unix-client "lpi_socket_unix_client.cpp")
-target_link_libraries(lpi-socket-unix-client ${LIBS})
+# lpi-signal-1
+add_executable(lpi_signal_1 "lpi_signal_1.cpp")
+target_link_libraries(lpi_signal_1 ${LIBS})
 
-# lpi-semaphore
-add_executable(lpi-sem-server "lpi_sem_server.cpp")
-target_link_libraries(lpi-sem-server ${LIBS} "-lpthread")
-add_executable(lpi-sem-client "lpi_sem_client.cpp")
-target_link_libraries(lpi-sem-client ${LIBS} "-lpthread")
+# lpi-signal-2
+add_executable(lpi_signal_2 "lpi_signal_2.cpp")
+target_link_libraries(lpi_signal_2 ${LIBS})
 
+# lpi-signal-3
+add_executable(lpi_signal_3 "lpi_signal_3.cpp")
+target_link_libraries(lpi_signal_3 ${LIBS})
 
-# lpi-flock
-add_executable(lpi-flock "lpi_flock.cpp")
-target_link_libraries(lpi-flock ${LIBS})
+# lpi-signal-sender and receiver
+add_executable(lpi_signal_sender "lpi_signal_sender.cpp")
+target_link_libraries(lpi_signal_sender ${LIBS})
 
-# lpi-flock-fcntl
-add_executable(lpi-flock-fcntl "lpi_flock_fcntl.cpp")
-target_link_libraries(lpi-flock-fcntl ${LIBS})
-
-add_subdirectory(process)
+add_executable(lpi_signal_receiver "lpi_signal_receiver.cpp")
+target_link_libraries(lpi_signal_receiver ${LIBS})

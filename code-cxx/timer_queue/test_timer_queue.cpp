@@ -92,6 +92,7 @@ namespace
   };
 }
 
+// ={=========================================================================
 // regardless of return value of handler, oneshot runs only one time.
 
 TEST(TimerQueue, runOneshotTimerWithTrue)
@@ -105,6 +106,7 @@ TEST(TimerQueue, runOneshotTimerWithTrue)
   std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 }
 
+// ={=========================================================================
 TEST(TimerQueue, runOneshotTimerWithFalse)
 {
   TimerQueue tq;
@@ -117,6 +119,7 @@ TEST(TimerQueue, runOneshotTimerWithFalse)
 }
 
 
+// ={=========================================================================
 TEST(TimerQueue, runSingleTimer)
 {
   TimerQueue tq;
@@ -131,6 +134,7 @@ TEST(TimerQueue, runSingleTimer)
   cv.wait(lock);
 }
 
+// ={=========================================================================
 TEST(TimerQueue, runSingleTimerOnMemberFunction)
 {
   TimerQueue tq;
@@ -147,6 +151,7 @@ TEST(TimerQueue, runSingleTimerOnMemberFunction)
   cv.wait(lock);
 }
 
+// ={=========================================================================
 TEST(TimerQueue, runSingleTimerButRemoveBeforeRunning)
 {
   TimerQueue tq;
@@ -168,6 +173,7 @@ TEST(TimerQueue, runSingleTimerButRemoveBeforeRunning)
   EXPECT_THAT(counter, 0);
 }
 
+// ={=========================================================================
 TEST(TimerQueue, runRepeatTimer)
 {
   TimerQueue tq;
@@ -189,6 +195,7 @@ TEST(TimerQueue, runRepeatTimer)
   EXPECT_THAT(counter, 10);
 }
 
+// ={=========================================================================
 // creates many but ends without running them.
 TEST(TimerQueue, makesManyTimersAndExit)
 {

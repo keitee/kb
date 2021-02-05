@@ -17,6 +17,19 @@
 using namespace std;
 using namespace testing;
 
+/*
+call stack from run in the main.
+
+#0  0xb354d802 in epoll_wait () from /lib/libc.so.6
+#1  0xb3ecb046 in sd_event_wait () from /lib/libsystemd.so.0
+#2  0xb3ecb5f0 in sd_event_run () from /lib/libsystemd.so.0
+#3  0xb3ecb6be in sd_event_loop () from /lib/libsystemd.so.0
+#4  0x0008e964 in EventLoopPrivate::exec (this=0x9cbf34) at /media/keitee/ssd2/as-sky-repo/asplayer/eventloop/eventloop.cpp:191
+#5  0x0008e0b4 in EventLoop::exec (this=0xbbdfe72c) at /media/keitee/ssd2/as-sky-repo/asplayer/eventloop/eventloop.cpp:56
+#6  0x00032dd8 in main (argc=1, argv=0xbbdfe8b4) at /media/keitee/ssd2/as-sky-repo/asplayer/main.cpp:61
+
+*/
+
 // ={=========================================================================
 
 namespace

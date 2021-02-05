@@ -20,13 +20,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <unistd.h>
 
 #include "lpi_error.h"
 
 namespace
 {
-
   // lib/ename.c.inc
 
   char const *ename[] = {
@@ -224,7 +224,6 @@ namespace
     else
       _exit(EXIT_FAILURE);
   }
-
 } // namespace
 
 void errMsg(const char *format, ...)
@@ -270,6 +269,15 @@ by the caller and without invoking exit handlers that were established by the
 caller.
 
 void err_exit(const char *format, ...)
+{
+    va_list argList;
+
+    va_start(argList, format);
+    outputError(TRUE, errno, FALSE, format, argList);
+    va_end(argList);
+
+    terminate(FALSE);
+}
 
 */
 
@@ -284,4 +292,74 @@ void errExitEN(int errnum, const char *format, ...)
   va_end(arg_list);
 
   terminate(true);
+}
+
+void usageErr(const char *format, ...)
+{
+  va_list args;
+
+  // flush any pending stdout
+  fflush(stdout);
+
+  fprintf(stderr, "Usage: ");
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+
+  // in case stderr is not line-buffered. what does it mean?
+  fflush(stdout);
+  exit(EXIT_FAILURE);
+}
+
+void cmdLineErr(const char *format, ...)
+{
+  va_list argList;
+
+  // flush any pending stdout
+  fflush(stdout);
+
+  fprintf(stderr, "Command-line usage error: ");
+  va_start(argList, format);
+  vfprintf(stderr, format, argList);
+  va_end(argList);
+
+  fflush(stderr);           // In case stderr is not line-buffered
+  exit(EXIT_FAILURE);
+}
+
+// from case
+// takes a printf style format string and args. returns std::string
+// string_formatter(const char *fmt, ...);
+
+void __attribute__((format(printf, 1, 2))) prnMsg(const char *fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+
+  char *s{nullptr};
+
+  // DESCRIPTION
+  //
+  // The functions asprintf() and vasprintf() are analogs of sprintf(3)
+  // and vsprintf(3), except that they allocate a string large enough to
+  // hold the output including the terminating null byte ('\0'), and
+  // return a pointer to it via the first argument.  This pointer should
+  // be passed to free(3) to release the allocated storage when it is no
+  // longer needed.
+
+  int n = vasprintf(&s, fmt, ap);
+  va_end(ap);
+
+  std::string str{};
+
+  if (nullptr != s)
+  {
+    if (n > 0)
+      str.assign(s, n);
+
+    free(s);
+  }
+
+  // return str;
+  std::cout << str;
 }

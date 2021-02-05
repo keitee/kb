@@ -91,6 +91,128 @@ TEST(GccAttribute, check_variable_attribute)
   std::cout << "Test ends\n";
 }
 
+namespace attribute_function
+{
+#ifdef __GNUC__
+#define NORETURN __attribute__((__noreturn__))
+#else
+#define NORETURN
+#endif
+
+  NORETURN static void terminate_1(bool useExit3)
+  {
+    std::cout << "terminate is called\n";
+
+    if (useExit3)
+      exit(EXIT_FAILURE);
+    else
+      _exit(EXIT_FAILURE);
+  }
+
+#ifdef __GNUC__
+  __attribute__((__noreturn__))
+#endif
+  static void
+  terminate_2(bool useExit3)
+  {
+    std::cout << "terminate is called\n";
+
+    if (useExit3)
+      exit(EXIT_FAILURE);
+    else
+      _exit(EXIT_FAILURE);
+  }
+
+  int cause_warning_1()
+  {
+    std::cout << "it's to cuase warning\n";
+    terminate_1(true);
+  }
+
+  int cause_warning_2()
+  {
+    std::cout << "it's NOT to cuase warning\n";
+    terminate_2(true);
+  }
+} // namespace attribute_function
+
+/*
+// ={=========================================================================
+
+when see:
+
+#ifdef __GNUC__
+    // This macro stops 'gcc -Wall' complaining that "control reaches
+    // end of non-void function" if we use the following functions to
+    // terminate main() or some other non-void function.
+
+#define NORETURN __attribute__ ((__noreturn__))
+#else
+#define NORETURN
+#endif
+
+void usageErr(const char *format, ...) NORETURN ;
+
+However, this is for declarations in a header since:
+
+/test_gcc.cpp: At global scope:
+/test_gcc.cpp:97:18: error: attributes are not allowed on a function-definition
+ #define NORETURN __attribute__ ((__noreturn__))
+
+ok, runs it to check:
+
+[ 54%] Building CXX object CMakeFiles/test_gcc.dir/test_gcc.cpp.o
+: In function ‘int attribute::cause_warning()’:
+: warning: no return statement in function returning non-void [-Wreturn-type]
+   }
+   ^
+[ 57%] Linking CXX executable test_gcc
+
+So cause_warning_2() do not cause this warning since termiate_2 use "noreturn"
+attribute. Unlike the case, no need to use this attribue in caller,
+cause_warning()?
+
+https://gcc.gnu.org/onlinedocs/gcc-3.2/gcc/Function-Attributes.html
+
+Declaring Attributes of Functions
+
+In GNU C, you declare certain things about functions called in your program
+which help the compiler optimize function calls and check your code more
+carefully.
+
+noreturn
+
+A few standard library functions, such as abort and exit, cannot return. GCC
+knows this automatically. Some programs define their own functions that never
+return. You can declare them noreturn to tell the compiler this fact. For
+example,
+
+          void fatal () __attribute__ ((noreturn));
+          
+          void
+          fatal (...)
+          {
+            ... // Print error message. ...
+            exit (1);
+          }
+          
+The noreturn keyword tells the compiler to assume that fatal cannot return. It
+can then optimize without regard to what would happen if fatal ever did return.
+
+This makes slightly better code. More importantly, it helps avoid spurious
+warnings of uninitialized variables.
+
+*/
+
+TEST(GccAttributeFunction, no_return)
+{
+  using namespace attribute_function;
+
+  cause_warning_1();
+
+  cause_warning_2();
+}
+
 // ={=========================================================================
 
 int main(int argc, char **argv)

@@ -171,5 +171,17 @@ target_link_libraries(test_abort gmock gmock_main)
 add_executable(test_trace "test_trace.c")
 target_link_libraries(test_trace gmock gmock_main)
 
-add_executable(test_psax "psax.c")
-target_link_libraries(test_psax curses)
+# add_executable(test_psax "psax.c")
+# target_link_libraries(test_psax curses)
+
+# see case where deadlock happens in a detached thread on a embedded env but not
+# able to get "full call traces" even when step through up to the point entering
+# a deadlock using gdb.
+#
+# so thought it may be due to it uses a detached thread. not able to easily
+# change it to use normal thread so try to do it on desktop env. 
+#
+# However, both cases can see "full call traces" is that because it's desktop
+# env?
+
+add_subdirectory(cpp-thread)

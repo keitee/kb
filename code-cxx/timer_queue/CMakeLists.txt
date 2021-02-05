@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.0.0)
 
 project(timer_queue VERSION 0.1 LANGUAGES CXX)
 
-enable_testing()
-
 # https://stackoverflow.com/questions/690223/how-to-retrieve-a-user-environment-variable-in-cmake-windows
 # Getting variables into your CMake script
 # You can pass a variable on the line with the cmake invocation:
@@ -15,9 +13,6 @@ enable_testing()
 # Then you can pick it up in a cmake script using:
 #
 # $ENV{FOO}
-
-# to gnerate signal/slot codes
-set(CMAKE_AUTOMOC ON)
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
@@ -87,10 +82,8 @@ link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
 # timer_queue
-# add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp slog.cpp)
-add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp)
-target_link_libraries(${PROJECT_NAME} gmock_main ${LIBS})
+add_executable(test_timer_queue test_timer_queue.cpp timer_queue.cpp)
+target_link_libraries(test_timer_queue gmock_main ${LIBS})
 
-# add_test(Gtest.MatcherForPair ${PROJECT_NAME})
-add_test(${PROJECT_NAME} ${PROJECT_NAME})
-
+add_executable(test_time test_time.cpp)
+target_link_libraries(test_time gmock_main ${LIBS})

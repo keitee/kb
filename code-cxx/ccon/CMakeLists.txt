@@ -113,6 +113,11 @@ target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
 add_executable(${PROJECT_NAME}_ex "test_ccon_ex.cpp")
 target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
 
+# standalone to see spinlock
+add_executable(test_ccon_lock_1 "test_ccon_lock_1.cpp")
+target_link_libraries(test_ccon_lock_1 Threads::Threads)
+add_executable(test_ccon_lock_2 "test_ccon_lock_2.cpp")
+target_link_libraries(test_ccon_lock_2 Threads::Threads)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

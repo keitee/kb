@@ -3057,19 +3057,21 @@ TEST(PatternNotifierFull, sendNotificationManyArgs)
 }
 
 /*
-={=========================================================================
+// ={=========================================================================
 cxx_pattern_singleton
 
 */
 
 namespace cxx_singleton
 {
+  // dynamic allocation and return pointer.
   class Foo1
   {
   private:
     std::string name_{};
     int count_{0};
     int calls_{0};
+
     static Foo1 *instance_;
 
     // to wait for random
@@ -3124,7 +3126,7 @@ namespace cxx_singleton
 
   int instance_count = 0;
 
-  // when use reference
+  // use reference. no allocation and no pointer defined
   class Foo2
   {
   private:
@@ -3178,14 +3180,15 @@ namespace cxx_singleton
   };
 } // namespace cxx_singleton
 
-TEST(PatternSingleton, check_on_single_thread_1)
+// ={=========================================================================
+TEST(PatternSingleton, on_single_thread_1)
 {
   using namespace cxx_singleton;
 
   EXPECT_THAT(Foo1::instance()->name(), "Foo1");
   EXPECT_THAT(Foo1::instance()->count(), 1);
 
-  // uses `instance` more
+  // uses `instance` more to see instance counter increases
   EXPECT_THAT(Foo1::instance()->name(), "Foo1");
   EXPECT_THAT(Foo1::instance()->name(), "Foo1");
 
@@ -3193,14 +3196,15 @@ TEST(PatternSingleton, check_on_single_thread_1)
   EXPECT_THAT(Foo1::instance()->count(), 1);
 }
 
-TEST(PatternSingleton, check_on_single_thread_2)
+// ={=========================================================================
+TEST(PatternSingleton, on_single_thread_2)
 {
   using namespace cxx_singleton;
 
   EXPECT_THAT(Foo2::instance().name(), "Foo2");
   EXPECT_THAT(Foo2::instance().count(), 1);
 
-  // uses `instance` more
+  // uses `instance` more to see instance counter increases
   EXPECT_THAT(Foo2::instance().name(), "Foo2");
   EXPECT_THAT(Foo2::instance().name(), "Foo2");
 
@@ -3210,6 +3214,7 @@ TEST(PatternSingleton, check_on_single_thread_2)
 
 namespace cxx_singleton
 {
+  // use Foo1
   void do_access_1()
   {
 #ifndef DISABLE_WAIT
@@ -3224,7 +3229,22 @@ namespace cxx_singleton
     std::cout << std::this_thread::get_id() << " ends" << std::endl;
   }
 
+  // use Foo2
   void do_access_2()
+  {
+#ifndef DISABLE_WAIT
+    // to wait for random
+    std::default_random_engine dre('r');
+    std::uniform_int_distribution<int> id(10, 1000);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
+#endif
+
+    EXPECT_THAT(Foo2::instance().name(), "Foo2");
+    std::cout << std::this_thread::get_id() << " ends" << std::endl;
+  }
+
+  void do_access_3()
   {
     for (size_t i = 0; i < 10; ++i)
     {
@@ -3236,6 +3256,7 @@ namespace cxx_singleton
       std::this_thread::sleep_for(std::chrono::milliseconds(id(dre)));
 #endif
 
+      // increase call count
       Foo1::instance()->exec();
     }
   }
@@ -3243,7 +3264,7 @@ namespace cxx_singleton
 
 // creates multiple threads which uses singleton to see how it works
 // thread safe as cxx11 supports
-TEST(PatternSingleton, check_on_multiple_thread_1)
+TEST(PatternSingleton, instance_count_on_multiple_thread_1)
 {
   using namespace cxx_singleton;
 
@@ -3266,15 +3287,48 @@ TEST(PatternSingleton, check_on_multiple_thread_1)
     std::cout << "threads " << i << " ends" << std::endl;
   }
 
-  // uses `instance` more
+  // uses `instance` more to see instance counter increases
   EXPECT_THAT(Foo1::instance()->name(), "Foo1");
   EXPECT_THAT(Foo1::instance()->name(), "Foo1");
 
-  // count stays the same
+  // instance count stays the same
   EXPECT_THAT(Foo1::instance()->count(), 1);
 }
 
-// ok, `initialisation` is thread-safe. how about meember function?
+TEST(PatternSingleton, instance_count_on_multiple_thread_2)
+{
+  using namespace cxx_singleton;
+
+  std::vector<std::future<void>> threads;
+
+  // lets creates multiple threads to run
+  for (int i = 0; i < 10; ++i)
+  {
+    auto result = std::async(std::launch::async, do_access_2);
+
+    // use std::move() and otherwise, compile error
+    threads.emplace_back(std::move(result));
+
+    std::cout << std::this_thread::get_id() << " ends" << std::endl;
+  }
+
+  for (int i = 0; i < 10; ++i)
+  {
+    threads[i].get();
+    std::cout << "threads " << i << " ends" << std::endl;
+  }
+
+  // uses `instance` more to see instance counter increases
+  EXPECT_THAT(Foo2::instance().name(), "Foo2");
+  EXPECT_THAT(Foo2::instance().name(), "Foo2");
+
+  // instance count stays the same
+  EXPECT_THAT(Foo1::instance()->count(), 1);
+}
+
+// ok, `initialisation` is thread-safe. that is static instance function is
+// thread-safe without protecting it. HOW about call counts in member function
+// which is not protected?
 //
 // as you can see it fails sometimes and this when #thread is 10
 //
@@ -3295,7 +3349,7 @@ TEST(PatternSingleton, check_on_multiple_thread_1)
 //   Actual: 98 (of type int)
 // [  FAILED  ] PatternSingleton.check_on_multiple_thread_2 (7160 ms)
 
-TEST(PatternSingleton, check_on_multiple_thread_2)
+TEST(PatternSingleton, call_count_on_multiple_thread_1)
 {
   using namespace cxx_singleton;
 
@@ -3306,7 +3360,7 @@ TEST(PatternSingleton, check_on_multiple_thread_2)
   // lets creates multiple threads to run
   for (int i = 0; i < NUM_THREADS; ++i)
   {
-    auto result = std::async(std::launch::async, do_access_2);
+    auto result = std::async(std::launch::async, do_access_3);
 
     // use std::move() and otherwise, compile error
     threads.emplace_back(std::move(result));
@@ -3390,9 +3444,7 @@ namespace cxx_singleton
     }
 
   private:
-    MySingleton1() = default;
-
-    // NOTE
+    MySingleton1()  = default;
     ~MySingleton1() = default;
 
     MySingleton1(const MySingleton1 &) = delete;
@@ -3461,9 +3513,7 @@ namespace cxx_singleton
     }
 
   private:
-    MySingleton2() = default;
-
-    // NOTE:
+    MySingleton2()  = default;
     ~MySingleton2() = default;
 
     MySingleton2(const MySingleton2 &) = delete;

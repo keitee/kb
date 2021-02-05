@@ -6,6 +6,7 @@
 #include <forward_list>
 #include <fstream>
 #include <future>
+#include <inttypes.h>
 #include <iostream>
 #include <limits>
 #include <list>
@@ -14,6 +15,8 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <sys/epoll.h>
+#include <sys/time.h>
 #include <thread>
 #include <variant>
 #include <vector>
@@ -24,33 +27,78 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
+namespace
+{
+  // from case
+  // takes a printf style format string and args. returns std::string
+  // string_formatter(const char *fmt, ...);
+
+  void __attribute__((format(printf, 1, 2))) print(const char *fmt, ...)
+  {
+    va_list ap;
+    va_start(ap, fmt);
+
+    char *s{nullptr};
+
+    // DESCRIPTION
+    //
+    // The functions asprintf() and vasprintf() are analogs of sprintf(3)
+    // and vsprintf(3), except that they allocate a string large enough to
+    // hold the output including the terminating null byte ('\0'), and
+    // return a pointer to it via the first argument.  This pointer should
+    // be passed to free(3) to release the allocated storage when it is no
+    // longer needed.
+
+    int n = vasprintf(&s, fmt, ap);
+    va_end(ap);
+
+    std::string str{};
+
+    if (nullptr != s)
+    {
+      if (n > 0)
+        str.assign(s, n);
+
+      free(s);
+    }
+
+    // return str;
+    std::cout << str;
+  }
+} // namespace
+
 /*
 ={=========================================================================
 warning: variable ‘first’ set but not used [-Wunused-but-set-variable]
 
 https://stackoverflow.com/questions/23998283/variable-warning-set-but-not-used
 
-because
+// declared, not set to anything
+int none[5];
 
-int none[5];        // declared, not set to anything
 
-And then:
+// And then: a value has been set, but it's not being used for anything
+none[i] = number1;
 
-none[i] = number1;  // a value has been set, but it's not being used for anything
-
-as the code is, you have: "none" set but not used; exactly what the compiler said.
+as the code is, you have: "none" set but not used; exactly what the compiler
+said.
 
 */
 
-TEST(CxxErrorWarning, not_used)
+TEST(CxxError, not_used)
 {
+  // // warning: variable ‘first’ set but not used [-Wunused-but-set-variable]
+  // {
+  //   size_t first{0};
+  //   first = 1;
+  // }
+
+  // no warinig
   {
-    // warning: variable ‘first’ set but not used [-Wunused-but-set-variable]
     size_t first{0};
     first = 1;
 
-    // this make the warning go away
-    // std::cout << first << std::endl;
+    std::cout << first << std::endl;
   }
 }
 
@@ -165,10 +213,52 @@ TEST(CxxMemoryModel, check_allocator)
 
 /*
 // ={=========================================================================
-cxx-size cxx-sizeof
+cxx-type cxx-size cxx-sizeof
+
+https://en.cppreference.com/w/cpp/types/integer
+
+uintptr_t (optional)
+unsigned integer type capable of holding a pointer (typedef)
+
+/usr/include/stdint.h
+{
+
+// Types for `void *' pointers.
+#if __WORDSIZE == 64
+# ifndef __intptr_t_defined
+typedef long int		intptr_t;
+#  define __intptr_t_defined
+# endif
+typedef unsigned long int	uintptr_t;
+#else
+# ifndef __intptr_t_defined
+typedef int			intptr_t;
+#  define __intptr_t_defined
+# endif
+typedef unsigned int		uintptr_t;
+#endif
+
+}
+
+/usr/include/x86_64-linux-gnu/bits/stdint-uintn.h
+{
+typedef __uint32_t uint32_t;
+typedef __uint64_t uint64_t;
+}
+
+/usr/include/x86_64-linux-gnu/bits/types.h
+{
+typedef unsigned int __uint32_t;
+typedef unsigned long int __uint64_t;
+}
+
+So 32 bit has different headers?
+
 
 LP64
 __x86_64__
+WORDSIZE 64
+
 size of (enum) is               : 4
 size of (unsigned short) is     : 2
 size of (int) is                : 4
@@ -180,6 +270,8 @@ size of (long int) is           : 8
 size of (unsigned long int) is  : 8
 size of (long long) is          : 8
 size of (unsigned long long) is : 8
+size of (float) is              : 4
+size of (double) is             : 8
 size of (* int) is              : 8
 size of (* unsigned int) is     : 8
 size of (size_t) is             : 8
@@ -187,6 +279,8 @@ size of (uint8_t) is            : 1
 size of (uint16_t) is           : 2
 size of (uint32_t) is           : 4
 size of (uint64_t) is           : 8
+size of (uintptr_t) is          : 8
+size of (intptr_t) is           : 8
 
 LP32
 __x86_32__
@@ -330,6 +424,7 @@ namespace
 // error see cxx-static-cast
 
 // ={=========================================================================
+// cxx-type
 TEST(CxxType, sizes)
 {
 #if defined(__LP64__) || defined(_LP64)
@@ -342,6 +437,12 @@ TEST(CxxType, sizes)
   std::cout << "__x86_64__ " << std::endl;
 #else
   std::cout << "__x86_32__ " << std::endl;
+#endif
+
+#if __WORDSIZE == 64
+  std::cout << "WORDSIZE 64" << std::endl;
+#else
+  std::cout << "WORDSIZE 32" << std::endl;
 #endif
 
   std::cout << "size of (enum) is               : " << sizeof(State)
@@ -368,8 +469,11 @@ TEST(CxxType, sizes)
 
   std::cout << "size of (long long) is          : " << sizeof(long long)
             << endl;
-  cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
-       << endl;
+  std::cout << "size of (unsigned long long) is : "
+            << sizeof(unsigned long long) << endl;
+
+  std::cout << "size of (float) is              : " << sizeof(float) << endl;
+  std::cout << "size of (double) is             : " << sizeof(double) << endl;
 
   int *pint;
   unsigned int *puint;
@@ -382,6 +486,164 @@ TEST(CxxType, sizes)
   std::cout << "size of (uint16_t) is           : " << sizeof(uint16_t) << endl;
   std::cout << "size of (uint32_t) is           : " << sizeof(uint32_t) << endl;
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
+  std::cout << "size of (uintptr_t) is          : " << sizeof(uintptr_t)
+            << endl;
+  std::cout << "size of (intptr_t) is           : " << sizeof(intptr_t) << endl;
+}
+
+/*
+// ={=========================================================================
+cxx-type cxx-portable
+
+https://www.gnu.org/software/libc/manual/html_node/Integers.html
+
+20.1 Integers
+
+The C language defines several integer data types: integer, short integer,
+long integer, and character, all in both signed and unsigned varieties.
+
+The GNU C compiler extends the language to contain long long integers as well.
+
+The C integer types were intended to allow code `to be portable` among
+machines with different inherent data sizes (word sizes), so each type may
+have different ranges on different machines. The problem with this is that a
+program often needs to be written for a particular range of integers, and
+sometimes must be written for a particular size of storage, regardless of what
+machine the program runs on.
+
+To address this problem, `the GNU C Library contains C type definitions` you
+can use to declare integers that meet your exact needs. 
+
+Because the GNU C Library header files are customized to a specific machine,
+`your program source code doesn’t have to be.`
+
+These typedefs are in `stdint.h`
+
+If you require that an integer be represented in `exactly N bits`, use one of
+the following types, with the obvious mapping to bit size and signedness:
+
+int8_t
+int16_t
+int32_t
+int64_t
+uint8_t
+uint16_t
+uint32_t
+uint64_t
+
+
+Ok, then these types would solve the type portabilty issue? "NO" since see the
+issue on using *cxx-printf*
+
+So the same `uint64_t` has the same physical size on both but is regarded as
+different type:
+
+/usr/include/x86_64-linux-gnu/bits/stdint-uintn.h
+{
+typedef __uint32_t uint32_t;
+typedef __uint64_t uint64_t;
+}
+
+/usr/include/x86_64-linux-gnu/bits/types.h
+{
+typedef unsigned int __uint32_t;
+typedef unsigned long int __uint64_t;
+}
+
+on 64:
+
+size of (uint64_t) is           : 8
+size of (long) is               : 8
+size of (long long) is          : 8
+
+
+So problem here is `have to use right format specifier` depending on 32/64 to
+avoid this warning/error.
+
+
+o solution 1. use if/def
+
+#if defined(__LP64__) || defined(_LP64)
+  AS_LOG_ERROR("failed to find timer with tag %ld to remove", tag);
+#else
+  AS_LOG_ERROR("failed to find timer with tag %lld to remove", tag);
+#endif
+
+https://stackoverflow.com/questions/685124/how-to-identify-a-64-bit-build-on-linux-using-the-preprocessor
+
+__LP64__
+_LP64
+
+https://gcc.gnu.org/onlinedocs/cpp/Common-Predefined-Macros.html#Common-Predefined-Macros
+
+These macros are defined, with value 1, if (and only if) the compilation is
+for a target where long int and pointer both use 64-bits and int uses 32-bit.
+
+see *cxx-cpp-check-define*
+
+
+o solution 2. use PRId64
+
+https://stackoverflow.com/questions/9225567/how-to-print-a-int64-t-type-in-c
+
+#include <inttypes.h>
+
+// cause error since it have to use "%"
+LOG_ERROR("failed to find timer with tag % to remove" PRId64, tag);
+
+// ok
+LOG_ERROR("failed to find timer with tag %" PRId64 " to remove", tag);
+
+this is effectively same as pre-processor replace PRIxx with "ld" or "lld".
+
+/usr/include/inttypes.h
+{
+# if __WORDSIZE == 64
+#  define __PRI64_PREFIX	"l"
+#  define __PRIPTR_PREFIX	"l"
+# else
+#  define __PRI64_PREFIX	"ll"
+#  define __PRIPTR_PREFIX
+# endif
+
+# define PRId64		__PRI64_PREFIX "d"
+}
+
+*/
+
+// ={=========================================================================
+TEST(CxxType, sizes_portable)
+{
+  uint64_t value{10};
+
+  // on 64
+  {
+    // "long decimal"
+    printf("uint64 value is %ld\n", value);
+
+    // "long long decimal"
+    // warning: format ‘%lld’ expects argument of type ‘long long int’,
+    // but argument 2 has type ‘uint64_t {aka `long unsigned int`}’
+    // [-Wformat=]
+    printf("uint64 value is %lld\n", value);
+  }
+
+  // on 32
+  {
+    // long decimal
+    // warning: format ‘%ld’ expects argument of type ‘long int’,
+    // but argument 2 has type ‘uint64_t {aka `long long unsigned int`}’
+    // [-Wformat=]
+    printf("uint64 value is %ld\n", value);
+
+    // "long long decimal"
+    printf("uint64 value is %lld\n", value);
+  }
+
+  // use PRId64 or PRIu64
+  {
+    printf("uint64 value is %" PRIu64 "\n", value);
+  }
 }
 
 /*
@@ -486,8 +748,6 @@ TEST(CxxType, overflow)
   {
     (value1 + value2);
 
-    (value1 + value2) / 2;
-
     std::cout << "int       : " << (value1 + value2) / 2 << std::endl;
 
     int value3{};
@@ -519,46 +779,47 @@ TEST(CxxType, overflow)
     EXPECT_THAT(__builtin_add_overflow_p(value1, 1, (int)0), true);
   }
 
-  // The following built-in functions allow checking if simple arithmetic
-  // operation would overflow.
-  //
-  // Built-in Function: bool __builtin_add_overflow_p (type1 a, type2 b, type3 c)
-  // Built-in Function: bool __builtin_sub_overflow_p (type1 a, type2 b, type3 c)
-  // Built-in Function: bool __builtin_mul_overflow_p (type1 a, type2 b, type3 c)
-  //
-  // These built-in functions are similar to __builtin_add_overflow,
-  // __builtin_sub_overflow, or __builtin_mul_overflow, except that they don’t
-  // store the result of the arithmetic operation anywhere and the last argument
-  // is not a pointer, but some expression with integral type other than
-  // enumerated or boolean type.
+  /*
+  The following built-in functions allow checking if simple arithmetic
+  operation would overflow.
+  
+  Built-in Function: bool __builtin_add_overflow_p (type1 a, type2 b, type3 c)
+  Built-in Function: bool __builtin_sub_overflow_p (type1 a, type2 b, type3 c)
+  Built-in Function: bool __builtin_mul_overflow_p (type1 a, type2 b, type3 c)
+  
+  These built-in functions are similar to __builtin_add_overflow,
+  __builtin_sub_overflow, or __builtin_mul_overflow, except that they don’t
+  store the result of the arithmetic operation anywhere and the last argument
+  is not a pointer, but some expression with integral type other than
+  enumerated or boolean type.
 
-  // The built-in functions promote the first two operands into infinite
-  // precision signed type and perform addition on those promoted operands.
-  //
-  // The result is then cast to "the type of the third argument."
-  //
-  // If the cast result is equal to the infinite precision result, the built-in
-  // functions return false, otherwise they return true.
-  //
-  // false : not overflow
+  The built-in functions promote the first two operands into infinite
+  precision signed type and perform addition on those promoted operands.
+  
+  The result is then cast to "the type of the third argument."
+  
+  If the cast result is equal to the infinite precision result, the built-in
+  functions return false, otherwise they return true.
+  
+  false : not overflow
 
-  // "The value" of the third argument is ignored, just the side effects in the
-  // third argument are evaluated, and no integral argument promotions are
-  // performed on the last argument. If the third argument is a bit-field, the
-  // type used for the result cast has the precision and signedness of the given
-  // bit-field, rather than precision and signedness of the underlying type.
+  "The value" of the third argument is ignored, just the side effects in the
+  third argument are evaluated, and no integral argument promotions are
+  performed on the last argument. If the third argument is a bit-field, the
+  type used for the result cast has the precision and signedness of the given
+  bit-field, rather than precision and signedness of the underlying type.
 
-  // For example, the following macro can be used to portably check, at compile-time, whether or not adding two constant integers will overflow, and perform the addition only when it is known to be safe and not to trigger a -Woverflow warning.
-  //
-  // #define INT_ADD_OVERFLOW_P(a, b) \
-  //    __builtin_add_overflow_p (a, b, (__typeof__ ((a) + (b))) 0)
-  //
-  // enum {
-  //     A = INT_MAX, B = 3,
-  //     C = INT_ADD_OVERFLOW_P (A, B) ? 0 : A + B,
-  //     D = __builtin_add_overflow_p (1, SCHAR_MAX, (signed char) 0)
-  // };
-
+  For example, the following macro can be used to portably check, at compile-time, whether or not adding two constant integers will overflow, and perform the addition only when it is known to be safe and not to trigger a -Woverflow warning.
+  
+  #define INT_ADD_OVERFLOW_P(a, b) \
+     __builtin_add_overflow_p (a, b, (__typeof__ ((a) + (b))) 0)
+  
+  enum {
+      A = INT_MAX, B = 3,
+      C = INT_ADD_OVERFLOW_P (A, B) ? 0 : A + B,
+      D = __builtin_add_overflow_p (1, SCHAR_MAX, (signed char) 0)
+  };
+  */
   {
     long long value4{};
 
@@ -620,14 +881,17 @@ TEST(CxxType, null)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-cast cxx-conversion cxx-printf
+cxx-cast cxx-conversion cxx-printf
 
-TEST(CxxType, check_types)
+values {55.000000, 140.000000, 436.000000, 246.000000}
+values {55.000000, 140.000000, 0.227083, 0.227778}
+
+*/
+TEST(CxxType, cast_1)
 {
   // converts int to float
-  // values {55.000000, 140.000000, 436.000000, 246.000000}
-  // values {55.000000, 140.000000, 0.227083, 0.227778}
   {
     int x{55};
     int y{140};
@@ -654,11 +918,98 @@ TEST(CxxType, check_types)
     int value0{1920};
     float value1{1920.0f};
 
-    // convert int to float
+    // float and float div
     float value2 = float(value0);
 
     EXPECT_TRUE((value2 / value1) == 1.0);
     EXPECT_TRUE((value2 / value1) == 1);
+
+    // int and float div
+    EXPECT_TRUE((value2 / value0) == 1);
+    EXPECT_TRUE((value2 / value0) == 1.0);
+  }
+}
+
+namespace cxx_type
+{
+  class Foo
+  {
+  private:
+    int m_value{};
+
+  public:
+    Foo()
+        : m_value{100}
+    {}
+  };
+
+  // shows the warning/error
+  using UserTag = uint32_t;
+
+  // shows no warning/error
+  // using UserTag = uintptr_t;
+
+  void showError(UserTag value)
+  {
+    Foo *pfoo;
+
+    pfoo = (Foo *)value;
+
+    (void)pfoo;
+  }
+} // namespace cxx_type
+
+/*
+case example
+
+this is warning and becomes error when use "-Werror"
+
+error: cast to pointer from integer of different size 
+  [-Werror=int-to-pointer-cast]
+   pfoo = (Foo *)value;
+                 ^~~~~
+
+the case example is:
+
+typedef SPM_API_UserTag uint32_t;
+
+void ::SpmApiSystemStateListener(SPM_API_UserTag _queue)
+{
+  AS_DMS::Queue *queue = (AS_DMS::Queue *) _queue;
+}
+
+gets the same error when build on 64 bit env. the intention is to use int32_t
+value as a handle which is a pointer of queue. the problem is Queue * is 64
+bit and UserTag is 32 bit so this error.
+
+
+o solution 1
+
+typedef usUsertag_t SPM_API_UserTag; 
+
+usUsertag_t would switch to 32 or 64 bit based on platform definition.
+
+o solution 2
+
+use uintptr_t as shown above and see cxx-type
+
+*/
+
+TEST(CxxType, cast_2)
+{
+  using namespace cxx_type;
+
+  // simple code to show error
+  // {
+  //   Foo *pfoo;
+  //   uint32_t value{100};
+  //   pfoo = (Foo *)value;
+  // }
+
+  {
+    UserTag value{100};
+
+    showError(value);
   }
 }
 
@@ -1928,7 +2279,7 @@ namespace cxx_variant
   // {
   //   public:
   //     using Arg = std::variant<int, std::string>;
-  // 
+  //
   //   private:
   //     std::map<std::string, Arg> mParsedArgs;
   //
@@ -1972,7 +2323,7 @@ namespace cxx_variant
   // TryParseString is to try with parsing the input string to the best matching
   // type. So if it looks like an integer, then we try to fetch integer.
   // Otherwise, we’ll return an unparsed string. Of course, we can extend this
-  // approach.  
+  // approach.
   //
   // Example how we can use it:
 
@@ -1982,13 +2333,13 @@ namespace cxx_variant
   //
   //   auto arg = cmdLine.Find("paramInt");
   //   if (arg && std::holds_alternative<int>(*arg))
-  //     std::cout << "paramInt is " 
+  //     std::cout << "paramInt is "
   //       << std::get<int>(*arg) << "\n";
   //
   //   arg = cmdLine.Find("textParam");
   //   if (arg && std::holds_alternative<std::string>(*arg))
-  //     std::cout << "textParam is " 
-  //       << std::get<std::string>(*arg) << "\n";    
+  //     std::cout << "textParam is "
+  //       << std::get<std::string>(*arg) << "\n";
   // }
   // catch (std::runtime_error &err)
   // {
@@ -3132,7 +3483,7 @@ namespace cxx_temporary
     int value_;
 
     StructValue(int value)
-      : value_(value)
+        : value_(value)
     {}
 
     int operator++() { return ++value_; }
@@ -3143,7 +3494,7 @@ namespace cxx_temporary
     StructValue value{3301};
     return value;
   }
-}
+} // namespace cxx_temporary
 
 // ={=========================================================================
 // cxx-temporary. show that not allowed to modify tempory
@@ -6347,48 +6698,186 @@ TEST(CxxTime, ratio)
   EXPECT_THAT(rn.den, 1);
 }
 
+/*
 // ={=========================================================================
-// The local date and time is: Tue Jun 12 12:49:12 2018
-// The local date and time is: Tue Jun 12 12:49:12 2018
-// The UTC date and time is: Tue Jun 12 11:49:12 2018
+The local date and time is: Tue Jun 12 12:49:12 2018
+The local date and time is: Tue Jun 12 12:49:12 2018
+The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(CxxTime, system_call)
+os-time
+
+time() system call returns the number of seconds since the Epoch. i.e., the
+same value that gettimeofday() returns in the tv_sec field of its tv argument.
+
+#include <time.h>
+time_t time(time_t *timep);
+Returns number of seconds since the Epoch,or (time_t) -1 on error
+
+Since time() returns the same value in two ways, we often simply use the
+following call without error checking:
+
+t = time(NULL);
+
+
+struct tm *localtime(const time_t *timep);
+
+The *call-gmtime()* and *call-localtime()* functions convert a time_t value
+into a so-called brokendown time. The broken-down time is placed in a
+statically allocated structure whose address is returned as the function
+result.
+
+Unlike gmtime(), `localtime() takes into account timezone and DST settings` to
+return a broken-down time corresponding to the system's local time.
+
+
+size_t strftime(char *outstr, size_t maxsize, const char *format, const struct
+    tm *timeptr);
+
+The *call-strftime()* function provides us with more precise control when
+converting a broken-down time into printable form. Given a broken-down time
+pointed to by timeptr, strftime() places a corresponding null-terminated,
+date-plus-time string in the buffer pointed to by outstr.
+
+       %c     The preferred date and time representation for the current locale.
+       %T     The time in 24-hour notation (%H:%M:%S).  (SU)
+
+
+char * currTime(const char *format);
+Return a string containing the current time formatted according to the
+specification in 'format' (see strftime(3) for specifiers). If 'format' is
+NULL, we use "%c" as a specifier (which gives the date and time as for
+ctime(3), but without the trailing newline). Returns NULL on error.
+
+*/
+
+TEST(CxxTime, os_call)
 {
-  // #include <time.h>
-  // time_t time(time_t *timep);
-  // time_t now = time(0);
-  //
-  // time() system call returns the number of seconds since the Epoch. i.e., the
-  // same value that gettimeofday() returns in the tv_sec field of its tv
-  // argument.
-
-  auto now = std::time(0);
-
-  // The ctime() function provides a simple method of converting a time_t value
-  // `into printable form.` The ctime() function automatically accounts for
-  // local timezone and DST settings when performing the conversion.
-  //
-  // Returns pointer to statically allocated string `terminated by newline` and
-  // \0 on success, or NULL on error
-
-  cout << "The local date and time is: " << std::ctime(&now);
-
-  // The gmtime() and localtime() functions convert a time_t value into a
-  // so-called brokendown time. The broken-down time is placed in a statically
-  // allocated structure whose address is returned as the function result.
-
-  // tm *localtm = localtime(&now);
-  auto localtm = std::localtime(&now);
-  cout << "The local date and time is: " << std::asctime(localtm);
-
-  // tm *gmtm = gmtime(&now);
-  auto gmtm = std::gmtime(&now);
-  if (gmtm != nullptr)
   {
-    cout << "The UTC date and time is: " << std::asctime(gmtm);
+    struct timeval current;
+
+    if (gettimeofday(&current, NULL) < 0)
+      std::cout << "failed on gettimeofday\n";
+
+    std::cout << "sec: " << current.tv_sec << ", micro sec: " << current.tv_usec
+              << std::endl;
+  }
+
+  {
+    // #include <time.h>
+    // time_t time(time_t *timep);
+    // time_t now = time(0);
+    //
+    // time() system call returns the number of seconds since the Epoch. i.e., the
+    // same value that gettimeofday() returns in the tv_sec field of its tv
+    // argument.
+
+    auto now = std::time(0);
+
+    // The ctime() function provides a simple method of converting a time_t value
+    // `into printable form.` The ctime() function automatically accounts for
+    // local timezone and DST settings when performing the conversion.
+    //
+    // Returns pointer to statically allocated string `terminated by newline` and
+    // \0 on success, or NULL on error
+
+    cout << "The local date and time is: " << std::ctime(&now);
+
+    // The gmtime() and localtime() functions convert a time_t value into a
+    // so-called brokendown time. The broken-down time is placed in a statically
+    // allocated structure whose address is returned as the function result.
+
+    // tm *localtm = localtime(&now);
+    auto localtm = std::localtime(&now);
+    cout << "The local date and time is: " << std::asctime(localtm);
+
+    // tm *gmtm = gmtime(&now);
+    auto gmtm = std::gmtime(&now);
+    if (gmtm != nullptr)
+    {
+      cout << "The UTC date and time is: " << std::asctime(gmtm);
+    }
+  }
+
+  {
+    // taken from
+    // char * currTime(const char *format);
+
+    auto currTime1 = [](const char *format) -> char * {
+      // #define BUF_SIZE 1000
+      const int BUF_SIZE = 1000;
+
+      char buf[BUF_SIZE]; /* Nonreentrant */
+      time_t t;
+      struct tm *tm;
+      size_t s;
+
+      // get time_t
+      t = time(NULL);
+
+      // convert time_t to tm which is broken-down time.
+      tm = localtime(&t);
+      if (tm == NULL)
+      {
+        print("localtime() failed");
+      }
+
+      s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
+
+      return (s == 0) ? NULL : buf;
+    };
+
+    // use gmtime()
+    auto currTime2 = [](const char *format) -> char * {
+      // #define BUF_SIZE 1000
+      const int BUF_SIZE = 1000;
+
+      char buf[BUF_SIZE]; /* Nonreentrant */
+      time_t t;
+      struct tm *tm;
+      size_t s;
+
+      // get time_t
+      t = time(NULL);
+
+      // convert time_t to tm which is broken-down time.
+      tm = gmtime(&t);
+      if (tm == NULL)
+      {
+        print("localtime() failed");
+      }
+
+      s = strftime(buf, BUF_SIZE, (format != NULL) ? format : "%c", tm);
+
+      return (s == 0) ? NULL : buf;
+    };
+
+    std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
+    std::cout << R"(currTime1("%T") : )" << currTime1("%T") << std::endl;
+
+    std::cout << "currTime1(NULL) : " << currTime1(NULL) << std::endl;
+    std::cout << "currTime2(NULL) : " << currTime2(NULL) << std::endl;
   }
 }
 
+// ={=========================================================================
+TEST(CxxTime, os_realtime)
+{
+  {
+    timespec tp;
+
+    clock_gettime(CLOCK_REALTIME, &tp);
+
+    // sec and us (micro sec)
+    printf("time %.010lu.%.06lu\n",
+           (unsigned long)tp.tv_sec,
+           (unsigned long)(tp.tv_nsec / 1000));
+
+    auto localtm = localtime(&tp.tv_sec);
+    cout << "The local date and time: " << asctime(localtm) << endl;
+  }
+}
+
+// ={=========================================================================
 TEST(CxxTime, conversion)
 {
   auto now = std::time(0);
@@ -9882,6 +10371,7 @@ TEST(CxxSmartPointer, bool_support)
   }
 }
 
+// ={=========================================================================
 // CXXSLR 5.2 Smart Pointers
 
 TEST(CxxSmartPointer, check_shared_example_1)
@@ -9957,6 +10447,7 @@ namespace cxx_smart_pointer
   };
 } // namespace cxx_smart_pointer
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_under_inheritance)
 {
   using namespace cxx_smart_pointer;
@@ -10070,6 +10561,7 @@ TEST(CxxSmartPointer, check_unique_const)
 }
 #endif
 
+// ={=========================================================================
 TEST(CxxSmartPointerUnique, check_move_assign_1)
 {
   using namespace cxx_sp_shared;
@@ -10084,6 +10576,7 @@ TEST(CxxSmartPointerUnique, check_move_assign_1)
   EXPECT_FALSE(p2);
 }
 
+// ={=========================================================================
 TEST(CxxSmartPointerUnique, check_move_assign_2)
 {
   // Foo ctor(1)
@@ -10183,6 +10676,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
+// ={=========================================================================
 TEST(CxxSmartPointerUnique, check_sink_source_pattern)
 {
   using namespace cxx_sp_shared;
@@ -10197,6 +10691,7 @@ TEST(CxxSmartPointerUnique, check_sink_source_pattern)
   cout << "main: ends" << endl;
 }
 
+// ={=========================================================================
 // use unique_ptr with stl collections
 TEST(CxxSmartPointerUnique, check_use_with_coll)
 {
@@ -10300,6 +10795,7 @@ namespace cxx_sp_delete
 
 } // namespace cxx_sp_delete
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_deleter)
 {
   using namespace cxx_sp_delete;
@@ -10384,6 +10880,7 @@ TEST(CxxSmartPointer, check_deleter)
   }
 }
 
+// ={=========================================================================
 // name: Jutta ,name: Jutta ,name: Nico ,name: Jutta ,name: Nico ,
 // name: Jutta ,name: Jutta ,name: Nicolai ,name: Jutta ,name: Nicolai ,
 // deleting Nicolai
@@ -10444,6 +10941,7 @@ TEST(CxxSmartPointer, sp_DeleteTime)
   EXPECT_THAT(pjutta.use_count(), 0);
 }
 
+// ={=========================================================================
 // Foo ctor(1)
 // Foo ctor(2)
 // Foo ctor(3)
@@ -10516,6 +11014,7 @@ namespace cxx_sp_use_count
   };
 } // namespace cxx_sp_use_count
 
+// ={=========================================================================
 // Is use_count() reliable?
 
 TEST(CxxSmartPointer, sp_UseCount)
@@ -10560,12 +11059,29 @@ TEST(CxxSmartPointer, sp_UseCount)
   EXPECT_THAT(p2.use_count(), 0);
 }
 
-// started from a quesion; what's going to happen when the shared pointer from
-// shared_from_this()? will it delete the pointee?
-// So as shown below, the parent on which shared_from_this() is called is also
-// shared pointer and if not, "bad_weak_ptr" will be thrown
+/*
+// ={=========================================================================
+started from a question; what's going to happen when the shared pointer from
+shared_from_this() gets deleted? Will it delete the pointee? So as shown
+below, the target on which shared_from_this() is called "should" be also
+shared pointer and if not, "bad_weak_ptr" will be thrown
 
-TEST(CxxSmartPointer, sp_SharedFromThis1)
+[ RUN      ] CxxSmartPointer.shared_from_this_1
+Foo ctor(1)
+Foo dtor(1)
+e.what : bad_weak_ptr
+[       OK ] CxxSmartPointer.shared_from_this_1 (0 ms)
+
+[ RUN      ] CxxSmartPointer.shared_from_this_2
+Foo ctor(1)
+Foo value: 1
+Foo value: 1
+Foo dtor(1)
+[       OK ] CxxSmartPointer.shared_from_this_2 (0 ms)
+
+*/
+
+TEST(CxxSmartPointer, shared_from_this_1)
 {
   using namespace cxx_sp_use_count;
 
@@ -10574,7 +11090,9 @@ TEST(CxxSmartPointer, sp_SharedFromThis1)
     Foo f(1);
 
     {
+      // return sp
       auto sp = f.getFoo();
+
       sp->value();
       EXPECT_THAT(sp.use_count(), 1);
     }
@@ -10584,7 +11102,8 @@ TEST(CxxSmartPointer, sp_SharedFromThis1)
   }
 }
 
-TEST(CxxSmartPointer, sp_SharedFromThis2)
+// ={=========================================================================
+TEST(CxxSmartPointer, shared_from_this_2)
 {
   using namespace cxx_sp_use_count;
 
@@ -10593,7 +11112,146 @@ TEST(CxxSmartPointer, sp_SharedFromThis2)
     std::shared_ptr<Foo> sp = std::make_shared<Foo>(1);
 
     {
+      // return sp
       auto f = sp->getFoo();
+
+      f->value();
+      EXPECT_THAT(f.use_count(), 2);
+    }
+
+    // sp is still available?
+    sp->value();
+    EXPECT_THAT(sp.use_count(), 1);
+
+  } catch (exception &e)
+  {
+    std::cout << "e.what : " << e.what() << std::endl;
+  }
+}
+
+namespace cxx_sp
+{
+  class Foo1 : public std::enable_shared_from_this<Foo1>
+  {
+  private:
+    int id;
+
+  private:
+    Foo1(int val)
+        : id(val)
+    {
+      cout << "Foo ctor(" << id << ")" << endl;
+    }
+
+  public:
+    void value() { std::cout << "Foo value: " << id << std::endl; }
+
+    ~Foo1() { cout << "Foo dtor(" << id << ")" << endl; }
+
+    std::shared_ptr<Foo1> getFoo() { return shared_from_this(); }
+  };
+} // namespace cxx_sp
+
+/*
+// ={=========================================================================
+:11159:56:   required from here
+/usr/include/c++/7/ext/new_allocator.h:136:4: 
+error: ‘cxx_sp_use_count::Foo1::Foo1(int)’ is private within this context
+  { ::new((void *)__p) _Up(std::forward<_Args>(__args)...); }
+    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+cxx-error to use cxx-make-shared when ctors is private.
+
+TEST(CxxSmartPointer, make_shared_1)
+{
+  using namespace cxx_sp;
+
+  try
+  {
+    // cxx-error
+    std::shared_ptr<Foo1> sp = std::make_shared<Foo1>(1);
+
+    {
+      // return sp
+      auto f = sp->getFoo();
+
+      f->value();
+      EXPECT_THAT(f.use_count(), 2);
+    }
+
+    // sp is still available?
+    sp->value();
+    EXPECT_THAT(sp.use_count(), 1);
+
+  } catch (exception &e)
+  {
+    std::cout << "e.what : " << e.what() << std::endl;
+  }
+}
+
+
+The trick is:
+
+https://stackoverflow.com/questions/8147027/how-do-i-call-stdmake-shared-on-a-class-with-only-protected-or-private-const/20961251#20961251
+
+note on
+o use of static function
+o use of private ctor in derived class
+
+*/
+
+namespace cxx_sp
+{
+  class Foo2 : public std::enable_shared_from_this<Foo2>
+  {
+  private:
+    int id;
+
+  private:
+    Foo2(int val)
+        : id(val)
+    {
+      cout << "Foo ctor(" << id << ")" << endl;
+    }
+
+  public:
+    void value() { std::cout << "Foo value: " << id << std::endl; }
+
+    ~Foo2() { cout << "Foo dtor(" << id << ")" << endl; }
+
+    // cxx-error
+    // std::shared_ptr<Foo2> getFoo() { return shared_from_this(); }
+
+    static std::shared_ptr<Foo2> getFoo()
+    {
+      class make_shared_enabler : public Foo2
+      {
+      public:
+        make_shared_enabler()
+            : Foo2(1)
+        {}
+      };
+
+      return std::make_shared<make_shared_enabler>();
+    }
+  };
+} // namespace cxx_sp
+
+TEST(CxxSmartPointer, make_shared_2)
+{
+  using namespace cxx_sp;
+
+  try
+  {
+    // cxx-error
+    // std::shared_ptr<Foo2> sp = std::make_shared<Foo2>(1);
+
+    std::shared_ptr<Foo2> sp = Foo2::getFoo();
+
+    {
+      // return sp
+      auto f = sp->getFoo();
+
       f->value();
       EXPECT_THAT(f.use_count(), 2);
     }
@@ -11082,6 +11740,7 @@ own count to # control PDM API calls to make release/request calls.
 # How about using smart pointers to this problem?
 */
 
+// ={=========================================================================
 TEST(SmartPointer, WeakResourceManagerSolution)
 {
   using namespace cxx_sp_weak_problem;
@@ -11288,6 +11947,7 @@ namespace cxx_sp_unique_own_version
 
 } // namespace cxx_sp_unique_own_version
 
+// ={=========================================================================
 TEST(SmartPointer, OwnUnique)
 {
   using namespace cxx_sp_unique_own_version;
@@ -11470,6 +12130,7 @@ namespace cxx_sp_shared_own_version
 
 } // namespace cxx_sp_shared_own_version
 
+// ={=========================================================================
 TEST(SmartPointer, OwnShared)
 {
   using namespace cxx_sp_shared_own_version;
@@ -11841,15 +12502,42 @@ TEST(CxxBool, bool_conversion)
   }
 }
 
-// ={=========================================================================
-// cxx-stream cxx-io
+/*
+={=========================================================================
+cxx-stream cxx-io
 
-TEST(CxxStream, stdio_input)
+[ RUN      ] CxxStream.read_std_input
+10
+4.0
+This is a text
+[       OK ] CxxStream.read_std_input (14910 ms)
+
+*/
+
+TEST(CxxStream, read_std_input_1)
 {
+  // from std::cin
   {
     int i{};
     double d{};
-    string s{};
+    std::string s{};
+
+    std::cin >> i;
+    std::cin >> d;
+
+    // see that it DO NOT read a line
+    std::cin >> s;
+
+    EXPECT_EQ(i, 10);
+    EXPECT_EQ(d, 4.0);
+    EXPECT_EQ(s, "This");
+  }
+
+  // use stringstream instead
+  {
+    int i{};
+    double d{};
+    std::string s{};
 
     // show the same result when use cin. To emulate input:
     std::stringstream iss("10\n4.0\nThis is a text\n");
@@ -11869,7 +12557,7 @@ TEST(CxxStream, stdio_input)
   {
     int i{};
     double d{};
-    string s{};
+    std::string s{};
 
     // show the same result when use cin. To emulate input:
     std::stringstream iss("10 4.0 This is a text");
@@ -11886,7 +12574,7 @@ TEST(CxxStream, stdio_input)
   {
     int i{};
     double d{};
-    string s{};
+    std::string s{};
     int i1, i2, i3, i4;
 
     std::stringstream iss("10\n4.0\n1 2 3 4\n");
@@ -11898,11 +12586,50 @@ TEST(CxxStream, stdio_input)
     iss >> i3;
     iss >> i4;
 
-    vector<int> coll{i1, i2, i3, i4};
+    std::vector<int> coll{i1, i2, i3, i4};
 
     EXPECT_EQ(i, 10);
     EXPECT_EQ(d, 4.0);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4));
+  }
+}
+
+/*
+={=========================================================================
+how to handle arguments from main(int argc, char *argv[])
+
+*/
+
+TEST(CxxStream, read_std_input_2)
+{
+  // {
+  //   char *argv[]{"10", "4.0", "This is a text"};
+  //
+  //   int arg1{};
+  //
+  //   // :11946:11: error: invalid operands of types ‘char*’ and ‘int’ to binary ‘operator>>’
+  //   // argv[0] >> arg1;
+  //   // ~~~~~~~~^~~~~~~
+  //   argv[0] >> arg1;
+  // }
+
+  // use cxx-stringstream conversion
+  {
+    char *argv[]{"10", "4.0", "This is a text"};
+    // char **argv[]{"10", "4.0", "This is a text"};
+
+    int arg1{};
+    std::stringstream{argv[0]} >> arg1;
+    EXPECT_THAT(arg1, 10);
+    EXPECT_THAT(std::strtol(argv[0], nullptr, 10), 10);
+
+    double arg2{};
+    std::stringstream{argv[1]} >> arg2;
+    EXPECT_THAT(arg2, 4.0);
+
+    std::string arg3{};
+    std::stringstream{argv[2]} >> arg3;
+    EXPECT_THAT(arg3, "This");
   }
 }
 
@@ -13938,19 +14665,20 @@ TEST(CxxRegex, match_1)
     EXPECT_EQ(found, true);
   }
 
-  // find XML/HTML tagged value (tags before and after the value must match)
-  //
-  // Here, we use the concept of “grouping.” We use “(...)” to define a
-  // so-called capture group, to which we refer later on with the regular
-  // expression “\1”. Note, however, that we specify the regular expression as
-  // an ordinary character sequence, so we have to specify the “character \
-  // followed by the character 1” as “\\1”.
-  //
-  // Alternatively, we could use a raw string, which was introduced with C++11
-  // It starts with “R"(” and ends with “)"”.
-  //
-  // R"(<(.*)>.*</\1>)" is equivalent to: "<(.*)>.*</\\1>"
-
+  /*
+  find XML/HTML tagged value (tags before and after the value must match)
+  
+  Here, we use the concept of “grouping.” We use “(...)” to define a
+  so-called capture group, to which we refer later on with the regular
+  expression “\1”. Note, however, that we specify the regular expression as
+  an ordinary character sequence, so we have to specify the “character \
+  followed by the character 1” as “\\1”.
+  
+  Alternatively, we could use a raw string, which was introduced with C++11
+  It starts with “R"(” and ends with “)"”.
+  
+  R"(<(.*)>.*</\1>)" is equivalent to: "<(.*)>.*</\\1>"
+  */
   {
     std::regex reg("<(.*)>.*</\\1>");
     bool found = std::regex_match("<tag>value</tag>", reg);
@@ -14362,7 +15090,7 @@ TEST(CxxRegex, token_iterators)
     std::istream_iterator<std::string> end{};
     std::vector<std::string> coll{beg, end};
 
-    for (auto const &e: coll)
+    for (auto const &e : coll)
     {
       cout << "name: " << e << endl;
     }
@@ -14750,6 +15478,7 @@ TEST(CxxBit, check_bitset)
   }
 }
 
+// ={=========================================================================
 // bitset::set()
 // 1) Sets all bits to true.
 // 2) Sets the bit at position pos to the value value.
@@ -14877,6 +15606,7 @@ namespace cxx_bit_array
   }
 } // namespace cxx_bit_array
 
+// ={=========================================================================
 TEST(CxxBit, check_bit_array)
 {
   using namespace cxx_bit_array;
@@ -14924,9 +15654,7 @@ TEST(CxxBit, check_bit_array)
 [ RUN      ] CxxBit.check_performace_on_array_bit
 [       OK ] CxxBit.check_performace_on_array_bit (50 ms)
 [ RUN      ] CxxBit.check_performace_on_array_bool
-[       OK ] CxxBit.check_performace_on_array_bool (34 ms) <<<<<<<<
-
-NOTE array bool is fastest.
+[       OK ] CxxBit.check_performace_on_array_bool (34 ms) // NOTE fastest.
 
 */
 
@@ -15155,6 +15883,7 @@ TEST(CxxBit, bit_RightShift)
   }
 }
 
+// ={=========================================================================
 // *cxx-twos-complement*
 TEST(CxxBit, bit_MaxNegagiveIsSpecial)
 {
@@ -15198,12 +15927,63 @@ namespace bit_overflow
   int bigrand() { return RAND_MAX * rand() + rand(); }
 } // namespace bit_overflow
 
+// ={=========================================================================
 TEST(CxxBit, bit_Overflow)
 {
   using namespace bit_overflow;
 
   for (int i = 0; i < 10; ++i)
     cout << (bigrand() % 100) << endl;
+}
+
+/*
+// ={=========================================================================
+
+    EPOLLERR = 0x008,   (8)
+#define EPOLLERR EPOLLERR
+
+    EPOLLHUP = 0x010,   (16)
+#define EPOLLHUP EPOLLHUP
+
+    EPOLLRDHUP = 0x2000, (8192)
+#define EPOLLRDHUP EPOLLRDHUP
+
+>>> bin(0x2000)         10000000000000'
+>>> bin(0x10)                    10000'
+>>> bin(0x8)                      1000'
+>>> (0x2000|0x10|0x8)   10000000011000
+8216
+
+    EPOLLMSG = 0x400,
+#define EPOLLMSG EPOLLMSG
+
+*cxx-bit-and* produce 0 when a bit is not set and produce that bit when set.
+
+*/
+
+TEST(CxxBit, mask)
+{
+  {
+    // epoll events (bit mask)
+    uint32_t events{EPOLLRDHUP};
+
+    // EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), true);
+    EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), EPOLLRDHUP);
+  }
+
+  {
+    uint32_t events{EPOLLERR};
+
+    // EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), true);
+    EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), EPOLLERR);
+  }
+
+  {
+    uint32_t events{EPOLLMSG};
+
+    EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), 0);
+    // EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), EPOLLMSG);
+  }
 }
 
 /*
@@ -18630,7 +19410,7 @@ TEST(CxxRandom, check_distribution_3)
   }
 }
 
-#if 0
+/*
 use seed
 
 The same sequence is helpful during debugging. However, once program is tested
@@ -18641,20 +19421,20 @@ default_random_engine(C++11) implementation-defined
 namespace cxx_code
 {
   // bits/random.h
-  /**
-   * @brief Constructs a %linear_congruential_engine random number
-   *        generator engine with seed @p __s.  The default seed value
-   *        is 1.
-   *
-   * @param __s The initial seed value.
-   */
+  //
+  // @brief Constructs a %linear_congruential_engine random number
+  //        generator engine with seed @p __s.  The default seed value
+  //        is 1.
+  //
+  // @param __s The initial seed value.
+
   explicit
     linear_congruential_engine(result_type __s = default_seed)
     { seed(__s); }
 
-  /**
-   * The classic Minimum Standard rand0 of Lewis, Goodman, and Miller.
-   */
+  //
+  // The classic Minimum Standard rand0 of Lewis, Goodman, and Miller.
+  //
   typedef linear_congruential_engine<uint_fast32_t, 16807UL, 0UL, 2147483647UL>
     minstd_rand0;
 
@@ -18668,9 +19448,9 @@ Since that retuns time as the number of seconds, this seed is 'only' useful for
 applications that generate the seed at longer intervals. This usually doesn't
 work if the program is run repeatedly as part of an automated process; it might
 wind up with the same seed several times.
+*/
 
-#endif
-
+// ={=========================================================================
 TEST(CxxRandom, check_distribution_4)
 {
   constexpr auto MAX_GENERATION{100000};
@@ -18701,7 +19481,7 @@ TEST(CxxRandom, check_distribution_4)
   EXPECT_THAT(unmatched, 0);
 }
 
-#if 0
+/*
 CPL 40.7.2
 
 If an implementation is able to offer a truly random number generator, that
@@ -18737,9 +19517,9 @@ DESCRIPTION
 
 https://unix.stackexchange.com/questions/324209/when-to-use-dev-random-vs-dev-urandom
 https://www.2uo.de/myths-about-urandom/
+*/
 
-#endif
-
+// ={=========================================================================
 TEST(CxxRandom, check_distribution_5)
 {
   {

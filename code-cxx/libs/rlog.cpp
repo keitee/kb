@@ -89,18 +89,23 @@ static void __default_log_printer(unsigned level,
   }
   else
   {
-    iov[2].iov_len = snprintf(body, sizeof(body), 
-        "< M:%.*s F:%.*s L:%d > ",
-        64, fname, 64, func, line);
+    iov[2].iov_len = snprintf(body,
+                              sizeof(body),
+                              "< M:%.*s F:%.*s L:%d > ",
+                              64,
+                              fname,
+                              64,
+                              func,
+                              line);
   }
 
   iov[2].iov_len = std::min(iov[2].iov_len, sizeof(body));
 
   iov[3].iov_base = (void *)message;
-  iov[3].iov_len = length;
+  iov[3].iov_len  = length;
 
   iov[4].iov_base = (void *)"\n";
-  iov[4].iov_len = 1;
+  iov[4].iov_len  = 1;
 
   // man fileno
   // FERROR(3)

@@ -53,6 +53,16 @@ TEST(String, ctors)
     EXPECT_THAT(coll, "container which grows");
   }
 
+  // basic_string( const basic_string& other,
+  //               size_type pos,
+  //               size_type count = std::basic_string::npos,
+  //               const Allocator& alloc = Allocator() );
+  {
+    std::string s{"this is name", 0, 4};
+    EXPECT_THAT(s.size(), 4);
+    EXPECT_THAT(s, "this");
+  }
+
   // 4) Constructs the string with the first count characters of character
   // string pointed to by s. s can contain null characters.
   // basic_string( const CharT* s,
@@ -1357,8 +1367,25 @@ TEST(StringOperation, append)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-string-assign
+cxx-string-assign
+
+(3)
+
+(until C++14)
+basic_string& assign( const basic_string& str,
+                      size_type pos, size_type count );
+
+(since C++14) (since C++20)
+basic_string& assign( const basic_string& str,
+                      size_type pos, size_type count = npos); 
+
+(until C++20)
+constexpr basic_string& assign( const basic_string& str,
+                                size_type pos, size_type count = npos);
+ 
+*/
 
 TEST(StringOperation, assign)
 {
@@ -2558,12 +2585,12 @@ For example, the declaration:
 causes the compiler to check the arguments in calls to my_printf for consistency
 with the printf style format string argument my_format.
 
-The parameter `archetype` determines how the format string is interpreted, and
+The parameter "archetype" determines how the format string is interpreted, and
 should be printf, scanf, strftime or strfmon. (You can also use __printf__,
 __scanf__, __strftime__ or __strfmon__.) 
 
-The parameter string-index specifies which argument is the format string
-argument (starting from 1), while first-to-check is the number of the first
+The parameter "string-index" specifies which argument is the format string
+argument (starting from 1), while "first-to-check" is the number of the first
 argument to check against the format string. 
 
 For functions where the arguments are not available to be checked (such as
@@ -2611,10 +2638,11 @@ Specific to Particular Target Machines.
 
 namespace string_conversion
 {
-  // from case
-  // takes a printf style format string and args. returns std::string
-  static inline std::string __attribute__((format(printf, 1, 2)))
-  string_formatter(const char *fmt, ...)
+  // from case. takes a printf style format string and args. 
+  // NOTE: the point is to returns std::string
+
+  inline std::string __attribute__((format(printf, 1, 2)))
+  string_formatter_1(const char *fmt, ...)
   {
     va_list ap;
     va_start(ap, fmt);
@@ -2623,7 +2651,7 @@ namespace string_conversion
 
     // DESCRIPTION
     //
-    // The  functions asprintf() and vasprintf() are analogs of sprintf(3)
+    // The functions asprintf() and vasprintf() are analogs of sprintf(3)
     // and vsprintf(3), except that they allocate a string large enough to
     // hold the output including the terminating null byte ('\0'), and
     // return a pointer to it via the first argument.  This pointer should
@@ -2646,21 +2674,49 @@ namespace string_conversion
     return str;
   }
 
-  static inline std::string string_formatter_2(const char *fmt, ...)
+  // error: attributes are not allowed on a function-definition
+  //      __attribute__((format(printf, 1, 2)))
+  //      ^~~~~~~~~~~~~
+  //
+  // However, see this:
+  //
+  // class IReadLine
+  // {
+  // public:
+  //     virtual void quit() const = 0;
+  //     virtual void printLn(const char *fmt, ...) const __attribute__ ((format (printf, 2, 3))) = 0;
+  // };
+  //
+  //inline std::string string_formatter_3(const char *fmt, ...)
+  //  __attribute__((format(printf, 1, 2)))
+  //{
+  //  va_list ap;
+  //  va_start(ap, fmt);
+
+  //  char *s{nullptr};
+  //
+  //  int n = vasprintf(&s, fmt, ap);
+  //  va_end(ap);
+
+  //  std::string str{};
+
+  //  if (nullptr != s)
+  //  {
+  //    if (n > 0)
+  //      str.assign(s, n);
+
+  //    free(s);
+  //  }
+
+  //  return str;
+  //}
+
+  inline std::string string_formatter_2(const char *fmt, ...)
   {
     va_list ap;
     va_start(ap, fmt);
 
     char *s{nullptr};
-
-    // DESCRIPTION
-    //
-    // The  functions asprintf() and vasprintf() are analogs of sprintf(3)
-    // and vsprintf(3), except that they allocate a string large enough to
-    // hold the output including the terminating null byte ('\0'), and
-    // return a pointer to it via the first argument.  This pointer should
-    // be passed to free(3) to release the allocated storage when it is no
-    // longer needed.
 
     int n = vasprintf(&s, fmt, ap);
     va_end(ap);
@@ -2680,6 +2736,7 @@ namespace string_conversion
 } // namespace string_conversion
 
 // ={=========================================================================
+// string-printf
 TEST(StringConversion, formatter)
 {
   using namespace string_conversion;
@@ -2688,24 +2745,24 @@ TEST(StringConversion, formatter)
 
   const std::string expected{"variable value has value in dec 100, hex 0x64"};
 
-  EXPECT_THAT(string_formatter("variable %s has value in dec %d, hex 0x%x",
+  EXPECT_THAT(string_formatter_1("variable %s has value in dec %d, hex 0x%x",
                                "value",
                                value,
                                value),
               expected);
 
-  // coped from the above:
-  // causes the compiler to check the arguments in calls to my_printf for consistency
-  // with the printf style format string argument my_format.
+  // copied from the above:
+  // causes the compiler to check the arguments in calls to my_printf 
+  // for consistency with the printf style format string argument my_format.
 
   // warning: format ‘%lld’ expects argument of type
   // ‘long long int’, but argument 3 has type ‘int’ [-Wformat=]
   //                                 value),
 
-  EXPECT_THAT(string_formatter("variable %s has value in dec %lld, hex 0x%x",
-                               "value",
-                               value,
-                               value),
+  EXPECT_THAT(string_formatter_1("variable %s has value in dec %lld, hex 0x%x",
+                                 "value",
+                                 value,
+                                 value),
               expected);
 
   // note: no warning

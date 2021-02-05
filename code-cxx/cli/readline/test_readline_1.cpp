@@ -696,9 +696,19 @@ static bool echoCommand(std::string const &command, void *data)
   return true;
 }
 
-// 1. readline completion works on "words" vector
-// 2. command handler works itself.
-// 3. however, both are not connected. How to solve? see test_readline_2
+/* 
+
+test_readline_1.cpp
+ 
+o simple app to see how readline works such as <TAB> and read stdin.
+o readline completion works on the pre-defined "words" vector
+o command handler from scli.cpp provides mapping <string, function>
+o however, both are not connected. that is, completion just do completion on
+  stdin but not run a function to handler map.
+
+How to solve? see test_readline_2
+
+*/
 
 int main(int argc, char **argv)
 {

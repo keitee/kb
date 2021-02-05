@@ -18,7 +18,6 @@
 #define ERROR_FUNCTIONS_H
 
 /*
-
 Display error message including `errno` diagnostic, and return to caller
 
 Prints a message on standard error. Its argument list is the same as for
@@ -32,12 +31,15 @@ description as returned by strerror()
 
 followed by the formatted output specified in the argument list.
 
+ERROR [ Success], this is error message from errMsg and value 10
+ERROR [ENOENT No such file or directory], failed to open file
+      ["errno name" and "strerr result"]
+ 
 */
 
 void errMsg(const char *format, ...);
 
 /*
-
 Display error message including `errno` diagnostic, and terminate the process
 
 */
@@ -58,7 +60,7 @@ threaded programs. If a thread made a call that returned an error in a
 be making calls and checking errno. In other words, race conditions would
 result.
 
-Each thread has its own errno value. On Linux, a `thread-specific-errno` is
+Each thread has its "own errno value." On Linux, a `thread-specific-errno` is
 achieved in a similar manner to most other UNIX: errno is defined as a macro
 that `expands into a function call` returning a modifiable lvalue that is
 distinct for each thread. Since the lvalue is modifiable, it is still possible
@@ -77,8 +79,9 @@ per-thread errno.
 The traditional method of returning status from system calls and some library
 functions is to `return 0 on success and -1 on error`, with errno being set to
 indicate the error. The functions in the `pthreads API do things differently`
-All pthreads functions return 0 on success or a positive value on failure. The
-failure value is one of the same values that can be placed in errno by
+All pthreads functions return 0 on success or a positive value on failure. 
+
+NOTE: The failure value is one of the same values that can be placed in errno by
 traditional UNIX system calls.
 
 We could diagnose errors from the POSIX threads functions using code such as
@@ -87,6 +90,8 @@ the following:
 errno = pthread_create(&thread, NULL, func, &arg);
 if (errno != 0)
    errExit("pthread_create");
+
+(So here, uses errno once and one more in errExit())
 
 This approach is `inefficient` because errno is defined in threaded programs
 as a macro. Under the POSIX threads API, errno is redefined to be a function
@@ -106,12 +111,19 @@ if (s != 0)
 
 Mainly, we use errExitEN() in programs that employ the POSIX threads API.
 
+(errExitEN() do not use errno at all)
+
 So the point is that "errExitEN" do not use errno which is a function call in
 threaded app and use args in a call. Hence, efficient.
 
-
 */
 void errExitEN(int errnum, const char *format, ...);
+
+// Print a command usage error message and terminate the process
+void usageErr(const char *format, ...);
+void cmdLineErr(const char *format, ...);
+
+void prnMsg(const char *fmt, ...);
 
 // org:
 //
