@@ -141,8 +141,8 @@ constexpr basic_string substr( size_type pos = 0, size_type count = npos ) const
 
 namespace string_view
 {
-  // The count is 30. Therefore, no small string optimisation kicks in. 
-  static const int COUNT  = 30;
+  // The count is 30. Therefore, no small string optimisation kicks in.
+  static const int COUNT = 30;
 
   static const int LOOP = 10000000;
 } // namespace string_view
@@ -192,8 +192,8 @@ TEST(StringView, substr_performace)
 
   auto time_for_string_view = std::chrono::steady_clock::now() - start;
 
-  std::cout << "time for string_view substr         : " << time_for_string_view.count()
-            << " seconds\n";
+  std::cout << "time for string_view substr         : "
+            << time_for_string_view.count() << " seconds\n";
 
   // ratio
   std::cout << "time for string/time for string_view: "
@@ -216,11 +216,11 @@ namespace cxx_string
   }
 
   // Where the cost of constructing an std::string object is a concern, the
-  // readability and ease of usage are frequently compromised by using 
+  // readability and ease of usage are frequently compromised by using
   // const char* and length parameters.
   // Better performance, but have to give up benefits of std::string interface.
 
-  void foo3(const char* str, size_t length) 
+  void foo3(const char *str, size_t length)
   {
     // do some processing on input text.
     std::string token{str};
@@ -231,7 +231,7 @@ namespace cxx_string
     // do some processing on input text.
     std::string_view token = text.substr(0, 3);
   }
-}
+} // namespace cxx_string
 
 /*
 // ={=========================================================================
@@ -392,16 +392,13 @@ outlive the pointed-to character array:
 
 namespace cxx_string_point_3
 {
-  std::string foo1()
-  {
-    return "foo1";
-  }
+  std::string foo1() { return "foo1"; }
 
   std::string foo2()
   {
     return "This size for std::string is 15 for MSVC and GCC and 23 for Clang.";
   }
-}
+} // namespace cxx_string_point_3
 
 TEST(StringView, points_to_make_3)
 {
@@ -445,20 +442,20 @@ TEST(StringView, points_to_make_3)
     //   std::cout << e << std::endl;
     //
     // [ RUN      ] StringView.points_to_make_3
-    // 
-    // 
-    // 
-    // 
-    // 
-    // 
-    // 
-    // 
+    //
+    //
+    //
+    //
+    //
+    //
+    //
+    //
     // e
-    // 
+    //
     // f
     // o
     // r
-    // 
+    //
     // s
     // t
     // d
@@ -470,41 +467,41 @@ TEST(StringView, points_to_make_3)
     // i
     // n
     // g
-    // 
+    //
     // i
     // s
-    // 
+    //
     // 1
     // 5
-    // 
+    //
     // f
     // o
     // r
-    // 
+    //
     // M
     // S
     // V
     // C
-    // 
+    //
     // a
     // n
     // d
-    // 
+    //
     // G
     // C
     // C
-    // 
+    //
     // a
     // n
     // d
-    // 
+    //
     // 2
     // 3
-    // 
+    //
     // f
     // o
     // r
-    // 
+    //
     // C
     // l
     // a
@@ -554,16 +551,16 @@ TEST(StringView, points_to_make_4)
   {
     std::string coll{"string"};
 
-    EXPECT_THAT(coll.size(), 6); 
+    EXPECT_THAT(coll.size(), 6);
 
     // should be the same since string.c_str() adds "null"
-    EXPECT_THAT(memcmp(cstring, coll.c_str(), 6+1), 0); 
+    EXPECT_THAT(memcmp(cstring, coll.c_str(), 6 + 1), 0);
   }
 
   {
     auto coll = "string"sv; // 'sv' is a string_view literal
 
-    EXPECT_THAT(coll.size(), 6); 
+    EXPECT_THAT(coll.size(), 6);
 
     // should be the same since string_view.c_str() do NOT adds "null"
     //
@@ -583,7 +580,7 @@ TEST(StringView, points_to_make_4)
   {
     auto coll = "string"sv; // 'sv' is a string_view literal
 
-    EXPECT_THAT(strlen(std::string(coll).c_str()), 6); 
+    EXPECT_THAT(strlen(std::string(coll).c_str()), 6);
   }
 }
 

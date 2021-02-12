@@ -18,6 +18,11 @@
 /* ={==========================================================================
 TODO: return reference of instance than shared pointer?
 
+o C++ gurantees that static instance_ gets properly initialised when there are
+multiple threads that calls this function. However, accessing members via this
+is different matter and if necessary, need to use lock to protect calls to
+member functions.
+
 */
 
 // ReadLinePrivate *ReadLinePrivate::instance()
@@ -37,6 +42,13 @@ std::shared_ptr<ReadLinePrivate> ReadLinePrivate::instance()
 
 /* ={==========================================================================
 o add "help" to list out commands registered by default in readline class.
+
+libreadline function pointers used:
+
+rl_attempted_completion_function;
+rl_completion_matches
+rl_on_new_line
+
 */
 
 ReadLinePrivate::ReadLinePrivate()
@@ -56,21 +68,101 @@ ReadLinePrivate::~ReadLinePrivate() {}
 
 /* ={==========================================================================
 note that tried to avoid using "static vectors which grows dynamically" but
+not find any other way than this. Well, see more compact version.
+
+*/
+
+char *ReadLinePrivate::completionGenerator_(const char *text, int state)
+{
+  static size_t len = 0, index = 0;
+
+  // this is new word to complete so initialize now; saves the length of text
+  // and set index 0.
+  if (0 == state)
+  {
+    len = strlen(text);
+    index = 0;
+  }
+
+  char *match{nullptr};
+
+  for (; index < m_commands.size(); ++index)
+  {
+    // if partial match is found. since index is static, it is kept while this
+    // function gets called multiple times with state > 0 and can discern
+    // between what's searched and what's not.
+    if (m_commands[index].name().compare(0, len, text) == 0)
+    {
+      match = strdup(m_commands[index].name().c_str());
+      // to exclude it from next search
+      ++index;
+      break;
+    }
+  }
+
+  // if no match is found, return null.
+  return match;
+}
+
+/* ={==========================================================================
+note that tried to avoid using "static vectors which grows dynamically" but
 not find any other way than this since:
 
-1. for ">><tab>" case, called many times with state 0 and one for other
-state.
+1. for ">><tab>" case
 
-2. for ">>xxx<tab>" case, called once with state 0.
+>> generator: t: , s: 0
+generator: add help
+generator: add test2
+generator: add test1
+return: help
+generator: t: , s: 1
+return: test2
+generator: t: , s: 2
+return: test1
+generator: t: , s: 3
+return null
+
+help   test1  test2
+
+2. for ">>xxx<tab>" case. 
+"test" completed even when returned "test1, test2". and then "test<TAB>"
+
+>> t<TAB>generator: t: t, s: 0
+generator: add test2
+generator: add test1
+return: test2
+generator: t: t, s: 1
+return: test1
+generator: t: t, s: 2
+return null
+
+>> test<TAB>generator: t: test, s: 0
+generator: add test2
+generator: add test1
+return: test2 (match index 0)
+generator: t: test, s: 1
+return: test1 (match index 1)
+generator: t: test, s: 2
+return null (match index 2)
+
+test1  test2
+
+that is "match_index" is to say "no more match to return"
+
 */
+
+#if 0
+// #define DEBUG_COMPLETION_ON
 
 char *ReadLinePrivate::completionGenerator_(const char *text, int state)
 {
   static std::vector<std::string> matches{};
   static size_t match_index{0};
 
-  // std::cout << "generator: t: " << std::string(text) << ", s: " << state
-  //           << std::endl;
+#ifdef DEBUG_COMPLETION_ON
+  std::cout << "generator: t: " << std::string(text) << ", s: " << state
+            << std::endl;
+#endif
 
   // This function is called with state=0 the first time; subsequent calls are
   // with a nonzero state. state=0 can be used to perform one-time
@@ -96,7 +188,9 @@ char *ReadLinePrivate::completionGenerator_(const char *text, int state)
       if (word.name().size() >= textstr.size() &&
           word.name().compare(0, textstr.size(), textstr) == 0)
       {
-        // std::cout << "generator: add " << word << std::endl;
+#ifdef DEBUG_COMPLETION_ON
+        std::cout << "generator: add " << word.name() << std::endl;
+#endif
         matches.push_back(word.name());
       }
     }
@@ -104,12 +198,17 @@ char *ReadLinePrivate::completionGenerator_(const char *text, int state)
 
   if (match_index >= matches.size())
   {
+#ifdef DEBUG_COMPLETION_ON
+    std::cout << "return null\n";
+#endif 
     // We return nullptr to notify the caller no more matches are available.
     return nullptr;
   }
   else
   {
-    // std::cout << "return: " << matches[match_index] << std::endl;
+#ifdef DEBUG_COMPLETION_ON
+    std::cout << "return: " << matches[match_index] << std::endl;
+#endif 
     auto ret = strdup(matches[match_index].c_str());
     match_index++;
     return ret;
@@ -118,6 +217,7 @@ char *ReadLinePrivate::completionGenerator_(const char *text, int state)
     // return strdup(matches[match_index++].c_str());
   }
 }
+#endif
 
 char *ReadLinePrivate::completion_generator_(const char *text, int state)
 {
@@ -157,6 +257,17 @@ char **ReadLinePrivate::completer_(const char *text, int start, int end)
   {
     // std::cout << "start: " << start << std::endl;
     matches = rl_completion_matches(text, completion_generator_);
+
+    // do not work
+    //if (matches)
+    //{
+    //  size_t index{0};
+    //  char *entry = matches[index];
+    //  for (; index < 3; index++)
+    //  {
+    //    std::cout << "match: " << entry << std::endl;
+    //  }
+    //}
   }
 
   return matches;

@@ -182,6 +182,9 @@ add_executable(${PROJECT_NAME} "test_os.cpp")
 ## target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
 
+# test_getopt standalone
+add_executable(test_getopt "test_getopt_long.cpp")
+target_link_libraries(test_getopt ${LIBS})
 
 # lpi-socket-unix
 add_executable(lpi-socket-unix-server "lpi_socket_unix_server.cpp")

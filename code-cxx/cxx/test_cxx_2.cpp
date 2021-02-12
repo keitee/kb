@@ -1451,7 +1451,7 @@ TEST(CxxVector, DISABLED_EraseRuntimeError)
 }
 
 // ={=========================================================================
-TEST(CxxVector, check_erase)
+TEST(CxxVector, erase)
 {
   {
     std::vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -2564,7 +2564,7 @@ TEST(CxxSet, check_merge)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxMap, begin_return)
+TEST(CxxMap, iterator_returns_pair)
 {
   {
     std::map<int, int>
@@ -2576,11 +2576,8 @@ TEST(CxxMap, begin_return)
     EXPECT_THAT(*it1, std::make_pair(1, 7));
     EXPECT_THAT(*it2, std::make_pair(2, 4));
   }
-}
 
-// ={=========================================================================
-TEST(CxxMap, check_compare)
-{
+  // and compare
   {
     std::map<int, int>
       coll{{1, 7}, {2, 4}, {3, 2}, {4, 3}, {5, 6}, {6, 1}, {7, 3}};
@@ -2592,6 +2589,162 @@ TEST(CxxMap, check_compare)
     EXPECT_THAT(*it1 < *it2, true);
     EXPECT_THAT(*it2 < *it1, false);
   }
+}
+
+/*
+// ={=========================================================================
+ 
+The both maps and unordered maps can also be thought of as an
+`associative-array`, an array whose index is not an integer value. As a
+consequence, both containers provide the subscript operator[].
+
+However, that the subscript operator does not behave like the usual subscript
+operator for arrays: `Not having an element for an index is 'not' an error.` A
+new index (or key) is taken as a reason `to create and insert a new element`
+that has the index as the key. `Thus, you can't have an invalid index.`
+
+c[key] 
+
+Inserts an element with key, if it does not yet exist, and returns a reference
+to the value of the element with key (only for nonconstant maps)
+
+"Thus, to use this feature, you can't use a value type that has no default
+constructor." 
+
+cxx-code
+{
+        // [23.3.1.2] element access
+        //
+        //  @brief  Subscript ( @c [] ) access to %map data.
+        //  @param  __k  The key for which data should be retrieved.
+        //  @return  A reference to the data of the (key,data) %pair.
+        //
+        //  Allows for easy lookup with the subscript ( @c [] )
+        //  operator.  Returns data associated with the key specified in
+        //  subscript.  If the key does not exist, a pair with that key
+        //  is created using default values, which is then returned.
+        //
+        //  Lookup requires logarithmic time.
+        //
+        mapped_type&
+        operator[](const key_type& __k)
+        {}
+}
+
+
+c.at(key) *cxx-map-at*
+Returns a reference to the value of the element with key (since C++11)
+
+Returns a reference to the mapped value of the element with key equivalent to
+key. If no such element exists, an exception of type `std::out_of_range` is
+thrown.
+
+coll.at("vat1") = 0.16;
+
+
+`The fecth only works for map` but not multimaps since there are multiple
+matches. Why not set? Since set has only key. Unlike other containers, [] op on
+map returns `mapped_type` but dereferencing of iterator returns `value_type`. 
+
+
+<ex>
+
+word_count[word] = 1; 
+
+Happens 3 setps but step 3 could be extra
+
+o Search key and not found
+o Insert temp element pair{word, 0}. value init since default ctor is called
+o Assign it with 1
+
+When accessing map with key which is not exist, cause addition. Inserts a new
+element with key "ottto" and prints its value, which is 0 by default.
+
+std::cout << coll["ottto"];
+
+The real bug which meant to print out debug message but creates one elements
+which is not added before due to if and else logic in the code.
+
+TRACE("getSourceInformation: "
+        << "configuration: " << sourceInfo["CONFIGURATION"]
+        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
+
+*/
+
+TEST(CxxMap, fetch_return_reference)
+{
+  std::map<unsigned int, int> expected{{1, 0}, {2, 0}, {3, 0}};
+
+  // use insert()
+  {
+    std::map<unsigned int, int> coll;
+
+    coll.insert({1, 0});
+    coll.insert({2, 0});
+    coll.insert({3, 0});
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // do the same
+  {
+    std::map<unsigned int, int> coll;
+
+    coll[1];
+    coll[2];
+    coll[3];
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == expected, true);
+  }
+
+  // note that "coll[1]++" increase its value since subscript operator returns
+  // reference
+  {
+    std::map<unsigned int, int> increased{{1, 1}, {2, 1}, {3, 1}};
+    std::map<unsigned int, int> coll;
+
+    coll[1]++;
+    coll[2]++;
+    coll[3]++;
+
+    EXPECT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll == increased, true);
+  }
+
+  // cxx-map-find returns an iterator to the pair. dereferencing an iterator
+  // yields a reference. so increased.
+  {
+    std::map<unsigned int, int> increased{{1, 0}, {2, 0}, {3, 2}};
+    std::map<unsigned int, int> coll;
+
+    coll[1];
+    coll[2];
+    coll[3];
+
+    auto it = coll.find(3);
+
+    it->second++;
+    it->second++;
+
+    EXPECT_THAT(coll == increased, true);
+  }
+
+  // so how can prevent "accidently" adding an item? check if it's already in
+  // the coll and then add it.
+  //
+  // {
+  //    auto q = coll.find("seal");
+  //
+  //    if (q == coll.end())
+  //    {
+  //      coll.emplace("seal");
+  //    }
+  // }
 }
 
 // ={=========================================================================
@@ -2663,123 +2816,6 @@ TEST(CxxMap, find)
       EXPECT_THAT(it->second, Eq(3));
     }
   }
-}
-
-/*
-// ={=========================================================================
- 
-The both maps and unordered maps can also be thought of as an
-`associative-array`, an array whose index is not an integer value. As a
-consequence, both containers provide the subscript operator[].
-
-However, that the subscript operator does not behave like the usual subscript
-operator for arrays: `Not having an element for an index is 'not' an error.` A
-new index (or key) is taken as a reason `to create and insert a new element`
-that has the index as the key. `Thus, you can't have an invalid index.`
-
-c[key] 
-
-Inserts an element with key, if it does not yet exist, and returns a reference
-to the value of the element with key (only for nonconstant maps)
-
-"Thus, to use this feature, you can't use a value type that has no default
-constructor." 
-
-
-c.at(key) *cxx-map-at*
-Returns a reference to the value of the element with key (since C++11)
-
-Returns a reference to the mapped value of the element with key equivalent to
-key. If no such element exists, an exception of type `std::out_of_range` is
-thrown.
-
-coll.at("vat1") = 0.16;
-
-
-`The fecth only works for map` but not multimaps since there are multiple
-matches. Why not set? Since set has only key. Unlike other containers, [] op on
-map returns `mapped_type` but dereferencing of iterator returns `value_type`. 
-
-
-<ex>
-
-word_count[word] = 1; 
-
-Happens 3 setps but step 3 could be extra
-
-o Search key and not found
-o Insert temp element pair{word, 0}. value init since default ctor is called
-o Assign it with 1
-
-When accessing map with key which is not exist, cause addition. Inserts a new
-element with key "ottto" and prints its value, which is 0 by default.
-
-std::cout << coll["ottto"];
-
-The real bug which meant to print out debug message but creates one elements
-which is not added before due to if and else logic in the code.
-
-NICKEL_TRACE("getSourceInformation: "
-        << "configuration: " << sourceInfo["CONFIGURATION"]
-        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
-
-*/
-
-TEST(CxxMap, fetch_can_insert)
-{
-  std::map<unsigned int, int> expected{{1, 0}, {2, 0}, {3, 0}};
-
-  // use insert()
-  {
-    std::map<unsigned int, int> coll;
-
-    coll.insert({1, 0});
-    coll.insert({2, 0});
-    coll.insert({3, 0});
-
-    EXPECT_THAT(coll.size(), 3);
-
-    EXPECT_THAT(coll == expected, true);
-  }
-
-  // do the same
-  {
-    std::map<unsigned int, int> coll;
-
-    coll[1];
-    coll[2];
-    coll[3];
-
-    EXPECT_THAT(coll.size(), 3);
-
-    EXPECT_THAT(coll == expected, true);
-  }
-
-  // do the same
-  {
-    std::map<unsigned int, int> _expected{{1, 1}, {2, 1}, {3, 1}};
-    std::map<unsigned int, int> coll;
-
-    coll[1]++;
-    coll[2]++;
-    coll[3]++;
-
-    EXPECT_THAT(coll.size(), 3);
-
-    EXPECT_THAT(coll == _expected, true);
-  }
-
-  // so how can prevent "accidently" adding an item? check if it's already in
-  // the coll and then add it.
-  //
-  // {
-  //    auto q = coll.find("seal");
-  //
-  //    if (q == coll.end())
-  //    {
-  //      coll.emplace("seal");
-  //    }
-  // }
 }
 
 // ={=========================================================================

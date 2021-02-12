@@ -143,6 +143,69 @@ TEST(CConThread, ids)
   }
 }
 
+namespace cxx_thread
+{
+  static void *threadFunc(void *arg)
+  {
+    const char *s = (char *)arg;
+    // cout << "thread id: " << std::this_thread::get_id() << endl;
+    printf("%s, sleeps for 10s, getpid=%d, gettid=%ld\n",
+           s,
+           getpid(),
+           syscall(SYS_gettid));
+    sleep(10);
+
+    // return the length of input message
+    return (void *)strlen(s);
+  }
+} // namespace cxx_thread
+
+/*
+// ={=========================================================================
+cxx-thread
+std::this_thread::get_id() is != gettid();
+shows tid and pid
+
+RUN      ] CConThread.tid_and_pid
+main pid = 21096
+Hello world, sleeps for 10s, getpid=21096, gettid=21097
+[       OK ] CConThread.tid_and_pid (10001 ms)
+
+*/
+
+TEST(CConThread, ids_tid_and_pid)
+{
+  using namespace cxx_thread;
+
+  {
+    char coll[] = "Hello world";
+    pthread_t t;
+    void *res;
+    int s;
+
+    EXPECT_THAT(strlen(coll), 11);
+
+    s = pthread_create(&t, NULL, threadFunc, (void *)coll);
+    if (s != 0)
+    {
+      printf("pthread_create failed");
+      exit(EXIT_FAILURE);
+    }
+
+    printf("main pid = %d\n", getpid());
+
+    s = pthread_join(t, &res);
+    if (s != 0)
+    {
+      printf("pthread_join failed");
+      exit(EXIT_FAILURE);
+    }
+
+    // get return from a thread
+    EXPECT_THAT((long)res, 11);
+  }
+}
+
 // ={=========================================================================
 // cxx-thread
 TEST(CConThread, ids_and_joinable)
@@ -212,60 +275,6 @@ TEST(CConThread, hardware_concurrency)
             << std::endl;
 }
 
-namespace cxx_thread
-{
-  static void *threadFunc(void *arg)
-  {
-    const char *s = (char *)arg;
-    // cout << "thread id: " << std::this_thread::get_id() << endl;
-    printf("%s, sleeps for 10s, getpid=%d, gettid=%ld\n",
-           s,
-           getpid(),
-           syscall(SYS_gettid));
-    sleep(10);
-
-    // return the length of input message
-    return (void *)strlen(s);
-  }
-} // namespace cxx_thread
-
-// ={=========================================================================
-// cxx-thread
-// std::this_thread::get_id() is != gettid();
-// shows tid and pid
-TEST(CConThread, tid_and_pid)
-{
-  using namespace cxx_thread;
-
-  {
-    char coll[] = "Hello world";
-    pthread_t t;
-    void *res;
-    int s;
-
-    EXPECT_THAT(strlen(coll), 11);
-
-    s = pthread_create(&t, NULL, threadFunc, (void *)coll);
-    if (s != 0)
-    {
-      printf("pthread_create failed");
-      exit(EXIT_FAILURE);
-    }
-
-    printf("main pid = %d\n", getpid());
-
-    s = pthread_join(t, &res);
-    if (s != 0)
-    {
-      printf("pthread_join failed");
-      exit(EXIT_FAILURE);
-    }
-
-    // get return from a thread
-    EXPECT_THAT((long)res, 11);
-  }
-}
-
 /*
 // ={=========================================================================
 cxx-thread-joinable
@@ -285,6 +294,7 @@ t.join();
 
 */
 
+// call join() when there is no thread associated
 TEST(CConThread, joinable_1)
 {
   {
@@ -585,7 +595,7 @@ do when use cxx-async
 
 */
 
-TEST(CConThread, thread_structure)
+TEST(CConThread, use_same_thread_on_ multiple_threads)
 {
   std::thread t{};
 
@@ -3874,7 +3884,7 @@ object that has an associated 8-byte unsigned integer maintained by the kernel.
 
 The system call returns a file descriptor that refers to the object. Writing an
 integer to this file descriptor adds that integer to the object’s value. A
-read() from the file descriptor "blocks" if the object’s value is 0. If the
+read() from the file descriptor "blocks if the object’s value is 0." If the
 object has a nonzero value, a read() returns that value and resets it to 0. 
 
 In addition, poll(), select(), or epoll can be used to test if the object has a

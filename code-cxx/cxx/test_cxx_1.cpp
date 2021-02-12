@@ -5666,10 +5666,11 @@ TEST(CxxCopyControl, PrivateAndDelete)
 // ={=========================================================================
 // cxx-enum
 
-namespace cxxenum
+namespace cxx_enum
 {
   // unscoped
-  // enum { red, yellow, green } color;       // same as above so cause error
+  // enum { red, yellow, green } color;       // same
+
   enum color
   {
     red,
@@ -5686,18 +5687,21 @@ namespace cxxenum
   };
 } // namespace cxxenum
 
+// ={=========================================================================
 TEST(CxxEnum, check_scoped_and_unscoped)
 {
-  using namespace cxxenum;
+  using namespace cxx_enum;
 
-  // explicitly use unscoped enumerators and implicitly use unscoped
+  // explicitly use unscoped enumerator and implicitly use unscoped.
   {
     int value_1 = color::yellow;
     int value_2 = yellow;
+
+    // should be same
     EXPECT_THAT(value_1, value_2);
   }
 
-  // both cases the compile cxx-error
+  // both cases cxx-error in compile
   //
   // {
   //   enum color { red, yellow, green };          // unscoped
@@ -5720,49 +5724,53 @@ TEST(CxxEnum, check_scoped_and_unscoped)
 
   // so can use enumerators of unscoped enum and this allows *cxx-enum-hack*
   // which is the implicit conversion to an integer
+  //
+  // However, error from integer to enum
+  //
+  // error: invalid conversion from ‘int’ to ‘cxx_enum::color’
+  // int value_2 {10};
+  // color c = value_2;
   {
     // to integer
     int value_1 = yellow;
     int coll[green];
 
+    EXPECT_THAT(green, 2);
     EXPECT_THAT(8, sizeof(coll));
-
-    // error from integer to enum
-    // error: invalid conversion from ‘int’ to ‘cxxenum::color’
-    // int value_2 {10};
-    // color c = value_2;
   }
 
-  // scoped enum do strong type-safety because they do not implicitly convert to
-  // or from integer values
-
-  {
-    // However, followings cause type error:
-    // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-    // note: it's interesting and unscoped is also type?
-    //
-    // color color_selected = 2;
-    //
-    // OK
-    // color color_selected = yellow;
-
-    // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in
-    // initialization int value_1 = peppers::red;
-    //
-    // cxx.cpp:1527:43: error: no match for ‘operator<<’
-    //  (operand types are ‘std::basic_ostream<char>’ and ‘cxx_enum::peppers’)
-    //      std::cout << "peppers::yellow value " << peppers::yellow <<
-    //      std::endl;
-    //
-    // std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
-    //
-    // okay and can use in this way
-    // << setw(20) << left << (e.status == procstatus::running ? "Running" :
-    // "Suspended")
-  }
+  // scoped enum do strong type-check because they do not implicitly convert to
+  // or from integer values. no cxx-enum-hack
+  //
+  // However, followings cause type error:
+  //
+  // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+  // note: it's interesting and unscoped is also type?
+  //
+  // color color_selected = 2;
+  //
+  // OK
+  //
+  // color color_selected = yellow;
+  //
+  // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization 
+  //
+  // int value_1 = peppers::red;
+  //
+  // cxx.cpp:1527:43: error: no match for ‘operator<<’
+  //  (operand types are ‘std::basic_ostream<char>’ and ‘cxx_enum::peppers’)
+  //      std::cout << "peppers::yellow value " << peppers::yellow <<
+  //      std::endl;
+  //
+  // std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
+  //
+  // okay and can use in this way
+  //
+  // << setw(20) << left << (e.status == procstatus::running ? "Running" :
+  // "Suspended")
 }
 
-namespace cxx_enum_in_class
+namespace cxx_enum
 {
   enum class named_and_scoped
   {
@@ -5800,9 +5808,21 @@ namespace cxx_enum_in_class
   };
 } // namespace cxx_enum_in_class
 
-TEST(CxxEnum, InClass)
+/*
+// ={=========================================================================
+use enum in a class? As with unscoped enum, 
+
+o can use cxx-enum-hack 
+o but have to use "Foo::" prefix as scoped enum. 
+o it is under cxx-access-control.
+
+benefit?
+
+*/
+
+TEST(CxxEnum, in_class)
 {
-  using namespace cxx_enum_in_class;
+  using namespace cxx_enum;
 
   // as expected for scoped enum
   {
@@ -5814,22 +5834,20 @@ TEST(CxxEnum, InClass)
     EXPECT_THAT(value_2, named_and_scoped::yellow);
   }
 
-  // use enum in a class? As with unscoped enum, can use cxx-enum-hack but have
-  // to use "Foo::" prefix as scoped enum. Also, is under cxx-access-control.
-  // benefit?
-
   {
     // when use `private`
+    //
     // cxx.cpp:1563:20: error: ‘cxx_enum::Foo::<unnamed enum> green’ is private
     // within this context
     //   int flag3 = Foo::green;
     //                    ^~~~~
-    // Since it's in class, this scoped but not named
+    // Since it's in class, this is scoped but not named
 
     int value_1 = Foo::green;
 
     // cxx.cpp:1587:19: error: ‘green’ was not declared in this scope
     //      int value_2 = green;
+    //
     // int value_2 = green;
 
     EXPECT_THAT(value_1, 2);
@@ -5845,80 +5863,93 @@ TEST(CxxEnum, InClass)
   }
 }
 
-enum class EnumFlags : char
+namespace cxx_enum
 {
-  SPORT = 1,
-  KIDS  = 2,
-  MUSIC = 4
-};
-
-constexpr EnumFlags operator|(EnumFlags lhs, EnumFlags rhs)
-{
-  // C++PL 220
-  // explicit converison is nessary since enum class does not support implicit
-  // conversions.
-  return static_cast<EnumFlags>(static_cast<char>(lhs) |
-                                static_cast<char>(rhs));
-}
-
-constexpr EnumFlags operator&(EnumFlags lhs, EnumFlags rhs)
-{
-  return static_cast<EnumFlags>(static_cast<char>(lhs) &
-                                static_cast<char>(rhs));
-}
-
-class ScopedEnum
-{
-public:
-  int checkFlags(EnumFlags flag)
+  // set enum type to char
+  enum class EnumFlags : char
   {
-    int result{};
+    SPORT = 1,
+    KIDS  = 2,
+    MUSIC = 4
+  };
 
-    switch (flag)
-    {
-      // used constexpr on oeprator| and & since someone might want to
-      // use them in constant expression.
-      case EnumFlags::SPORT:
-        cout << "has sport flag" << endl;
-        result = 0;
-        break;
-
-      case EnumFlags::KIDS:
-        cout << "has kids flas" << endl;
-        result = 1;
-        break;
-
-      case EnumFlags::MUSIC:
-        cout << "has music flag" << endl;
-        result = 2;
-        break;
-
-        // *cxx-switch*
-        // to avoid warning
-        // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-        // case EnumFlags::SPORT|EnumFlags::MUSIC:
-        //     cout << "has sport and music flag" << endl;
-        //     result = 3;
-        //     break;
-
-      default:
-        cout << "has unknown flag" << endl;
-        result = 100;
-    }
-
-    return result;
+  constexpr EnumFlags operator|(EnumFlags lhs, EnumFlags rhs)
+  {
+    return static_cast<EnumFlags>(static_cast<char>(lhs) |
+        static_cast<char>(rhs));
   }
-};
 
-// [ RUN      ] Enum.ScopedEnum
-// has sport flag
-// has kids flas
-// has music flag
-// has unknown flag
-// [       OK ] Enum.ScopedEnum (0 ms)
+  constexpr EnumFlags operator&(EnumFlags lhs, EnumFlags rhs)
+  {
+    return static_cast<EnumFlags>(static_cast<char>(lhs) &
+        static_cast<char>(rhs));
+  }
+
+  class ScopedEnum
+  {
+    public:
+      int checkFlags(EnumFlags flag)
+      {
+        int result{};
+
+        switch (flag)
+        {
+          // used constexpr on oeprator| and & since someone might want to
+          // use them in constant expression.
+          case EnumFlags::SPORT:
+            cout << "has sport flag" << endl;
+            result = 0;
+            break;
+
+          case EnumFlags::KIDS:
+            cout << "has kids flas" << endl;
+            result = 1;
+            break;
+
+          case EnumFlags::MUSIC:
+            cout << "has music flag" << endl;
+            result = 2;
+            break;
+
+            // *cxx-switch*
+            // to avoid warning
+            // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
+            // case EnumFlags::SPORT|EnumFlags::MUSIC:
+            //     cout << "has sport and music flag" << endl;
+            //     result = 3;
+            //     break;
+
+          default:
+            cout << "has unknown flag" << endl;
+            result = 100;
+        }
+
+        return result;
+      }
+  };
+}
+
+/*
+// ={=========================================================================
+Use enum in cxx-bit-or/and
+
+C++PL 220
+explicit converison is nessary since enum class does not support implicit
+conversions.
+
+[ RUN      ] Enum.ScopedEnum
+has sport flag
+has kids flas
+has music flag
+has unknown flag
+[       OK ] Enum.ScopedEnum (0 ms)
+
+*/
 
 TEST(CxxEnum, ScopeAndType)
 {
+  using namespace cxx_enum;
+
   ScopedEnum scoped;
 
   EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));

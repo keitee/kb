@@ -49,27 +49,29 @@ using namespace testing;
 
 1. LPI log supports `errno`
 
-[ RUN      ] LPILog.useLog
+[ RUN      ] LogLPI.err_msg
 ERROR [ Success], this is error message from errMsg and value 10
 ERROR [ Success], this is error message from errMsg and value 10
 ERROR [ENOENT No such file or directory], failed to open file
-[       OK ] LPILog.useLog (0 ms)
+[       OK ] LogLPI.err_msg (0 ms)
 
 
 2. this shows `errno` remains
 
-[ RUN      ] LPILog.useLogExit
+[ RUN      ] LogLPI.err_exit
 ERROR [ENOENT No such file or directory], this is error message from errExit
-[       OK ] LPILog.useLogExit (0 ms)
+[       OK ] LogLPI.err_exit (0 ms)
 
+
+[ RUN      ] LogLPI.fatal
+ERROR:, this is fatal message
 
 [ RUN      ] Log.lpi_usage_error
 Usage: signal pid num-sigs sig-num [sig-num-2]
-$
 
 */
 
-TEST(Log, lpi_err_msg)
+TEST(LogLPI, err_msg)
 {
   {
     int value{10};
@@ -95,7 +97,7 @@ TEST(Log, lpi_err_msg)
   }
 }
 
-TEST(Log, lpi_err_exit)
+TEST(LogLPI, err_exit)
 {
   errMsg("this is error message from errExit");
 
@@ -103,12 +105,21 @@ TEST(Log, lpi_err_exit)
   // LOG_EXIT_ERROR("this is error message from errExit");
 }
 
-TEST(Log, lpi_usage_error)
+TEST(LogLPI, fatal)
+{
+  fatal("this is fatal message");
+
+  // since it do exit()
+  // LOG_EXIT_ERROR("this is error message from errExit");
+}
+
+// since it terminate the process
+TEST(LogLPI, DISABLED_usage_error)
 {
   usageErr("%s pid num-sigs sig-num [sig-num-2]\n", "signal");
 }
 
-TEST(Log, lpi_print_message)
+TEST(LogLPI, print_message)
 {
   prnMsg("%s pid num-sigs sig-num [sig-num-2]\n", "signal");
 }
@@ -131,7 +142,7 @@ LOG| F:test_log.cxx C:void func3() L:00108 : this is func3()
 
 */
 
-TEST(Log, simple_useMessage)
+TEST(Log, simple)
 {
   int value{10};
   std::string message{"errMsg"};
@@ -145,22 +156,28 @@ TEST(Log, simple_useMessage)
 
 void func3()
 {
+  LOG_ENTER();
   LOG_MSG("this is func3()");
+  LOG_EXIT();
 }
 
 void func2()
 {
+  LOG_ENTER();
   LOG_MSG("this is func2()");
   func3();
+  LOG_EXIT();
 }
 
 void func1()
 {
+  LOG_ENTER();
   LOG_MSG("this is func1()");
   func2();
+  LOG_EXIT();
 }
 
-TEST(Log, simple_showCorrectLineNumbers)
+TEST(Log, simple_level)
 {
   func1();
 }

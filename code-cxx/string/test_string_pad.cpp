@@ -52,7 +52,7 @@ namespace cxx_string
     // s.erase(end, s.end());
     s.erase(end);
   }
-}
+} // namespace cxx_string
 
 TEST(StringPad, parse_ids)
 {

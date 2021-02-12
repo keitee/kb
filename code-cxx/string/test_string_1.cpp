@@ -296,7 +296,7 @@ TEST(StringOperation, back)
   EXPECT_THAT(s1.size(), 3);
 
   // this fails as the same reason as string ctors shown above.
-  // error: invalid conversion from ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type 
+  // error: invalid conversion from ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type
   // {aka char}’ to ‘const char*’ [-fpermissive]
   // EXPECT_EQ(string(s1.back()), "o");
 
@@ -2152,30 +2152,34 @@ TEST(StringConversion, string_to_number_max)
 
 /*
 // ={=========================================================================
-cxx-stringstream
+cxx-stringstream cxx-string-convert
 handles "type" automatically
 */
 
-TEST(StringConversion, stringstream)
+TEST(StringConversion, stringstream_1)
 {
   // note that os, buffer, has all inputs from << and seek() moves writing pos.
   // *cxx-string-convert-to-string*
 
   // to string. overwrite and move write point
   {
-    std::ostringstream os;
+    std::ostringstream os{};
 
+    // write
     os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
     EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
 
-    bitset<15> bit_set(5789);
+    // keep adding
+    std::bitset<15> bit_set(5789);
     os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
     EXPECT_EQ(
       os.str(),
       "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
 
+    // move write point
     os.seekp(0);
 
+    // overwrite
     os << "octal : " << oct << 15;
     EXPECT_EQ(
       os.str(),
@@ -2638,7 +2642,7 @@ Specific to Particular Target Machines.
 
 namespace string_conversion
 {
-  // from case. takes a printf style format string and args. 
+  // from case. takes a printf style format string and args.
   // NOTE: the point is to returns std::string
 
   inline std::string __attribute__((format(printf, 1, 2)))
@@ -2746,13 +2750,13 @@ TEST(StringConversion, formatter)
   const std::string expected{"variable value has value in dec 100, hex 0x64"};
 
   EXPECT_THAT(string_formatter_1("variable %s has value in dec %d, hex 0x%x",
-                               "value",
-                               value,
-                               value),
+                                 "value",
+                                 value,
+                                 value),
               expected);
 
   // copied from the above:
-  // causes the compiler to check the arguments in calls to my_printf 
+  // causes the compiler to check the arguments in calls to my_printf
   // for consistency with the printf style format string argument my_format.
 
   // warning: format ‘%lld’ expects argument of type
@@ -3002,7 +3006,7 @@ namespace string_trim
 
     // if "trailing spaces" are found. "end+1" to include the found char.
     if (std::string::npos != end)
-      ret = ret.substr(0, end+1);
+      ret = ret.substr(0, end + 1);
 
     return ret;
   }
@@ -3537,22 +3541,30 @@ TEST(StringParse, regex)
     std::istream_iterator<std::string> end{};
     std::vector<std::string> coll{beg, end};
 
-    for (auto const &e: coll)
-    {
-      cout << "name: " << e << endl;
-    }
-    cout << endl;
+    std::vector<std::string> expected{"nico,",
+                                      "jim,",
+                                      "helmut,",
+                                      "paul,",
+                                      "tim,",
+                                      "john",
+                                      "paul,",
+                                      "rita"};
+
+    EXPECT_THAT(coll, expected);
   }
 
-  // how about leading spaces?
+  // how about leading spaces? so not need to handle leading/trailing spaces
+  // before parsing using stringstream.
   //
-  // name: [nico,]
-  // name: [jim]
-  // name: [,]
-  // name: [helmut,]
-  // name: [paul,]
-  // name: [tim,]
-  // name: [rita]
+  // // trim leading spaces, (pos, end]
+  // auto startpos = line_.find_first_not_of(" \t");
+  // if (startpos != std::string::npos)
+  //   line_ = line_.substr(startpos);
+  //
+  // // trim trailing spaces, (0, pos+1)
+  // auto endpos = line_.find_last_not_of(" \t");
+  // if (endpos != std::string::npos)
+  //   line_ = line_.substr(0, endpos + 1);
 
   {
     std::string names{"     nico, jim    ,      helmut, paul, tim, rita    "};
@@ -3562,10 +3574,19 @@ TEST(StringParse, regex)
     std::istream_iterator<std::string> end{};
     std::vector<std::string> coll{beg, end};
 
-    for (auto const &e: coll)
-    {
-      cout << "name: [" << e << "]" << endl;
-    }
+    std::vector<std::string>
+      expected{"nico,", "jim", ",", "helmut,", "paul,", "tim,", "rita"};
+  }
+
+  {
+    std::string names{"     this is a command line        "};
+    std::stringstream ss{names};
+
+    std::istream_iterator<std::string> beg{ss};
+    std::istream_iterator<std::string> end{};
+    std::vector<std::string> coll{beg, end};
+
+    std::vector<std::string> expected{"this", "is", "a", "command", "line"};
   }
 }
 

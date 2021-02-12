@@ -294,6 +294,19 @@ void errExitEN(int errnum, const char *format, ...)
   terminate(true);
 }
 
+void fatal(const char *format, ...)
+{
+  va_list arg_list;
+
+  va_start(arg_list, format);
+
+  // note that errnum but not errno
+  outputError(false, 0, true, format, arg_list);
+  va_end(arg_list);
+
+  terminate(true);
+}
+
 void usageErr(const char *format, ...)
 {
   va_list args;
@@ -323,7 +336,7 @@ void cmdLineErr(const char *format, ...)
   vfprintf(stderr, format, argList);
   va_end(argList);
 
-  fflush(stderr);           // In case stderr is not line-buffered
+  fflush(stderr); // In case stderr is not line-buffered
   exit(EXIT_FAILURE);
 }
 

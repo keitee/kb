@@ -27,22 +27,6 @@ $ ./psem_create -cx /demo 666
 $ ls -l /dev/shm/sem.*
 -rw-rw---- 1 mtk users 16 Jul 6 12:09 /dev/shm/sem.demo
 
-GETOPT(3)
-
-NAME
-       getopt, getopt_long, getopt_long_only, optarg, optind, opterr, optopt -
-       Parse command-line options
-
-SYNOPSIS
-       #include <unistd.h>
-
-       int getopt(int argc, char * const argv[],
-                  const char *optstring);
-
-       extern char *optarg;
-
-       extern int optind, opterr, optopt;
-
 
 #include <fcntl.h> // Defines O_* constants
 #include <semaphore.h>

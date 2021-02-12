@@ -1,35 +1,26 @@
-#include <boost/lexical_cast.hpp>
-#include <boost/variant.hpp>
-#include <chrono>
-#include <condition_variable>
-#include <forward_list>
-#include <iostream>
-#include <limits>
-#include <list>
-#include <memory>
-#include <mutex>
-#include <regex>
-#include <set>
+// #include <boost/lexical_cast.hpp>
+// #include <boost/variant.hpp>
+// #include <chrono>
+// #include <condition_variable>
+// #include <forward_list>
+// #include <iostream>
+// #include <limits>
+// #include <list>
+// #include <memory>
+// #include <mutex>
+// #include <regex>
+// #include <set>
 #include <thread>
-#include <vector>
+// #include <vector>
 
 #include <fcntl.h>
 #include <fnmatch.h>
+#include <getopt.h> // getopt_long
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/prctl.h>
 #include <sys/uio.h> // readv()
 
-// #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from <stdio.h> */
-//
-// ibc.cpp: In member function ‘virtual void Syscall_GetPidThroughSyscall_Test::TestBody()’:
-// libc.cpp:605:13: error: ‘SYS_getpid’ was not declared in this scope
-//      syscall(SYS_getpid);
-//              ^
-// libc.cpp: In function ‘sanitizer_syscall::uptr sanitizer_syscall::internal_stat(const char*, void*)’:
-// libc.cpp:699:23: error: ‘__NR_stat’ was not declared in this scope
-//  #define SYSCALL(name) __NR_##name
-//                        ^
 #include <string.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -43,6 +34,470 @@
 using namespace std;
 using namespace std::placeholders;
 using namespace testing;
+
+/*
+call-getopt
+
+LPI-B PARSING COMMAND-LINE OPTIONS
+
+A typical UNIX command line has the following form:
+
+command [ options ] arguments
+
+According to these rules, the following commands are all equivalent:
+
+$ grep -l -i -f patterns *.c
+$ grep -lif patterns *.c
+$ grep -lifpatterns *.c
+
+the facility to do so is encapsulated in a standard library function, getopt().
+
+#include <unistd.h>
+
+extern int optind, opterr, optopt;
+extern char *optarg;
+
+int getopt(int argc , char *const argv [], const char * optstring );
+
+The "optstring" argument specifies the set of options that getopt() should
+look for in argv.
+
+Most implementations allow other characters as well, with the exception of : ,
+? , and - , which have special meaning to getopt(). Each option character may
+be followed by a colon (:), indicating that this option expects an argument.
+
+
+We parse a command line by calling getopt() repeatedly. Each call returns
+information about the next unprocessed option. If an option was found, the
+"option character is returned as the function result."
+
+If the end of the option list was reached, getopt() returns -1. If an option
+has an argument, getopt() sets the global variable "optarg" to point to that
+argument.
+
+Note that the function result of getopt() is int. We must not assign the
+result of getopt() to a variable of type char, because the comparison of the
+char variable with -1 won’t work on systems where char is unsigned.
+
+
+On each call to getopt(), the global variable "optind" is updated to contain
+the index of the next unprocessed element of argv. The optind variable is
+automatically set to 1 before the first call to getopt().
+
+
+The rules about how getopt() handles and reports these errors are as follows:
+
+o By default, getopt() prints an appropriate error message on standard error
+  and "returns the character ? as its function result." In this case, the
+  global variable "optopt" returns the erroneous option character (i.e., the
+  one that is unrecognized or whose argument is missing).
+
+o The global variable opterr can be used to suppress the error messages
+  printed by getopt(). By default, this variable is set to 1. If we set it to
+  0, then getopt() doesn’t print error messages, but otherwise behaves as
+  described in the preceding point. The program can detect the error via the
+  ? function result and dis- play a customized error message.
+
+o Alternatively, we may suppress error messages by specifying a colon ( : ) as
+  the first character in optstring (doing so overrides the effect of setting
+  opterr to 0).  In this case, an error is reported as with setting opterr to
+  0, except that an option with a missing argument is reported by returning :
+  as the function result.  This difference in return values allows us to
+  distinguish the two types of errors (unrecognized option and missing option
+  argument), if we need to do so.
+
+Listing B-1: Using getopt()
+–––––––––––––––––––––––––––––––––––––––––––––––––––––––– getopt/t_getopt.c
+
+when use:
+
+while (-1 != (opt = getopt(argc, argv, ":p:x")))
+
+$ ./t_getopt -x -p hello world
+
+                0           1     2      3       4
+char *argv[] = {"t_getopt", "-x", "-p", "hello", "world"};
+
+opt = 120 (x); optind = 2
+opt = 112 (p); optind = 4
+-x was specified (count = 1)
+-p was specified with the value "hello"
+first nonoption argument is world at argv[4]
+
+when use:
+
+while (-1 != (opt = getopt(argc, argv, "p:x:")))
+
+opt = 120 (x); optind = 3
+-x was specified (count = 1)
+first nonoption argument is hello at argv[3]
+
+
+when optind == argc
+
+$ ./t_getopt -x -p hello
+
+opt = 120 (x); optind = 2
+opt = 112 (p); optind = 4
+-x was specified (count = 1)
+-p was specified with the value "hello"
+
+
+when miss argument
+
+$ ./t_getopt -p
+
+opt =  58 (:); optind = 2; optopt = 112 (p)
+missing argument (-p)
+usage: t_getopt [-p arg] [-x]
+$
+
+$ ./t_getopt -a
+opt = 63 (?); optind = 2; optopt = 97 (a)
+Unrecognized option (-a)
+Usage: ./t_getopt [-p arg] [-x]
+
+$ ./t_getopt -p str -- -x
+opt =112 (p); optind = 3
+-p was specified with the value "str"
+First nonoption argument is "-x" at argv[4]
+
+the string –x was interpreted as an argument to the –p option, rather than as
+an option.
+
+$ ./t_getopt -p -x
+opt =112 (p); optind = 3
+-p was specified with the value "-x"
+
+*/
+
+namespace call_getopt
+{
+#define printable(ch) (isprint((unsigned char)ch) ? ch : '#')
+
+  void usageError(char *name, const char *msg, int opt)
+  {
+    if (nullptr != msg && opt != 0)
+      fprintf(stderr, "%s (-%c)\n", msg, printable(opt));
+
+    fprintf(stderr, "usage: %s [-p arg] [-x]\n", name);
+
+    exit(EXIT_FAILURE);
+  }
+
+  int fake_main(int argc, char *argv[])
+  {
+    int opt{}, xfnd{};
+    char *pstr{nullptr};
+
+    while (-1 != (opt = getopt(argc, argv, ":p:x")))
+    // while (-1 != (opt = getopt(argc, argv, "p:x:")))
+    {
+      printf("opt = %3d (%c); optind = %d", opt, printable(opt), optind);
+
+      // o Alternatively, we may suppress error messages by specifying a colon
+      // ( : ) as the first character in optstring (doing so overrides the
+      // effect of setting opterr to 0).  In this case, an error is reported
+      // as with setting opterr to 0, except that an option with a missing
+      // argument is reported by returning : as the function result.  This
+      // difference in return values allows us to distinguish the two types of
+      // errors (unrecognized option and missing option argument), if we need
+      // to do so.
+      //
+      // "returns the character ? as its function result." In this case, the
+      // global variable "optopt" returns the erroneous option character
+      // (i.e., the one that is unrecognized or whose argument is missing).
+
+      if (opt == '?' || opt == ':')
+        printf("; optopt = %3d (%c)", optopt, printable(optopt));
+
+      printf("\n");
+
+      switch (opt)
+      {
+        case 'p':
+          pstr = optarg;
+          break;
+        case 'x':
+          xfnd++;
+          break;
+          // no "break" since usageError() never return.
+        case ':':
+          usageError(argv[0], "missing argument", optopt);
+        case '?':
+          usageError(argv[0], "unrecognized option", optopt);
+        default:
+          // fatal("unexpected case in switch()");
+          printf("unexpected case in switch()");
+      }
+    } // while
+
+    if (xfnd != 0)
+      printf("-x was specified (count = %d)\n", xfnd);
+
+    if (pstr != nullptr)
+      printf("-p was specified with the value \"%s\"\n", pstr);
+
+    if (optind < argc)
+      printf("first nonoption argument is %s at argv[%d]\n",
+             argv[optind],
+             optind);
+
+    return 0;
+  }
+} // namespace call_getopt
+
+/*
+// ={=========================================================================
+
+when runs the second try in the same test, only have the last result on
+output. This is the case even when have a separate test. WHY?
+
+[ RUN      ] OsGlibc.getopt_1
+opt = 120 (x); optind = 2
+opt = 112 (p); optind = 4
+-x was specified (count = 1)
+-p was specified with the value "hello"
+[       OK ] OsGlibc.getopt_1 (0 ms)
+[ RUN      ] OsGlibc.getopt_2
+
+first nonoption argument is world at argv[4]
+[       OK ] OsGlibc.getopt_2 (0 ms)
+*/
+
+TEST(OsGlibc, DISABLED_getopt_1)
+{
+  using namespace call_getopt;
+
+  {
+    const char *argv[] = {"t_getopt", "-x", "-p", "hello"};
+    int argc{4};
+
+    fake_main(argc, const_cast<char **>(argv));
+  }
+
+  // when have this, only have this result on output
+  // {
+  //   const char *argv[] = {"t_getopt", "-x", "-p", "hello", "world"};
+  //   int argc{5};
+  //   fake_main(argc, const_cast<char **>(argv));
+  // }
+}
+
+TEST(OsGlibc, getopt_2)
+{
+  using namespace call_getopt;
+
+  {
+    const char *argv[] = {"t_getopt", "-x", "-p", "hello", "world"};
+    int argc{5};
+
+    fake_main(argc, const_cast<char **>(argv));
+  }
+}
+
+TEST(OsGlibc, DISABLED_getopt_3)
+{
+  using namespace call_getopt;
+
+  std::cout << std::endl;
+
+  {
+    const char *argv[] = {"t_getopt", "-p"};
+    int argc{2};
+
+    fake_main(argc, const_cast<char **>(argv));
+  }
+}
+
+/*
+https://www.gnu.org/software/libc/manual/html_node/Getopt.html
+
+GNU-specific behavior
+
+By default, the glibc implementation of getopt() implements a nonstandard
+feature: it allows options and nonoptions to be intermingled. Thus, for
+example, the following are equivalent:
+
+$ ls -l file
+$ ls file -l
+
+In processing command lines of the second form, getopt() permutes the contents
+of argv so that all options are moved to the beginning of the array and all
+nonoptions are moved to the end of the array. (If argv contains an element
+pointing to the word -- , then only the elements preceding that element are
+subject to permutation and interpretation as options.) In other words, the
+const declaration of argv in the getopt() prototype shown earlier is not
+actually true for glibc.
+
+Permuting the contents of argv is not permitted by SUSv3 (or SUSv4). We can
+force getopt() to provide standards-conformant behavior
+
+An alternative method of preventing getopt() from permuting command-line
+arguments is to make the first character of optstring a plus sign ( + ).
+
+
+GNU extensions
+
+Many GNU commands allow a form of long option syntax. A long option
+begins with two hyphens, and the option itself is identified using a word, rather
+than a single character, as in the following example:
+
+$ gcc --version
+
+The glibc function getopt_long() can be used to parse such options.
+
+       int getopt_long_only(int argc, char * const argv[],
+                  const char *optstring,
+                  const struct option *longopts, int *longindex);
+
+           struct option {
+               const char *name;
+               int         has_arg;
+               int        *flag;
+               int         val;
+           };
+
+       The meanings of the different fields are:
+
+       name 
+
+       is the name of the long option.
+
+       has_arg
+
+       is: no_argument (or 0) if the option does not take an argument;
+       required_argument (or 1) if the option requires an argument; or
+       optional_argument (or 2) if the option takes an optional argument.
+
+       flag
+
+       specifies  how  results  are  returned for a long option.  If flag is
+       NULL, then getopt_long() returns val.  (For example, the calling
+       program may set val to the equivalent short option character.)
+       Otherwise, getopt_long() returns 0, and flag points to a variable which
+       is set to val if the option is found, but left unchanged if the option
+       is not found.
+
+       val
+
+       is the value to return, or to load into the variable pointed to by
+       flag.
+
+       The last element of the array has to be filled with zeros.
+
+
+./test_getopt -h
+opt = 104 (h); optind = 2, got h
+./test_getopt --help
+opt = 104 (h); optind = 2, got h
+
+./test_getopt --v
+./test_getopt: unrecognized option '--v'
+opt =  63 (?); optind = 2, unknown opt. optopt =   0 (#)
+
+./test_getopt -vv
+./test_getopt: invalid option -- 'v'
+opt =  63 (?); optind = 1, unknown opt. optopt = 118 (v)
+./test_getopt: invalid option -- 'v'
+opt =  63 (?); optind = 2, unknown opt. optopt = 118 (v)
+
+./test_getopt -v
+./test_getopt: invalid option -- 'v'
+opt =  63 (?); optind = 2, unknown opt. optopt = 118 (v)
+
+./test_getopt -a
+./test_getopt: option requires an argument -- 'a'
+opt =  63 (?); optind = 2, unknown opt. optopt =  97 (a)
+
+./test_getopt --a xxx
+opt =  97 (a); optind = 3, got a with option{xxx}
+
+./test_getopt --a=address
+opt =  97 (a); optind = 2, got a with option{address}
+
+*/
+
+namespace call_getopt
+{
+  // {
+  //     printf("Usage: DobbyTool <option(s)> <cmd>\n");
+  //     printf("  Tool for investigating and debugging issues with the Dobby daemon\n");
+  //     printf("\n");
+  //     printf("  -h, --help                    Print this help and exit\n");
+  //     printf("\n");
+  //     printf("  -a, --address=ADDRESS         The dbus address to talk to, if not set attempts\n");
+  //     printf("                                to find the dbus socket in the usual places\n");
+  //     printf("  -s, --service=SERVICE         The dbus service the file mapper daemon is on [%s]\n", gDBusService.c_str());
+  //     printf("\n");
+  // }
+
+  void parse_args(int argc, char **argv)
+  {
+    // clang-format off
+    struct option longopts[] = {
+      {"help",    no_argument,        nullptr, (int)'h'},
+      {"address", required_argument,  nullptr, (int)'a'},
+      {"service", required_argument,  nullptr, (int)'s'},
+      {nullptr,   0,                  nullptr, 0       }
+    };
+    // clang-format on
+
+    int opt{}, longindex{};
+
+    // An alternative method of preventing getopt() from permuting
+    // command-line arguments is to make the first character of optstring a
+    // plus sign ( + ).
+
+    while (-1 !=
+           (opt = getopt_long(argc, argv, "+ha:s:", longopts, &longindex)))
+    {
+      printf("opt = %3d (%c); optind = %d", opt, printable(opt), optind);
+
+      switch (opt)
+      {
+        case 'h':
+          printf("got h\n");
+          break;
+
+        case 'a':
+          printf("got a with option{%s}\n", optarg);
+          break;
+
+        case 's':
+          printf("got s with option{%s}\n", optarg);
+          break;
+
+          // error cases
+        case '?':
+          printf("unknown opt. optopt = %3d (%c)\n", optopt, printable(optopt));
+          break;
+
+        default:
+          printf("unknown opt\n");
+          break;
+      }
+    } // while
+
+    if (optind < argc)
+      printf("first nonoption argument is %s at argv[%d]\n",
+             argv[optind],
+             optind);
+  }
+} // namespace call_getopt
+
+// ={=========================================================================
+TEST(OsGlibc, getopt_long_1)
+{
+  using namespace call_getopt;
+
+  {
+    const char *argv[] = {"getopt_long", "-help"};
+    int argc{4};
+
+    fake_main(argc, const_cast<char **>(argv));
+  }
+}
 
 /*
 
@@ -84,6 +539,7 @@ class unique_lock
 
 */
 
+// ={=========================================================================
 TEST(OsGlibc, errno_message)
 {
   const std::string message{"Resource deadlock avoided"};
@@ -1403,18 +1859,22 @@ TEST(OsGlibc, check_fgets)
 {
   using namespace osfgets;
 
-  const char input_1[]{
-    "&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
-    "00000040000001A4000000600000001A00000061000000020002000000630000000800B980"
-    "D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1A"
-    "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
+  const char input_1[]{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken="
+                       "00000040000001A4000000600000001A000000610000000200020"
+                       "00000630000000800B980"
+                       "D500B98675000000700000017A0006B40A223124823D8BB018C76"
+                       "6555E7CDC360F8ADE3F1A"
+                       "F7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};
 
-  std::string expected_1{
-    "JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUYyMjI3MiZ2Z2N0b2tlbj0wMD"
-    "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxMDAwMDAwMDIwMDAyMDAwMDAw"
-    "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDAwMTdBMDAwNkI0MEEyMjMxMj"
-    "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGOTFCMzEwRDBFMkY3NjI0ODI4"
-    "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
+  std::string expected_1{"JnZnY2Fzc2V0aWQ9RjY3MzA3QURBMTYxNEMzNUEwQkE0REUzOUY"
+                         "yMjI3MiZ2Z2N0b2tlbj0wMD"
+                         "AwMDA0MDAwMDAwMUE0MDAwMDAwNjAwMDAwMDAxQTAwMDAwMDYxM"
+                         "DAwMDAwMDIwMDAyMDAwMDAw"
+                         "NjMwMDAwMDAwODAwQjk4MEQ1MDBCOTg2NzUwMDAwMDA3MDAwMDA"
+                         "wMTdBMDAwNkI0MEEyMjMxMj"
+                         "Q4MjNEOEJCMDE4Qzc2NjU1NUU3Q0RDMzYwRjhBREUzRjFBRjdGO"
+                         "TFCMzEwRDBFMkY3NjI0ODI4"
+                         "REJGREUyRDNENEU1OSZzdHJlYW10eXBlPTEK"};
 
   // clang-format off
   const char input_2[]{"&vgcassetid=F67307ADA1614C35A0BA4DE39F22272&vgctoken=00000040000001A4000000600000001A00000061000000020002000000630000000800B980D500B98675000000700000017A0006B40A223124823D8BB018C766555E7CDC360F8ADE3F1AF7F91B310D0E2F7624828DBFDE2D3D4E59&streamtype=1"};

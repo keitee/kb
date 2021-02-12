@@ -9,6 +9,12 @@
 
 namespace Slog
 {
+  const char levels[] = {
+    ' ', // LOG_LOG,
+    '>', // LOG_ENTER,
+    '<', // LOG_EXIT,
+    '+', // LOG_MIL
+  };
 
   // lib/ename.c.inc
 
@@ -149,7 +155,8 @@ namespace Slog
 
 #define MAX_ENAME 132
 
-  void outputError(const char *file,
+  void outputError(int level,
+                   const char *file,
                    int line,
                    const char *function,
                    bool useErrorString,
@@ -180,11 +187,11 @@ namespace Slog
     }
     else
     {
-      snprintf(errText, BUF_SIZE, "F:%s C:%s L:%05d :", file, function, line);
+      snprintf(errText, BUF_SIZE, "F:%s C:%s L:%05d", file, function, line);
     }
 
     // concat user msg and err string. note that added newline.
-    snprintf(buf, BUF_SIZE, "LOG| %s %s\n", errText, userMsg);
+    snprintf(buf, BUF_SIZE, "LOG| %s %c%s\n", errText, levels[level], userMsg);
 
     if (useFlush)
       fflush(stdout);
@@ -234,8 +241,12 @@ namespace Slog
 
   */
 
-  void errMsg(
-    const char *file, int line, const char *function, const char *format, ...)
+  void errMsg(int level,
+              const char *file,
+              int line,
+              const char *function,
+              const char *format,
+              ...)
   {
     va_list arg_list;
     int saved_errno;
@@ -244,7 +255,15 @@ namespace Slog
     saved_errno = errno;
 
     va_start(arg_list, format);
-    outputError(file, line, function, true, errno, true, format, arg_list);
+    outputError(level,
+                file,
+                line,
+                function,
+                true, // use errno string
+                errno,
+                true,
+                format,
+                arg_list);
     va_end(arg_list);
 
     errno = saved_errno;
@@ -256,16 +275,50 @@ namespace Slog
 
   */
 
-  void errExit(
-    const char *file, int line, const char *function, const char *format, ...)
+  void errExit(int level,
+               const char *file,
+               int line,
+               const char *function,
+               const char *format,
+               ...)
   {
     va_list arg_list;
 
     va_start(arg_list, format);
-    outputError(file, line, function, true, errno, true, format, arg_list);
+    outputError(level,
+                file,
+                line,
+                function,
+                true, // use errno string
+                errno,
+                true,
+                format,
+                arg_list);
     va_end(arg_list);
 
     terminate(true);
+  }
+
+  void prnMsg(int level,
+              const char *file,
+              int line,
+              const char *function,
+              const char *format,
+              ...)
+  {
+    va_list arg_list;
+
+    va_start(arg_list, format);
+    outputError(level,
+                file,
+                line,
+                function,
+                false, // use errno string
+                errno,
+                true,
+                format,
+                arg_list);
+    va_end(arg_list);
   }
 
   /*

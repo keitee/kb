@@ -119,6 +119,8 @@ threaded app and use args in a call. Hence, efficient.
 */
 void errExitEN(int errnum, const char *format, ...);
 
+void fatal(const char *format, ...);
+
 // Print a command usage error message and terminate the process
 void usageErr(const char *format, ...);
 void cmdLineErr(const char *format, ...);

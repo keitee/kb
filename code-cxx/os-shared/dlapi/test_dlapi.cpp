@@ -37,21 +37,32 @@ Returns library handle on success, or NULL on error
               cannot be  done,  an  error  is returned.
 
 
-<os-shared-dlerror>
+<os-dlerror>
 The dlerror() function returns NULL `if no error has occurred` since the last
 call to dlerror(). We’ll see how this is useful in the next section.
 
-<os-shared-dlsym>
+<os-dlsym>
 
 #include <dlfcn.h>
-void *dlsym(void * handle , char * symbol );
+void *dlsym(void * handle , char * symbol);
 Returns address of symbol, or NULL if symbol is not found
 
-The value of a symbol returned by dlsym() may be NULL, which is
-indistinguishable from the “symbol not found” return. In order to differentiate
-the two possibilities, we must call dlerror() beforehand (to make sure that any
-previously held error string is `cleared`) and then if, after the call to
-dlsym(), dlerror() returns a non-NULL value, we know that an error occurred.
+
+the reason to use dlerror() before calling any dlapi will clear error message
+
+`The value of a symbol returned by dlsym() may be NULL`, which is
+`indistinguishable from NULL for the "symbol not found" return.` 
+
+In order to differentiate the two possibilities, we must call dlerror()
+beforehand (to make sure that any previously held error string is cleared) and
+then if, after the call to dlsym(), dlerror() returns a non-NULL value, we
+know that an error occurred.
+
+that is, how distinguishs when symbol value is NULL and when symbol is not
+found. When symbol value itself is null, dlerror() should be null.
+
+dlsym() return null and dlerror() returns not-null : symbol itself is null
+dlsym() return null and dlerror() returns null     : symbol not found
 
 
 <os-readline>
@@ -68,6 +79,22 @@ typedef int (*rl_on_new_line_t)(void);
 /*
 assume that for `rl_on_new_line` symbol, there is symbol_t typedef and m_symbol
 member variable to set.
+
+*/
+
+/*
+this macro can be revised to:
+
+    #define GET_RL_FUNC(f) \
+        do { \
+            _ ## f = reinterpret_cast<f ## _t>(dlsym(mLibHandle, "" #f "")); \
+            if (! _ ## f) { \
+                AI_LOG_ERROR("failed to get symbol '" #f "' (%s)", dlerror()); \
+                goto failed; \
+            } \
+        } while(0)
+
+where uses "goto" to handle clean up than just return.
 
 */
 
@@ -138,6 +165,84 @@ TEST(OsShared, dlapi)
 
     auto ret = m_rl_on_new_line();
     LOG_MSG("return from rl_on_new_line_t (%d)", ret);
+
+    dlclose(handle);
+  }
+}
+
+/*
+$ strace -eopenat ./test_dlapi --gtest_filter=*dlopen*
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/tls/haswell/x86_64/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/tls/haswell/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/tls/x86_64/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/tls/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/haswell/x86_64/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/haswell/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/x86_64/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/libdl.so.2", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libdl.so.2", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/libpthread.so.0", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libpthread.so.0", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/usr/lib/x86_64-linux-gnu/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/home/keitee/git/kb/code-cxx/os-shared/dlapi/../../libs/build/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+Note: Google Test filter = *dlopen*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from OsShared
+[ RUN      ] OsShared.dlopen
+openat(AT_FDCWD, "/usr/lib/libreadline.so", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+/home/keitee/git/kb/code-cxx/os-shared/dlapi/test_dlapi.cpp:161: Failure
+Value of: handle
+Expected: isn't equal to (nullptr)
+  Actual: NULL (of type void*)
+[  FAILED  ] OsShared.dlopen (1 ms)
+[----------] 1 test from OsShared (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (2 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] OsShared.dlopen
+
+ 1 FAILED TEST
++++ exited with 1 +++
+$
+
+LOG| F:test_dlapi.cpp C:virtual void OsShared_dlopen_Test::TestBody() L:00208 
+failed to open libreadline.so {/usr/lib/libreadline.so: cannot open shared object file: No such file or directory}
+
+so have to use dlopen("libreadline.so") and can rely on PATH. This example
+comes from embedded where we know the exact path.
+
+*/
+
+TEST(OsShared, dlopen)
+{
+  {
+    void *handle = dlopen("/usr/lib/libreadline.so", RTLD_NOW);
+    if (nullptr == handle)
+    {
+      LOG_MSG("failed to open libreadline.so {%s}", dlerror());
+    }
+
+    ASSERT_THAT(handle, Ne(nullptr));
+
+    // clear error message
+    dlerror();
+
+    rl_on_new_line_t f_on_new_line =
+      (rl_on_new_line_t)dlsym(handle, "rl_on_new_line");
+
+    if (!f_on_new_line)
+      LOG_MSG("failed to find symbol rl_on_new_line_t (%s)", dlerror());
+
+    EXPECT_THAT(f_on_new_line, Ne(nullptr));
 
     dlclose(handle);
   }

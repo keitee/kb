@@ -48,24 +48,28 @@ void printWaitStatus(const char *msg, int status)
     printf("child killed by signal %d (%s)",
            WTERMSIG(status),
            strsignal(WTERMSIG(status)));
-#ifdef WCOREDUMP        /* Not in SUSv3, may be absent on some systems */
-        if (WCOREDUMP(status))
-            printf(" (core dumped)");
+#ifdef WCOREDUMP /* Not in SUSv3, may be absent on some systems */
+    if (WCOREDUMP(status))
+      printf(" (core dumped)");
 #endif
-        printf("\n");
+    printf("\n");
+  }
+  else if (WIFSTOPPED(status))
+  {
+    printf("child stopped by signal %d (%s)\n",
+           WSTOPSIG(status),
+           strsignal(WSTOPSIG(status)));
 
-    } else if (WIFSTOPPED(status)) {
-        printf("child stopped by signal %d (%s)\n",
-                WSTOPSIG(status), strsignal(WSTOPSIG(status)));
-
-#ifdef WIFCONTINUED     /* SUSv3 has this, but older Linux versions and
+#ifdef WIFCONTINUED /* SUSv3 has this, but older Linux versions and
                            some other UNIX implementations don't */
-    } else if (WIFCONTINUED(status)) {
-        printf("child continued\n");
+  }
+  else if (WIFCONTINUED(status))
+  {
+    printf("child continued\n");
 #endif
-
-    } else {            /* Should never happen */
-        printf("what happened to this child? (status=%x)\n",
-                (unsigned int) status);
-    }
+  }
+  else
+  { /* Should never happen */
+    printf("what happened to this child? (status=%x)\n", (unsigned int)status);
+  }
 }
