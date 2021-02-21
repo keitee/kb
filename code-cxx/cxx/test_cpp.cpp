@@ -4,9 +4,8 @@
 
 using namespace testing;
 
+/*
 // ={=========================================================================
-
-#if 0
 
 3.1 Object-like Macros
 
@@ -22,7 +21,7 @@ name of the macro and then the token sequence it should be an abbreviation for,
 
 #define BUFFER_SIZE 1024
 
-#endif
+*/
 
 namespace cxx_cpp
 {
@@ -44,7 +43,8 @@ namespace cxx_cpp
   //
 } // namespace cxx_cpp
 
-TEST(CxxCpp, check_defined)
+// ={=========================================================================
+TEST(CxxCpp, defined)
 {
 #if defined CHECK_CXX_CPP_DEFINED
   EXPECT_THAT(true, true);
@@ -84,7 +84,8 @@ TEST(CxxCpp, check_defined)
 #endif
 }
 
-#if 0
+/*
+// ={=========================================================================
 
 4.2.5 Elif
 
@@ -92,39 +93,40 @@ One common case of nested conditionals is used to check for more than two
 possible alternatives. For example, you might have
 
 #if X == 1
-…
-#else /* X != 1 */
+...
+#else // X != 1
 #if X == 2
-…
-#else  /* X != 2 */
-…
-#endif /* X != 2 */
-#endif /* X != 1 */
+...
+#else  // X != 2
+...
+#endif // X != 2
+#endif // X != 1
 
-Another conditional directive, ‘#elif’, allows this to be abbreviated as follows:
+Another conditional directive, ‘#elif’, allows this to be abbreviated as
+follows:
 
 #if X == 1
-…
+...
 #elif X == 2
-…
-#else  /* X != 2 and X != 1*/
-…
-#endif /* X != 2 and X != 1*/
+...
+#else  // X != 2 and X != 1
+...
+#endif // X != 2 and X != 1
 
 ‘#elif’ stands for “else if”. Like ‘#else’, it goes in the middle of a
-conditional group and subdivides it; it does not require a matching ‘#endif’ of
-its own. Like ‘#if’, the ‘#elif’ directive includes an expression to be tested.
-The text following the ‘#elif’ is processed only if the original ‘#if’-condition
-failed and the ‘#elif’ condition succeeds.
+conditional group and subdivides it; it does not require a matching ‘#endif’
+of its own. Like ‘#if’, the ‘#elif’ directive includes an expression to be
+tested.  The text following the ‘#elif’ is processed only if the original
+‘#if’-condition failed and the ‘#elif’ condition succeeds.
 
-More than one ‘#elif’ can go in the same conditional group. Then the text after
-each ‘#elif’ is processed only if the ‘#elif’ condition succeeds after the
-original ‘#if’ and all previous ‘#elif’ directives within it have failed.
+More than one ‘#elif’ can go in the same conditional group. Then the text
+after each ‘#elif’ is processed only if the ‘#elif’ condition succeeds after
+the original ‘#if’ and all previous ‘#elif’ directives within it have failed.
 
 ‘#else’ is allowed after any number of ‘#elif’ directives, but ‘#elif’ may not
 follow ‘#else’.
 
-#endif
+*/
 
 #define CPPUNIT_NO_STREAM 1
 // shows "if defined (CPPUNIT_NO_STREAM)"
@@ -134,7 +136,8 @@ follow ‘#else’.
 
 // so, one of them must be defined in order not to see "error"
 
-TEST(CxxCpp, check_elseif)
+// ={=========================================================================
+TEST(CxxCpp, elseif)
 {
 #if defined(CPPUNIT_NO_STREAM)
   std::cout << "if defined (CPPUNIT_NO_STREAM)" << std::endl;
@@ -145,6 +148,43 @@ TEST(CxxCpp, check_elseif)
 #else // CPPUNIT_HAVE_CLASS_STRSTREAM
 #error Cannot define CppUnit::OStringStream.
 #endif // #if defined( CPPUNIT_NO_STREAM )
+}
+
+namespace cxx_cpp
+{
+  // taken from <sys/timerfd.h>
+  // Bits to be set in the FLAGS parameter of `timerfd_settime'.
+  enum
+  {
+    TFD_TIMER_ABSTIME = 1 << 0,
+#define TFD_TIMER_ABSTIME TFD_TIMER_ABSTIME
+    TFD_TIMER_CANCEL_ON_SET = 1 << 1
+#define TFD_TIMER_CANCEL_ON_SET TFD_TIMER_CANCEL_ON_SET
+  };
+} // namespace cxx_cpp
+
+// ={=========================================================================
+TEST(CxxCpp, define_and_enum)
+{
+  using namespace cxx_cpp;
+
+  // can use enum but cannot use like:
+  // EXPECT_THAT(TFD_TIMER_ABSTIME, 1);
+
+  if (TFD_TIMER_ABSTIME == 1)
+  {
+    EXPECT_THAT(true, true);
+  }
+  else
+  {
+    EXPECT_THAT(true, false);
+  }
+
+#ifdef TFD_TIMER_ABSTIME
+  EXPECT_THAT(true, true); // true
+#else
+  EXPECT_THAT(true, false); // false
+#endif
 }
 
 #if 0

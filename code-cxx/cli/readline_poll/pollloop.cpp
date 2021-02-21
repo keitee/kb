@@ -1,6 +1,15 @@
-/*
+/* ={==========================================================================
+reference code:
+AppInfrastructure/Common/lib/source/PollLoop.cpp
+AppInfrastructure/InputHandler/test/source/EPollLoopTests.cpp
+AppInfrastructure/InputHandler/lib/source/EPollLoop.cpp
 
-AppInfrastructure/InputHandler/lib/source/EPollLoop.h 
+TODO:
+not able to find real use of EPOLLDEFERRED in the reference code tree and may be
+no real use case.
+
+that means that readline and pollloop are only for using readline library
+feature.
 
 */
 
@@ -23,31 +32,9 @@ namespace
   const int MILLISEC_PER_NANOSEC{1000L * 1000L};
 } // namespace
 
-/*
+/* ={==========================================================================
 @param[in] long deffered_time_interval  the time interval in milliseconds
 
-*/
-PollLoop::PollLoop(const std::string &name,
-                   int max_source,
-                   long deferred_time_interval)
-    : m_name(name)
-    , m_threadid(-1)
-    , m_epollfd(-1)
-    , m_max_source(max_source)
-    , m_defer_timespec({.it_interval = {.tv_sec  = 0,
-                                        .tv_nsec = (deferred_time_interval *
-                                                    MILLISEC_PER_NANOSEC)},
-                        .it_value    = {.tv_sec  = 0,
-                                     .tv_nsec = (deferred_time_interval *
-                                                 MILLISEC_PER_NANOSEC)}})
-{}
-
-PollLoop::~PollLoop()
-{
-  stop();
-}
-
-/*
 struct timespec {
     time_t tv_sec;                // Seconds
     long   tv_nsec;               // Nanoseconds
@@ -61,15 +48,52 @@ struct itimerspec {
 "value" is initial value to expire and use "interval" after that
 
 */
+PollLoop::PollLoop(const std::string &name,
+                   unsigned int max_source,
+                   long deferred_time_interval)
+    : m_name(name)
+    , m_threadid(-1)
+    , m_epollfd(-1)
+    , m_max_source(max_source)
+    , m_defer_timespec({.it_interval = {.tv_sec  = 0,
+                                        .tv_nsec = (deferred_time_interval *
+                                                    MILLISEC_PER_NANOSEC)},
+                        .it_value    = {.tv_sec  = 0,
+                                     .tv_nsec = (deferred_time_interval *
+                                                 MILLISEC_PER_NANOSEC)}})
+{
+  LOG_MSG("check on EPOLLWAKEUP {%u}", EPOLLWAKEUP);
+  LOG_MSG("check on EPOLLDEFERRED {%u}", EPOLLDEFERRED);
+  LOG_MSG("pollloop is ctored");
+}
+
+PollLoop::~PollLoop()
+{
+  stop();
+
+  LOG_MSG("pollloop is dtored");
+}
 
 void PollLoop::enableDeferredTimer_()
 {
+  // TODO
+  // Should be called with the lock held, sanity check on debug builds
+  // #if (AI_BUILD_TYPE == AI_DEBUG)
+  //     if (mLock.try_lock() == true)
+  //     {
+  //         AI_LOG_ERROR("mutex lock not held in %s", __FUNCTION__);
+  //         mLock.unlock();
+  //     }
+  // #endif
+
   // if timerfd was created
   if (m_defer_timerfd >= 0)
   {
-    // TODO: TFD_TIMER_ABSTIME = 1 << 0 but use 0?
     // set new time and
-    if (timerfd_settime(m_defer_timerfd, 0, &m_defer_timespec, nullptr) < 0)
+    if (timerfd_settime(m_defer_timerfd,
+                        TFD_TIMER_ABSTIME,
+                        &m_defer_timespec,
+                        nullptr) < 0)
     {
       LOG_MSG("failed to set time to timerfd");
     }
@@ -85,7 +109,42 @@ void PollLoop::enableDeferredTimer_()
   }
 }
 
-// poll thread function
+void PollLoop::disableDeferredTimer_()
+{
+  // TODO
+  // Should be called with the lock held, sanity check on debug builds
+  // #if (AI_BUILD_TYPE == AI_DEBUG)
+  //     if (mLock.try_lock() == true)
+  //     {
+  //         AI_LOG_ERROR("mutex lock not held in %s", __FUNCTION__);
+  //         mLock.unlock();
+  //     }
+  // #endif
+
+  if (m_defer_timerfd >= 0)
+  {
+    struct itimerspec spec_{};
+
+    // bzero() is deprecated so use memset
+    //
+    // why no error on casting?
+    // memset(reinterpret_cast<void *>(&spec_), 0, sizeof(spec_));
+    memset(&spec_, 0, sizeof(spec_));
+
+    if (timerfd_settime(m_defer_timerfd, 0, &spec_, nullptr) < 0)
+    {
+      LOG_MSG("failed to disble time to timerfd");
+    }
+    else
+    {
+      LOG_MSG("timerfd is disabled");
+    }
+  }
+}
+
+/* ={==========================================================================
+poll thread function which does all the epoll stuff
+*/
 void PollLoop::run_(const std::string &name, int priority)
 {
   // save up thread id
@@ -115,6 +174,8 @@ void PollLoop::run_(const std::string &name, int priority)
   unsigned int failures_{};
   bool done{false};
 
+  LOG_MSG("pollloop loop runs\n");
+
   while (false == done)
   {
     // On success, epoll_wait() returns `the number of items` that have been
@@ -135,9 +196,10 @@ void PollLoop::run_(const std::string &name, int priority)
       }
     }
 
-    // iterate through all the events
+    // iterate through all the events that are ready
     for (int i = 0; i < num; ++i)
     {
+      // gets an event
       const struct epoll_event &event = events_[i];
 
       // when death eventfd is fired
@@ -170,6 +232,9 @@ void PollLoop::run_(const std::string &name, int priority)
             auto source_ = e.m_source.lock();
             if (source_)
             {
+              LOG_MSG("source{%s} has DEFERRED and added to triggered set",
+                      e.m_name.c_str());
+
               triggered_[source_] |= EPOLLDEFERRED;
             }
           }
@@ -193,6 +258,7 @@ void PollLoop::run_(const std::string &name, int priority)
 
             if (event.events & (e.m_events | EPOLLRDHUP | EPOLLERR | EPOLLHUP))
             {
+              // get sp from wp of source
               auto source_ = e.m_source.lock();
               if (source_)
               {
@@ -210,6 +276,8 @@ void PollLoop::run_(const std::string &name, int priority)
       }
     } // for
 
+    // Ok, have all triggered events, triggerred_, and let's process it.
+    //
     // m_lock is no longer held which is ok as we now have a list of shared
     // pointers and their events, triggerred_, ensuring other threads can now
     // add / delete sources without affecting us
@@ -228,6 +296,8 @@ void PollLoop::run_(const std::string &name, int priority)
     // go back around the loop
   } // while
 
+  LOG_MSG("pollloop run ends");
+
   // free events
   free(events_);
 
@@ -235,9 +305,11 @@ void PollLoop::run_(const std::string &name, int priority)
   m_threadid.store(-1);
 }
 
-/*
+/* ={==========================================================================
 o interestingly, sources in m_sources are added to epool either from
 addSource() or start().
+
+o if the poll loop is already running, it is stopped and restarted.
 
 o start the poll thread
 
@@ -369,16 +441,17 @@ void PollLoop::stop()
   // signal eventfd which should cause the epoll thread to drop out
   if (m_death_eventfd >= 0)
   {
-    uint64_t set{1};
+    uint64_t set_{1};
 
-    if (sizeof(set) !=
-        TEMP_FAILURE_RETRY(write(m_death_eventfd, &set, sizeof(set))))
+    if (sizeof(set_) !=
+        TEMP_FAILURE_RETRY(write(m_death_eventfd, &set_, sizeof(set_))))
     {
       LOG_MSG("failed to write on eventfd");
     }
     else if (m_thread.joinable())
     {
       m_thread.join();
+      LOG_MSG("pollloop thread ends");
     }
 
     close(m_death_eventfd);
@@ -398,7 +471,7 @@ void PollLoop::stop()
   }
 }
 
-/*
+/* ={==========================================================================
 A source is a file descriptor, a bitmask of events to wait for and a
 IPollSource object that will be called when any of the events in the bitmask
 occur on the file descriptor.
@@ -411,11 +484,28 @@ allowed.
 @param[in]  fd         The file descriptor to poll on
 @param[in]  events     A bitmask of events to listen on
 
+o added "name" for logging which is not in the reference
+
 */
-bool PollLoop::addSource(const std::shared_ptr<IPollSource> &source,
+bool PollLoop::addSource(const std::string &name,
+                         const std::shared_ptr<IPollSource> &source,
                          int fd,
                          uint32_t events)
 {
+  // 5.2 File Control Operations: fcntl()
+  //
+  // The fcntl() system call performs a range of control operations on an open
+  // file descriptor.
+  //
+  // NOTE on "open file descriptor"
+  //
+  // https://stackoverflow.com/questions/12340695/how-to-check-if-a-given-file-descriptor-stored-in-a-variable-is-still-valid
+  //
+  // fcntl(fd, F_GETFD) is the canonical cheapest way to check that fd is a
+  // valid open file descriptor. If you need to batch-check a lot, using poll
+  // with a zero timeout and the events member set to 0 and checking for
+  // POLLNVAL in revents after it returns is more efficient.
+
   if ((fd < 0) || (fcntl(fd, F_GETFD) < 0))
   {
     LOG_MSG("invalid file desc");
@@ -430,12 +520,11 @@ bool PollLoop::addSource(const std::shared_ptr<IPollSource> &source,
     return false;
   }
 
-  // note that EPOLLDEFERRED is not in man epoll_ctl.
-  // TODO: what's this?
+  // check if event bit flag is one of them in the set
   events &= (EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLDEFERRED);
 
   // store the source
-  m_sources.push_back(PollSourceWrapper(source, fd, events));
+  m_sources.push_back(PollSourceWrapper(name, source, fd, events));
 
   // check if it has the deffered flag set.
   // TODO Q: why since it sets up above anyway?
@@ -444,7 +533,10 @@ bool PollLoop::addSource(const std::shared_ptr<IPollSource> &source,
   if (source_.m_events & EPOLLDEFERRED)
   {
     if (++m_deferred_sources == 1)
+    {
+      LOG_MSG("source{%s} has enabled DEFERRED timer", source_.m_name.c_str());
       enableDeferredTimer_();
+    }
   }
 
   // add it to epoll
@@ -466,8 +558,64 @@ bool PollLoop::addSource(const std::shared_ptr<IPollSource> &source,
   return true;
 }
 
+/* ={==========================================================================
+Modifies the events bitmask for the source
+*/
 bool PollLoop::modSource(const std::shared_ptr<IPollSource> &source,
                          uint32_t events)
-{}
+{
+  // TODO:
+  return true;
+}
 
-bool PollLoop::delSource(const std::shared_ptr<IPollSource> &source) {}
+/* ={==========================================================================
+It's important to note that even after the source has been removed and this
+function returns, it's possible for the source's process() method to be called.
+This is because "triggered_" that is used to process events can be different
+from "m_sources" which is protected; that is triggerred_ is not protected.
+
+*/
+
+bool PollLoop::delSource(const std::shared_ptr<IPollSource> &source)
+{
+  std::lock_guard<SpinLock> lock(m_lock);
+
+  auto it = m_sources.begin();
+  auto last = m_sources.end();
+
+  for (; it != last; ++it)
+  {
+    // only when found the source to remove
+    if (it->m_source.lock() == source)
+    {
+      if (it->m_events & EPOLLDEFERRED)
+      {
+        LOG_MSG("DEFERRED is set");
+
+        if (--m_deferred_sources == 0)
+        {
+          LOG_MSG("source{%s} has disabled DEFERRED timer", it->m_name.c_str());
+          disableDeferredTimer_();
+        }
+      }
+
+      if (m_epollfd > 0)
+      {
+        if (epoll_ctl(m_epollfd, EPOLL_CTL_DEL, it->m_fd, nullptr) < 0)
+        {
+          LOG_MSG("failed to delete source{%s} from epoll", it->m_name.c_str());
+          // may use LOG_EXIT()
+          return false;
+        }
+      }
+
+      m_sources.erase(it);
+      // no need to continue searching so return.
+      return true;
+    }
+  }
+
+  // since it failed to find match
+  LOG_MSG("failed to find source{%s} from epoll", it->m_name.c_str());
+  return false;
+}

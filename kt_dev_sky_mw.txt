@@ -521,6 +521,25 @@ http://hudkinsartifactory.cisco.com:8081/artifactory/formal_builds/Q/formal/Q000
 ={============================================================================
 *kt_dev_skymw_0000* mw-build
 
+*do-fsr*
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=28104016
+
+4- using FIRSTBOOT in NFS mount builds.
+Steps:
+
+user FIRSTBOOT argument with startstack.sh.
+
+What will you loose?
+
+it will "partition" and format Disk and erase NVram and FLASH using DD and flash_erase linux utilities. Which means you will loose all settings, contents and DRM data. it will also erase CA data in NVram.
+
+What will be retained?
+
+Nothing.
+
+FIRSTBOOT=false
+
+
 <to-fix-titan-build-error>
 export LC_ALL=C
 
@@ -1107,6 +1126,9 @@ git push origin NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
 
 
 AS-DEV-RDK_DTT_/players/status_can_not_be_stopped
+
+rbt post --tracking-branch=origin/develop --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=NGDEV-177848_AS-DEV-RDK_/as/services/b/sb_should_accept_any_integer_value
 
 
 // as-system-service
@@ -5049,19 +5071,6 @@ boolTestAppCmd(mediaDestroyCommand, destroyMediaStreamer());
 boolTestAppCmd(mediaStopCommand, stopMediaStreamer());
 
 
-*btaudio-logging* *as-logging*
-
-// when use this from ASDA, INFO, ENTRY are gets on MIL
-
-static  AS_DIAG::Context Context("AS_BTAUDIO",
-                                 "BluetoothAudio service for AS");
-AS_DIAG::Context *AS_BTAUDIO_ContextRef = &(Context);
-
-
-NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M:AS_DMS_Writer.cpp 
-  F:BluetoothA2DPTransport L:00258 > @ctx:dbusitf bluetooth_a2dp_transport.cpp(32) new a2dp transport /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
-
-
 *btaudio-audiostreamer*
 
 1. m_ptrBluetoothProtocol is enabled as long as Player runs
@@ -6015,103 +6024,6 @@ class BluezProxy
 };
 
 
-*btaudio-from-as*
-
-// as-map-old
-// ethan-as-source/Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
-{
-  startVisibilityExecutor              = new AS_BTAUDIO::StartVisibilityFactory();
-  cancelVisibilityExecutor             = new AS_BTAUDIO::CancelVisibilityFactory();
-  acceptPairingExecutor                = new AS_BTAUDIO::AcceptPairingFactory();
-  rejectPairingExecutor                = new AS_BTAUDIO::RejectPairingFactory();
-  btaStatusExecutor                    = new AS_BTAUDIO::StatusExecutorFactory();
-
-  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
-      "/as/audiostreamer/bluetooth/action/startvisibility", startVisibilityExecutor );
-
-  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
-      "/as/audiostreamer/bluetooth/action/stopvisibility",  cancelVisibilityExecutor );
-
-  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
-      "/as/audiostreamer/bluetooth/action/acceptpairing",   acceptPairingExecutor );
-
-  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
-      "/as/audiostreamer/bluetooth/action/rejectpairing",   rejectPairingExecutor );
-
-  map->RegisterUrl( REQ_METHOD_WS,        (char *)
-      "/as/audiostreamer/bluetooth/status",                 btaStatusExecutor,
-      NULL, "AS_WS_BTAD_STAT" ); 
-}
-
-
-*btaudio-pairing*
-
-// ethan-as-source/Components/AS/Services
-// /Executors/AudioStreamer/BluetoothAudio/source/AS_BTAUDIO_AcceptPairingExecutor.cpp
-
-class AcceptPairingExecutor : public AS_WORKER::Executor
-{
-  AS::shared_ptr<AS_BTAUDIO::GenericController> m_controller;
-
-  m_controller = AS_CONTROLLERS::GetController<AS_BTAUDIO::GenericController>();
-
-  /** @brief Accepts an incoming pairing request
-   *
-   The executor method accepts an incoming pairing request from a remote
-   device. The m_params instance for the executor must contain the parameter
-   "bdaddr" which must specify and match the incoming request. The bdaddr will
-   be Bluetooth address of the remote device with any : characters removed.
-
-   If the bdaddr is given and matching the incoming request, the request will
-   be accepted and a 200 status written via the executor's m_env. If the
-   address is not given correctly, the subsystem is not active, or no pairing
-   request exists, an error status and message will be written.
-
-   *
-   * @return AS_STATUS_OK upon success, or AS_STATUS_ERROR upon internal error
-   */
-
-  int AcceptPairingExecutor::Exec()
-  {
-    m_controller->HandleAcceptPairing( bdaddrString );
-  }
-}
-
-// controller -> bt audio controller
-
-GenericController::GenericController( AS_WORKER::Environment *environment, const char *deviceName )
-{
-  m_Delegate = new ControllerImplementation( environment, deviceName );
-}
-
-
-// ethan-as-source/Components/AS/Services/Controllers/
-// BTAudioController/include/AS_BTAUDIO_ControllerImplementation.h
-
-ControllerImplementation(
-    AS_WORKER::Environment *env, const char *deviceName = nullptr,
-    uint32_t           maxPaired = 12 // Default max 12 paired, 0 = no limit
-    )
-{
-  pthread_mutexattr_init   (&(m_dataLockAttr));
-  pthread_mutexattr_settype(&(m_dataLockAttr),PTHREAD_MUTEX_RECURSIVE);
-
-  pthread_mutex_init       (&(m_dataLock),&(m_dataLockAttr));
-
-  // Create event queue
-  m_queue        = env->CreateQueue();
-
-  // TODO: There is no further use for the environment after queue is created. There is little point in storing the pointer in the object and delete later.
-  // Hence delete the environment. Revisit for a better implementation later. Not deleting here will cause a leak on STB, there is no impact on utests and hence will not be caught using valgrind.
-  delete env;
-
-  `m_platformItf  = new AS_BTAUDIO::PlatformItf( deviceName );`
-
-  `m_platformItf->BindController(this);`
-
-  m_btaudioControllerThread = new AS_DMS::Thread( this, "AS_BTAUDIO_CTL" );
-}
-
 // Components/AS/Services/Controllers/
 // `BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp`
 
@@ -6222,61 +6134,237 @@ void ControllerImplementation::ProcessConnectionState(AS::string bdaddr,
   AS_LOG_EXIT("%s() exit",__func__);
 }
 
-// log when tried to connect but gets couldn't connected on the phone
 
-265215:NDS: ^0000008724.288619 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:onPropertyChange L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(439) onPropertyChange() entry: path=/org/bluez/hci0/dev_88_9F_6F_88_6A_7B property = Connected
-265216:NDS: ^0000008724.288681 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:onPropertyChange L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(450) Controller bound, passing on connection state 1
-265217:NDS: ^0000008724.288700 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:ProcessConnectionState L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(683) ProcessConnectionState() bdaddr=889F6F886A7B,connected=1
-265218:NDS: ^0000008724.288741 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(781) Message received = 0x31500d0c
-265219:NDS: ^0000008724.288764 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(860) ConnectionState received
-265220:NDS: ^0000008724.288781 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(862) bdaddr = "889F6F886A7B", connected = 1
-265221:NDS: ^0000008724.288798 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessConnectionState L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(461) DoProcessConnectionState() entry: bdaddr=889F6F886A7B,connected=1
-265222:NDS: ^0000008724.288816 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SetConnected L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(186) SetConnected() entry: bdaddr=889F6F886A7B,connected=1
-265223:NDS: ^0000008724.288832 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SetConnected L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(196) Found device in paired list
-265224:NDS: ^0000008724.288908 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SetConnected L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(201) Updating connected timestamp
-265225:NDS: ^0000008724.288926 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:sort L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(21) sort() entry
-265226:NDS: ^0000008724.288945 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SaveStatusDb L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(540) SaveStatusDb() entry
-265227:NDS: ^0000008724.288960 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:GetBluezStoragePath L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(793) GetBluezStoragePath() entry: hciPath=/org/bluez/hci0
-265228:NDS: ^0000008724.288985 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:GetBluezStoragePath L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(803) Storage path found = "/tmp/bluez/StatusDb"
-265229:NDS: ^0000008724.289045 !ERROR -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SaveStatusDb L:00254 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(567) Failed to open file /tmp/bluez/StatusDb for writing
-265230:NDS: ^0000008724.289064 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(912) Deleting message 0x31500d0c
-265231:NDS: ^0000008724.289081 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:ToJSON L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(353) ToJSON() entry
-265232:NDS: ^0000008724.289350 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(936) Status has changed, update listeners
-265233:NDS: ^0000008724.289376 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(73) UpdateJsonListeners() entry: jsonStatus {
+*btaudio-log-when-paired* *as-logging* *btaudio-pairing*
+
+// when use this from ASDA, INFO, ENTRY are gets on MIL
+
+static  AS_DIAG::Context Context("AS_BTAUDIO",
+                                 "BluetoothAudio service for AS");
+AS_DIAG::Context *AS_BTAUDIO_ContextRef = &(Context);
+
+
+ag "bluetooth_|bleaudiostreamer|BTAUDIO|^   " LOG > out.log
+ag "MSG_TYPE|title:|onPlayer"
+
+// as-map-old
+// ethan-as-source/Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
+{
+  startVisibilityExecutor              = new AS_BTAUDIO::StartVisibilityFactory();
+  cancelVisibilityExecutor             = new AS_BTAUDIO::CancelVisibilityFactory();
+  acceptPairingExecutor                = new AS_BTAUDIO::AcceptPairingFactory();
+  rejectPairingExecutor                = new AS_BTAUDIO::RejectPairingFactory();
+  btaStatusExecutor                    = new AS_BTAUDIO::StatusExecutorFactory();
+
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
+      "/as/audiostreamer/bluetooth/action/startvisibility", startVisibilityExecutor );
+
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
+      "/as/audiostreamer/bluetooth/action/stopvisibility",  cancelVisibilityExecutor );
+
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
+      "/as/audiostreamer/bluetooth/action/acceptpairing",   acceptPairingExecutor );
+
+  map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
+      "/as/audiostreamer/bluetooth/action/rejectpairing",   rejectPairingExecutor );
+
+  map->RegisterUrl( REQ_METHOD_WS,        (char *)
+      "/as/audiostreamer/bluetooth/status",                 btaStatusExecutor,
+      NULL, "AS_WS_BTAD_STAT" ); 
+}
+
+GenericController::GenericController( AS_WORKER::Environment *environment, const char *deviceName )
+{
+  m_Delegate = new ControllerImplementation( environment, deviceName );
+}
+
+// ethan-as-source/Components/AS/Services/Controllers/
+// BTAudioController/include/AS_BTAUDIO_ControllerImplementation.h
+
+ControllerImplementation(
+    AS_WORKER::Environment *env, const char *deviceName = nullptr,
+    uint32_t           maxPaired = 12 // Default max 12 paired, 0 = no limit
+    )
+{
+  `m_platformItf  = new AS_BTAUDIO::PlatformItf( deviceName );`
+
+  `m_platformItf->BindController(this);`
+
+  m_btaudioControllerThread = new AS_DMS::Thread( this, "AS_BTAUDIO_CTL" );
+}
+
+
+-AS           < T:AS_WS_BTAD_STAT M:AS_DMS_Writer.cpp F:JsonStatusListener L:00258 > @ctx:main.fallback AS_BTAUDIO_StatusExecutor.cpp(69) KT: JsonStatusListener() entry: status={
+28331:   "pairinginprogress" : false,
+28332:   "visible" : false
+
+int StartVisibilityExecutor::Exec()
+{
+  m_controller->HandleStartVisibility( timeout );
+}
+
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleStartVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(577) HandleStartVisibility() entry: timeout=105
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleStartVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(586) HandleStartVisibility() exit
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(805) KT: StartVisibility received, timeout = 105
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoStartVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(118) DoStartVisibility() entry: timeout 105
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoStartVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(130) KT: Visibility started with timeout 105 secs
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoStartVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(132) DoStartVisibility() exit
+
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(82) KT: UpdateJsonListeners() entry: jsonStatus {
+28734:   "pairinginprogress" : false,
+28735:   "visible" : true
+
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(93) KT: Calling listener func 0x3456e5(priv=0x75ac918c)
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:JsonStatusListener L:00258 > @ctx:main.fallback AS_BTAUDIO_StatusExecutor.cpp(69) KT: JsonStatusListener() entry: status={
+28739:   "pairinginprogress" : false,
+28740:   "visible" : true
+
+-AS           < T:no name M:AS_DMS_Writer.cpp F:ProcessDeviceAdded L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(724) ProcessDeviceAdded() path=/org/bluez/hci0/dev_88_9F_6F_88_6A_7B
+-AS           < T:no name M:AS_DMS_Writer.cpp F:ProcessDeviceAdded L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(734) ProcessDeviceAdded() exit
+-AS           < T:no name M:AS_DMS_Writer.cpp F:onObjectAdded L:00270 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(411) Adding Device /org/bluez/hci0/dev_88_9F_6F_88_6A_7B
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(790) Message received = 0x759075b4
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(882) DeviceAdded update received
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(883) Device Path = "/org/bluez/hci0/dev_88_9F_6F_88_6A_7B"
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessDeviceAdded L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(404) DoProcessDeviceAdded() entry: path=/org/bluez/hci0/dev_88_9F_6F_88_6A_7B
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessDeviceAdded L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(440) DoProcessDeviceAdded() isDeviceAdded 0 exit
+
+-AS           < T:no name M:AS_DMS_Writer.cpp F:ProcessPairingRequest L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(661) ProcessPairingRequest() entry: bdaddr=889F6F886A7B,name=Galaxy J6,confirm=328773
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(848) KT: PairingRequest received
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(849) KT: bdaddr = "889F6F886A7B", name = "Galaxy J6", confirm = "328773"
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessPairingRequest L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(361) DoProcessPairingRequest() entry: bdaddr=889F6F886A7B,name=Galaxy J6,confirm=328773
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessPairingRequest L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(380) DoProcessPairingRequest() exit
+
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(82) KT: UpdateJsonListeners() entry: jsonStatus {
+29298:   "pairingaddr" : "889F6F886A7B",
+29299:   "pairingcode" : "328773",
+29300:   "pairinginprogress" : true,
+29301:   "pairingname" : "Galaxy J6",
+29302:   "visible" : true
+
+
+// ethan-as-source/Components/AS/Services/Executors/AudioStreamer/BluetoothAudio/source/AS_BTAUDIO_AcceptPairingExecutor.cpp
+
+class AcceptPairingExecutor : public AS_WORKER::Executor
+{
+  AS::shared_ptr<AS_BTAUDIO::GenericController> m_controller;
+
+  m_controller = AS_CONTROLLERS::GetController<AS_BTAUDIO::GenericController>();
+
+  /** @brief Accepts an incoming pairing request
+   *
+   The executor method accepts an incoming pairing request from a remote
+   device. The m_params instance for the executor must contain the parameter
+   "bdaddr" which must specify and match the incoming request. The bdaddr will
+   be Bluetooth address of the remote device with any : characters removed.
+
+   If the bdaddr is given and matching the incoming request, the request will
+   be accepted and a 200 status written via the executor's m_env. If the
+   address is not given correctly, the subsystem is not active, or no pairing
+   request exists, an error status and message will be written.
+
+   *
+   * @return AS_STATUS_OK upon success, or AS_STATUS_ERROR upon internal error
+   */
+
+  int AcceptPairingExecutor::Exec()
+  {
+    m_controller->HandleAcceptPairing( bdaddrString );
+  }
+}
+
+int AcceptPairingExecutor::Exec()
+{
+  // Accept pairing, if successful, a status update will occur
+  AS_LOG_INFO( "KT: Calling Controller with Bdaddr \"%s\"",
+      bdaddrString.c_str() );
+  m_controller->HandleAcceptPairing( bdaddrString );
+
+  else
+  {
+    // Invalid (malformed) Bdaddr
+    AS_LOG_ERROR( "Malformed bdaddr \"%s\"", bdaddrString.c_str() );
+    Util::FormatError( Util::AcceptPairing_MalformedBdaddr_Error,
+        m_httpStatus,
+        m_jsonRoot );
+  }
+
+!MIL    -AS           		< T:AS_MAIN_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:205 > HTTP Request received. httpRequestHandle: " "960"  , (arg #1) 1 , (arg #2) 959459377 , (arg #3) /bluetooth/action/acceptpairing?bdaddr= 
+!ERROR  -AS           		< T:AS_MAIN_TH_9001 M:AS_WORKER_ParamValidator.cpp F:??? L:689 > Parameter is empty. url: /as/audiostreamer/bluetooth/action/acceptpairing, method: POST, parameter: bdaddr 
+!ERROR  -AS           		< T:AS_WRKR_TH_9001 M:AS_BTAUDIO_AcceptPairingExecutor.cpp F:??? L:88 > Missing mandatory bdaddr 
+!MIL    -AS           		< T:AS_WRKR_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:387 > HTTP response sent.    httpRequestHandle: " "960"  , (arg #1)  httpStatus: 400 , (arg #2) 1 , (arg #3) 959459377 , (arg #4) /bluetooth/action/acceptpairing?bdaddr=, errorCode: 11005 
+!WARN   -com.bskyb.epgui		< T:no name M:NetworkAccessManager.cpp F:void NetworkAccessManagerBase::onFinished(QNetworkReply*) L:106 > [NNN] error: url: http://127.0.0.1:9001/as/audiostreamer/bluetooth/action/acceptpairing?bdaddr= code: 400 error: QNetworkReply::ProtocolInvalidOperationError, Error transferring http://127.0.0.1:9001/as/audiostreamer/bluetooth/action/acceptpairing?bdaddr=
+!INFO   -com.bskyb.epgui		< T:no name M:RestfulRequestHandler.cpp F:void RestfulRequestHandler::httpResponse() L:609 > "There was an error handling 'http://127.0.0.1:9001/as/audiostreamer/bluetooth/action/acceptpairing?bdaddr='. HTTP 400 (ProtocolInvalidOperationError, Error transferring http://127.0.0.1:9001/as/audiostreamer/bluetooth/action/acceptpairing?bdaddr= - serve
+!INFO   -com.bskyb.epgui		< T:no name M:GlobalNavScene.cpp F:QVariant GlobalNavScene::onPanelContainerRequest(const PanelRequ L:1532 > Handling Request for exclusive keys (key recognizer ignores): url: false
+!MIL    -AS           		< T:AS_MAIN_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:205 > HTTP Request received. httpRequestHandle: " "961"  , (arg #1) 1 , (arg #2) 959459377 , (arg #3) /bluetooth/action/rejectpairing?bdaddr= 
+!ERROR  -AS           		< T:AS_MAIN_TH_9001 M:AS_WORKER_ParamValidator.cpp F:??? L:689 > Parameter is empty. url: /as/audiostreamer/bluetooth/action/rejectpairing, method: POST, parameter: bdaddr 
+!ERROR  -AS           		< T:AS_WRKR_TH_9001 M:AS_BTAUDIO_RejectPairingExecutor.cpp F:??? L:92 > Missing mandatory bdaddr 
+!MIL    -AS           		< T:AS_WRKR_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:387 > HTTP response sent.    httpRequestHandle: " "961"  , (arg #1)  httpStatus: 400 , (arg #2) 1 , (arg #3) 959459377 , (arg #4) /bluetooth/action/rejectpairing?bdaddr=, errorCode: 11005 
+!MIL    -AS           		< T:AS_MAIN_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:205 > HTTP Request received. httpRequestHandle: " "962"  , (arg #1) 1 , (arg #2) 959459377 , (arg #3) /bluetooth/action/stopvisibility 
+!MIL    -AS           		< T:AS_WRKR_TH_9001 M:AS_WEB_SERVER_RequestResponseLogger.cpp F:??? L:387 > HTTP response sent.    httpRequestHandle: " "962"  , (arg #1)  httpStatus: 200 , (arg #2) 1 , (arg #3) 959459377 , (arg #4) /bluetooth/action/stopvisibility 
+
+}
+
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_AcceptPairingExecutor.cpp(42) KT: Exec() entry
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_AcceptPairingExecutor.cpp(72) KT: Calling Controller with Bdaddr "889F6F886A7B"
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleAcceptPairing L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(591) HandleAcceptPairing() entry: bdaddr=889F6F886A7B
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleAcceptPairing L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(600) HandleAcceptPairing() exit
+
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(822) AcceptPairing received, bdaddr ="889F6F886A7B"
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoAcceptPairing L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(221) DoAcceptPairing() entry: bdaddr=889F6F886A7B
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_AcceptPairingExecutor.cpp(128) Exec() exit: err = 0
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SaveStatusDb L:00254 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(567) Failed to open file /tmp/bluez/StatusDb for writing
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoAcceptPairing L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(250) Pairing accepted for device 889F6F886A7B
+
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(82) KT: UpdateJsonListeners() entry: jsonStatus {
+29509:   "paireddevices" : [
+29510:      {
+29511:         "bdaddr" : "889F6F886A7B",
+29512:         "connected" : true,
+29513:         "name" : "Galaxy J6"
+29514:      }
+29515:   ],
+29516:   "pairi
+
+{
    "paireddevices" : [
       {
          "bdaddr" : "889F6F886A7B",
          "connected" : true,
          "name" : "Galaxy J6"
-      },
-      {
-         "
-265242:NDS: ^0000008724.289393 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(85) Calling listener func 0x34d221(priv=0x2e844f64)
-265245:NDS: ^0000008727.165980 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:onPropertyChange L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(439) onPropertyChange() entry: path=/org/bluez/hci0/dev_88_9F_6F_88_6A_7B property = Connected
-265246:NDS: ^0000008727.166065 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:onPropertyChange L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(450) Controller bound, passing on connection state 0
-265247:NDS: ^0000008727.166090 !MIL   -AS           < p:00000e08 t:31efedb0 T:no name M:AS_DMS_Writer.cpp F:ProcessConnectionState L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(683) ProcessConnectionState() bdaddr=889F6F886A7B,connected=0
-265249:NDS: ^0000008727.166218 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(781) Message received = 0x31500d0c
-265250:NDS: ^0000008727.166244 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(860) ConnectionState received
-265251:NDS: ^0000008727.166262 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(862) bdaddr = "889F6F886A7B", connected = 0
-265252:NDS: ^0000008727.166280 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoProcessConnectionState L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(461) DoProcessConnectionState() entry: bdaddr=889F6F886A7B,connected=0
-265253:NDS: ^0000008727.166298 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SetConnected L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(186) SetConnected() entry: bdaddr=889F6F886A7B,connected=0
-265254:NDS: ^0000008727.166314 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SetConnected L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(196) Found device in paired list
-265255:NDS: ^0000008727.166338 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SaveStatusDb L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(540) SaveStatusDb() entry
-265256:NDS: ^0000008727.166358 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:GetBluezStoragePath L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(793) GetBluezStoragePath() entry: hciPath=/org/bluez/hci0
-265257:NDS: ^0000008727.166384 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:GetBluezStoragePath L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(803) Storage path found = "/tmp/bluez/StatusDb"
-265258:NDS: ^0000008727.166435 !ERROR -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:SaveStatusDb L:00254 > @ctx:AS_BTAUDIO AS_BTAUDIO_PlatformItf.cpp(567) Failed to open file /tmp/bluez/StatusDb for writing
-265259:NDS: ^0000008727.166453 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(912) Deleting message 0x31500d0c
-265260:NDS: ^0000008727.166469 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:ToJSON L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_StatusDb.cpp(353) ToJSON() entry
-265261:NDS: ^0000008727.166737 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(936) Status has changed, update listeners
-265262:NDS: ^0000008727.166762 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00296 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(73) UpdateJsonListeners() entry: jsonStatus {
-   "paireddevices" : [
-      {
-         "bdaddr" : "889F6F886A7B",
-         "connected" : false,
-         "name" : "Galaxy J6"
-      },
-      {
-265271:NDS: ^0000008727.166780 !MIL   -AS           < p:00000e08 t:327a0db0 T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00283 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(85) Calling listener func 0x34d221(priv=0x2e844f64)
+      }
+   ],
+   "pairinginprogress" : false,
+   "visible" : true
+}
+
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:Exec L:00254 > @ctx:AS_BTAUDIO AS_BTAUDIO_RejectPairingExecutor.cpp(102) Not pairing
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleCancelVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(633) HandleCancelVisibility() entry
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:HandleCancelVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(640) HandleCancelVisibility() exit
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(790) Message received = 0x75903364
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(814) CancelVisibility received
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoCancelVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(159) DoCancelVisibility() entry
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoCancelVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(170) Visibility cancelled
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:DoCancelVisibility L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(171) DoCancelVisibility() exit
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(921) Deleting message 0x75903364
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:Exec L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(945) Status has changed, update listeners
+-AS           < T:AS_BTAUDIO_CTL M:AS_DMS_Writer.cpp F:UpdateJsonListeners L:00258 > @ctx:AS_BTAUDIO AS_BTAUDIO_ControllerImplementation.cpp(82) KT: UpdateJsonListeners() entry: jsonStatus {
+29563:   "paireddevices" : [
+29564:      {
+29565:         "bdaddr" : "889F6F886A7B",
+29566:         "connected" : true,
+29567:         "name" : "Galaxy J6"
+29568:      }
+29569:   ],
+29570:   "pairi
+
+-AS           < T:AS_WRKR_TH_9001 M:AS_DMS_Writer.cpp F:Exec L:00254 > @ctx:AS_BTAUDIO AS_BTAUDIO_CancelVisibilityExecutor.cpp(47) Not visible
+-AS           < T:no name M:AS_DMS_Writer.cpp F:doWork_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(680) TRANSPORT ADDED message(/org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0)
+-AS           < T:no name M:AS_DMS_Writer.cpp F:exited_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(1080) fsm exited: DeviceOffState
+-AS           < T:no name M:AS_DMS_Writer.cpp F:entered_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(1028) fsm entered: (RunningSuperState)
+-AS           < T:no name M:AS_DMS_Writer.cpp F:entered_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(1028) fsm entered: (TransportOnState)
+-AS           < T:no name M:AS_DMS_Writer.cpp F:exited_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(1080) fsm exited: TransportOnState
+-AS           < T:no name M:AS_DMS_Writer.cpp F:entered_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(1028) fsm entered: (PlayerOnState)
+-AS           < T:no name M:AS_DMS_Writer.cpp F:doWork_ L:00258 > @ctx:dbusitf bleaudiostreamer.cpp(755) PLAYER STATUS message value(paused)
 
 
 <btaudio-connected-from-phone>
@@ -6291,8 +6379,6 @@ NDS: ^0000003322.221619 !MIL   -AS           < p:00000e08 t:2d2cbdb0 T:no name M
 
 
 <when-change-track>
-ag "MSG_TYPE|title:|onPlayer"
-
 !MIL   -AS           < p:00000e11 t:328fedc0 T:no name M:AS_DMS_Writer.cpp F:onPlayerPropertyChange L:00258 > @ctx:dbusitf bluetooth_media.cpp(360) KT::onPlayerChanged: state stopped
 !MIL   -AS           < p:00000e11 t:31efedc0 T:no name M:AS_DMS_Writer.cpp F:eventHandler L:00258 > @ctx:dbusitf bluetooth_media.cpp(709) KT::MSG_TYPE_PLAYER_STATE
 !MIL   -AS           < p:00000e11 t:31efedc0 T:no name M:AS_DMS_Writer.cpp F:eventHandler L:00258 > @ctx:dbusitf bluetooth_media.cpp(719) KT::MSG_TYPE_FAKE_STATE
@@ -11839,6 +11925,9 @@ to rdkcrashportal of a server (which can take hours to find again) This is not
 persisted over reboots or reflashes. By default, a crash will cause
 /lib/rdk/coreDump.sh to be run.
 
+see /opt/minidumps
+
+
 Change core pattern to save on writable area
 
 cat /proc/sys/kernel/core_pattern
@@ -12461,16 +12550,18 @@ scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.19.0.0.0_20210127185620sdy.bin 
 FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.19.0.0.0_20210127185620sdy.bin
 ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.26 ''\'''\''FlashApp' '/tmp/data/SKXI11AIS_VBN_SKXI11AIS_000160.22.0.0.0_20210210085348sdy.bin'\'''\'''
 
-// X3 from SI
+// X3 from SI. current
 scp -r -P 10022 ./SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin root@192.168.0.14:/tmp/data
 FlashApp /tmp/data SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin
 
-scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.20.2.0.0_20210204142458sdy.bin root@192.168.0.14:/tmp/data
-FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.20.2.0.0_20210204142458sdy.bin
+// from CI
+scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.21.6.0.0_20210211191445sdy.bin root@192.168.0.14:/tmp/data
+FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.21.6.0.0_20210211191445sdy.bin
 
 // own build
 scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.18.2.0.0_20210119200347sdy.bin root@192.168.0.14:/tmp/data
 FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.18.2.0.0_20210119200347sdy.bin
+
 
 
 2. Copy the <image-name>.bin to USB.
@@ -12789,7 +12880,7 @@ GET /as/diag/fallback/enabeAll
 GET /as/diag/AAMP_PLAYER/enableAll
 GET /as/diag/AS_PLAYER/enableAll
 
-curl -v -X GET http://192.168.0.14:9005/as/diag/AS_PLAYER/enableAll
+curl -v -X GET http://192.168.0.15:9005/as/diag/AS_PLAYER/enableAll
 curl -v -X GET http://192.168.0.14:9005/as/diag/AS_PLAYER/enableAll?persist=true
 
 curl -v -X GET http://192.168.0.9:9005/as/diag/AAMP_PLAYER/enableAll
@@ -12995,12 +13086,6 @@ root@sky_llama_adapter:/lib/systemd/system# ls -al sky-*
 -rw-r--r--    1 root     root           838 Jan  2 10:42 sky-dobby.service
 -rw-r--r--    1 root     root           713 Jan  2 10:00 sky-dropbear.service
 -rw-r--r--    1 root     root           414 Jan  2 10:43 sky-fixup.service
-
-
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -F
 
 // xi6
 -rwxr-xr-x 1 keitee keitee  67K Dec 18 15:12 libwayland-egl.so.0.0.0*
@@ -15964,7 +16049,7 @@ echo $WESTEROS_SINK_USE_GFX
 asrdkplayer -v
 
 
-*as-player-aamp*
+*as-player-aamp* *as-aamp*
 sdk:sysroots/armv7at2hf-neon-rdk-linux-gnueabi/usr/include/main_aamp.h
 
 class PlayerInstanceAAMP
@@ -16633,7 +16718,9 @@ enum CoreStatus {
 [11:23:41,548701] *test_dtt(26849).20 console.cpp:632(L1) current service pk: 6200
 
 
-*dtt-play-status-reason*
+*dtt-play-status-reason* *as-mr-status*
+
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=DTT+HLA
 
 The follow call is added to the Player
 
@@ -16654,18 +16741,26 @@ enum PlayerSessionBlockedReason {
     eBlockedReason_NothingToRecord,
     eBlockedReason_ServiceError,
     eBlockedReason_ServicePinLocked,
-    eBlockedReason_ServiceBlocked,
-    eBlockedReason_ServiceNotFound,
+    eBlockedReason_ServiceBlocked,      // NOTE: 6, TECHNICAL FAULT
+
+    // Andrew Bennett:house_with_garden:  09:43
+    // there are DTT tech faults and CAK tech faults.
+
+    eBlockedReason_ServiceNotFound,     // NOTE:?? 7, NOT BROADCASTING
+
     eBlockedReason_CaptureResourceNotAvailable,
     eBlockedReason_CaptureNoSignal,
     eBlockedReason_StorageResourceNotAvailable,
     eBlockedReason_StreamResourceNotAvailable,
     eBlockedReason_StreamError,
     eBlockedReason_TunerNotAvailable,
-    eBlockedReason_TunerBadParameters,
-    eBlockedReason_TunerLowOrNoSignal,  // 15
+
+    eBlockedReason_TunerBadParameters,    // 14, PLAYER SESSION FAILURE
+
+    eBlockedReason_TunerLowOrNoSignal,    // 15, NO SIGNAL
     eBlockedReason_InsufficientOutputProtection,
-    eBlockedReason_DecoderUnableToDecode,
+    eBlockedReason_DecoderUnableToDecode, // NO SIGNAL
+
     eBlockedReason_DecoderCodecNotSupported,
     eBlockedReason_RecorderNoSpaceLeft,
     eBlockedReason_RecorderUnableToRecord,
@@ -16681,7 +16776,9 @@ enum PlayerSessionBlockedReason {
     eBlockedReason_CaNoAccess,
     eBlockedReason_CaUpdateRequired,
     eBlockedReason_CaUnsupportedScramblingAlgorithm,
-    eBlockedReason_CaBroadcastError,
+
+    eBlockedReason_CaBroadcastError,    // TECHNICAL FAULT
+
     eBlockedReason_CaUsageRulesViolation,
     eBlockedReason_CaDeviceNotActivated,
     eBlockedReason_CaEntitlementExpired,
@@ -16708,6 +16805,8 @@ public:
     CoreStatus mCoreStatus; FJAP_INIT(eCsGenericNoResource);
     CaDescramblerStatus mCaDescramblerStatus;
 };
+
+"BLOCKED (eCsStreamProviderTunerUrlParseError)" which is eSessionState_Blocked
 
 
 ={============================================================================
@@ -16853,7 +16952,7 @@ http://192.168.0.12:9005/as/services/scan/action/start?scantype=OFTA
 
 
 http://192.168.0.14:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL 
-curl -v -X POST "http://192.168.0.14:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL" -d ""
+curl -v -X POST "http://193.168.0.15:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL" -d ""
 
 method call time=1585663775.024915 sender=:1.158 -> destination=com.sky.as.player serial=992 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
@@ -16990,7 +17089,7 @@ dict:string:string: \
 string:""
 
 
-*as-dtt-mediarite* *as-mr*
+*as-dtt-mediarite* *as-mr-unittest*
 
 // from ftp
 wget --user=sky --password=PHEr7xb2Rb ftp://sky@ftp.futarque.com/MediariteAndClientLib/2020-01-31/Release_RDK_Readme.txt
@@ -17506,7 +17605,7 @@ http://192.168.0.12:9005/as/players/1/action/watchlive?sid=3
 
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-1044-1044-ff
 
-http://192.168.0.14:9005/as/players/1/action/watchlive?sid=M233a-1044-1100-483
+http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2905-33
 
 // channel 5
 http://192.168.0.12:9005/as/players/1/action/watchlive?sid=M233a-2005-2134-16c
@@ -17653,6 +17752,21 @@ string:''
 
 *as-dtt-service-list* *as-mr*
 
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -F
+
+http://192.168.0.15:40660
+
+// to get more loggings and runs these on the box
+curl -X POST -H "Content-Type: application/json" 'http://127.0.0.1:9998/jsonrpc' -d '{"jsonrpc":"2.0","id":3,"method": "Controller.1.activate", "params": { "callsign": "org.rdk.MediaSettings" }}'
+result should be : {"jsonrpc":"2.0","id":3,"result":null}
+
+curl -X POST -H "Content-Type: application/json" 'http://127.0.0.1:9998/jsonrpc' -d '{"jsonrpc":"2.0", "id":3, "method":"org.rdk.MediaSettings.1.setVar", "params":{ "scope": "CALL", "key": "EXV_TIMETRACE", "value": "RPC" }}'
+result should be  {"jsonrpc":"2.0","id":3,"result":{"success":true}}
+
+
 // delete mr list to have FSR effect
 ls -al /opt/persistent/mediarite/ 
 rm -rf /opt/persistent/mediarite/*
@@ -17660,6 +17774,8 @@ rm -rf /opt/persistent/mediarite/*
 // empty from 8.2 to clear out scan result
 ls -al /media/apps/mediarite/
 rm -rf /media/apps/mediarite/*
+
+scp -r -P 10022 root@192.168.0.15:/opt/logs/mediarite.log mediarite_3.log
 
 
 https://www.stb.bskyb.com/confluence/display/2016/Hybrid+Service+List+HLA
@@ -17838,6 +17954,8 @@ curl -v -X GET http://192.168.0.13:9005/as/services/1/1
 curl -v -X GET http://192.168.0.14:9005/as/services/0/0
 curl -v -X GET http://192.168.0.14:9005/as/services/0/0 > mr_list.out
 curl -v -X GET http://192.168.0.14:9005/as/services/0/0/default
+
+curl -v -X GET http://192.168.0.14:9005/as/services/999/999
 
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
@@ -18239,36 +18357,21 @@ Feb 10 14:05:05 sky-llama-panel com.sky.as.player[5269]:
 Feb 10 14:05:05 sky-llama-panel com.sky.as.player[5269]: 
   ServicesScanController: MR mark setup is done with region {GBR}
 
+1. call these APIs at boot up to set settings if it's first time installation.
 
-0. check on APIs.
+call one of followings to inform MR for relevant setting changes.
 
 // to set sub preference; user setting and region default
 void setSubtitleLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
-
 // to set audio preference; user setting and region default
 void setAudioLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
 
 // to disable/enable sub
 void setSubtitlesEnabled(bool iIsOn) FJAP_THROW(FutarqueRpcException);
-
-1. call these APIs at boot up to set settings if it's first time installation.
-
-void setSubtitleLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
-void setAudioLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
-
-void setSubtitlesEnabled(bool iIsOn) FJAP_THROW(FutarqueRpcException);
 void markSetupDone() FJAP_THROW(FutarqueRpcException);
 
 2. use selection api to select a track
 bool selectTrack(const char * iPlayerId, CoreTrackType iTrackType, int64 iTrackPK) FJAP_THROW(FutarqueRpcException);
-
-3. change settings
-call one of followings to inform MR for relevant setting changes.
-void setSubtitleLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
-void setAudioLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
-
-// to disable/enable sub
-void setSubtitlesEnabled(bool iIsOn) FJAP_THROW(FutarqueRpcException);
 
 
 TableResultError getTrack(const char * iPlayerId, FutarqueString iAttributes, int64 iTrackPK, TracksResult & oTableResult) FJAP_THROW(FutarqueRpcException);
@@ -18290,7 +18393,7 @@ enum CoreTrackType {
 };
 
 
-*as-dtt-audio-track*
+*as-dtt-track*
 
 http://10.184.136.138:8081/job/AS_TEST_XIONE/513/artifact/output/TEST-players_tracks_TEST_001_jsonschema.xml/*view*
 
@@ -18353,7 +18456,7 @@ void PlayersComponentTracksExecutor::handleGetRequest( const ASRequest &request 
 {
   PlayerController::getInstance()->GetComponentTracks( AS_PLAYER_VWID_MAIN, request );
   {
-    m_playerSessions[vwid]->GetComponentTracks( request );
+    m_playerSessions[vwid]->`GetComponentTracks`( request );
     {
       // use m_status
     }
@@ -18361,12 +18464,15 @@ void PlayersComponentTracksExecutor::handleGetRequest( const ASRequest &request 
 }
 
 
+*dtt-audio-when-change-channel*
+
 o build audio prio string of {override, settting, (platform) default} order
-  and call aamp API to pass it. only for audio
+  and call aamp API to pass it. NOTE: only for audio and AAMP. For *as-mr*,
+  this done in the first-time setup step.
 
 void ASPlayerSession::WatchStream( const ASRequest &request )
 {
-  SetPreferredAudioLanguages()
+  `SetPreferredAudioLanguages()`
   {
     // try to find it from override map
     PlayerSettingsStorage::getInstance()->GetOverrideAudioLanguage( m_sid, 
@@ -18376,7 +18482,8 @@ void ASPlayerSession::WatchStream( const ASRequest &request )
 
     PlayerSettingsStorage::getInstance()->GetDefaultAudioLanguage(defaultAudioLanguage);
 
-    m_playerInterface->setPreferredAudioLanguages( preferredAudioLanguages );
+    // so not implemented in mrplayer and return false
+    m_playerInterface->`setPreferredAudioLanguages`( preferredAudioLanguages );
   }
 }
 
@@ -18400,8 +18507,10 @@ the set of the last [10] services that have had audio and/or subtitles track
 selection overridden, usage time updated on read and write, LRU policy used
 when list is full
 
-
 NOTE: dtt(mr) do not support override.
+
+
+*dtt-audio-set*
 
 curl -v -X POST http://192.168.0.12:9005/as/players/1/action/setaudio?audioid=4
 
@@ -18414,10 +18523,12 @@ http://192.168.0.14:9005/as/players/1/action/setaudio?audioid=787
 // not work
 curl -X POST http://192.168.0.14:9005/as/players/1/action/setaudio?audioid=783
 
-
 Attempts to tune and begin playback of specified audio track.
 
 URI STRUCTURE /as/players/<vwid>/action/setaudio?audioid=<audioid>
+
+o NOTE that do not use if/def on PlaybackType so do not care about what player
+is using.
 
 void ASPlayerSession::SetAudioComponentTrack( const ASRequest &request )
 {
@@ -18448,33 +18559,9 @@ void ASPlayerSession::SetAudioComponentTrack( const ASRequest &request )
 }
 
 
-// to set subtitle
-http://192.168.0.12:9005/as/players/1/action/setsubtitles?subtitleid=6
-
-// to disable subtitle as per the spec
-curl -v -X POST http://192.168.0.12:9005/as/players/1/action/setsubtitles
-
-This action does not change the state of the global subtitle setting in /system/settings
-
-void ASPlayerSession::SetSubtitlesComponentTrack(const ASRequest &request)
-{
-  if ( subtitlesId != oldTextTrackIndex )
-  {
-    m_playerInterface->setTextTrack( subtitlesId );
-
-    // Update or add entry to m_overrideHistoryMap
-    PlayerSettingsStorage::getInstance()->
-      SetSubtitlesOverride( m_sid, m_status.m_currentAvailableSubtitleLanguages[subtitlesId].trackIsoCode );
-
-    // same as SetSubtitlesOverride() but update or add isSubtitlesEnabled
-    // field
-    PlayerSettingsStorage::getInstance()->
-      SetSubtitlesEnabledOverride( m_sid, "true" );
-  }
-}
-
-
 *dtt-audio-setting* *player-setting*
+
+URI STRUCTURE /as/players/setting/<setting>?pin=<pin>
 
 curl -X GET http://192.168.0.12:9005/as/players/setting/audioLanguage
 {
@@ -18489,6 +18576,9 @@ o as per HLA, "Change settings".
 o save audio language in prefs if different from current lang in prefs
 o change audio track only when the selected lang is not found in `the override` 
   and found in available list.
+
+o NOTE that use if/def on PlaybackType while it's not IDLE state since need to
+change audio track as *dtt-audio-set*
 
 void PlayersSettingExecutor::HandleAudioLanguage( const ASRequest &request )
 {
@@ -18544,6 +18634,57 @@ note that does it mean AAMP do save default lang since only set a track to set
 in AAMP case
 
 
+*dtt-subs-set* to set subtitle
+
+http://192.168.0.12:9005/as/players/1/action/setsubtitles?subtitleid=6
+
+// to disable subtitle as per the spec
+curl -v -X POST http://192.168.0.12:9005/as/players/1/action/setsubtitles
+
+o If the subtitleid parameter is not specified then subtitles will no longer
+be presented. 
+
+o This action does not change the state of the global subtitle setting in
+/system/settings
+
+o NOTE that use if/def on PlaybackType for overriding and disabling subs
+that's different between two players. But not do care about what player is
+using.
+
+aamp->setTextTrack
+mrp->selectTrack
+
+
+void `ASPlayerSession::SetSubtitlesComponentTrack`(const ASRequest &request)
+{
+  // only when playing
+
+  `else if ( m_status.m_ps != Player::State::Idle )`
+  {
+    // when different from the current sub
+
+    if ( subtitlesId != oldTextTrackIndex )
+    {
+      // NOTE that unlike audio, subtitle has on/off. so even if set subtitle
+      // here, subtitle will not be displayed if subtitle is off? AAMP case
+
+      `m_playerInterface->setTextTrack( subtitlesId );`
+
+      // Update or add entry to m_overrideHistoryMap
+      PlayerSettingsStorage::getInstance()->
+        SetSubtitlesOverride( m_sid, m_status.m_currentAvailableSubtitleLanguages[subtitlesId].trackIsoCode );
+
+      // same as SetSubtitlesOverride() but update or add isSubtitlesEnabled
+      // field in the overridemap
+      PlayerSettingsStorage::getInstance()->
+        SetSubtitlesEnabledOverride( m_sid, "true" );
+    }
+  }
+}
+
+
+*dtt-subs-setting* *player-setting*
+
 curl -X GET http://192.168.0.14:9005/as/players/setting/subtitlesLanguage
 {
    "subtitlesLanguage" : "English"
@@ -18551,28 +18692,43 @@ curl -X GET http://192.168.0.14:9005/as/players/setting/subtitlesLanguage
 
 curl -X POST http://192.168.0.12:9005/as/players/setting/subtitlesLanguage --data '{"subtitlesLanguage": "English"}'
 
+o NOTE that use if/def on PlaybackType while it's not IDLE state since need to
+change sub track as *dtt-audio-setting*
+
 void PlayersSettingExecutor::HandleSubtitlesLanguage( const ASRequest &request )
 {
-  if ( currentSubtitlesLanguage != isoCodeSubtitlesLanguage )
+  `if ( currentSubtitlesLanguage != isoCodeSubtitlesLanguage )`
   {
     // note it's in executor
-    PlayerSettingsStorage::getInstance()->PersistPlayerSetting( subtitlesLanguageKey, isoCodeSubtitlesLanguage );
+    PlayerSettingsStorage::getInstance()->PersistPlayerSetting( subtitlesLanguageKey, `isoCodeSubtitlesLanguage` );
 
     PlayerController::getInstance()->ProcessSettingSubtitlesChange( isoCodeSubtitlesLanguage );
       m_playerSessions[AS_PLAYER_VWID_MAIN]->`ProcessSettingSubtitlesChange`( subtitlesLanguageIsoCode );
       {
-
-        // only when it's not found in override
-        if ( isSubtitlesSelectionOverrideSaved == false )
+        `if ( m_status.m_ps != Player::State::Idle )`
         {
-          m_status.m_currentAvailableSubtitleLanguages
+          // only when it's not found in override
+          if ( isSubtitlesSelectionOverrideSaved == false )
+          {
+            // search matching index with lang iso code and use that index
 
-          m_playerInterface->setTextTrack( index );
+            m_playerInterface->setTextTrack( index );
+          }
+
+          if (PlaybackType::PLAYBACK_TYPE_LIVE == m_PlaybackType)
+          {
+            if (false == m_playerInterface->setTextLanguage(subtitlesLanguageIsoCode))
+            {
+              LOG_ERROR( "Failed to change subtitle language, %s", subtitlesLanguageIsoCode.c_str() );
+            }
+          }
         }
       }
   }
 }
 
+
+*dtt-subs-on/off*
 
 The subtitles attribute can be “on” or “off”.
 curl -X GET http://192.168.0.12:9005/as/players/setting/subtitles
@@ -18582,52 +18738,59 @@ curl -X GET http://192.168.0.12:9005/as/players/setting/subtitles
 
 curl -X POST http://192.168.0.12:9005/as/players/setting/subtitles --data '{"subtitles": "on"}'
 
-// on or off
+o NOTE that use if/def on PlaybackType while it's not IDLE state since need to
+change sub track as *dtt-audio-set*
+
 void PlayersSettingExecutor::HandleSubtitles( const ASRequest &request )
 {
   // current setting from flash
-  if ( currentSubtitlesEnabled != subtitlesEnabled )
+  `if ( currentSubtitlesEnabled != subtitlesEnabled )`
   {
     subtitlesEnabled = ( subtitlesEnabledString == "on" ) ? true : false;
 
     if ( PlayerSettingsStorage::getInstance()->PersistPlayerSetting( subtitlesEnabledKey, subtitlesEnabledString ) == 0 )
     {
-      PlayerController::getInstance()->ProcessSettingSubtitlesEnabledChange( subtitlesEnabled );
+      // true or false
+
+      PlayerController::getInstance()->ProcessSettingSubtitlesEnabledChange( `subtitlesEnabled` );
       {
-        m_playerSessions[AS_PLAYER_VWID_MAIN]->`ProcessSettingSubtitlesEnabledChange`( isSubtitlesEnabled );
+        m_playerSessions[AS_PLAYER_VWID_MAIN]->`ProcessSettingSubtitlesEnabledChange`( subtitlesEnabled );
         {
-          // Change subtitles enabled setting only if selection override is
-          // not found in override history and in available texts
-
-          if ( PlayerSettingsStorage::getInstance()->GetOverrideSubtitlesEnabled( m_sid, overrideSubtitlesEnabled ) == 0 )
+          `if ( m_status.m_ps != Player::State::Idle )`
           {
-            isSubtitlesEnabledSelectionOverrideSaved = true;
-          }
+            // Change subtitles enabled setting only if selection override is
+            // not found in override history and in available texts
 
-          if ( isSubtitlesEnabledSelectionOverrideSaved == false )
-          {
-            if ( isSubtitlesEnabled )
+            if ( PlayerSettingsStorage::getInstance()->GetOverrideSubtitlesEnabled( m_sid, overrideSubtitlesEnabled ) == 0 )
             {
-              // Subtitles was not enabled earlier. Set subtitles use override
-              // or default setting
-              `SetSubtitlesLanguage()`
+              isSubtitlesEnabledSelectionOverrideSaved = true;
+            }
+
+            if ( isSubtitlesEnabledSelectionOverrideSaved == false )
+            {
+              if ( subtitlesEnabled == true )
               {
-                m_playerInterface->setTextTrack( index );
+                // Subtitles was not enabled earlier. Set subtitles use override
+                // or default setting
+                `SetSubtitlesLanguage()`
+                {
+                  m_playerInterface->setTextTrack( index );
+                }
+              }
+              else
+              {
+                // disable Subtitles
+                m_playerInterface->setTextTrack( -1 );
               }
             }
-            else
-            {
-              // disable Subtitles
-              m_playerInterface->setTextTrack( -1 );
-            }
-          }
 
-          *dtt-audio*
-          if (PlaybackType::PLAYBACK_TYPE_LIVE == m_PlaybackType)
-          {
-            if (false == m_playerInterface->enableText( isSubtitlesEnabled ))
+            // *dtt-audio*
+            if (PlaybackType::PLAYBACK_TYPE_LIVE == m_PlaybackType)
             {
-              settingManager->setSubtitlesEnabled(enable);
+              if (false == m_playerInterface->enableText( isSubtitlesEnabled ))
+              {
+                `settingManager->setSubtitlesEnabled(enable);`
+              }
             }
           }
         }
@@ -18635,6 +18798,31 @@ void PlayersSettingExecutor::HandleSubtitles( const ASRequest &request )
     }
   }
 }
+
+
+o about the issue when change subtitle:
+
+Subtitle language setting
+As advised, AS set default subtitle language, setSubtitleLanguagePriority(),
+in the first-time setup and expects that the default is selected when getting
+the list of subtitles of a current channel. However, the list shows 0 is
+selected and which is no subtitle selected as far as I understand. Is that
+wrong expectation? If so, could you clarify and advise on that please?
+
+By default Mediarite will only select a subtitle track when the Main audio
+preference does not match. This is change by
+setDisplaySubtitlesOnlyWhenNoAudioMatch on the SettingsManager.
+
+It is to allow a user to only get subtitles if it is not a native language. It
+is a requirement in some European countries.
+
+void setDisplaySubtitlesOnlyWhenNoAudioMatch(int iNumAudioPrefsToCheck);
+
+The argument is the number of audio tracks to check for a preferred audio
+match before selecting a subtitle track.
+
+In your case I would expect that 0 is a good choice. You should call it after
+your call to setRegionWithDefaults (so disable this feature)
 
 
 *dtt-audio-issue*
@@ -18675,6 +18863,188 @@ Feb 10 11:26:27 sky-llama-panel com.sky.as.player[19897]: Number of text tracks:
 Feb 10 11:26:27 sky-llama-panel com.sky.as.player[19897]: currently selected subtitle track {0}
 Feb 10 11:26:27 sky-llama-panel com.sky.as.player[19897]: Selected text track index: 0
 Feb 10 11:26:27 sky-llama-panel com.sky.as.player[19897]: < GetComponentTracks
+
+
+*dtt-audio-test*
+
+// on CLI
+
+CASE 1: sub ENG default, sub OFF, SD4
+
+"sid" : "M233a-90b-2908-36", (54)
+"t" : "DTG SD4",
+
+dtt > changeTo 36
+
+dtt > changeSubtitle off
+
+dtt > showTrackSetting
+
+mark setup done? true
+subs lang prios: {eng, eng, }
+audio lang prios: {eng, eng, }
+getDisplaySubtitlesOnlyWhenNoAudioMatch value: 0
+[16:30:30,020204] MAIN(3331).20 console.cpp:1062(L1) currently selected track: 213, type: audio
+[16:30:30,021135] MAIN(3331).20 console.cpp:1073(L1) currently selected track: 0, type: sub
+
+EXPECT_THAT(so no sub is selected and remains which chaning channel)
+
+dtt > listTracks a/s
+
+// audio. selected by default lang
+pk      : 239
+name    : English (MPEG)
+iso     : eng
+selected: 1
+
+pk      : 0
+name    : No Subtitles
+iso     :
+selected: 1
+
+
+"sid" : "M233a-90b-2905-33",
+"t" : "DTG SD1",
+
+dtt > changeTo 33
+
+dtt > showTrackSetting
+
+[16:33:43,424971] MAIN(3331).20 console.cpp:1062(L1) currently selected track: 222, type: audio
+[16:33:43,426467] MAIN(3331).20 console.cpp:1073(L1) currently selected track: 0, type: sub
+
+dtt > listTracks a/s
+
+// audio. selected by default lang
+pk      : 222
+name    : English (MPEG)
+iso     : eng
+selected: 1
+
+// sub
+pk      : 0
+name    : No Subtitles
+iso     :
+selected: 1
+
+
+// on AS
+
+"sid" : "M233a-90b-2908-36", (54)
+"t" : "DTG SD4",
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-36 -data ""
+
+curl -X POST http://192.168.0.15:9005/as/players/setting/subtitles --data '{"subtitles": "off"}'
+
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+no sub is selected
+
+"sid" : "M233a-90b-2905-33",
+"t" : "DTG SD1",
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2905-33 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-36 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+no sub is selected
+
+
+CASE 3: sub off and sub setting works. selected
+
+dtt > showTrackSetting
+
+mark setup done? true
+subs lang prios: {eng, eng, }
+audio lang prios: {eng, eng, }
+getDisplaySubtitlesOnlyWhenNoAudioMatch value: 0
+currently subtitle enabled? false
+[17:00:12,361617] MAIN(13743).20 console.cpp:1066(L1) currently selected track: 266, type: audio
+[17:00:12,362536] MAIN(13743).20 console.cpp:1077(L1) currently selected track: 268, type: sub
+
+dtt > listTracks s
+
+------- :
+pk      : 0
+name    : No Subtitles
+iso     :
+selected: 0
+------- :
+pk      : 267
+name    : English (DVB)
+iso     : eng
+selected: 0
+------- :
+pk      : 268
+name    : Gaelic (DVB)
+iso     : gla
+selected: 1
+------- :
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/setsubtitles?subtitleid=399 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+                {
+                        "isocode" : "gle",
+                        "name" : "Irish",
+                        "selected" : true,
+                        "subtitleid" : "399"
+                },
+ 
+
+
+CASE 2: sub ENG default, sub ON, channen SD4
+
+dtt > showTrackSetting
+
+mark setup done? true
+subs lang prios: {eng, eng, }
+audio lang prios: {eng, eng, }
+currently subtitle enabled? true
+[17:06:42,277998] MAIN(13743).20 console.cpp:1066(L1) currently selected track: 266, type: audio
+[17:06:42,278935] MAIN(13743).20 console.cpp:1077(L1) currently selected track: 268, type: sub
+
+track is selected by default setting
+
+dtt > listTracks s
+------- :
+pk      : 0
+name    : No Subtitles
+iso     :
+selected: 0
+------- :
+pk      : 293
+name    : English (DVB)
+iso     : eng
+selected: 1
+------- :
+pk      : 294
+name    : Gaelic (DVB)
+
+
+"sid" : "M233a-90b-2905-33",
+"t" : "DTG SD1",
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2905-33 -data ""
+
+curl -X POST http://192.168.0.15:9005/as/players/setting/subtitles --data '{"subtitles": "on"}'
+
+"sid" : "M233a-90b-2908-36", (54)
+"t" : "DTG SD4",
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-36 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+sub is selected
+
+"sid" : "M233a-90b-2905-33",
+"t" : "DTG SD1",
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2905-33 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-36 -data ""
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+
+no sub is selected
 
 
 *as-player-aamp*
@@ -19220,6 +19590,45 @@ keitee@kit-ubuntu:~/Downloads/x/usr/lib/mediarite/plugins$ ll
 -rwxr-xr-x 1 keitee keitee 908K Jan 28 14:08 libNagraSKYrelease.so.1.4.0*
 -rwxr-xr-x 1 keitee keitee 1.8M Jan 28 14:08 libNagraSKYdebug.so.1.4.0*
 lrwxrwxrwx 1 keitee keitee   27 Jan 28 14:08 libNagra.so -> libNagraSKYrelease.so.1.4.0*
+
+
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-dtt-parental
+
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=DTT+Parental+Control+HLA
+
+/as/players/viewingrestrictions
+/players/setting/viewingRestriction/
+
+{
+ “viewingRestriction”:
+ { “cert”: “15” }
+}
+
+The cert attribute can be any one of the options as returned by
+/players/viewingrestrictions
+
+
+/pin/action/submit
+DESCRIPTION Submits a PIN for verification
+URI STRUCTURE /as/pin/action/submit?pin=<pin>
+
+PinController
+manage pin on a persist file.
+
+
+/players/<vwid>/action/submitpin
+
+DESCRIPTION Submits a PIN to a specific video player
+URI STRUCTURE /as/players/<vwid>/action/submitpin?pin=<pin>
+
+goes through PlayerController, Session, and PinController
+
+Q: AV is blocked when PIN is not right on AAMP?
+
+
+={============================================================================
+*kt_dev_skymw_0000* mw-rdk-dtt-full-hybrid
 
 
 ={============================================================================
@@ -20860,7 +21269,7 @@ dict:string:string:\
 string:""
 
 
-*wpe-framework-as-thunder*
+*wpe-framework-rdk-thunder*
 
 https://etwiki.sys.comcast.net/display/RDK/RDK+Thunder+API
 
@@ -21027,6 +21436,9 @@ Code  Message               Description
   }
 }
 
+
+*rdk-thunder-api*
+/usr/bin/curl -X PUT http://127.0.0.1:9998/Service/Controller/Activate/org.rdk.System.2
 
 curl -d '{"jsonrpc":"2.0","id":"3","method": "DRMActivationService.1.GetActivationStatus","params":{}}' http://127.0.0.1:9998/jsonrpc
 {"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Could not access requested service"}}
@@ -23705,15 +24117,21 @@ Received: {'servicelist': {u'reason': u'initializing', u'state': u'unavailable'}
 Found matching system/status update
 Get the services list
 
+
 *dtt-audio*
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=105813922
 
 AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_007_change_setaudio_dtt
 
-// players_tracks_TEST_010_change_setaudio_dtt_exact
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+
+*players_tracks_TEST_010_change_setaudio_dtt_exact* NOTE: mr audio track issue
+
+o DTG SD1 which has 5 audios.
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_010_change_setaudio_dtt_exact
+
 
 // players_tracks_TEST_011_audio_only_dtt_exact
 // note that need to chage test to have ['sf']=sd but not 'au'
@@ -23730,13 +24148,52 @@ Generating XML reports...
 Generated XML report: test-dtt-audio/TEST-players_tracks_TEST_011_audio_only_dtt_exact.xml
 
 
-// players_tracks_TEST_012_setsubtitle_dtt_exact
-// note: requires default subs set which means marksetupdone() path is done before.
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+*players_tracks_TEST_012_setsubtitle_dtt_exact* NOTE: subtitle issue
+
+o requires dtt scan done on DTG stream. If it's FSRed, test runs a scan.
+
+o DTG SD4
+
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts audio track {English (MPEG), eng, 13, 1}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {English (DVB), eng, 14, 0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {Gaelic (DVB), gla, 15, 0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {Irish (DVB), gle, 16, 0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {Welsh (DVB), wel, 17, 0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {Welsh (DVB), cym, 18, 0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track {French (DVB), fra, 19, 0}
+
+200 POST http://192.168.0.15:9005/as/players/setting/subtitles {"subtitles": "on"} [1613473216.4]
+
+    settingManager->setSubtitlesEnabled(enable);
+
+200 POST http://192.168.0.15:9005/as/players/setting/subtitlesLanguage {"subtitlesLanguage": "English"} [1613473216.5]
+
+    settingManager->setSubtitleLanguagePriority(subtitlePreference);
+
+
+But when calls /tracks, there is no selected subs. 0 means sub is off.
+
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: currently selected subtitle track {0}
+Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: Selected text track index: 0
+
+AssertionError: Expect one track selected, received []
+
+note: requires default subs set which means marksetupdone() path is done before.
+
+So question is why?
+
+o set default sub in the first-time setup:
+
+settingManager->setSubtitleLanguagePriority(subtitlePreference);
+
+see "about the issue when change subtitle:"
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_012_setsubtitle_dtt_exact
 
 
-// players_tracks_TEST_013_subtitle_on_off_dtt_exact
+*players_tracks_TEST_013_subtitle_on_off_dtt_exact*
+
 // use DTG SD4
 AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_013_subtitle_on_off_dtt_exact

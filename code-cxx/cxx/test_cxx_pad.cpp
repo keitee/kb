@@ -19,11 +19,27 @@
 using namespace std;
 using namespace testing;
 
-// ={=========================================================================
-TEST(CxxTypeVariant, custom_variant)
+/*
+*/
+
+TEST(CxxPad, pad_1)
 {
-  // specify types to hold
-  std::variant<int, std::string, double> v = 1;
+  std::vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for (auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if (!(*it % 2))
+    {
+      cout << "it : " << *it << endl;
+      it = coll2.erase(it);
+    }
+    else
+      ++it;
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
 }
 
 // ={=========================================================================

@@ -68,11 +68,88 @@ void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 //   cout << "(" << count << ")" << endl;
 // }
 
+/*
 // ={=========================================================================
-// cxx-iter
+cxx-core cxx-iter-invalidated cxx-insert cxx-erase
 
-// core will be generated
-TEST(CxxIterator, invalidated)
+Q: This seems okay since inserting element at the same pos,2? what will happen?
+core dump since "it" gets invalidated.
+
+[ RUN      ] CxxCollInsert.on_vector_invalidated_iterator
+Segmentation fault (core dumped)
+
+cxx-iter
+
+Operations that add or remove elements from a container could invalidate
+pointers, references, or iterator to container elements. Using an invalidated
+pointer is the same kind of problems as using an unitialized pointer. 
+
+This is only for sequential containers that use `contiguous-memory`
+
+After `add` an element: *cxx-insert*
+
+o Iterators, pointers, and references to a *cxx-vector* or *cxx-string* are
+  invalid if the container was reallocated. If no rellocation happens, indirect
+  references before the insertion remain valid; those after insertion are
+  invalid.
+
+o Same for *cxx-deque* if we add elements anywhere but at the front or back. If
+  we add at the front or back, iterators are invalidated but references and
+  pointers to exisiting elements are not.
+
+o Iterators, pointers, and references to `list` or `forward_list` remain valid.
+
+After `remove` an element: *cxx-erase*
+
+o All other iterators, references, and pointers to a `vector` or `string`
+  remain valid before the removal point. The `off-the-end` iterator is always
+  invalidated.
+
+o All others to a `cxx-deque` are invalidated if the removed elements are anywhere
+  but the front or back.
+
+o All others to `list` or `forward_list` remains valid.
+
+
+note:
+
+o invalidated iterators also apply to associative containers. erase for map
+  which invalidate iterators for `erased` elements.
+
+o `erase()`/`insert()` returns void for associative containers. not ture any
+  more since C++11 and see map cases.
+
+*/
+
+TEST(CxxIteratorInvalidated, DISABLED_on_vector_insert)
+{
+  std::vector<int> coll{1, 2, 3, 4};
+
+  auto it = find(coll.begin(), coll.end(), 2);
+
+  coll.insert(it, 7);
+  coll.insert(it, 6);
+  coll.insert(it, 5);
+}
+
+/*
+cxx-insert
+
+(1)
+iterator insert( iterator pos, const T& value ); (until C++11)
+iterator insert( const_iterator pos, const T& value ); (since C++11) (until C++20)
+constexpr iterator insert( const_iterator pos, const T& value ); (since C++20)
+
+(2)	
+iterator insert( const_iterator pos, T&& value ); (since C++11) (until C++20)
+constexpr iterator insert( const_iterator pos, T&& value ); (since C++20)
+
+return value
+1-2) Iterator pointing to the inserted value
+
+*/
+
+TEST(CxxIteratorInvalidated, on_vector_insert_fixed)
 {
   std::vector<int> coll{1, 2, 3, 4};
 
@@ -82,59 +159,59 @@ TEST(CxxIterator, invalidated)
     it = coll.insert(it, 7);
     it = coll.insert(it, 6);
     it = coll.insert(it, 5);
-
-    // Q: This seems okay since inserting element at the same pos,2? what will
-    // happen?
-    //
-    // veci.insert( it, 7 );
-    // veci.insert( it, 6 );
-    // veci.insert( it, 5 );
-    //
-    // core dump since "it" gets invalidated.
   }
 
   EXPECT_THAT(coll, ElementsAre(1, 5, 6, 7, 2, 3, 4));
 }
 
-// ={=========================================================================
-// *cxx-undefined*
-// may cause runtime error but not always so undefined.
-//
-// Calling erase() for the element to which you are referring with it
-// invalidates "it" as an iterator of coll and calling ++it results in
-// undefined behavior.
-//
-// However, when use -D_GLIBCXX_DEBUG:
-//
-// /usr/include/c++/6/debug/safe_iterator.h:298:
-// Error: attempt to increment a singular iterator.
-//
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffcae5ac5d0 {
-//       type =
-//       __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char,
-//       std::char_traits<char>, std::allocator<char> > const, int> >,
-//       std::__debug::map<std::__cxx11::basic_string<char,
-//       std::char_traits<char>, std::allocator<char> >, int,
-//       std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
-//       std::allocator<char> > >,
-//       std::allocator<std::pair<std::__cxx11::basic_string<char,
-//       std::char_traits<char>, std::allocator<char> > const, int> > > >
-//       (constant iterator);
-//
-//       state = singular;
-//
-//       references sequence with type
-//       'std::__debug::map<std::__cxx11::basic_string<char,
-//       std::char_traits<char>, std::allocator<char> >, int,
-//       std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
-//       std::allocator<char> > >,
-//       std::allocator<std::pair<std::__cxx11::basic_string<char,
-//       std::char_traits<char>, std::allocator<char> > const, int> > >' @
-//       0x0x7ffcae5ac600 }
+/*
+={=========================================================================
+*cxx-undefined*
+
+may cause runtime error but not always so undefined.
+
+Calling erase() for the element to which you are referring with it
+invalidates "it" as an iterator of coll and calling ++it results in
+undefined behavior.
+
+However, when use -D_GLIBCXX_DEBUG:
+
+/usr/include/c++/6/debug/safe_iterator.h:298:
+Error: attempt to increment a singular iterator.
+
+Objects involved in the operation:
+    iterator "this" @ 0x0x7ffcae5ac5d0 {
+      type =
+      __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char,
+      std::char_traits<char>, std::allocator<char> > const, int> >,
+      std::__debug::map<std::__cxx11::basic_string<char,
+      std::char_traits<char>, std::allocator<char> >, int,
+      std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
+      std::allocator<char> > >,
+      std::allocator<std::pair<std::__cxx11::basic_string<char,
+      std::char_traits<char>, std::allocator<char> > const, int> > > >
+      (constant iterator);
+
+      state = singular;
+
+      references sequence with type
+      'std::__debug::map<std::__cxx11::basic_string<char,
+      std::char_traits<char>, std::allocator<char> >, int,
+      std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
+      std::allocator<char> > >,
+      std::allocator<std::pair<std::__cxx11::basic_string<char,
+      std::char_traits<char>, std::allocator<char> > const, int> > >' @
+      0x0x7ffcae5ac600 }
+
+On map, can't use the find() member functions to remove elements that have a
+certain value instead of a certain key. So can use loop but careful not to saw
+off the branch on which you are sitting.
+
+*/
 
 // ={=========================================================================
-TEST(CxxIterator, DISABLED_invalidated_on_map)
+// cxx-erase
+TEST(CxxIteratorInvalidated, DISABLED_on_map)
 {
   std::map<std::string, int> coll{{"one", 1},
                                   {"two", 2},
@@ -152,7 +229,7 @@ TEST(CxxIterator, DISABLED_invalidated_on_map)
 }
 
 // ={=========================================================================
-TEST(CxxIterator, map)
+TEST(CxxIteratorInvalidated, on_map_fixed)
 {
   // before C++11
   {
@@ -166,7 +243,7 @@ TEST(CxxIterator, map)
 
     for (auto it = coll.cbegin(); it != coll.cend();)
     {
-      // before C++11 since erase returns nothing. *cxx-side-effect*
+      // before C++11 since erase returns nothing so use *cxx-side-effect*
       if (it->second == value)
         coll.erase(it++);
       else
@@ -174,7 +251,7 @@ TEST(CxxIterator, map)
     }
   }
 
-  // after C++11
+  // after C++11 use return value and note that cannot use cxx-range-for
   {
     std::map<std::string, int> coll{{"one", 1},
                                     {"two", 2},
@@ -194,84 +271,211 @@ TEST(CxxIterator, map)
   }
 }
 
+/*
 // ={=========================================================================
-// https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
+cxx-deque
 
-TEST(CxxIterator, deque)
+Again,
+
+o All others to a `cxx-deque` are invalidated if the removed elements are anywhere
+  but the front or back.
+
+o any insertion or deletion of elements other than at the beginning or end
+  invalidates all pointers, references, and iterators that refer to elements of
+  the deque.
+
+*/
+TEST(CxxIteratorInvalidated, on_deque)
 {
-  // why this work?
+  // works since "it" is still valid
   {
-    deque<int> coll{1, 2, 3};
+    std::deque<int> coll{1, 2, 3};
+
+    std::vector<int> result{};
+    std::vector<int> expected{3, 2, 1};
 
     for (auto it = coll.rbegin(); it != coll.rend(); ++it)
     {
-      cout << "it : " << *it << endl;
+      result.push_back(*it);
       coll.pop_back();
     }
+
+    EXPECT_THAT(coll.empty(), true);
+    EXPECT_THAT(result, expected);
   }
-  // why this work?
+
+  // so "++it" and rbegin() are the same.
   {
-    deque<int> coll{1, 2, 3};
+    std::deque<int> coll{1, 2, 3};
+
+    std::vector<int> result{};
+    std::vector<int> expected{3, 2, 1};
 
     for (auto it = coll.rbegin(); it != coll.rend();)
     {
-      cout << "it : " << *it << endl;
-      coll.pop_back();
-      ++it;
-    }
-  }
-
-  {
-    deque<int> coll{1, 2, 3};
-
-    for (auto it = coll.rbegin(); it != coll.rend();)
-    {
-      cout << "it : " << *it << endl;
+      // cout << "it : " << *it << endl;
+      result.push_back(*it);
       coll.pop_back();
       it = coll.rbegin();
+    }
+
+    EXPECT_THAT(coll.empty(), true);
+    EXPECT_THAT(result, expected);
+  }
+}
+
+/*
+// ={=========================================================================
+[ RUN      ] CxxPad.pad_4
+it : 3
+it : 2
+it : 1
+Segmentation fault (core dumped)
+
+With add_compile_options("-g;-D_GLIBCXX_DEBUG")
+
+/usr/include/c++/7/debug/safe_iterator.h:327:
+Error: attempt to decrement a past-the-end iterator.
+
+Objects involved in the operation:
+    iterator "this" @ 0x0x7ffe327eed70 {
+      type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
+      state = past-the-end;
+      references sequence with type 'std::__debug::deque<int, std::allocator<int> >' @ 0x0x7ffe327eee70
+    }
+Aborted (core dumped)
+
+Since in the last iteration, *it == 1, pop_back() done, it still the name in the
+for chech, so goes iteration and update it which is the past of end and access
+it.
+*/
+
+TEST(CxxIteratorInvalidated, DISABLED_on_deque_1)
+{
+  {
+    std::deque<int> coll{1, 2, 3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      it = coll.rbegin();
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+    }
+  }
+}
+
+/*
+// ={=========================================================================
+note that it starts from 2
+
+https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
+
+[ RUN      ] CxxPad.pad_6
+it : 2
+it : 1
+Segmentation fault (core dumped)
+
+With add_compile_options("-g;-D_GLIBCXX_DEBUG")
+
+[ RUN      ] CxxPad.pad_6
+it : 2
+/usr/include/c++/7/debug/safe_iterator.h:149:
+Error: attempt to copy-construct an iterator from a singular iterator.
+
+Objects involved in the operation:
+    iterator "this" @ 0x0x7ffe4dbd20a0 {
+      type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
+      state = singular;
+    }
+    iterator "other" @ 0x0x7ffe4dbd2180 {
+      type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
+      state = singular;
+      references sequence with type 'std::__debug::deque<int, std::allocator<int> >' @ 0x0x7ffe4dbd2200
+    }
+Aborted (core dumped)
+*/
+
+TEST(CxxIteratorInvalidated, DISABLED_on_deque_2)
+{
+  // same as the above
+  {
+    std::deque<int> coll{1, 2, 3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      ++it;
+      cout << "it : " << *it << endl;
+      coll.pop_back();
     }
   }
 }
 
 // ={=========================================================================
-// /usr/include/c++/6/debug/safe_iterator.h:149:
-// Error: attempt to copy-construct an iterator from a singular iterator.
-//
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffde23ae160 {
-//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int,
-//       int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable
-//       iterator); state = singular;
-//     }
-//     iterator "other" @ 0x0x7ffde23ae1f0 {
-//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int,
-//       int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable
-//       iterator); state = singular; references sequence with type
-//       'std::__debug::deque<int, std::allocator<int> >' @ 0x0x7ffde23ae230
-//     }
-// Aborted
-
-TEST(CxxIterator, DISABLED_InvalidOnDeque_Errors)
+// cxx-insert cxx-erase
+TEST(CxxIteratorInvalidated, on_vector_erase_fixed)
 {
-  {
-    deque<int> coll{1, 2, 3};
+  std::vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
-    for (auto it = coll.rbegin(); it != coll.rend();)
+  // in every iteration, update it which is invalidated after insert/erase.
+  for (auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if (!(*it % 2))
     {
-      it = coll.rbegin();
       cout << "it : " << *it << endl;
-      coll.pop_back();
+      it = coll2.erase(it);
     }
-  }
-  {
-    deque<int> coll{1, 2, 3};
-
-    for (auto it = coll.rbegin(); it != coll.rend();)
-    {
+    else
       ++it;
-      cout << "it : " << *it << endl;
-      coll.pop_back();
-    }
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
+}
+
+/*
+// ={=========================================================================
+no compile/runtime error but errors when built with -D_GLIBCXX_DEBUG and run
+
+ /usr/include/c++/6/debug/safe_iterator.h:191:
+ Error: attempt to construct a constant iterator from a singular mutable
+ iterator.
+
+ Objects involved in the operation:
+     iterator "this" @ 0x0x7ffcc61e9980 {
+       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int
+       const*, std::__cxx1998::vector<int, std::allocator<int> > >,
+       std::__debug::vector<int, std::allocator<int> > > (constant iterator);
+       state = singular;
+     }
+     iterator "other" @ 0x0x7ffcc61e97f0 {
+       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*,
+       std::__cxx1998::vector<int, std::allocator<int> > >,
+       std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+       state = singular;
+       references sequence with type 'std::__debug::vector<int,
+       std::allocator<int> >' @ 0x0x7ffcc61e9820
+     }
+ Aborted
+*/
+
+TEST(CxxIteratorInvalidated, DISABLED_on_vector_erase)
+{
+  vector<int> coll1{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+  auto it = coll1.begin() + 1;
+
+  // note: `it` is not valid after this
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0, 2, 3, 4, 5, 6, 7, 8));
+
+  // not cause exception
+  try
+  {
+    coll1.erase(it);
+    EXPECT_THAT(coll1, ElementsAre(0, 3, 4, 5, 6, 7, 8));
+  } catch (const exception &e)
+  {
+    std::cout << "what is " << e.what() << std::endl;
   }
 }
 
@@ -935,6 +1139,95 @@ TEST(CxxIterator, adaptor_stream)
 }
 
 // ={=========================================================================
+// cxx-vector-insert cxx-insert
+TEST(CxxCollInsert, on_vector_1)
+{
+  std::vector<int> coll{2, 3, 4, 5};
+
+  coll.insert(coll.begin(), 1);
+
+  EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
+}
+
+// ={=========================================================================
+// cxx-map-insert cxx-insert
+TEST(CxxCollInsert, on_map)
+{
+  std::map<unsigned int, std::string> coll{{1, "one"},
+                                           {2, "two"},
+                                           {3, "three"},
+                                           {4, "four"}};
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.insert({1, "one"});
+    coll_1.insert({2, "two"});
+    coll_1.insert({3, "three"});
+    coll_1.insert({4, "four"});
+
+    EXPECT_THAT(coll == coll_1, true);
+  }
+
+  // (7) cxx-map-insert
+  // template< class InputIt >
+  // void insert( InputIt first, InputIt last );
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.insert(coll.cbegin(), coll.cend());
+
+    EXPECT_THAT(coll == coll_1, true);
+  }
+
+  {
+    std::map<unsigned int, std::string> coll_1{};
+
+    coll_1.emplace(std::make_pair(1, "one"));
+    coll_1.emplace(std::make_pair(2, "two"));
+    coll_1.emplace(std::make_pair(3, "three"));
+    coll_1.emplace(std::make_pair(4, "four"));
+
+    EXPECT_THAT(coll == coll_1, true);
+  }
+}
+
+/*
+// ={=========================================================================
+cxx-map-erase cxx-erase
+(1)
+void erase( iterator pos ); (until C++11)
+iterator erase( const_iterator pos ); (since C++11)
+iterator erase( iterator pos ); (since C++17)
+
+(2)	
+void erase( iterator first, iterator last ); (until C++11)
+iterator erase( const_iterator first, const_iterator last ); (since C++11)
+
+Return value
+1-2) Iterator following the last removed element.
+*/
+
+TEST(CxxCollErase, on_map)
+{
+  std::map<unsigned int, std::string> coll{{1, "one"},
+                                           {2, "two"},
+                                           {3, "three"},
+                                           {4, "four"}};
+
+  // erase it from begin()
+  auto it = coll.begin();
+
+  while (it != coll.end())
+  {
+    it = coll.erase(it);
+  }
+
+  EXPECT_THAT(coll.empty(), true);
+}
+
+// ={=========================================================================
 // cxx-vector
 
 // CXXSLR-7.3.5 Examples of Using Vectors
@@ -952,6 +1245,7 @@ TEST(CxxIterator, adaptor_stream)
 //  size()    : 4
 //  capacity(): 4
 
+// ={=========================================================================
 TEST(CxxVector, check_capacity)
 {
   // create empty vector for strings
@@ -1163,6 +1457,7 @@ i: 3, coll size: 1
 [       OK ] CxxVector.check_ctor_variable (0 ms)
 */
 
+// ={=========================================================================
 TEST(CxxVector, check_ctor_variable)
 {
   for (int i = 1; i < 10; i++)
@@ -1261,16 +1556,6 @@ TEST(CxxVector, check_assign)
   {
     std::vector<int> coll1{1, 2, 3, 4, 5, 6};
     GetVectorArg(coll1);
-  }
-}
-
-// ={=========================================================================
-TEST(CxxVector, check_insert)
-{
-  {
-    std::vector<int> coll{2, 3, 4, 5};
-    coll.insert(coll.begin(), 1);
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5));
   }
 }
 
@@ -1387,67 +1672,6 @@ TEST(CxxVector, check_move)
     ASSERT_THAT(coll1.size(), 6);
     ASSERT_THAT(coll2.size(), 6);
   }
-}
-
-// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
-//
-// /usr/include/c++/6/debug/safe_iterator.h:191:
-// Error: attempt to construct a constant iterator from a singular mutable
-// iterator.
-//
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffcc61e9980 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int
-//       const*, std::__cxx1998::vector<int, std::allocator<int> > >,
-//       std::__debug::vector<int, std::allocator<int> > > (constant iterator);
-//       state = singular;
-//     }
-//     iterator "other" @ 0x0x7ffcc61e97f0 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*,
-//       std::__cxx1998::vector<int, std::allocator<int> > >,
-//       std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::vector<int,
-//       std::allocator<int> >' @ 0x0x7ffcc61e9820
-//     }
-// Aborted
-
-// ={=========================================================================
-TEST(CxxVector, DISABLED_EraseRuntimeError)
-{
-  vector<int> coll1;
-  INSERT_ELEMENTS(coll1, 0, 8);
-  EXPECT_THAT(coll1, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8));
-
-  auto it = coll1.begin() + 1;
-
-  // note: `it` is not valid after this
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0, 2, 3, 4, 5, 6, 7, 8));
-
-  // not cause exception
-  try
-  {
-    coll1.erase(it);
-    EXPECT_THAT(coll1, ElementsAre(0, 3, 4, 5, 6, 7, 8));
-  } catch (const exception &e)
-  {
-    std::cout << "what is " << e.what() << std::endl;
-  }
-
-  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for (auto it = coll2.begin(); it != coll2.end(); /* no */)
-  {
-    // if see even values, remove it
-    if (!(*it % 2))
-      it = coll2.erase(it);
-    else
-      ++it;
-  }
-
-  EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
 }
 
 // ={=========================================================================
@@ -1590,7 +1814,6 @@ TEST(CxxVector, erase)
 
 namespace cxx_vector
 {
-
   class VectorRelocation
   {
   public:
@@ -2671,6 +2894,7 @@ TRACE("getSourceInformation: "
 
 */
 
+// ={=========================================================================
 TEST(CxxMap, fetch_return_reference)
 {
   std::map<unsigned int, int> expected{{1, 0}, {2, 0}, {3, 0}};
@@ -2815,49 +3039,6 @@ TEST(CxxMap, find)
       EXPECT_THAT(it->first, Eq(4));
       EXPECT_THAT(it->second, Eq(3));
     }
-  }
-}
-
-// ={=========================================================================
-TEST(CxxMap, insert_and_emplace)
-{
-  std::map<unsigned int, std::string> coll{{1, "one"},
-                                           {2, "two"},
-                                           {3, "three"},
-                                           {4, "four"}};
-
-  {
-    std::map<unsigned int, std::string> coll_1{};
-
-    coll_1.insert({1, "one"});
-    coll_1.insert({2, "two"});
-    coll_1.insert({3, "three"});
-    coll_1.insert({4, "four"});
-
-    EXPECT_THAT(coll == coll_1, true);
-  }
-
-  // (7) cxx-map-insert
-  // template< class InputIt >
-  // void insert( InputIt first, InputIt last );
-
-  {
-    std::map<unsigned int, std::string> coll_1{};
-
-    coll_1.insert(coll.cbegin(), coll.cend());
-
-    EXPECT_THAT(coll == coll_1, true);
-  }
-
-  {
-    std::map<unsigned int, std::string> coll_1{};
-
-    coll_1.emplace(std::make_pair(1, "one"));
-    coll_1.emplace(std::make_pair(2, "two"));
-    coll_1.emplace(std::make_pair(3, "three"));
-    coll_1.emplace(std::make_pair(4, "four"));
-
-    EXPECT_THAT(coll == coll_1, true);
   }
 }
 
@@ -3160,6 +3341,7 @@ TEST(CxxMap, check_sorted_custom_compare)
 //
 // any better way??
 
+// ={=========================================================================
 TEST(CxxMap, map_Copy)
 {
   {

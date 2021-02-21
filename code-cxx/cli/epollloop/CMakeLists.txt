@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_readline_poll VERSION 0.1 LANGUAGES CXX)
+project(test_epollloop VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -99,11 +99,9 @@ include_directories(${LIBS_DIR})
 # The name of the library that has dlopen and dlclose in it, usually -ldl on
 # most UNIX machines.
 
-# readline poll 
-add_executable(test_readline_poll 
-  pollloop.cpp
-  readline_poll.cpp
-  test_readline_poll.cpp)
+# epollloop
+add_executable(test_epollloop 
+  epollloop.cpp
+  test_epollloop.cpp)
 
-target_link_libraries(test_readline_poll ${LIBS} ${CMAKE_DL_LIBS} readline
-  gmock_main)
+target_link_libraries(test_epollloop ${LIBS} ${CMAKE_DL_LIBS} gmock_main)

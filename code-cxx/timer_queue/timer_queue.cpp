@@ -33,14 +33,42 @@ The first of the new system calls is timerfd_create(), which creates a new timer
 The value of clockid can be either CLOCK_REALTIME or CLOCK_MONOTONIC (see Table
 23-1).
 
+
+Starting with Linux 2.6.27, the following values may be bitwise ORed in flags to
+change the behavior of timerfd_create():
+
+TFD_NONBLOCK
+
+Set the O_NONBLOCK file status flag on the new open file description. Using this
+flag saves extra calls to fcntl(2) to achieve the same result.
+
+
 TFD_CLOEXEC
 
 Set the close-on-exec flag (FD_CLOEXEC) for the new file descriptor. This flag
 is useful for the same reasons as the open() O_CLOEXEC flag described in Section
 4.3.1.
 
+In Linux versions up to and including 2.6.26, flags must be specified as zero.
 
-eventfd
+
+Q: what's return from read()? From timerfd_create man:
+
+   Operating on a timer file descriptor
+       The file descriptor returned by timerfd_create() supports the following
+       operations:
+
+       read(2)
+              If the timer has already expired one or more times since its
+              settings were last modified using timerfd_settime(), or since the
+              last successful read(2), then the buffer given to read(2) returns
+              an unsigned 8-byte  inte‐ ger (uint64_t) containing the number of
+              expirations that have occurred.  (The returned value is in host
+              byte order—that is, the native byte order for integers on the host
+              machine.)
+
+
+os-eventfd
 
        #include <sys/eventfd.h>
        int eventfd(unsigned int initval, int flags);
@@ -511,6 +539,11 @@ void TimerQueue::updateTimerfd_() const
     // set expiry time. begin() returns iterator hence use ->
     its.it_value = tqueue_.begin()->expiry;
   }
+
+  // NOTE: should use "flag" TFD_TIMER_ABSTIME, than using value
+  // if (0 != timerfd_settime(timerfd_, 0, &its, NULL))
+  //
+  // since see this use somewhere but here when use it, test run hangs.
 
   if (0 != timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, NULL))
   {

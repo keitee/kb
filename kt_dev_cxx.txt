@@ -9063,10 +9063,12 @@ switch( events )
 ={============================================================================
 *kt_dev_cxx_0000* cxx-loop cxx-for cxx-while cxx-side-effect
 
-{cxx-range-for}
-The `range-for` is supported from GCC 4.6
+*cxx-range-for*
+The `cxx-range-for` is supported from GCC 4.6
 
-o range-for caches `begin()` and `end()` so has risk of using `invalidated-iterators`
+o range-for caches `begin()` and `end()` so has risk of using
+  *cxx-iter-invalidated*
+
 o shall use `const&` in for loop statement to avoid unnecessary copy.
 o do not call end() in every loop
 o range-for do not use iterator but use element itself. 
@@ -32000,7 +32002,7 @@ IPerson::create(...)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pattern-singleton cxx-singleton
 
-<cxx-init-order-problem> *cxx-undefined*
+*cxx-init-order-problem* *cxx-undefined*
 
 // file A
 class FileSystem {
@@ -32048,7 +32050,7 @@ another thread but before it's finished.
 exactly one thread.
 
 
-{singleton-simple}
+*cxx-singleton-simple*
 To the initial problem, use `function-static`. EC++04 said it is common
 implementation of `singleton-pattern`
 
@@ -41860,7 +41862,6 @@ element accidentally in which throw out_of_range.
 There are some differences between containers as to what to return from insert
 and erase and arguments. 
 
-
 {cxx-vector-insert-cxx-vector-erase} cxx-insert cxx-erase
 
 `where, pos, beg, end are iterators`
@@ -42157,226 +42158,8 @@ because addition and deletion will invalidate iterator of vector.
 
 
 {cxx-iter-invalidated} CPR 353.
-Operations that add or remove elements from a container could invalidate
-pointers, references, or iterator to container elements. Using an invalidated
-pointer is the same kind of problems as using an unitialized pointer. 
 
-This is only for sequential containers that use `contiguous-memory`
-
-After `add` an element:
-
-* Iterators, pointers, and references to a `vector` or `string` are invalid if
-  the container was reallocated. If no rellocation happens, indirect
-  references before the insertion remain valid; those after insertion are
-  invalid.
-
-* Same for `deque` if we add elements anywhere but at the front or back. If we
-  add at the front or back, iterators are invalidated but references and
-  pointers to exisiting elements are not.
-
-* Iterators, pointers, and references to `list` or `forward_list` remain valid.
-
-After `remove` an element:
-
-* All other iterators, references, and pointers to a `vector` or `string`
-  remain valid before the removal point. The `off-the-end` iterator is always
-  invalidated.
-
-* All others to a `deque` are invalidated if the removed elements are anywhere
-  but the front or back.
-
-* All others to `list` or `forward_list` remains valid.
-
-
-<ex>
-* invalidated iterators also apply to associative containers. erase for map
-  which invalidate iterators for `erased` elements.
-
-* `erase()`/`insert()` returns void for associative containers. not any more
-  since C++11 and see map cases.
-
-Can't use the find() member functions to remove elements that have a certain
-value instead of a certain key. So can use loop but careful not to saw off the
-branch on which you are sitting.
-
-
-// core will be generated
-TEST(Iterator, InvalidOnVector)
-{
-  std::vector<int> coll{1,2,3,4};
-
-  auto it = find(coll.begin(), coll.end(), 2);
-  if( it != coll.end())
-  {
-    it = coll.insert( it, 7 );
-    it = coll.insert( it, 6 );
-    it = coll.insert( it, 5 );
-
-    // Q: This seems okay since inserting element at the same pos,2? what will
-    // happen?
-    //
-    // veci.insert( it, 7 );
-    // veci.insert( it, 6 );
-    // veci.insert( it, 5 );
-    //
-    // core dump since it gets invalidated.
-  }
-
-  EXPECT_THAT(coll, ElementsAre(1,5,6,7,2,3,4));
-}
-
-
-// *cxx-undefined*
-// may cause runtime error but not always so undefined. 
-// Calling erase() for the element to which you are referring with it
-// invalidates it as an iterator of coll and calling ++it results in
-// undefined behavior.
-//
-// However, when use -D_GLIBCXX_DEBUG:
-//
-// /usr/include/c++/6/debug/safe_iterator.h:298:
-// Error: attempt to increment a singular iterator.
-// 
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffcae5ac5d0 {
-//       type = __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> >, std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > > > (constant iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > >' @ 0x0x7ffcae5ac600
-//     }
-
-TEST(DISABLED_StlIterator, InvalidIteratorOnMap)
-{
-  std::map<std::string, int> coll{
-    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
-  };
-
-  int value = 2;
-
-  for (auto it = coll.cbegin(); it != coll.cend(); ++it)
-  {
-    if (it->second == value)
-      coll.erase(it);
-  }
-}
-
-TEST(StlIterator, ValidIteratorOnMapBeforeC11)
-{
-  std::map<std::string, int> coll{
-    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
-  };
-
-  int value = 2;
-
-  for (auto it = coll.cbegin(); it != coll.cend();)
-  {
-    // before C++11 since erase returns nothing. *cxx-side-effect*
-    if (it->second == value)
-      coll.erase(it++);
-    else
-      ++it;
-  }
-}
-
-TEST(StlIterator, ValidIteratorOnMapAfterC11)
-{
-  std::map<std::string, int> coll{
-    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
-  };
-
-  int value = 2;
-
-  for (auto it = coll.cbegin(); it != coll.cend();)
-  {
-    if (it->second == value)
-      it = coll.erase(it);
-    else
-      ++it;
-  }
-}
-
-
-// https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
-
-// why this work?
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_One)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend(); ++it)
-  {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-  }
-}
-
-// why this work?
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_Two)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
-  {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-    ++it;
-  }
-}
-
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_Three)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
-  {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-    it = coll.rbegin();
-  }
-}
-
-// /usr/include/c++/6/debug/safe_iterator.h:149:
-// Error: attempt to copy-construct an iterator from a singular iterator.
-// 
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffde23ae160 {
-//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
-//       state = singular;
-//     }
-//     iterator "other" @ 0x0x7ffde23ae1f0 {
-//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::deque<int, std::allocator<int> >' @ 0x0x7ffde23ae230
-//     }
-// Aborted
-
-TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorOne)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
-  {
-    it = coll.rbegin();
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-  }
-}
-
-TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorTwo)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
-  {
-    ++it;
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-  }
-}
-
-
-<ex>
-
-// shows *cxx-iter-invalidated* case
+<ex> shows *cxx-iter-invalidated* case
 
 PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
     PortfolioIterator end, unsigned int max_quanity)
@@ -42409,10 +42192,10 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   // copy it back
   copy(coll.begin(), coll.end(), begin);
 
-  // *cxx-vector-reallocation* *cxx-iter-invalidated*
-  // *cxx-iter-singular* means invalidated iterator since there is no gurantee
-  // that current is valid after second pass push_back due to relocation
-  //
+  // *cxx-vector-reallocation* *cxx-iter-invalidated* *cxx-iter-singular*
+  // means invalidated iterator since there is no gurantee that current is
+  // valid after second pass push_back due to relocation
+ 
   // /usr/include/c++/6/debug/safe_iterator.h:298:
   // Error: attempt to increment a singular iterator.
   // 
@@ -42429,82 +42212,6 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
 
   // to make it pass, not used
   return current;
-}
-
-
-// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
-//
-// /usr/include/c++/6/debug/safe_iterator.h:191:
-// Error: attempt to construct a constant iterator from a singular mutable 
-// iterator.
-// 
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffcc61e9980 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int const*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (constant iterator);
-//       state = singular;
-//     }
-//     iterator "other" @ 0x0x7ffcc61e97f0 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffcc61e9820
-//     }
-// Aborted
-
-TEST(DISABLED_StlVector, EraseChangesEnd_EmitRuntimeError)
-{
-  vector<int> coll1;
-  INSERT_ELEMENTS(coll1, 0, 8);
-  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
-
-  auto it = coll1.begin()+1;
-
-  // note: it is not valid after this so should be
-  // it = coll1.erase(it);
-
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
-
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
-
-  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
-  {
-    // if see even values, remove it
-    if(!(*it % 2))
-      it = coll2.erase(it);
-    else
-      ++it;
-  }
-
-  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
-}
-
-
-TEST(StlVector, InsertAndErase)
-{
-  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = coll.begin(); it != coll.end(); /* no */)
-  {
-    // if see odd values, repeat it in front of it.
-    if(*it % 2)
-    {
-      // *cxx-iter-arthimetic*
-      it = coll.insert(it, *it);
-      it += 2;
-    }
-    else
-      // cxx-vector-erase cxx-erase
-      it = coll.erase(it);
-  }
-
-  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
 }
 
 
@@ -43891,7 +43598,6 @@ namespace cxx_code
 } // namespace
 
 
-{cxx-deque-coll-access}
 c[idx]    
 Returns the element with index idx (no range checking)
 
@@ -57576,17 +57282,22 @@ namespace cxx_code *cxx-sp-weak-code*
 
 <ex>
 
-TEST(SmartPointer, WeakNotInReferenceCount)
+TEST(CxxSmartPointerWeak, guarded_access)
 {
+  // Can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a `bad_weak_ptr exception`
+
   {
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
 
     // wp is created out of sp
-    weak_ptr<int> wp(sp);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp. since it's weak, creating wp
     // doesn't change the reference count of p
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
     // sp is created out of wp. lock() checks whether the object to which the
     // weak_ptr points still exist
@@ -57596,80 +57307,87 @@ TEST(SmartPointer, WeakNotInReferenceCount)
       EXPECT_THAT(wp.use_count(), 2);
     }
 
-    // since p is only around in if
+    // since wp p is only around in if()
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
-    // cxx-error compile error
-    // if (wp)
-    //   std::cout << "wp is not null" << std::endl;
-  }
-
-  // Can explicitly convert a weak_ptr into a shared_ptr by using a
-  // corresponding shared_ptr constructor. If there is no valid referenced
-  // object, this constructor will throw a `bad_weak_ptr exception` 
-
-  {
-    auto sp = make_shared<int>(42);
-
-    // wp is created out of sp
-    weak_ptr<int> wp(sp);
-
-    // wp is not involved in reference of sp
-    EXPECT_THAT(sp.use_count(), 1);
-
-    // sp is created out of wp
-    shared_ptr<int> p(wp);
-    if (p)
-    {
-      EXPECT_THAT(sp.use_count(), 2);
-      EXPECT_THAT(wp.use_count(), 2);
-    }
-
-    EXPECT_THAT(sp.use_count(), 2);
   }
 
   // Can call expired(), which returns true if use_count() is zero, false
   // otherwise. This option is equivalent to checking whether use_count() is
   // equal to 0 but might be 'faster'.
-  
+
   {
-    auto sp = make_shared<int>(42);
-    weak_ptr<int> wp(sp);
+    auto sp = std::make_shared<int>(42);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
+    // release sp
     sp = nullptr;
 
-    // sp is gone and wp.lock() returns nullptr
+    EXPECT_FALSE(sp);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    // since sp is gone, wp.lock() returns null shared pointer
     // because the last owner of the object released the object in the meantime
     // — lock() yields an empty shared_ptr.
 
     auto rp = wp.lock();
 
-    EXPECT_THAT(wp.expired(), true);
+    // rp is shared_ptr
+    EXPECT_FALSE(rp);
     EXPECT_THAT(rp, nullptr);
+
+    // expired() uses use_count() as well
+    EXPECT_THAT(wp.expired(), true);
+  }
+
+  // so can use use_count() to see if sp's object is still around
+  {
+    auto sp = std::make_shared<int>(42);
+
+    // wp is created out of sp
+    std::weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp. since it's weak, creating wp
+    // doesn't change the reference count of p
+    EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    // sp is created out of wp. lock() checks whether the object to which the
+    // weak_ptr points still exist
+    if (wp.use_count())
+    {
+      EXPECT_THAT(sp.use_count(), 1);
+      EXPECT_THAT(wp.use_count(), 1);
+    }
   }
 
   // You can explicitly convert a weak_ptr into a shared_ptr by using a
-  // corresponding shared_ptr constructor. If there is no valid referenced
-  // object, this constructor will throw a bad_weak_ptr exception. 
+  // corresponding "shared_ptr constructor." If there is no valid referenced
+  // object, this constructor will throw a bad_weak_ptr exception.
+  //
+  // NOTE that "lock() or use_count()" approach above do not cause excepiton
+  // when checking if sp is around or not.
 
   {
-    auto sp = make_shared<int>(42);
-    weak_ptr<int> wp(sp);
+    auto sp = std::make_shared<int>(42);
+    std::weak_ptr<int> wp(sp);
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
+    // release sp
     sp = nullptr;
 
     // EXPECT_THROW(coll.pop(), ReadEmptyStack);
     try
     {
       std::shared_ptr<int> osp(wp);
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::ostringstream os;
       os << e.what();
@@ -57679,28 +57397,24 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(wp.expired(), true);
   }
 
-  // assign sp later when use make_shared() directly 
-
+  // how to set wp with sp?
   {
-    weak_ptr<int> wp;
+    std::weak_ptr<int> wp{};
 
     EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
 
     // *cxx-error*
     // EXPECT_THAT(wp, nullptr);
 
-    EXPECT_THAT(wp.lock(), nullptr);
-    EXPECT_THAT(wp.use_count(), 0);
-
-    wp = make_shared<int>(42);
+    // assign wp from make_shared() directly and NOTE do not work
+    wp = std::make_shared<int>(42);
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.use_count(), 0);
 
     auto sp = wp.lock();
-
-    // because the referenced object is already gone
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.use_count(), 0);
@@ -57708,16 +57422,17 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(sp, nullptr);
   }
 
+  // use copy assign
   {
-    weak_ptr<int> wp;
+    std::weak_ptr<int> wp;
 
     EXPECT_THAT(wp.expired(), true);
-    EXPECT_THAT(wp.use_count(), 0);
-
     EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
 
-    auto sp = make_shared<int>(42);
+    auto sp = std::make_shared<int>(42);
+
+    // copy assign
     wp = sp;
 
     EXPECT_THAT(wp.expired(), false);
@@ -57731,6 +57446,23 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(wp.use_count(), 2);
 
     EXPECT_THAT(spwp, Not(nullptr));
+
+    // separation between sp and wp since sp wasn't affected
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
+
+    // reset wp but do not affect sp
+    wp.reset();
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
   }
 }
 
@@ -58157,7 +57889,7 @@ namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
 A unique_ptr does not have to own an object, so it can be empty.
 
 
-<cxx-sp-bool> *cxx-conversion-to-bool*
+*cxx-sp-bool* *cxx-conversion-to-bool*
 You can check whether a unique_ptr owns an object by calling *cxx-operator-bool*
 
 // if up is not empty
@@ -61341,6 +61073,7 @@ clock::now()  Yields a time_point for the current point in time
 Table 5.23. Operations and Types of Clocks
 
 
+*cxx-time-clock*
 The C++ standard library provides three clocks, which provide this interface:
 
 o The `system_clock` represents timepoints associated with the usual real-time
@@ -61349,7 +61082,7 @@ o The `system_clock` represents timepoints associated with the usual real-time
   system time type time_t, which means that you can convert into and from
   calendar times
 
-o The `steady_clock` gives the guarantee that it never gets adjusted. Thus,
+o The `steady_clock` gives the guarantee `that it never gets adjusted.` Thus,
   timepoint values never decrease as the physical time advances, and they
   advance at a steady rate relative to real time.
 
@@ -61428,23 +61161,20 @@ TEST(Time, ShowCronoClockDetails)
 }
 
 
-<cxx-time-steady-clock>
+*cxx-time-clock-steady*
 The steady_clock is important to compare or compute the difference of two
 times in your program, where you processed the current point in time.
 
-
-TEST(Time, SteadyClock)
+TEST(CxxTime, steady_clock)
 {
   {
-    // now() is static function. clock returns `timepoint`
+    // now() is static function
     auto system_start = chrono::system_clock::now();
 
     sleep(10);
 
-    // diff is `duration`
     auto diff = chrono::system_clock::now() - system_start;
-
-    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+    auto sec  = chrono::duration_cast<chrono::seconds>(diff);
 
     // cout << "this programs runs: " << sec.count() << " seconds" << endl;
     EXPECT_THAT(sec.count(), 10);
@@ -61457,13 +61187,12 @@ TEST(Time, SteadyClock)
     sleep(10);
 
     auto diff = chrono::steady_clock::now() - system_start;
-    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+    auto sec  = chrono::duration_cast<chrono::seconds>(diff);
 
     // cout << "this programs runs: " << sec.count() << " seconds" << endl;
     EXPECT_THAT(sec.count(), 10);
   }
 }
-
 
 `if the clock was adjusted in the meantime`, this diff might be a negative
 duration. For the same reason, using timers with other than the steady_clock
@@ -61526,25 +61255,27 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // min  : Tue Sep 21 00:12:44 1677
 // max  : Fri Apr 11 23:47:16 2262
 
-
-TEST(Time, Timepoint)
+TEST(CxxTime, timepoint)
 {
-  // print the epoch of this clock
+  {
+    // print the epoch of this system clock
 
-  // is equivalent to:
-  // std::chrono::time_point<std::chrono::system_clock> tp
-  std::chrono::system_clock::time_point tp;
+    // is equivalent to:
+    // std::chrono::time_point<std::chrono::system_clock> tp
+    // Thus, the default constructor, which yields the epoch, creates a timepoint,
 
-  cout << "epoch: " << as_string(tp) << endl;
+    std::chrono::system_clock::time_point tp;
+    cout << "epoch: " << as_string(tp) << endl;
 
-  tp = std::chrono::system_clock::now();
-  cout << "now  : " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::now();
+    cout << "now  : " << as_string(tp) << endl;
 
-  tp = std::chrono::system_clock::time_point::min();
-  cout << "min  : " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::time_point::min();
+    cout << "min  : " << as_string(tp) << endl;
 
-  tp = std::chrono::system_clock::time_point::max();
-  cout << "max  : " << as_string(tp) << endl;
+    tp = std::chrono::system_clock::time_point::max();
+    cout << "max  : " << as_string(tp) << endl;
+  }
 }
 
 TEST(Time, TimePointArithmetic)

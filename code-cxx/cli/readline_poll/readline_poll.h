@@ -9,20 +9,7 @@
 #include <string>
 #include <vector>
 
-// reference code
-//
-// class IReadLine
-// {
-// public:
-//   virtual ~IReadLine() = default;
-//
-// public:
-//   virtual void quit() const = 0;
-//   virtual void printLine(const char *fmt, ...) const
-//     __attribute__((format(printf, 2, 3))) = 0;
-// };
-//
-// using handler = std::function<void(const std::shared_ptr<IReadLine> &source,
+// #define USE_SIMPLE_SINGLETON
 
 class ReadLine;
 
@@ -38,7 +25,17 @@ private:
   // protecting m_commands vector and the other for protecting instance_ between
   // callbacks from readline and signal handler from kernel(?)
   //
-  // instance_lock seems necessary since ctrl-c can be pressed any time. lock
+  // instance_lock seems necessary since ctrl-c can be pressed any time? Since
+  // there is:
+  //
+  // Guarantees of the C++ runtime
+  // I already presented the details to the thread safe initialization of
+  // variables in the post Thread safe initialization of data.
+  //
+  // no need to worry about *cxx-init-order-problem* and sp itself is static and
+  // lives until application ends. So appears that it is not necessary.
+  //
+  // m_lock for readline interfaces
   // may be not since adding commands is not done dynamically and the rest is
   // reading operations. remains to be seen
   //
@@ -99,7 +96,13 @@ private:
                     const std::vector<std::string> &args);
 
 public:
+#ifdef USE_SIMPLE_SINGLETON
   static ReadLine &instance();
+#else
+  // static std::shared_ptr<ReadLine> m_instance;
+  static std::shared_ptr<ReadLine> instance();
+#endif
+
   explicit ReadLine();
   ~ReadLine();
 

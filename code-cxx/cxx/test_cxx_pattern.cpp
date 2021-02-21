@@ -3391,6 +3391,8 @@ TEST(PatternSingleton, call_count_on_multiple_thread_1)
 // out. When I translate the program with maximum optimization that has to
 // change. So the call MySingleton::getInstance() will not be optimized away.
 //
+// *cxx-init-order-problem* *cxx-undefined*
+//
 // Guarantees of the C++ runtime
 // I already presented the details to the thread safe initialization of
 // variables in the post Thread safe initialization of data.

@@ -4639,7 +4639,7 @@ namespace ctor_init_2
 } // namespace ctor_init_2
 
 // ={=========================================================================
-TEST(CxxCtor, check_init_forms)
+TEST(CxxCtor, init_forms)
 {
   // direct init. conversion from char * to string before calling ctor and which
   // is "Foo(const string &mesg)" since it's best match
@@ -4753,7 +4753,7 @@ namespace ctor_init_explicit
 } // namespace ctor_init_explicit
 
 // ={=========================================================================
-TEST(CxxCtor, check_explicit_init)
+TEST(CxxCtor, explicit_init)
 {
   using namespace ctor_init_explicit;
 
@@ -4923,7 +4923,7 @@ namespace cxx_init_list
 } // namespace cxx_init_list
 
 // ={=========================================================================
-TEST(CxxCtor, check_init_list_1)
+TEST(CxxCtor, list_init_form_1)
 {
   using namespace cxx_init_list;
 
@@ -4998,7 +4998,7 @@ namespace cxx_init_list
 } // namespace cxx_init_list
 
 // ={=========================================================================
-TEST(CxxCtor, check_init_list_2)
+TEST(CxxCtor, list_init_form_2)
 {
   using namespace cxx_init_list;
 
@@ -5117,7 +5117,7 @@ the object, then those values will be used to "construct" the object.
 
 */
 
-TEST(CxxCtor, init_list_3)
+TEST(CxxCtor, list_init_form_3)
 {
   // Q: represent vector's size or element value?
   //
@@ -5205,6 +5205,192 @@ TEST(CxxCtor, init_list_3)
 
     std::vector<std::string> coll2{10, "hi"};
     EXPECT_THAT(coll2.size(), 10);
+  }
+}
+
+/*
+={=========================================================================
+so called cxx-init-universal-form works on c struc? works
+*/
+
+TEST(CxxCtor, list_init_form_4)
+{
+  // not same
+  {
+    // not inited
+    struct itimerval spec_;
+
+    // get clean set
+    struct itimerval expected;
+    memset(&expected, 0, sizeof(expected));
+
+    // int memcmp(const void *s1, const void *s2, size_t n);
+    EXPECT_THAT(
+      memcmp((const void *)&spec_, (const void *)&expected, sizeof(expected)),
+      Not(0));
+  }
+
+  // same
+  {
+    // note that use of list init.
+    struct itimerval spec_
+    {};
+
+    // get clean set
+    struct itimerval expected;
+    memset(&expected, 0, sizeof(expected));
+
+    // int memcmp(const void *s1, const void *s2, size_t n);
+    EXPECT_THAT(
+      memcmp((const void *)&spec_, (const void *)&expected, sizeof(expected)),
+      0);
+  }
+}
+
+// NOTE: it didn't work
+// struct itimerspec spec_
+// {
+//   {std::chrono::duration_cast<std::chrono::seconds>(initial).count(),
+//    (initial % std::chrono::seconds(1)).count()},
+//   {
+//     std::chrono::duration_cast<std::chrono::seconds>(interval).count(),
+//       (interval % std::chrono::seconds(1)).count()
+//   }
+// };
+
+/*
+={=========================================================================
+cxx-init-universal-form
+works on c struc? works. Ok, but found that
+
+{
+  struct itimerspec spec_
+  {
+    {std::chrono::duration_cast<std::chrono::seconds>(initial).count(),
+      (initial % std::chrono::seconds(1)).count()},
+      {
+        std::chrono::duration_cast<std::chrono::seconds>(interval).count(),
+        (interval % std::chrono::seconds(1)).count()
+      }
+  };
+}
+
+DO NOT work as hoped. WHY? because the structure is defined:
+
+           struct timespec {
+               time_t tv_sec;
+               long   tv_nsec;
+           };
+
+           struct itimerspec {
+               struct timespec it_interval;
+               struct timespec it_value;
+           };
+
+so the order of stuct itimerspec does matters when use list init.
+
+see https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
+
+6.29 Designated Initializers
+
+Standard C90 requires the elements of an initializer to appear in a fixed order,
+the same as the order of the elements in the array or structure being
+initialized.
+
+The code above is legal in C99, but not legal in C++11.
+
+  struct itimerspec expected_wrong_fixed = 
+  {
+    {.it_value.tv_sec = 1, .it_value.tv_nsec = 500000000},
+    {.it_interval.tv_sec = 0, .it_interval.tv_nsec = 500000000}
+  };
+
+causes cxx-error compile error
+
+https://stackoverflow.com/questions/18731707/why-does-c11-not-support-designated-initializer-lists-as-c99
+
+C++ has constructors. If it makes sense to initialize just one member then
+that can be expressed in the program by implementing an appropriate
+constructor. This is the sort of abstraction C++ promotes.
+
+On the other hand the designated initializers feature is more about exposing
+and making members easy to access directly in client code. This leads to
+things like having a person of age 18 (years?) but with height and weight of
+zero.
+
+In other words, designated initializers support a programming style where
+internals are exposed, and the client is given flexibility to decide how they
+want to use the type.
+
+C++ is more interested in putting the flexibility on the side of the designer
+of a type instead, so designers can make it easy to use a type correctly and
+difficult to use incorrectly. Putting the designer in control of how a type
+can be initialized is part of this: the designer determines constructors,
+in-class initializers, etc.
+
+*/
+
+TEST(CxxCtor, list_init_form_5)
+{
+  const std::chrono::milliseconds time_1{1500};
+  const std::chrono::nanoseconds time_1_nano{time_1};
+
+  const std::chrono::milliseconds time_2{500};
+  const std::chrono::nanoseconds time_2_nano{time_2};
+
+  struct itimerspec spec
+  {};
+
+  spec.it_value.tv_sec =
+    std::chrono::duration_cast<std::chrono::seconds>(time_1_nano).count();
+  spec.it_value.tv_nsec = (time_1_nano % std::chrono::seconds(1)).count();
+
+  spec.it_interval.tv_sec =
+    std::chrono::duration_cast<std::chrono::seconds>(time_2_nano).count();
+  spec.it_interval.tv_nsec = (time_2_nano % std::chrono::seconds(1)).count();
+
+  struct itimerspec expected_wrong
+  {
+    {1, 500000000}, { 0, 500000000 }
+  };
+
+  struct itimerspec expected_right
+  {
+    {0, 500000000}, { 1, 500000000 }
+  };
+
+  auto compare_itimerspce_ = [](struct itimerspec &lhs,
+                                struct itimerspec &rhs) {
+    return ((lhs.it_value.tv_sec == rhs.it_value.tv_sec) &&
+            (lhs.it_value.tv_nsec == rhs.it_value.tv_nsec) &&
+            (lhs.it_interval.tv_sec == rhs.it_interval.tv_sec) &&
+            (lhs.it_interval.tv_nsec == rhs.it_interval.tv_nsec));
+  };
+
+  // expected_wrong
+  {
+    // std::cout << "i sec: " << spec.it_value.tv_sec
+    //           << ", i nsec : " << spec.it_value.tv_nsec << std::endl;
+
+    // std::cout << "int sec: " << spec.it_interval.tv_sec
+    //   << ", int nsec : " << spec.it_interval.tv_nsec << std::endl;
+
+    EXPECT_THAT(compare_itimerspce_(spec, expected_wrong), false);
+
+    EXPECT_THAT(spec.it_value.tv_sec, Ne(expected_wrong.it_value.tv_sec));
+    EXPECT_THAT(spec.it_value.tv_nsec, expected_wrong.it_value.tv_nsec);
+    EXPECT_THAT(spec.it_interval.tv_sec, Ne(expected_wrong.it_interval.tv_sec));
+    EXPECT_THAT(spec.it_interval.tv_nsec, expected_wrong.it_interval.tv_nsec);
+  }
+
+  // expected_right
+  {
+    EXPECT_THAT(compare_itimerspce_(spec, expected_right), true);
+
+    // EXPECT_THAT(spec.it_value.tv_sec, expected_right.it_value.tv_sec);
+    // EXPECT_THAT(spec.it_value.tv_nsec, expected_right.it_value.tv_nsec);
+    // EXPECT_THAT(spec.it_interval.tv_sec, expected_right.it_interval.tv_sec);
+    // EXPECT_THAT(spec.it_interval.tv_nsec, expected_right.it_interval.tv_nsec);
   }
 }
 
@@ -5685,7 +5871,7 @@ namespace cxx_enum
     red,
     green
   };
-} // namespace cxxenum
+} // namespace cxx_enum
 
 // ={=========================================================================
 TEST(CxxEnum, check_scoped_and_unscoped)
@@ -5753,7 +5939,7 @@ TEST(CxxEnum, check_scoped_and_unscoped)
   //
   // color color_selected = yellow;
   //
-  // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization 
+  // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
   //
   // int value_1 = peppers::red;
   //
@@ -5806,7 +5992,7 @@ namespace cxx_enum
         : name_("")
     {}
   };
-} // namespace cxx_enum_in_class
+} // namespace cxx_enum
 
 /*
 // ={=========================================================================
@@ -5876,58 +6062,58 @@ namespace cxx_enum
   constexpr EnumFlags operator|(EnumFlags lhs, EnumFlags rhs)
   {
     return static_cast<EnumFlags>(static_cast<char>(lhs) |
-        static_cast<char>(rhs));
+                                  static_cast<char>(rhs));
   }
 
   constexpr EnumFlags operator&(EnumFlags lhs, EnumFlags rhs)
   {
     return static_cast<EnumFlags>(static_cast<char>(lhs) &
-        static_cast<char>(rhs));
+                                  static_cast<char>(rhs));
   }
 
   class ScopedEnum
   {
-    public:
-      int checkFlags(EnumFlags flag)
+  public:
+    int checkFlags(EnumFlags flag)
+    {
+      int result{};
+
+      switch (flag)
       {
-        int result{};
+        // used constexpr on oeprator| and & since someone might want to
+        // use them in constant expression.
+        case EnumFlags::SPORT:
+          cout << "has sport flag" << endl;
+          result = 0;
+          break;
 
-        switch (flag)
-        {
-          // used constexpr on oeprator| and & since someone might want to
-          // use them in constant expression.
-          case EnumFlags::SPORT:
-            cout << "has sport flag" << endl;
-            result = 0;
-            break;
+        case EnumFlags::KIDS:
+          cout << "has kids flas" << endl;
+          result = 1;
+          break;
 
-          case EnumFlags::KIDS:
-            cout << "has kids flas" << endl;
-            result = 1;
-            break;
+        case EnumFlags::MUSIC:
+          cout << "has music flag" << endl;
+          result = 2;
+          break;
 
-          case EnumFlags::MUSIC:
-            cout << "has music flag" << endl;
-            result = 2;
-            break;
+          // *cxx-switch*
+          // to avoid warning
+          // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
+          // case EnumFlags::SPORT|EnumFlags::MUSIC:
+          //     cout << "has sport and music flag" << endl;
+          //     result = 3;
+          //     break;
 
-            // *cxx-switch*
-            // to avoid warning
-            // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-            // case EnumFlags::SPORT|EnumFlags::MUSIC:
-            //     cout << "has sport and music flag" << endl;
-            //     result = 3;
-            //     break;
-
-          default:
-            cout << "has unknown flag" << endl;
-            result = 100;
-        }
-
-        return result;
+        default:
+          cout << "has unknown flag" << endl;
+          result = 100;
       }
+
+      return result;
+    }
   };
-}
+} // namespace cxx_enum
 
 /*
 // ={=========================================================================
@@ -6702,35 +6888,11 @@ TEST(Reference, AccessOnReference)
   firstObjectWithValue10.printValue();
 }
 
-// ={=========================================================================
+// ={========================================================================
 // cxx-time
 
-TEST(CxxTime, ratio)
-{
-  // typedef std::ratio<5, 3> 5/3, FiveThirds;
-  using FiveThirds = std::ratio<5, 3>;
-
-  // Numerator and denominator. 5/3
-  EXPECT_THAT(FiveThirds::num, 5);
-  EXPECT_THAT(FiveThirds::den, 3);
-
-  // Numerator and denominator
-  EXPECT_THAT(std::nano::num, 1);
-  EXPECT_THAT(std::nano::den, 1000000000LL);
-
-  EXPECT_THAT(std::micro::num, 1);
-  EXPECT_THAT(std::micro::den, 1000000LL);
-
-  EXPECT_THAT(std::milli::num, 1);
-  EXPECT_THAT(std::milli::den, 1000LL);
-
-  std::ratio<100> rn;
-  EXPECT_THAT(rn.num, 100);
-  EXPECT_THAT(rn.den, 1);
-}
-
 /*
-// ={=========================================================================
+// ={========================================================================
 The local date and time is: Tue Jun 12 12:49:12 2018
 The local date and time is: Tue Jun 12 12:49:12 2018
 The UTC date and time is: Tue Jun 12 11:49:12 2018
@@ -6781,7 +6943,8 @@ ctime(3), but without the trailing newline). Returns NULL on error.
 
 */
 
-TEST(CxxTime, os_call)
+// ={=========================================================================
+TEST(CxxTime, os_calls)
 {
   {
     struct timeval current;
@@ -6890,7 +7053,7 @@ TEST(CxxTime, os_call)
   }
 }
 
-// ={=========================================================================
+// ={========================================================================
 TEST(CxxTime, os_realtime)
 {
   {
@@ -6946,21 +7109,50 @@ TEST(CxxTime, check_sleep_for)
   EXPECT_THAT((curr->tm_sec - prev->tm_sec), 0);
 }
 
-// ={=========================================================================
-// Arithmetic Duration Operations
-//
-// You can compute with durations in the expected way (see Table 5.21):
-//
-// o You can process the sum, difference, product, or quotient of two durations.
-// o You can add or subtract ticks or other durations.
-// o You can compare two durations.
-//
-// The important point here is that the unit type of two durations involved in
-// such an operation might be different.
-//
-// Table 5.21. Arithmetic Operations of durations
+// ={========================================================================
+TEST(CxxTime, ratio)
+{
+  // typedef std::ratio<5, 3> 5/3, FiveThirds;
+  using FiveThirds = std::ratio<5, 3>;
 
-TEST(CxxTime, check_duration_1)
+  // Numerator and denominator. 5/3
+  EXPECT_THAT(FiveThirds::num, 5);
+  EXPECT_THAT(FiveThirds::den, 3);
+
+  // Numerator and denominator, 10**9
+  EXPECT_THAT(std::nano::num, 1);
+  EXPECT_THAT(std::nano::den, 1000000000LL);
+
+  // 10**6
+  EXPECT_THAT(std::micro::num, 1);
+  EXPECT_THAT(std::micro::den, 1000000LL);
+
+  // 10**3
+  EXPECT_THAT(std::milli::num, 1);
+  EXPECT_THAT(std::milli::den, 1000LL);
+
+  std::ratio<100> rn;
+  EXPECT_THAT(rn.num, 100);
+  EXPECT_THAT(rn.den, 1);
+}
+
+/*
+={=========================================================================
+Arithmetic Duration Operations
+
+You can compute with durations in the expected way (see Table 5.21):
+
+o You can process the sum, difference, product, or quotient of two durations.
+o You can add or subtract ticks or other durations.
+o You can compare two durations.
+
+The important point here is that the unit type of two durations involved in
+such an operation might be different.
+
+Table 5.21. Arithmetic Operations of durations
+*/
+
+TEST(CxxTime, duration_count)
 {
   std::chrono::seconds twentySeconds(20);
   EXPECT_THAT(twentySeconds.count(), 20);
@@ -6972,30 +7164,33 @@ TEST(CxxTime, check_duration_1)
   EXPECT_THAT(oneMillisecond.count(), 1);
 }
 
-// ={=========================================================================
-// You can also convert durations into durations of different units, as long
-// as there is an implicit type conversion. Thus, you can convert hours into
-// seconds but not the other way around. For example:
-//
-// Table 5.22. Other Operations and Types of durations
-//
-// d.count()             Returns ticks of the duration d
-// duration_cast<D>(d)   Returns duration d explicitly converted into type D
+/*
+={=========================================================================
+You can also convert durations into durations of different units, as long
+as there is an implicit type conversion. Thus, you can convert hours into
+seconds but not the other way around. For example:
 
-// [ RUN      ] CxxTime.check_duration_2
-// 188209768194270 ms
-// 3742327457174483840 ns
-// [       OK ] CxxTime.check_duration_2 (0 ms)
+Table 5.22. Other Operations and Types of durations
 
-TEST(CxxTime, check_duration_2)
+d.count()             Returns ticks of the duration d
+duration_cast<D>(d)   Returns duration d explicitly converted into type D
+
+*/
+
+TEST(CxxTime, duration_conversion_1)
 {
+  // show that "ms" is not inited and has undefined value. *cxx-init*
+  // [ RUN      ]
+  // 188209768194270 ms
+  // 3742327457174483840 ns
+  // [       OK ]
   {
     std::chrono::seconds twentySeconds{20}; // 20 seconds
     std::chrono::hours aDay{24};            // 24 hours
-    std::chrono::milliseconds ms;           // NOTE NOT milliseconds
+    std::chrono::milliseconds ms;
 
     // 24 hours and 20 seconds in milliseconds?
-    // 24 * 60 * 60 * 1000 + 20 * 1000
+    // 24 * 60 * 60 * 1000 + 20 * 1000 = 86,420,000
 
     ms += twentySeconds + aDay; // 86,420,000 milliseconds
     --ms;                       // 86,419,999 milliseconds
@@ -7048,7 +7243,7 @@ namespace cxx_time
   }
 } // namespace cxx_time
 
-TEST(CxxTime, check_duration_cast_1)
+TEST(CxxTime, duration_cast_1)
 {
   using namespace cxx_time;
 
@@ -7058,7 +7253,8 @@ TEST(CxxTime, check_duration_cast_1)
   std::chrono::hours hh = std::chrono::duration_cast<chrono::hours>(ms);
   EXPECT_THAT(hh.count(), 2);
 
-  // take remians which means take hours out
+  // take remians which means take hours out. NOTE that ms in ms and % with
+  // hours.
   std::chrono::minutes mm = std::chrono::duration_cast<std::chrono::minutes>(
     ms % std::chrono::hours(1));
 
@@ -7203,8 +7399,19 @@ TEST(CxxTime, check_various_clock)
   EXPECT_THAT(os.str(), expected);
 }
 
+/*
 // ={=========================================================================
-TEST(CxxTime, check_steady_clock)
+*cxx-time-clock-steady*
+
+The steady_clock is important to compare or compute the difference of two times
+in your program, where you processed the current point in time.
+
+`if the clock was adjusted in the meantime`, this diff might be a negative
+duration. For the same reason, using timers with other than the steady_clock
+might change their duration when the system clock gets adjusted. 
+
+*/
+TEST(CxxTime, steady_clock)
 {
   {
     // now() is static function
@@ -7233,8 +7440,37 @@ TEST(CxxTime, check_steady_clock)
   }
 }
 
+/*
 // ={=========================================================================
-// cxx-time-timepoint
+cxx-time-timepoint
+
+o A timepoint represents a specific point in time by associating a positive or
+  negative duration to a given clock.
+
+util/chrono1.cpp
+epoch: Thu Jan  1 01:00:00 1970
+now  : Thu Apr 12 10:52:00 2018
+min  : Tue Sep 21 00:11:29 1677
+max  : Sat Apr 12 00:47:16 2262
+
+epoch: Thu Jan  1 01:00:00 1970
+
+Note that it’s 1 o’clock rather than midnight. This may look a bit
+surprising, but remember that the conversion to the calendar time with
+ctime() inside asString() takes the time zone into account. Thus, the UNIX
+epoch used here  which, again, is not always guaranteed to be the epoch of
+the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
+it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
+on January 1, 1970. Accordingly, if you start this program, your output is
+probably different, according to your time zone, even if your system uses the
+same epoch in its system clock.
+
+epoch: Thu Jan  1 00:00:00 1970
+now  : Thu Apr 12 10:01:32 2018
+min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the book
+max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
+
+*/
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
 {
@@ -7255,30 +7491,8 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
   return ts;
 }
 
-// util/chrono1.cpp
-// epoch: Thu Jan  1 01:00:00 1970
-// now  : Thu Apr 12 10:52:00 2018
-// min  : Tue Sep 21 00:11:29 1677
-// max  : Sat Apr 12 00:47:16 2262
-
-// epoch: Thu Jan  1 01:00:00 1970
-//
-// Note that it’s 1 o’clock rather than midnight. This may look a bit
-// surprising, but remember that the conversion to the calendar time with
-// ctime() inside asString() takes the time zone into account. Thus, the UNIX
-// epoch used here  which, again, is not always guaranteed to be the epoch of
-// the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
-// it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
-// on January 1, 1970. Accordingly, if you start this program, your output is
-// probably different, according to your time zone, even if your system uses the
-// same epoch in its system clock.
-
-// epoch: Thu Jan  1 00:00:00 1970
-// now  : Thu Apr 12 10:01:32 2018
-// min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the book
-// max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
-
-TEST(CxxTime, check_timepoint)
+// ={=========================================================================
+TEST(CxxTime, timepoint)
 {
   {
     // print the epoch of this system clock
@@ -7286,6 +7500,7 @@ TEST(CxxTime, check_timepoint)
     // is equivalent to:
     // std::chrono::time_point<std::chrono::system_clock> tp
     // Thus, the default constructor, which yields the epoch, creates a timepoint,
+
     std::chrono::system_clock::time_point tp;
     cout << "epoch: " << as_string(tp) << endl;
 
@@ -7306,7 +7521,7 @@ TEST(CxxTime, check_timepoint)
 // now : 1599840923
 // now : 1599840923
 
-TEST(CxxTime, check_now)
+TEST(CxxTime, timepoint_now)
 {
   // tp.time_since_epoch()
   // Returns the duration between the epoch and timepoint tp
@@ -7333,7 +7548,7 @@ TEST(CxxTime, check_now)
 }
 
 // ={=========================================================================
-TEST(CxxTime, check_timepoint_arithmetic)
+TEST(CxxTime, timepoint_arithmetic)
 {
   std::ostringstream os{};
 
@@ -7376,10 +7591,52 @@ TEST(CxxTime, check_timepoint_arithmetic)
   EXPECT_THAT(os.str(), expected);
 }
 
+namespace cxx_time
+{
+  // to down
+  std::string function_1(const std::chrono::nanoseconds &timeout)
+  {
+    std::stringstream ss{};
+
+    ss << timeout.count();
+
+    return ss.str();
+  }
+
+  // to up
+  std::string function_2(const std::chrono::seconds &timeout)
+  {
+    std::stringstream ss{};
+
+    ss << timeout.count();
+
+    return ss.str();
+  }
+} // namespace cxx_time
+
+// ={=========================================================================
+TEST(CxxTime, timepoint_conversion)
+{
+  using namespace cxx_time;
+
+  EXPECT_THAT(function_1(std::chrono::milliseconds(1)), "1000000");
+
+  // error: invalid initialization of reference of type
+  // ‘const seconds& {aka const std::chrono::duration<long int>&}’
+  // from expression of type
+  // ‘std::chrono::duration<long int, std::ratio<1, 1000> >’
+  //
+  //    std::cout << "count : " << function_2(std::chrono::milliseconds(1))
+
+  // std::cout << "count : " << function_2(std::chrono::milliseconds(1))
+  //           << std::endl;
+}
+
 // 12/04/18
 // Tuesday 12/04/18 02PM
 
-TEST(Time, Facet)
+// ={=========================================================================
+TEST(CxxTime, use_facet)
 {
   ostringstream os;
 
@@ -10214,6 +10471,7 @@ TEST(CxxSmartPointer, check_copy_3)
 // shared_ptr<int> sp1(new int);
 // shared_ptr<int> sp2(sp1);     // OK
 
+// ={=========================================================================
 TEST(CxxSmartPointer, check_group_or_ownership)
 {
   {
@@ -10399,6 +10657,38 @@ TEST(CxxSmartPointer, bool_support)
     EXPECT_THAT(!!up, false);
 
     EXPECT_THAT(up == nullptr, true);
+  }
+
+  {
+    // cxx-error compile error since cxx-sp-weak do not support bool conversion
+    // but cxx-sp does.
+    //
+    // error: could not convert ‘wp’ from ‘std::weak_ptr<int>’ to ‘bool’
+    // if (wp)
+    //  std::cout << "wp is not null" << std::endl;
+  }
+
+  // to show cxx-sp supports bool conversion
+  {
+    auto sp = std::make_shared<int>(42);
+
+    // wp is created out of sp
+    std::weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    // sp is created out of wp and cxx-sp supports bool conversion.
+    std::shared_ptr<int> p(wp);
+    if (p)
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+
+    EXPECT_THAT(sp.use_count(), 2);
+    EXPECT_THAT(sp.use_count(), 2);
   }
 }
 
@@ -11112,6 +11402,7 @@ Foo dtor(1)
 
 */
 
+// ={=========================================================================
 TEST(CxxSmartPointer, shared_from_this_1)
 {
   using namespace cxx_sp_use_count;
@@ -11268,6 +11559,7 @@ namespace cxx_sp
   };
 } // namespace cxx_sp
 
+// ={=========================================================================
 TEST(CxxSmartPointer, make_shared_2)
 {
   using namespace cxx_sp;
@@ -11301,7 +11593,7 @@ TEST(CxxSmartPointer, make_shared_2)
 // cxx-smart-ptr-weak
 // 5.2.2 Class weak_ptr
 
-TEST(CxxSmartPointer, weak_GuardedAccess)
+TEST(CxxSmartPointerWeak, guarded_access)
 {
   // Can explicitly convert a weak_ptr into a shared_ptr by using a
   // corresponding shared_ptr constructor. If there is no valid referenced
@@ -11326,39 +11618,9 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
       EXPECT_THAT(wp.use_count(), 2);
     }
 
-    // since p is only around in if()
+    // since wp p is only around in if()
     EXPECT_THAT(sp.use_count(), 1);
     EXPECT_THAT(wp.use_count(), 1);
-
-    // cxx-error compile error since cxx-sp-weak do not support bool conversion
-    // but cxx-sp does.
-    //
-    // error: could not convert ‘wp’ from ‘std::weak_ptr<int>’ to ‘bool’
-    // if (wp)
-    //  std::cout << "wp is not null" << std::endl;
-  }
-
-  // to show cxx-sp supports bool conversion
-  {
-    auto sp = std::make_shared<int>(42);
-
-    // wp is created out of sp
-    std::weak_ptr<int> wp(sp);
-
-    // wp is not involved in reference of sp
-    EXPECT_THAT(sp.use_count(), 1);
-    EXPECT_THAT(wp.use_count(), 1);
-
-    // sp is created out of wp and cxx-sp supports bool conversion.
-    std::shared_ptr<int> p(wp);
-    if (p)
-    {
-      EXPECT_THAT(sp.use_count(), 2);
-      EXPECT_THAT(wp.use_count(), 2);
-    }
-
-    EXPECT_THAT(sp.use_count(), 2);
-    EXPECT_THAT(sp.use_count(), 2);
   }
 
   // Can call expired(), which returns true if use_count() is zero, false
@@ -11415,8 +11677,11 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
   }
 
   // You can explicitly convert a weak_ptr into a shared_ptr by using a
-  // corresponding shared_ptr constructor. If there is no valid referenced
+  // corresponding "shared_ptr constructor." If there is no valid referenced
   // object, this constructor will throw a bad_weak_ptr exception.
+  //
+  // NOTE that "lock() or use_count()" approach above do not cause excepiton
+  // when checking if sp is around or not.
 
   {
     auto sp = std::make_shared<int>(42);
@@ -11444,7 +11709,7 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
 
   // how to set wp with sp?
   {
-    std::weak_ptr<int> wp;
+    std::weak_ptr<int> wp{};
 
     EXPECT_THAT(wp.expired(), true);
     EXPECT_THAT(wp.lock(), nullptr);
@@ -11453,7 +11718,7 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
     // *cxx-error*
     // EXPECT_THAT(wp, nullptr);
 
-    // assign wp from make_shared() directly and do not work
+    // assign wp from make_shared() directly and NOTE do not work
     wp = std::make_shared<int>(42);
 
     EXPECT_THAT(wp.expired(), true);
@@ -11492,7 +11757,7 @@ TEST(CxxSmartPointer, weak_GuardedAccess)
 
     EXPECT_THAT(spwp, Not(nullptr));
 
-    // separation between sp and wp
+    // separation between sp and wp since sp wasn't affected
 
     EXPECT_THAT(*sp, 42);
     EXPECT_THAT(*spwp, 42);
@@ -15988,7 +16253,8 @@ TEST(CxxBit, bit_Overflow)
     EPOLLMSG = 0x400,
 #define EPOLLMSG EPOLLMSG
 
-*cxx-bit-and* produce 0 when a bit is not set and produce that bit when set.
+*cxx-bit-and* produce 0 when a bit is not set and produce that bit when set. So
+use it to check if bit flag is in the expected set or not.
 
 */
 
@@ -16009,6 +16275,7 @@ TEST(CxxBit, mask)
     EXPECT_THAT((events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)), EPOLLERR);
   }
 
+  // when not in the set, becomes 0.
   {
     uint32_t events{EPOLLMSG};
 

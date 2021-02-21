@@ -595,7 +595,7 @@ do when use cxx-async
 
 */
 
-TEST(CConThread, use_same_thread_on_ multiple_threads)
+TEST(CConThread, use_same_thread_on_multiple_threads)
 {
   std::thread t{};
 
@@ -3885,7 +3885,7 @@ object that has an associated 8-byte unsigned integer maintained by the kernel.
 The system call returns a file descriptor that refers to the object. Writing an
 integer to this file descriptor adds that integer to the object’s value. A
 read() from the file descriptor "blocks if the object’s value is 0." If the
-object has a nonzero value, a read() returns that value and resets it to 0. 
+object has a "nonzero value", a read() returns that value and resets it to 0. 
 
 In addition, poll(), select(), or epoll can be used to test if the object has a
 nonzero value; if it does, the file descriptor indicates as being readable. An
@@ -3934,7 +3934,7 @@ o If the eventfd counter is zero at the time of the call to read(2), then the
 */
 
 // ={=========================================================================
-TEST(CConCondition, eventfd)
+TEST(CConCondition, eventfd_1)
 {
   std::string result{};
 
@@ -3945,6 +3945,7 @@ TEST(CConCondition, eventfd)
     ASSERT_THAT(true, false);
   }
 
+  // reader waits for a signal
   auto f1 = std::async(std::launch::async, [&] {
     uint64_t read_value{};
     if (sizeof(uint64_t) !=
@@ -3959,6 +3960,7 @@ TEST(CConCondition, eventfd)
     return true;
   });
 
+  // writer writes "nonzero" so reader can wake up
   auto f2 = std::async(std::launch::async, [&] {
     this_thread::sleep_for(chrono::milliseconds(3000));
 
@@ -3980,6 +3982,74 @@ TEST(CConCondition, eventfd)
 
   // since reads wait for write done
   EXPECT_THAT(result, "WRITE-READ");
+}
+
+/*
+// ={=========================================================================
+set "init value" 1 so that reader can run right away without blocking. so
+the reader first and writer next.
+
+then why use this?
+
+In case example:
+
+bool EPollLoop::executeInPollloop(const Executor &func)
+
+o use eventfd with 1 init value since it pushes functor to be run in the epoll
+thread later when a thread get a chance to do.
+
+o why use eventfd after all. if not need to signal it, can make functor and a
+thread can pick that up, and run it? To use epoll.
+
+*/
+
+TEST(CConCondition, eventfd_2)
+{
+  std::string result{};
+
+  int efd = eventfd(1, EFD_CLOEXEC);
+  if (efd < 0)
+  {
+    std::cout << "failed to create eventFd" << std::endl;
+    ASSERT_THAT(true, false);
+  }
+
+  // reader waits for a signal
+  auto f1 = std::async(std::launch::async, [&] {
+    uint64_t read_value{};
+    if (sizeof(uint64_t) !=
+        TEMP_FAILURE_RETRY(read(efd, &read_value, sizeof(uint64_t))))
+    {
+      std::cout << "errno: " << errno << ", failed on read(eventfd)"
+                << std::endl;
+    }
+
+    result += "-READ";
+    // std::cout << "f1 writes " << result << std::endl;
+    return true;
+  });
+
+  // writer writes "nonzero" so reader can wake up
+  auto f2 = std::async(std::launch::async, [&] {
+    this_thread::sleep_for(chrono::milliseconds(3000));
+
+    uint64_t write_value{100};
+    if (sizeof(uint64_t) !=
+        TEMP_FAILURE_RETRY(write(efd, &write_value, sizeof(uint64_t))))
+    {
+      std::cout << "errno: " << errno << ", failed on write(eventfd)"
+                << std::endl;
+    }
+
+    result += "WRITE";
+    // std::cout << "f2 writes " << result << std::endl;
+    return true;
+  });
+
+  f1.get();
+  f2.get();
+
+  EXPECT_THAT(result, "-READWRITE");
 }
 
 // from CPP challenge which solves the issue when there are multiple consumers.

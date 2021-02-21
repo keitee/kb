@@ -1,5 +1,6 @@
 #include "readline_poll.h"
 #include "slog.h"
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -13,6 +14,10 @@
 #ifndef STDIN_FILENO
 #error "STDIN_FILENO is not defined"
 #endif
+
+/* ={==========================================================================
+
+*/
 
 namespace
 {
@@ -50,7 +55,9 @@ namespace
 } // namespace
 
 /*
-1. use simpler singleton code than the reference:
+1. return shared pointer from instance() or not?
+
+the reference returns an shared pointer from instance()
 
 std::shared_ptr<ReadLine> ReadLine::instance()
 {
@@ -65,14 +72,7 @@ std::shared_ptr<ReadLine> ReadLine::instance()
   return mInstance;
 }
 
-2. the reference uses IReadLine and 
-
-class ReadLine : public IReadLine,
-
-this causes error on "static ReadLine instance_" since it's ABC. so has to
-remove that to use simple singleton
-
-*/
+can move to use simpler singleton code
 
 ReadLine &ReadLine::instance()
 {
@@ -82,6 +82,79 @@ ReadLine &ReadLine::instance()
 
   return instance_;
 }
+
+However, the problem is ReadLine::runCommand_() requires a shared pointer to
+call an handler and PollLoop expects it for each source.
+
+So if use
+
+#define USE_SIMPLE_SINGLETON
+
+then 
+
+[ RUN      ] TestReadLinePoll.run_single_command
+LOG| F:readline_poll.cpp C:ReadLine::ReadLine() L:00165  readline is created
+unknown file: Failure
+C++ exception with description "bad_weak_ptr" thrown in the test body.
+[  FAILED  ] TestReadLinePoll.run_single_command (1 ms)
+[----------] 1 test from TestReadLinePoll (1 ms total)
+
+
+2. the reference uses IReadLine and 
+
+class IReadLine
+{
+public:
+  virtual ~IReadLine() = default;
+
+public:
+  virtual void quit() const = 0;
+  virtual void printLine(const char *fmt, ...) const
+    __attribute__((format(printf, 2, 3))) = 0;
+};
+
+using handler = std::function<void(const std::shared_ptr<IReadLine> &source,
+
+class ReadLine : public IReadLine,
+
+this causes error on "static ReadLine instance_" since it's ABC. so has to
+remove that to use simple singleton and not use it.
+
+*/
+
+#ifdef USE_SIMPLE_SINGLETON
+
+ReadLine &ReadLine::instance()
+{
+  // std::lock_guard<std::mutex> lock(m_instance_lock);
+
+  static ReadLine instance_;
+
+  return instance_;
+}
+
+#else
+
+std::shared_ptr<ReadLine> m_instance;
+// std::shared_ptr<ReadLine> ReadLine::m_instance;
+
+std::shared_ptr<ReadLine> ReadLine::instance()
+{
+  // std::lock_guard<std::mutex> locker(mInstanceLock);
+
+  if (!m_instance)
+  {
+    // this is trick to call std::make_shared() when ctor is private. see
+    // TEST(CxxSmartPointer, make_shared_2)
+    class make_shared_enabler : public ReadLine
+    {};
+    m_instance = std::make_shared<make_shared_enabler>();
+  }
+
+  return m_instance;
+}
+
+#endif
 
 ReadLine::ReadLine()
     : m_pollloop(std::make_shared<PollLoop>("ReadLine"))
@@ -155,7 +228,11 @@ char *ReadLine::completionGenerator_(const char *text, int state)
 char *ReadLine::completion_generator_(const char *text, int state)
 {
   // std::lock_guard<std::mutex> lock(m_instance_lock);
+#ifdef USE_SIMPLE_SINGLETON
   return instance().completionGenerator_(text, state);
+#else
+  return m_instance->completionGenerator_(text, state);
+#endif
 }
 
 char **ReadLine::completer_(const char *text, int start, int end)
@@ -217,7 +294,11 @@ void ReadLine::commandLineHandler_(const char *text)
 void ReadLine::commandline_handler_(char *text)
 {
   // std::lock_guard<std::mutex> lock(m_instance_lock);
+#ifdef USE_SIMPLE_SINGLETON
   instance().commandLineHandler_(text);
+#else
+  m_instance->commandLineHandler_(text);
+#endif
 }
 
 /* ={==========================================================================
@@ -394,7 +475,12 @@ void ReadLine::addCommand(const std::string &name,
 {
   // std::lock_guard<std::mutex> lock(m_lock);
 
-  m_commands.emplace_back(Command{name, description, help, f, args});
+  // add only if it's not registared before
+  auto found_ = [name](const auto &command) { return name == command.m_name; };
+
+  if (m_commands.cend() ==
+      std::find_if(m_commands.cbegin(), m_commands.cend(), found_))
+    m_commands.emplace_back(Command{name, description, help, f, args});
 }
 
 /* ={==========================================================================
@@ -503,7 +589,15 @@ void ReadLine::signalHandler(int)
   // needs to be "instance().quit()" since signal context don't know about
   // instance otherwise gets:
   // : error: ‘instance_’ was not declared in this scope
+  //
+  // instance_.quit(); also gets the same error since it's defined inside
+  // function ::instance()
+
+#ifdef USE_SIMPLE_SINGLETON
   instance().quit();
+#else
+  m_instance->quit();
+#endif
 }
 
 void ReadLine::run()
@@ -520,7 +614,11 @@ void ReadLine::run()
   // install the handler
   _rl_callback_handler_install("> ", commandline_handler_);
 
-  if (false == m_pollloop->addSource(shared_from_this(), STDIN_FILENO, EPOLLIN))
+  // add it to pollloop
+  if (false == m_pollloop->addSource("readline",
+                                     shared_from_this(),
+                                     STDIN_FILENO,
+                                     EPOLLIN))
   {
     LOG_MSG("failed to add stdin source to poll loop");
     return;
@@ -594,6 +692,24 @@ void ReadLine::quitCommand_(const std::shared_ptr<ReadLine> &readline,
   readline->quit();
 }
 
+/*
+> help
+quit             quit this interactive terminal
+help             show commmands available and helps
+test1            test command 1
+test2            test command 2
+
+> help test1
+test1            test command 1
++ test command which uses golbal free function
+
+> help test2
+test2            test command 2
++ test command which uses golbal free function
++ -x agr1
+
+*/
+
 void ReadLine::helpCommand_(const std::shared_ptr<ReadLine> &readline,
                             const std::vector<std::string> &args)
 {
@@ -612,18 +728,18 @@ void ReadLine::helpCommand_(const std::shared_ptr<ReadLine> &readline,
   {
     for (const auto &e : m_commands)
     {
-      // TODO: going to work since the input args don't have command at 0?
+      // to support "help [command]"
       if (e.m_name == args[0])
       {
-        readline->printLine("%-16s %s\n",
+        readline->printLine("%-16s %s",
                             e.m_name.c_str(),
                             e.m_description.c_str());
 
         if (e.m_help.size())
-          readline->printLine("%s\n", e.m_help.c_str());
+          readline->printLine("+ %s", e.m_help.c_str());
 
         if (e.m_args.size())
-          readline->printLine("%s\n", e.m_args.c_str());
+          readline->printLine("+ %s", e.m_args.c_str());
       }
     }
   }

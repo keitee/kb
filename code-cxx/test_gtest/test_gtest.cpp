@@ -14,7 +14,8 @@ using namespace testing;
 // gtest-basic
 
 /*
-https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
+https://github.com/google/googletest
+https://github.com/google/googletest/blob/master/docs/primer.md
 
 FAIL();
 ADD_FAILURE();
@@ -52,17 +53,20 @@ expected true but false
 
 */
 
+// ={=========================================================================
 // "DISABLED" works for both case
 TEST(DISABLED_GtestAssert, fail1)
 {
   FAIL() << "should generate a fatal failure";
 }
 
+// ={=========================================================================
 TEST(GtestAssert, DISABLED_fail2)
 {
   FAIL() << "should generate a fatal failure";
 }
 
+// ={=========================================================================
 TEST(GtestAssert, DISABLED_add_message)
 {
   // do print message but make a test failed
@@ -72,46 +76,73 @@ TEST(GtestAssert, DISABLED_add_message)
   EXPECT_TRUE(true) << "expected true but true";
 }
 
-// OUT(object under test)
-//
-// Which way of displays is preferable??
-//
-// [ RUN      ] GtestAssert.shows_argument_order1
-//
-// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:93: Failure
-// Value of: OUT
-// Expected: is equal to 100
-//   Actual: 101 (of type int)
-//
-// NOTE: GMOCK use the second below
-//
-// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:94: Failure
-// Value of: 100
-// Expected: is equal to 101
-//   Actual: 100 (of type int)
-// [  FAILED  ] GtestAssert.shows_argument_order1 (0 ms)
-//
-// However, see below case:
-//
-// [ RUN      ] OsGlibc.check_memcmp
-//  /home/keitee/git/kb/code-cxx/os/test_os.cpp:224: Failure
-//  Value of: 0
-//  Expected: is equal to -1
-//    Actual: 0 (of type int)
-// [  FAILED  ] OsGlibc.check_memcmp (0 ms)
-//
-// EXPECT_THAT(0, memcmp(coll1, coll2, 6));
-//
-// [ RUN      ] OsGlibc.check_memcmp
-// /home/keitee/git/kb/code-cxx/os/test_os.cpp:232: Failure
-// Value of: memcmp(coll1, coll2, 6)
-// Expected: is equal to 0
-//   Actual: -1 (of type int)
-// [  FAILED  ] OsGlibc.check_memcmp (0 ms)
-//
-// EXPECT_THAT(memcmp(coll1, coll2, 6), 0);
+/*
+Which way of displays is preferable?
 
-TEST(GtestAssert, DISABLED_shows_argument_order1)
+1.
+
+OUT(object under test)
+
+  EXPECT_THAT(OUT, 100);
+
+.cpp:124: Failure
+Value of: OUT
+Expected: is equal to 100
+  Actual: 101 (of type int)
+
+
+  EXPECT_THAT(100, OUT);
+
+.cpp:125: Failure
+Value of: 100
+Expected: is equal to 101
+  Actual: 100 (of type int)
+
+2.
+
+  EXPECT_THAT(0, memcmp(coll1, coll2, 6));
+
+.cpp:224: Failure
+Value of: 0
+Expected: is equal to -1
+  Actual: 0 (of type int)
+
+  EXPECT_THAT(memcmp(coll1, coll2, 6), 0);
+
+.cpp:232: Failure
+Value of: memcmp(coll1, coll2, 6)
+Expected: is equal to 0
+  Actual: -1 (of type int)
+
+NOTE So prefer this form over _EQ/_TRUE as shown below tests
+
+  EXPECT_THAT(out, value);
+
+
+https://github.com/google/googletest/blob/master/docs/advanced.md#asserting-using-gmock-matchers
+
+Asserting Using gMock Matchers
+
+gMock comes with a library of matchers for validating arguments passed to mock
+objects. A gMock matcher is basically a predicate that knows how to describe
+itself. It can be used in these assertion macros:
+
+Fatal assertion	              Nonfatal assertion	          Verifies
+ASSERT_THAT(value, matcher);	EXPECT_THAT(value, matcher);	value matches matcher
+
+For example, StartsWith(prefix) is a matcher that matches a string starting
+with prefix, and you can write:
+
+using ::testing::StartsWith;
+...
+    // Verifies that Foo() returns a string starting with "Hello".
+    EXPECT_THAT(Foo(), StartsWith("Hello"));
+
+*/
+
+// ={=========================================================================
+// TEST(Gtest, argument_order_form_1)
+TEST(Gtest, DISABLED_argument_order_form_1)
 {
   int OUT{101};
 
@@ -119,8 +150,74 @@ TEST(GtestAssert, DISABLED_shows_argument_order1)
   EXPECT_THAT(100, OUT);
 }
 
+/* _EQ or _THAT?
+
+  EXPECT_EQ(value, 100);
+
+.cpp:103: Failure
+Expected equality of these values:
+  value
+    Which is: 101
+  100
+
+  EXPECT_EQ(100, value);
+
+.cpp:103: Failure
+Expected equality of these values:
+  100
+  value
+    Which is: 101
+
+NOTE so pefer _THAT
+
+*/
+
+// ={=========================================================================
+// TEST(Gtest, argument_order_form_2)
+TEST(Gtest, DISABLED_argument_order_form_2)
+{
+  int value{101};
+
+  EXPECT_EQ(value, 100);
+  EXPECT_EQ(100, value);
+}
+
+/* _EQ or _TRUE?
+
+From Binary Comparison
+However, when possible, ASSERT_EQ(actual, expected) is preferred to
+ASSERT_TRUE(actual == expected), since it tells you actual and expected's
+values on failure.
+
+  EXPECT_TRUE(value == 100);
+
+.cpp:192: Failure
+Value of: value == 100
+  Actual: false
+Expected: true
+
+  EXPECT_EQ(value, 100);
+
+.cpp:192: Failure
+Expected equality of these values:
+  value
+    Which is: 101
+  100
+
+*/
+
+// TEST(Gtest, argument_order_form_3)
+TEST(Gtest, DISABLED_argument_order_form_3)
+{
+  int value{101};
+
+  EXPECT_TRUE(value == 100);
+  EXPECT_EQ(value, 100);
+}
+
+// ={=========================================================================
 // the order of arg can cause compile error
-TEST(GtestAssert, shows_argument_order2)
+TEST(Gtest, argument_order_can_cause_error)
 {
   std::string result{"result"};
 
@@ -132,45 +229,6 @@ TEST(GtestAssert, shows_argument_order2)
   //
   // EXPECT_THAT("result", result);
 }
-
-// [ RUN      ] GtestAssert.shows_argument_order2
-// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:103: Failure
-// Expected equality of these values:
-//   value
-//     Which is: 101
-//   100
-// /home/keitee/git/kb/code-cxx/test_gtest/test_gtest.cpp:104: Failure
-// Expected equality of these values:
-//   100
-//   value
-//     Which is: 101
-// [  FAILED  ] GtestAssert.shows_argument_order2 (0 ms)
-
-TEST(GtestAssert, DISABLED_shows_argument_order2)
-{
-  int value{101};
-
-  EXPECT_EQ(value, 100);
-  EXPECT_EQ(100, value);
-}
-
-// to see which makes better messages
-//
-// [ RUN      ] Gtest.ExpectOrEq
-// gtest.cpp:283: Failure
-// Value of: 101
-// Expected: is equal to 100
-//   Actual: 101 (of type int)
-//
-// gtest.cpp:284: Failure
-// Expected equality of these values:
-//   101
-//   value
-//     Which is: 100
-// [  FAILED  ] Gtest.ExpectOrEq (0 ms)
-// [----------] 2 tests from Gtest (0 ms total)
-
-// for EXPECT_THROW()
 
 /*
 ={=========================================================================
@@ -201,6 +259,7 @@ St12out_of_range
 [       OK ] GtestAssert.shows_check_exception (0 ms)
 */
 
+// ={=========================================================================
 TEST(GtestAssert, shows_check_exception)
 {
   {
@@ -245,6 +304,37 @@ TEST(GtestAssert, shows_check_exception)
       // #include <cxxabi.h>
       // std::cout << __cxa_current_exception_type()->name() << std::endl;
     }
+  }
+}
+
+/*
+// ={=========================================================================
+Binary Comparison
+This section describes assertions that compare two values.
+
+ASSERT_LE(val1, val2);	EXPECT_LE(val1, val2);	val1 <= val2
+
+However, when possible, ASSERT_EQ(actual, expected) is preferred to
+ASSERT_TRUE(actual == expected), since it tells you actual and expected's
+values on failure.
+
+*/
+
+TEST(Gtest, binary_comparison)
+{
+  {
+    int value{5};
+    EXPECT_LE(value, 5);
+  }
+
+  {
+    int value{4};
+    EXPECT_LE(value, 5);
+  }
+
+  {
+    int value{7};
+    EXPECT_LE(value, 5);
   }
 }
 
@@ -812,6 +902,7 @@ namespace gtestaction
   };
 } // namespace gtestaction
 
+// ={=========================================================================
 TEST(GMock, check_action)
 {
   using namespace gtestaction;

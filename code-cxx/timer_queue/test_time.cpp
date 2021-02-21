@@ -99,9 +99,9 @@ int setitimer(
 Returns 0 on success, or –1 on error
 
 
-As a timer progresses, it counts down from the initial value (it_value) toward
+As a timer progresses, it "counts down" from the initial value (it_value) toward
 0.  When the timer reaches 0, the corresponding signal is sent to the process,
-and then, if the interval (it_interval) is nonzero, the timer value (it_value)
+and then, if the interval (it_interval) is "nonzero", the timer value (it_value)
 is reloaded, and counting down toward 0 recommences.
 
 At any time, we can use getitimer() to retrieve the current state of the timer
@@ -124,13 +124,13 @@ MAIN:     1.00   1.80   1.00
 MAIN:     1.50   1.30   1.00
 MAIN:     2.00   0.80   1.00
 MAIN:     2.50   0.30   1.00
-ALARM:    2.80   1.00   1.00
+ALARM:    2.80   1.00   1.00  // after 2.80
 MAIN:     3.00   0.80   1.00
 MAIN:     3.50   0.30   1.00
-ALARM:    3.80   1.00   1.00
+ALARM:    3.80   1.00   1.00  // then +1
 MAIN:     4.00   0.80   1.00
 MAIN:     4.50   0.30   1.00
-ALARM:    4.80   1.00   1.00
+ALARM:    4.80   1.00   1.00  // then +1
 that's all folks
 [       OK ] CxxTime.os_set_timer (4800 ms)
 
@@ -194,7 +194,7 @@ namespace cxx_time
 } // namespace cxx_time
 
 // ={=========================================================================
-TEST(CxxTime, os_set_timer)
+TEST(CxxTime, os_set_timer_1)
 {
   using namespace cxx_time;
 
@@ -208,6 +208,7 @@ TEST(CxxTime, os_set_timer)
 
   struct sigaction sa;
 
+  // install signal handler
   sigemptyset(&sa.sa_mask);
   sa.sa_flags   = 0;
   sa.sa_handler = sigalmHandler;
@@ -254,8 +255,9 @@ TEST(CxxTime, os_set_timer)
 
   for (;;)
   {
-    // inner loop consumes at least 0.5 seconds CPU time. that is, update
-    // process time at >= 0.5 interval and check if signal is raised at < 0.5
+    // inner loop consumes at least 0.5 seconds CPU time. that is, looping while
+    // < 0.5 check if signal is raised at < 0.5 and when exit loop, update
+    // process time at >= 0.5 interval
 
     // divide by CLOCKS_PER_SEC makes seconds. multifly by 10 so that can use 5
     // to mean 0.5 seconds than using 0.5 in a statement.
@@ -287,8 +289,170 @@ TEST(CxxTime, os_set_timer)
   exit(EXIT_SUCCESS);
 }
 
+/*
 // ={=========================================================================
+NOTE: what if not set interval time? becomes single shot timer
 
+RUN      ] CxxTime.os_set_timer_2
+START:    4.80
+MAIN:     5.30   2.30   0.00
+MAIN:     5.80   1.80   0.00
+MAIN:     6.30   1.30   0.00
+MAIN:     6.80   0.80   0.00
+MAIN:     7.30   0.30   0.00
+ALARM:    7.60   0.00   0.00
+    Elapsed     Value   Interval
+MAIN:     7.80   0.00   0.00
+MAIN:     8.30   0.00   0.00
+MAIN:     8.80   0.00   0.00
+MAIN:     9.30   0.00   0.00
+MAIN:     9.80   0.00   0.00
+MAIN:    10.30   0.00   0.00
+MAIN:    10.80   0.00   0.00
+MAIN:    11.30   0.00   0.00
+MAIN:    11.80   0.00   0.00
+MAIN:    12.30   0.00   0.00
+MAIN:    12.80   0.00   0.00
+MAIN:    13.30   0.00   0.00
+MAIN:    13.80   0.00   0.00
+MAIN:    14.30   0.00   0.00
+MAIN:    14.80   0.00   0.00
+MAIN:    15.30   0.00   0.00
+MAIN:    15.80   0.00   0.00
+MAIN:    16.30   0.00   0.00
+MAIN:    16.80   0.00   0.00
+MAIN:    17.30   0.00   0.00
+    Elapsed     Value   Interval
+MAIN:    17.80   0.00   0.00
+MAIN:    18.30   0.00   0.00
+MAIN:    18.80   0.00   0.00
+MAIN:    19.30   0.00   0.00
+MAIN:    19.80   0.00   0.00
+MAIN:    20.30   0.00   0.00
+MAIN:    20.80   0.00   0.00
+MAIN:    21.30   0.00   0.00
+MAIN:    21.80   0.00   0.00
+MAIN:    22.30   0.00   0.00
+MAIN:    22.80   0.00   0.00
+MAIN:    23.30   0.00   0.00
+MAIN:    23.80   0.00   0.00
+MAIN:    24.30   0.00   0.00
+MAIN:    24.80   0.00   0.00
+MAIN:    25.30   0.00   0.00
+MAIN:    25.80   0.00   0.00
+MAIN:    26.30   0.00   0.00
+MAIN:    26.80   0.00   0.00
+MAIN:    27.30   0.00   0.00
+    Elapsed     Value   Interval
+MAIN:    27.80   0.00   0.00
+...
+
+*/
+
+TEST(CxxTime, os_set_timer_2)
+{
+  using namespace cxx_time;
+
+  struct itimerval timer{};
+
+  // number of signals(expiration) to catch before exiting
+  int max_signals{};
+
+  // number of signals so far caught
+  int sig_count{};
+
+  struct sigaction sa;
+
+  // install signal handler
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags   = 0;
+  sa.sa_handler = sigalmHandler;
+  if (sigaction(SIGALRM, &sa, NULL) == -1)
+  {
+    std::cout << "failed on sigaction\n";
+  }
+
+  // exit after 3 expirations
+  max_signals = 3;
+
+  displayTimes("START:", false);
+
+  // set timer value from command line but here set them up
+  // Initial value 1.8 seconds, interval 1 second
+  //
+  // if (argc > 1 && strcmp(argv[1], "--help") == 0)
+  //  usageErr("%s [secs [usecs [int-secs [int-usecs]]]]\n", argv[0]);
+  //
+  // $ ./real_timer 1 800000 1 0
+  //
+  // The it_value substructure of the new_value argument specifies the delay
+  // until the timer is to expire. The it_interval substructure specifies
+  // whether this is to be a periodic timer. If both fields of it_interval are
+  // set to 0, then the timer is expires just once, at the time given by
+  // it_value. If one or both of the it_interval fields are nonzero, then, after
+  // each expiration of the timer, the timer will be reset to expire again at
+  // the specified interval.
+
+  timer.it_value.tv_sec     = 2;      // 2 secs
+  timer.it_value.tv_usec    = 800000; // us. 800.000 ms. 0.8 sec
+
+  // NOTE: what if not set interval time?
+  //
+  // timer.it_interval.tv_sec  = 1;
+  // timer.it_interval.tv_usec = 0;
+
+  if (setitimer(ITIMER_REAL, &timer, NULL) == -1)
+  {
+    std::cout << "failed on settimer\n";
+  }
+
+  // process time of clock_t
+  clock_t prev_process_time = clock();
+
+  sig_count = 0;
+
+  for (;;)
+  {
+    // inner loop consumes at least 0.5 seconds CPU time. that is, looping while
+    // < 0.5 check if signal is raised at < 0.5 and when exit loop, update
+    // process time at >= 0.5 interval
+
+    // divide by CLOCKS_PER_SEC makes seconds. multifly by 10 so that can use 5
+    // to mean 0.5 seconds than using 0.5 in a statement.
+
+    while (((clock() - prev_process_time) * 10 / CLOCKS_PER_SEC) < 5)
+    {
+      if (got_alarm)
+      {
+        // clear "got_alarm"
+        got_alarm = 0;
+
+        displayTimes("ALARM:", true);
+
+        sig_count++;
+
+        if (sig_count >= max_signals)
+        {
+          std::cout << "that's all folks\n";
+          return;
+        }
+      }
+    } // while
+
+    prev_process_time = clock();
+    displayTimes("MAIN:", true);
+
+  } // for
+
+  exit(EXIT_SUCCESS);
+}
+
+/*
+// ={=========================================================================
+TODO: add tests for timerfd?
+*/
+
+// ={=========================================================================
 int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);

@@ -30,7 +30,8 @@ public:
   virtual bool start(int priority = -1) = 0;
   virtual void stop()                   = 0;
 
-  virtual bool addSource(const std::shared_ptr<IPollSource> &source,
+  virtual bool addSource(const std::string &name,
+                         const std::shared_ptr<IPollSource> &source,
                          int fd,
                          uint32_t events)                            = 0;
   virtual bool modSource(const std::shared_ptr<IPollSource> &source,
