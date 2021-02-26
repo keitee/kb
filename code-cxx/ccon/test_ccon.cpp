@@ -3412,14 +3412,42 @@ TEST(CConCondition, see_wait3)
   EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 0));
 }
 
+/*
 // ={=========================================================================
-// Called with a predicate as third argument, wait_for() and wait_until() return
-// the result of the predicate (whether the condition holds).
+Called with a predicate as third argument, wait_for() and wait_until() return
+the result of the predicate (whether the condition holds).
 
-// wait_for() will check the supplied predicate when woken and will return the
-// value of predicate OR `the timeout expires.` see *cxx-con-wait-unbounded*
+wait_for() will check the supplied predicate when woken and will return the
+value of predicate OR `the timeout expires.` see *cxx-con-wait-unbounded*
 
-TEST(CConCondition, see_wait_for)
+(1)	(since C++11)
+template< class Rep, class Period >
+std::cv_status wait_for( std::unique_lock<std::mutex>& lock,
+                         const std::chrono::duration<Rep, Period>& rel_time);
+
+(1)	(since C++11)
+template< class Rep, class Period, class Predicate >
+bool wait_for( std::unique_lock<std::mutex>& lock,
+               const std::chrono::duration<Rep, Period>& rel_time,
+               Predicate pred);
+
+NOTE that wait_until uses timepoint
+
+(1)	(since C++11)
+template< class Clock, class Duration >
+std::cv_status
+    wait_until( std::unique_lock<std::mutex>& lock,
+                const std::chrono::time_point<Clock, Duration>& timeout_time );
+
+(1)	(since C++11)
+template< class Clock, class Duration, class Pred >
+bool wait_until( std::unique_lock<std::mutex>& lock,
+                 const std::chrono::time_point<Clock, Duration>& timeout_time,
+                 Pred pred );
+*/
+
+// ={=========================================================================
+TEST(CConCondition, wait_for_1)
 {
   std::mutex m;
   std::unique_lock<std::mutex> lock(m);
@@ -3433,7 +3461,7 @@ TEST(CConCondition, see_wait_for)
     EXPECT_THAT(result, std::cv_status::timeout);
   }
 
-  // when signaled
+  // when signaled and result is not timeout
   {
     auto f = std::async([&cond] {
       this_thread::sleep_for(chrono::milliseconds(1000));
@@ -3445,7 +3473,7 @@ TEST(CConCondition, see_wait_for)
     EXPECT_THAT(result, std::cv_status::no_timeout);
   }
 
-  // return bool
+  // return bool which comes from the predicate
   {
     auto result = cond.wait_for(lock, std::chrono::seconds(1), [&]() {
       return !q.empty();
@@ -3455,6 +3483,7 @@ TEST(CConCondition, see_wait_for)
     EXPECT_THAT(result, false);
   }
 
+  // return bool which comes from the predicate. added an item to queue.
   {
     q.push(1);
 
@@ -3467,6 +3496,23 @@ TEST(CConCondition, see_wait_for)
     // okay, it's done.
     EXPECT_THAT(result, true);
   }
+}
+
+/*
+// ={=========================================================================
+cv_status has default value? no since it's enum not class/struct
+
+enum class cv_status {
+    no_timeout,
+    timeout  
+};
+*/
+
+TEST(CConCondition, cv_status_has_no_default_value)
+{
+  std::cv_status result{std::cv_status::timeout};
+
+  EXPECT_THAT(result, std::cv_status::timeout);
 }
 
 // interface:

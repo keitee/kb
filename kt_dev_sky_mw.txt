@@ -2284,15 +2284,19 @@ FactoryContainer::FactoryContainer()
 
 class InputQueue
 {
-  std::queue<KeyEvent> mKeyQueue;
+  `std::queue<KeyEvent> mKeyQueue;`
 
   int registerKeyListener(unsigned eventSources,
       const IInputHandler::KeyListener& listener,
       const IInputHandler::KeyListenerPredicate& predicate);
+  {
+    // notify listeners
+    mListenerThread = std::thread(&InputQueue::listenerThread, this);
+  }
 };
 
+// this is single queue for all
 const std::shared_ptr<InputQueue> mInputQueue;
-
 
 InputHandler::InputHandler()
     *create-single-queue*
@@ -2302,7 +2306,7 @@ InputHandler::InputHandler()
     , mFusionHandler(std::make_shared<FusionInputHandler>(mInputQueue))
 
     *create-linux-input-handler*
-    , mLinuxHandler(std::make_shared<LinuxInputHandler>(mInputQueue))
+    , mLinuxHandler(std::make_shared<LinuxInputHandler>(`mInputQueue`))
     , mCdiHandler(std::make_shared<CdiInputHandler>(mInputQueue))
 {
   mFusionHandler->start();
@@ -2327,7 +2331,7 @@ int InputHandler::registerKeyListener(unsigned eventSources,
                                       const IInputHandler::KeyListener& listener,
                                       const IInputHandler::KeyListenerPredicate& predicate)
 {
-  return mInputQueue->registerKeyListener(eventSources, listener, predicate);
+  return `mInputQueue->registerKeyListener`(eventSources, listener, predicate);
 }
 
 
@@ -2374,41 +2378,60 @@ HID, mouse events to slider / touch events, etc).
 class InputSource
 {
   void sendKey(uint16_t keyCode, bool down);
-  const std::shared_ptr<InputQueue> mQueue;
+
+  `const std::shared_ptr<InputQueue> mQueue;`
+
+  void sendKeyWithFilterByte(uint8_t filterByte, uint16_t keyCode, bool down)
+  {
+    mQueue->sendKey(mDeviceInfo, filterByte, keyCode, down);
+  }
 };
 
 
-o run a thread
-o deliver keys from GFX to two input soruces depending on type. so use input
-sources to access q and to send it to it
+class FusionInputHandler
+{
+  // o run a thread
+  // o deliver keys from GFX to two input soruces depending on type. so use input
+  //   sources to access q and to send it to it
 
-FusionInputHandler creates two input sources
+  loop
+  {
+    mFrontPanelInput.injectKey(keyCode, true);
+    mInfraredInput.injectKey(keyCode, true);
+  }
 
-        // FrontPanel (EventSource::FrontPanel)
-        FrontPanel = 0xff,
-        // Infrared (EventSource::Infrared)
-        Generic_IR = 0xf0,           // All IR prior to EC10x Rcus
+  // FusionInputHandler creates two input sources
+  //
+  // // FrontPanel (EventSource::FrontPanel)
+  // FrontPanel = 0xff,
+  // // Infrared (EventSource::Infrared)
+  // Generic_IR = 0xf0,           // All IR prior to EC10x Rcus
 
-M:InputSource.cpp F:InputSource L:00066 > MIL: KT: mdevinfo {0xff03fffe, 0xff, 0x3, 0xfffe}
-M:InputSource.cpp F:InputSource L:00066 > MIL: KT: mdevinfo {0xf003fffd, 0xf0, 0x3, 0xfffd}
+  // M:InputSource.cpp F:InputSource L:00066 > MIL: KT: mdevinfo {0xff03fffe, 0xff, 0x3, 0xfffe}
+  // M:InputSource.cpp F:InputSource L:00066 > MIL: KT: mdevinfo {0xf003fffd, 0xf0, 0x3, 0xfffd}
+
+  `FusionInputDevice` mFrontPanelInput;
+  FusionInputDevice mInfraredInput;
+
+  FusionInputHandler::FusionInputHandler(const std::shared_ptr<InputQueue> &inputQueue)
+      , mGfxBuffer(nullptr)
+      , mFrontPanelInput(IInputHandler::DeviceType::FrontPanel, 0xfffe, inputQueue,
+          std::chrono::milliseconds(FRONT_PANEL_LONG_STANDBY_MS),
+          FRONT_PANEL_SHORT_STANDBY_KEYCODE,
+          FRONT_PANEL_LONG_STANDBY_KEYCODE)
+      , mInfraredInput(IInputHandler::DeviceType::Generic_IR, 0xfffd, inputQueue,
+          std::chrono::milliseconds(RCU_LONG_STANDBY_MS),
+          RCU_SHORT_STANDBY_KEYCODE,
+          RCU_LONG_STANDBY_KEYCODE)
+  {}
+}
 
 class FusionInputDevice : public InputSource
-
-    FusionInputDevice mFrontPanelInput;
-    FusionInputDevice mInfraredInput;
-
-FusionInputHandler::FusionInputHandler(const std::shared_ptr<InputQueue> &inputQueue)
-    : mStopFlag(false)
-    , mGfxBuffer(nullptr)
-    , mFrontPanelInput(IInputHandler::DeviceType::FrontPanel, 0xfffe, inputQueue,
-                       std::chrono::milliseconds(FRONT_PANEL_LONG_STANDBY_MS),
-                       FRONT_PANEL_SHORT_STANDBY_KEYCODE,
-                       FRONT_PANEL_LONG_STANDBY_KEYCODE)
-    , mInfraredInput(IInputHandler::DeviceType::Generic_IR, 0xfffd, inputQueue,
-                     std::chrono::milliseconds(RCU_LONG_STANDBY_MS),
-                     RCU_SHORT_STANDBY_KEYCODE,
-                     RCU_LONG_STANDBY_KEYCODE)
 {
+  inline void injectKey(uint16_t keyCode, bool down)
+  {
+    this->sendKey(keyCode, down);
+  }
 }
 
 
@@ -2428,10 +2451,18 @@ CdiFrontPanelInputDevice::CdiFrontPanelInputDevice
 @brief This runs the main epoll loop that checks for new linux input device
 nodes and also reads events from the existing input device nodes.
 
+// do not run thread sinc uses epollloop instead and add fds to epoll
+
+std::map< dev_t, std::pair<int64_t, std::shared_ptr<LinuxInputDevice> > > mInputDevices;
+
 bool LinuxInputHandler::start()
 {
   // use udev
   EPollLoop::Handler udevHandler; 
+
+  mRcuModeNotifierId = `mPollLoop->addFileDescriptor`(mRcuModeNofitier->fd(), 
+      EPollLoop::Readable,
+      rcuModeHandler);
 
   // start a long period timer for periodically scaning the device nodes
   mSyncTimerId = mPollLoop->addTimer(std::chrono::seconds(5), std::chrono::seconds(5),
@@ -2459,14 +2490,15 @@ void LinuxInputHandler::addNewInputDevice(dev_t devNumber, const std::string &de
 {
   // try and create the new device based
   std::shared_ptr<LinuxInputDevice> device =
-    `LinuxInputDevice::create`(devNumber, m_modeSetting, devPath, `mInputQueue`, mDeviceIDManager);
+    `LinuxInputDevice::create`(devNumber, m_modeSetting, `devPath`, `mInputQueue`, mDeviceIDManager);
 
   // add the device to the poll loop
-  EPollLoop::Handler handler = std::bind(`&LinuxInputDevice::process`, device,
+  EPollLoop::Handler `handler` = std::bind(`&LinuxInputDevice::process`, device,
       std::placeholders::_1, std::placeholders::_2);
 
-  int64_t id = mPollLoop->addFileDescriptor(device->fd(), EPollLoop::Readable, handler);
+  int64_t id = `mPollLoop->addFileDescriptor`(device->fd(), EPollLoop::Readable, handler);
 
+  // add it to device map
   mInputDevices[devNumber] = std::make_pair(id, device);
 
   AI_LOG_MILESTONE("added device node %u:%u (%s) with fd %d and id %hu to input loop ",
@@ -2475,25 +2507,23 @@ void LinuxInputHandler::addNewInputDevice(dev_t devNumber, const std::string &de
 }
 
 
-when rcu is gets paired:
+when *ble-rcu* is gets paired:
 
--APPINFRA     < p:00000e00 t:46e8ddb0 T:no name 
+-APPINFRA     <
 M:LinuxInputHandler.cpp F:syncDeviceNodes L:00453 
 > MIL: KT: LinuxInputHandler::syncDeviceNodes: validDevices {1}
 
--APPINFRA     < p:00000e00 t:46e8ddb0 T:no name 
+-APPINFRA     < 
 M:LinuxInputHandler.cpp F:addNewInputDevice L:00514 
 > KT: added device node 13:64 (bluetooth vendor:0x057a product:0x0004 'D4:B8:FF:12:E1:A8') 
 > with fd 520 and id 504 to input loop
 
 
+-APPINFRA     < 
+M:LinuxInputDevice.cpp F:create L:00169 > KT LinuxInputDevice(devPath(`/dev/input/event0`) busType(2) devType(3)
+
+
 *linux-input-device* LinuxInputDevice
-
-
-bool LinuxInputHandler::start()
-{
-}
-
 
 @class LinuxInputDevice
 @brief Generic input source for linux event device nodes.
@@ -2505,17 +2535,29 @@ bool LinuxInputHandler::start()
  *  is because we interpret the raw events differently based on the source
  *  of the events (ie BLE vs USB keyboard).
 
+appinfrastructure/AppInfrastructure/InputHandler/lib/source/LinuxInputDevice.h
+
 class LinuxInputDevice : public InputSource
 {
+public:
+    enum class BusType
+    {
+        USB,
+        HIL,
+        Bluetooth,
+        Virtual,
+        Other
+    };
+
     LinuxInputEventProcessor *mEventProcessor;
 };
 
 
 std::shared_ptr<LinuxInputDevice> LinuxInputDevice::create(dev_t devNumber,
-                                                           uint8_t devMode,
-                                                           const std::string &devPath,
-                                                           const std::shared_ptr<InputQueue> &queue,
-                                                           const std::shared_ptr<InputDeviceIDManager> &idManager)
+    uint8_t devMode,
+    const std::string &devPath,
+    const std::shared_ptr<InputQueue> `&queue`,
+    const std::shared_ptr<InputDeviceIDManager> &idManager)
 {
   // depending on dev id, will set "devType"
 
@@ -2524,7 +2566,7 @@ std::shared_ptr<LinuxInputDevice> LinuxInputDevice::create(dev_t devNumber,
     std::shared_ptr<LinuxInputDevice>
     (new LinuxInputDevice(devFd, devNumber, devMode, devType,
                           busType, id.vendor, id.product,
-                          id.version, physAddress, idToken, queue));
+                          id.version, physAddress, idToken, `queue`));
 }
 
 
@@ -2539,11 +2581,12 @@ LinuxInputDevice::LinuxInputDevice(int deviceFd, dev_t devNumber,
   // depending on the product id
   if (devType != IInputHandler::DeviceType::GenericLinuxInputDev)
   {
-    // BLE RCU
+    // *ble-rcu* BLE RCU
     `mEventProcessor = new BleRcuInputEventProcessor(this);`
   }
 }
 
+// called by epoll
 void `LinuxInputDevice::process`(int devFd, unsigned events)
 {
   ssize_t amount = TEMP_FAILURE_RETRY(readv(devFd, iov, maxInputEvents));
@@ -2563,12 +2606,12 @@ the source of the events is the BT RCU. It does this by looking at the vendor
 and product ids. It is not expected that LinuxInputEventProcessor will be used
 in the standard case, it is there for testing or as a fallback.
 
-`InputSource is LinuxInputDevice`
 
 class LinuxInputEventProcessor
 {
   protected:
-    InputSource * const mOutput;
+    // `InputSource is LinuxInputDevice`
+    `InputSource * const mOutput`;
 };
 
 LinuxInputEventProcessor::LinuxInputEventProcessor(InputSource *output)
@@ -2595,6 +2638,7 @@ void BleRcuInputEventProcessor::processEvents(const struct input_event *events)
 
 void BleRcuInputEventProcessor::processKeyEvents(uint16_t keyCode, int32_t state)
 {
+  // `InputSource has a queue`
   // send the up / down state of the key
   mOutput->sendKey(hidKeyCode, (state == LNX_KEY_UP) ? false : true);
 }
@@ -2626,20 +2670,6 @@ appinfrastructure/AppInfrastructure/Public/InputHandler/IInputHandler.h
         FrontPanel = 0xff,
     };
 
-appinfrastructure/AppInfrastructure/InputHandler/lib/source/LinuxInputDevice.h
-
-class LinuxInputDevice : public InputSource
-{
-public:
-    enum class BusType
-    {
-        USB,
-        HIL,
-        Bluetooth,
-        Virtual,
-        Other
-    };
-};
 
 // ir keys
 
@@ -2650,7 +2680,7 @@ public:
 -APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(2), keyCode(61022), down(0)}
 -APPINFRA     < M:BleRcuController.cpp F:onIrPairingCode L:00850 > KT: received IR pairing code 094
 
--APPINFRA     < M:LinuxInputDevice.cpp F:create L:00169 > KT LinuxInputDevice(devPath(/dev/input/event0) busType(2) devType(3)
+-APPINFRA     < M:LinuxInputDevice.cpp F:create L:00169 > KT LinuxInputDevice(devPath(`/dev/input/event0`) busType(2) devType(3)
 -APPINFRA     < M:LinuxInputDevice.cpp F:LinuxInputDevice L:00210 > KT LinuxInputDevice creates BleRcuInputEventProcessor
 -APPINFRA     < M:LinuxInputHandler.cpp F:addNewInputDevice L:00497 > KT: added device node 13:64 (bluetooth vendor:0x057a product:0x0004 'D4:B8:FF:12:E1:A8') with fd 508 and id 1418 to input loop 
 
@@ -11939,6 +11969,7 @@ echo "/opt/persistent/%e-%s.core.%p" >/proc/sys/kernel/core_pattern
 Copy them to the host
 
 scp -P 10022 root@192.168.0.12:/opt/persistent/*core* .
+scp -P 10022 root@192.168.0.12:/opt/persistent/asrdkplayer*core* .
 
 Run gdb-multiarch
 
@@ -11974,7 +12005,7 @@ cd ${CUR_DIR}
 done < ./dir1.txt
 
 
-*rdk-gdb-rdk-core*
+*rdk-gdb-core-rdk-core*
 // need to set sysroot and use debug binary.
 
 cp /media/keitee/ssd2/as-sky-repo/asplayer/build/asrdkplayer /media/keitee/ssd2/as-sky-repo/xi1-gdb
@@ -12530,19 +12561,28 @@ Generated on Wed Oct 07  15:40:31 UTC 2020
 /etc/device.properties
 
 
-*rdk-build-flash*
+*rdk-flash*
 
 // CAD3 UK
 scp -r -P 10022 ./SKXI11ADS_000150.13.2s0_PROD_sdy_4GBUK_PROLOVP.bin root@192.168.0.22:/tmp/data
 FlashApp /tmp/data/SKXI11ADS_000150.13.2s0_PROD_sdy_4GBUK_PROLOVP.bin
 
 // CAD3 IT driver 2.1
-https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_skyxione-it/314/
-scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin root@192.168.0.17:/tmp/data
-FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin
+// https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_skyxione-it/314/
+// scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin root@192.168.0.17:/tmp/data
+// FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin
 
-scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210129202136sdy.bin root@192.168.0.17:/tmp/data
-FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210129202136sdy.bin
+scp -r -P 10022 ./SKXI11ANS_000150.20.2s0_VBN_sdy_4GBIT_PROLOVP.bin root@192.168.0.16:/tmp/data
+FlashApp /tmp/data/SKXI11ANS_000150.20.2s0_VBN_sdy_4GBIT_PROLOVP.bin
+
+scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin root@192.168.0.16:/tmp/data
+FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin
+
+ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.16 ''\'''\''FlashApp' \
+'/tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin'\'''\'''
+
+ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.16 reboot
+
 
 // X3(LLAMA) driver 2.1
 https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_llama-panel/306/
@@ -12553,10 +12593,11 @@ ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.26 ''\'''\''FlashApp' '/
 // X3 from SI. current
 scp -r -P 10022 ./SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin root@192.168.0.14:/tmp/data
 FlashApp /tmp/data SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin
+SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin 
 
 // from CI
-scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.21.6.0.0_20210211191445sdy.bin root@192.168.0.14:/tmp/data
-FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.21.6.0.0_20210211191445sdy.bin
+scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210224171558sdy.bin root@192.168.0.15:/tmp/data
+FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210224171558sdy.bin
 
 // own build
 scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.18.2.0.0_20210119200347sdy.bin root@192.168.0.14:/tmp/data
@@ -12881,6 +12922,10 @@ GET /as/diag/AAMP_PLAYER/enableAll
 GET /as/diag/AS_PLAYER/enableAll
 
 curl -v -X GET http://192.168.0.15:9005/as/diag/AS_PLAYER/enableAll
+curl -v -X GET http://192.168.0.15:9005/as/diag/AS_PLAYER/enableInfo
+curl -v -X GET http://192.168.0.15:9005/as/diag/AS_PLAYER/disableInfo
+curl -v -X GET http://192.168.0.15:9005/as/diag/fallback/enableAll
+
 curl -v -X GET http://192.168.0.14:9005/as/diag/AS_PLAYER/enableAll?persist=true
 
 curl -v -X GET http://192.168.0.9:9005/as/diag/AAMP_PLAYER/enableAll
@@ -16759,7 +16804,7 @@ enum PlayerSessionBlockedReason {
 
     eBlockedReason_TunerLowOrNoSignal,    // 15, NO SIGNAL
     eBlockedReason_InsufficientOutputProtection,
-    eBlockedReason_DecoderUnableToDecode, // NO SIGNAL
+    eBlockedReason_DecoderUnableToDecode, // 15, NO SIGNAL
 
     eBlockedReason_DecoderCodecNotSupported,
     eBlockedReason_RecorderNoSpaceLeft,
@@ -16777,7 +16822,7 @@ enum PlayerSessionBlockedReason {
     eBlockedReason_CaUpdateRequired,
     eBlockedReason_CaUnsupportedScramblingAlgorithm,
 
-    eBlockedReason_CaBroadcastError,    // TECHNICAL FAULT
+    eBlockedReason_CaBroadcastError,    // TECHNICAL FAULT for NAGRA
 
     eBlockedReason_CaUsageRulesViolation,
     eBlockedReason_CaDeviceNotActivated,
@@ -16807,6 +16852,61 @@ public:
 };
 
 "BLOCKED (eCsStreamProviderTunerUrlParseError)" which is eSessionState_Blocked
+
+{
+	"atrack" : "0xFFFFFFFF",
+	"audioenabled" : true,
+	"eid" : "7d2-f517",
+	"endposutc" : 1614083642,
+	"lcn" : "",
+	"media" : "LIVE",
+	"nownextversion" : 1,
+	"posutc" : 1614083642,
+	"posutcms" : 1614083642470,
+	"ps" : "BLOCKED",
+	"psr" : 
+	[
+		"NO SIGNAL"
+	],
+	"sid" : "M233a-90b-2908-36",
+	"speed" : 1,
+	"startposutc" : 1614083642,
+	"subtitleid" : "1",
+	"vtrack" : "0xFFFFFFFF",
+	"vwid" : "1"
+}
+
+I think you can trigger a eBlockedReason_TunerBadParameters by entering e.g.
+
+tune://dvb-t?frequency=722000000
+
+in the TestTune tab of the mediarite webUI on http://<ip-of-box>:40660/?#tuneTestPage
+
+Feb 23 12:41:51 sky-llama-panel com.sky.as.player[21179]: mrplayer status BLOCKED (eCsStreamProviderTunerUrlParseError, 14) status
+Feb 23 12:41:51 sky-llama-panel com.sky.as.player[21179]: getASStateReason_: mr blocked reason{14} defaults to SessionFailure
+
+{
+	"atrack" : "0xFFFFFFFF",
+	"audioenabled" : true,
+	"eid" : "7d2-f517",
+	"endposutc" : 1614084105,
+	"lcn" : "",
+	"media" : "LIVE",
+	"nownextversion" : 1,
+	"posutc" : 1614084105,
+	"posutcms" : 1614084105996,
+	"ps" : "BLOCKED",
+	"psr" : 
+	[
+		"PLAYER SESSION FAILURE"
+	],
+	"sid" : "M233a-90b-2908-36",
+	"speed" : 1,
+	"startposutc" : 1614084105,
+	"subtitleid" : "1",
+	"vtrack" : "0xFFFFFFFF",
+	"vwid" : "1"
+}
 
 
 ={============================================================================
@@ -18345,6 +18445,51 @@ says "available".
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-dtt-audio-track
 
+2021.2
+
+Moves from design where a session has handling of track/audio overrides and
+each player passes up track lists via status to design where these moves down
+to each player. Since there is an issue when polling track list every 1
+seconds in MR case so plan to remove this polling and to get the list when
+it's requested.
+
+
+https://www.stb.bskyb.com/confluence/display/2016/T10+-+IP+Linear
+
+AC10.4.1 Audio track selection 
+
+Given the viewer has requested to play an IP linear service when starting play 
+then the audio track corresponding to any existing override for the service is
+selected, or if not found the audio track corresponding to the audio language
+setting is selected, or if not found the audio track corresponding to the
+default audio language is selected, or if not found any available audio track
+is selected
+
+AC10.4.2 Subtitles track selection
+
+Given the viewer has requested to play an IP linear service when starting play 
+then the subtitles track corresponding to any existing override for the
+service is selected, otherwise if the subtitles user setting is on the
+subtitles track corresponding to the subtitles language setting is selected
+
+
+https://www.stb.bskyb.com/confluence/display/2016/T26+-+DTT
+
+AC26.6.1 Audio track selection
+Given the viewer has requested to play a DTT linear service when starting play 
+then the audio track corresponding to any existing override for the service is
+selected, or if not found the audio track corresponding to the audio language
+setting is selected, or if not found the audio track corresponding to the
+default audio language is selected, or if not found any available audio track
+is selected
+
+AC26.6.2 Subtitles track selection 
+Given the viewer has requested to play a DTT linear service when starting play
+then the subtitles track corresponding to any existing override for the
+service is selected, otherwise if `the subtitles user setting is on` the
+subtitles track corresponding to `the subtitles language setting` is selected
+
+
 *dtt-audio-mr*
 
 https://www.stb.bskyb.com/jira/browse/NGDEV-155159
@@ -18362,17 +18507,18 @@ Feb 10 14:05:05 sky-llama-panel com.sky.as.player[5269]:
 call one of followings to inform MR for relevant setting changes.
 
 // to set sub preference; user setting and region default
-void setSubtitleLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
+`void` setSubtitleLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
+
 // to set audio preference; user setting and region default
-void setAudioLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
+`void` setAudioLanguagePriority(std::vector<FutarqueString> iIso639_3_list) FJAP_THROW(FutarqueRpcException);
 
 // to disable/enable sub
-void setSubtitlesEnabled(bool iIsOn) FJAP_THROW(FutarqueRpcException);
+`void` setSubtitlesEnabled(bool iIsOn) FJAP_THROW(FutarqueRpcException);
 void markSetupDone() FJAP_THROW(FutarqueRpcException);
+
 
 2. use selection api to select a track
 bool selectTrack(const char * iPlayerId, CoreTrackType iTrackType, int64 iTrackPK) FJAP_THROW(FutarqueRpcException);
-
 
 TableResultError getTrack(const char * iPlayerId, FutarqueString iAttributes, int64 iTrackPK, TracksResult & oTableResult) FJAP_THROW(FutarqueRpcException);
 TableResultError getTracks(const char * iPlayerId, FutarqueString iAttributes, CoreTrackType iCoreTrackType, TracksResult & oTableResult) FJAP_THROW(FutarqueRpcException);
@@ -18464,6 +18610,15 @@ void PlayersComponentTracksExecutor::handleGetRequest( const ASRequest &request 
 }
 
 
+*dtt-audio-track-index*
+
+In AAMP case, gets json string for the list and parse it then put them in
+vector. The order of json array becomes the order of vector and this order is
+used as index to select and to refer. In MR case, uses PK instead. To cope
+both, add index in track detail of player interface and each player fill it up
+accordingly.
+
+
 *dtt-audio-when-change-channel*
 
 o build audio prio string of {override, settting, (platform) default} order
@@ -18533,28 +18688,31 @@ is using.
 void ASPlayerSession::SetAudioComponentTrack( const ASRequest &request )
 {
   // only when it's playing state
-
-  if (requested track is different to the currently selected track)
+  `else if ( m_status.m_ps != Player::State::Idle )`
   {
-    // Update track selection with new track
-    m_playerInterface->setAudioTrack( audioId );
+
+    if (requested track is different to the currently selected track)
     {
-      bool AAMPPlayer::setAudioTrack(int audioIndex)
+      // Update track selection with new track
+      m_playerInterface->setAudioTrack( audioId );
+      {
+        bool AAMPPlayer::setAudioTrack(int audioIndex)
+      }
+
+      // Update or add entry to m_overrideHistoryMap<sid, property>
+      //
+      // SetAudioOverride()
+      //
+      // if found, update {audio iso, time};
+      // if not found, add {audio iso, time, clear subtitle settings}. if # of
+      // entry goes over the max, delete the oldest and then add.
+      //
+      // SetSubtitlesOverride() do the same only for subtitle bits
+      // SetSubtitlesEnabledOverride; do the sname only for sub enable bit
+
+      PlayerSettingsStorage::getInstance()
+        ->SetAudioOverride( m_sid, m_status.m_currentAvailableAudioLanguages[audioId].trackIsoCode );
     }
-
-    // Update or add entry to m_overrideHistoryMap<sid, property>
-    //
-    // SetAudioOverride()
-    //
-    // if found, update {audio iso, time};
-    // if not found, add {audio iso, time, clear subtitle settings}. if # of
-    // entry goes over the max, delete the oldest and then add.
-    //
-    // SetSubtitlesOverride() do the same only for subtitle bits
-    // SetSubtitlesEnabledOverride; do the sname only for sub enable bit
-
-    PlayerSettingsStorage::getInstance()
-      ->SetAudioOverride( m_sid, m_status.m_currentAvailableAudioLanguages[audioId].trackIsoCode );
   }
 }
 
@@ -18580,26 +18738,35 @@ o change audio track only when the selected lang is not found in `the override`
 o NOTE that use if/def on PlaybackType while it's not IDLE state since need to
 change audio track as *dtt-audio-set*
 
+o setting changes is covered by channel change since watchstream set it
+everytime.
+
 void PlayersSettingExecutor::HandleAudioLanguage( const ASRequest &request )
 {
-  PlayerController::getInstance()->ProcessSettingAudioChange( isoCodeAudioLanguage );
+  // "audioLanguage"
 
+  PlayerSettingsStorage::getInstance()->`PersistPlayerSetting`( audioLanguageKey, isoCodeAudioLanguage );
+
+  PlayerController::getInstance()->ProcessSettingAudioChange( isoCodeAudioLanguage );
   {
     m_playerSessions[AS_PLAYER_VWID_MAIN]->`ProcessSettingAudioChange`( audioLanguageIsoCode )
     {
-      // only when it's not found in override
-      if ( isAudioSelectionOverrideSaved == false )
+      if ( m_status.m_ps != Player::State::Idle )
       {
-        // search it in current available audio and if found, set it out
-        m_status.m_currentAvailableAudioLanguages
+        // only when it's not found in override
+        if ( isAudioSelectionOverrideSaved == false )
+        {
+          // search it in current available audio and if found, set it out
+          m_status.m_currentAvailableAudioLanguages
 
-        m_playerInterface->setAudioTrack( index );
-      }
+            m_playerInterface->setAudioTrack( index );
+        }
 
-      // for dtt-audio, changes it without checking.
-      {
-        std::vector<std::string> langs{audioLanguageIsoCode from user, audioDefault for platform};
-        settingManager->setAudioLanguagePriority(langs);
+        // for dtt-audio, changes it without checking.
+        {
+          std::vector<std::string> langs{audioLanguageIsoCode from user, audioDefault for platform};
+          settingManager->setAudioLanguagePriority(langs);
+        }
       }
     }
   }
@@ -18683,23 +18850,102 @@ void `ASPlayerSession::SetSubtitlesComponentTrack`(const ASRequest &request)
 }
 
 
-*dtt-subs-setting* *player-setting*
+*dtt-subs-setting* *player-setting-language*
+
+// from data file asplayer/player/LanguageMap_UK.dat
+
+PlayerLanguage playerLanguage[] =
+{
+#if defined(SKY_AS_EE_UK)
+#include "LanguageMap_UK.dat"
+#elif defined(SKY_AS_EE_IT)
+#include "LanguageMap_IT.dat"
+#elif defined(SKY_AS_EE_DE)
+#include "LanguageMap_DE.dat"
+#endif
+};
+
+curl -X GET http://192.168.0.15:9005/as/players/languages
+{
+   "audiolanguages" : {
+      "options" : [
+         "English",
+         "French",
+         "German",
+         "Spanish",
+         "Irish",
+         "Scots",
+         "Welsh",
+         "Punjabi",
+         "Hindi",
+         "Urdu",
+         "Italian",
+         "Portuguese",
+         "Chinese",
+         "Arabic",
+         "Bengali",
+         "Russian"
+      ]
+   },
+   "subtitlelanguages" : {
+      "options" : [
+         "English",
+         "French",
+         "German",
+         "Spanish",
+         "Irish",
+         "Scots",
+         "Welsh",
+         "Punjabi",
+         "Hindi",
+         "Urdu",
+         "Italian",
+         "Portuguese",
+         "Chinese",
+         "Arabic",
+         "Bengali",
+         "Russian"
+      ]
+   }
+}
+
+
+Player Subtitle Tracks: [
+  {u'subtitleid': u'401', u'selected': True, u'isocode': u'eng', u'name': u'English'}, 
+  {u'subtitleid': u'402', u'isocode': u'gla', u'name': u'Scots'}, 
+  {u'subtitleid': u'403', u'isocode': u'gle', u'name': u'Irish'}, 
+  {u'subtitleid': u'404', u'isocode': u'wel', u'name': u'Other'}, 
+  {u'subtitleid': u'405', u'isocode': u'cym', u'name': u'Welsh'}, 
+  {u'subtitleid': u'406', u'isocode': u'fra', u'name': u'French'}]
+
+the problem is that dat file only has "cym" and "wel" is not found so maps to
+"Other"
+
+{ "cym",        "Welsh",            true,       true },
+
 
 curl -X GET http://192.168.0.14:9005/as/players/setting/subtitlesLanguage
 {
    "subtitlesLanguage" : "English"
 }
 
-curl -X POST http://192.168.0.12:9005/as/players/setting/subtitlesLanguage --data '{"subtitlesLanguage": "English"}'
+curl -X POST http://192.168.0.15:9005/as/players/setting/subtitlesLanguage --data '{"subtitlesLanguage": "English"}'
 
 o NOTE that use if/def on PlaybackType while it's not IDLE state since need to
 change sub track as *dtt-audio-setting*
 
 void PlayersSettingExecutor::HandleSubtitlesLanguage( const ASRequest &request )
 {
+  // std::string subtitlesLanguageKey = "subtitlesLanguage";
+
+  // get it from the persistent
+
+  PlayerSettingsStorage::getInstance()->GetSettingSubtitleLanguage( currentSubtitlesLanguage );
+
   `if ( currentSubtitlesLanguage != isoCodeSubtitlesLanguage )`
   {
-    // note it's in executor
+    // note it's in executor. save it to the persistent
+
     PlayerSettingsStorage::getInstance()->PersistPlayerSetting( subtitlesLanguageKey, `isoCodeSubtitlesLanguage` );
 
     PlayerController::getInstance()->ProcessSettingSubtitlesChange( isoCodeSubtitlesLanguage );
@@ -18743,10 +18989,18 @@ change sub track as *dtt-audio-set*
 
 void PlayersSettingExecutor::HandleSubtitles( const ASRequest &request )
 {
+  // std::string subtitlesEnabledKey = "subtitles";
+
+  // read from the persist
+
+  bool currentSubtitlesEnabled = PlayerSettingsStorage::getInstance()->IsSettingSubtitlesEnabled();
+
   // current setting from flash
   `if ( currentSubtitlesEnabled != subtitlesEnabled )`
   {
     subtitlesEnabled = ( subtitlesEnabledString == "on" ) ? true : false;
+
+    // NOTE: save it to the persist
 
     if ( PlayerSettingsStorage::getInstance()->PersistPlayerSetting( subtitlesEnabledKey, subtitlesEnabledString ) == 0 )
     {
@@ -19217,6 +19471,9 @@ Row 0001 {
 AutoStreamer Manual action - start {'tv_channels': 8, 'expected_tracks': {'DTG SD4': {'audiotracks': [{'isocode': 'eng'}], 'subtitletracks': [{'isocode': 'eng'}, {'isocode': 'gle'}, {'isocode': 'wel'}, {'isocode': 'cym'}, {'isocode': 'gla'}, {'isocode': 'fra'}]}, 'DTG SD3': {'audiotracks': [{'isocode': 'eng'}], 'subtitletracks': []}, 'DTG SD2': {'audiotracks': [{'isocode': 'qaa'}, {'isocode': 'und'}], 'subtitletracks': [{'isocode': 'wel'}, {'isocode': 'und'}]}, 'DTG SD1': {'audiotracks': [{'isocode': 'eng'}, {'isocode': 'gle'}, {'isocode': 'cym'}, {'isocode': 'gla'}, {'isocode': 'fra'}], 'subtitletracks': []}}, 
   'file_name': 'UK_T2_LS_TS1_12.00.ts', 'radio_channels': 1, 'stop': 'AMS_DTT_TS7_STOP', 'start': 'AMS_DTT_TS7_START'}
 
+// TS2
+DtPlay /home/keitee/Downloads/HD_Linear/HD_LinearServices_12.00/UK_T2_LS_TS2_12.00.ts  -mB 8 -mC QAM64 -t 2115 -l 0 -r 40214645  -mf 514  -n 1 -mG 1/32 -mc 2/3
+
 // new streams DTG
 DtPlay /home/keitee/Downloads/HD_Linear/HD_LinearServices_12.00/UK_T2_LS_TS1_12.00.ts  -mB 8 -mC QAM64 -t 2115 -l 0 -r 40214645  -mf 514  -n 1 -mG 1/32 -mc 2/3
 
@@ -19595,6 +19852,7 @@ lrwxrwxrwx 1 keitee keitee   27 Jan 28 14:08 libNagra.so -> libNagraSKYrelease.s
 ={============================================================================
 *kt_dev_skymw_0000* mw-rdk-dtt-parental
 
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=T26+-+DTT#T26-DTT-Viewing:ParentalControl
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=DTT+Parental+Control+HLA
 
 /as/players/viewingrestrictions
@@ -19609,22 +19867,103 @@ The cert attribute can be any one of the options as returned by
 /players/viewingrestrictions
 
 
+{
+  m_pinRequestHandlerMap["/as/pin"] = std::make_shared<PinExecutor>();
+  m_pinRequestHandlerMap["/as/pin/action/submit"] = std::make_shared<PinActionSubmitExecutor>();
+  m_pinRequestHandlerMap["/as/pin/action/retriesleft"] = std::make_shared<PinActionRetriesLeftExecutor>();
+}
+
 /pin/action/submit
 DESCRIPTION Submits a PIN for verification
 URI STRUCTURE /as/pin/action/submit?pin=<pin>
 
+curl -X GET http://192.168.0.15:9005/as/pin/ -d ""
+
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=0000 -d ""
+
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=0000 -d ""
+
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=1235 -d "" && \
+curl -X POST http://192.168.0.15:9005/as/pin/action/submit?pin=0000 -d ""
+
+curl -X GET http://192.168.0.15:9005/as/players/viewingrestrictions -d ""
+
+
 PinController
-manage pin on a persist file.
 
+o reads PIN and RETRIES LEFT from persist so remains over reboots
 
-/players/<vwid>/action/submitpin
+o manage pin/retry cound on a persist text file
+
+o run a state machine
+  starts from PIN_CONTROLLER_STATE_PIN_UNBLOCKED
+
+o /players/<vwid>/action/submitpin
+  send PIN_CONTROLLER_EVENT_RETRIES_LEFT_VALUE_CHANGED
+  moves to BLOCKED/UNBLOCKED based on retry count.
+
+o queue.recv() has timeout and when time expires, use event which has UNDEF
+  default value and changed to UNBLOCKED state.
+
 
 DESCRIPTION Submits a PIN to a specific video player
 URI STRUCTURE /as/players/<vwid>/action/submitpin?pin=<pin>
 
 goes through PlayerController, Session, and PinController
 
-Q: AV is blocked when PIN is not right on AAMP?
+
+m_playerRequestVwidSpecificHandlerMap["action/submitpin"] = std::make_shared<PlayersSubmitPinExecutor>();
+
+void PlayersSubmitPinExecutor::handlePostRequest( const ASRequest &request )
+{
+  PlayerController::getInstance()->SubmitPin( AS_PLAYER_VWID_MAIN, request );
+}
+
+void PlayerController::SubmitPin( int vwid, const ASRequest &request )
+{
+  void ASPlayerSession::SubmitPin( const ASRequest &request )
+  {
+    pinError = PinController::getInstance()->SubmitPin( pinValueItr->second );
+
+    Q: what's the action when pin blocked?
+  }
+}
+
+Q: AV is blocked when PIN is not right on AAMP? Yes, EPG will do for OTT/VOD.
+MR will do for DTT.
+
+/as/pin
+DESCRIPTION Returns the status of the PIN subsytem, not the PIN itself.
+
+The response contains how many tries the user has left before the PIN will be
+blocked.
+
+{
+ “triesLeft”: 0,
+}
+
+
+https://www.stb.bskyb.com/confluence/display/2016/Parental+Control+HLA
+current impl. use ID3 tag to get ca rating and put it on player/status
+"carating"
+
+
+*as-player-status* only for DTT
+[psr = PIN1 | PIN2 | PIN3 | PIN BLOCK | CARD NO RIGHTS
+
+
+mr calls:
+
+PlayerRpcHelper
+    bool setContentRestrictions(const char * iPlayerId, const FutarqueContentRating & iContentRestrictions) FJAP_THROW(FutarqueRpcException);
+    bool getContentRestrictions(const char * iPlayerId, FutarqueContentRating & oContentRestrictions) FJAP_THROW(FutarqueRpcException);
+    bool disableContentRestrictionsUntil(const char * iPlayerId, int iGrace, int iTime, bool iEventChange) FJAP_THROW(FutarqueRpcException);
 
 
 ={============================================================================
@@ -24133,10 +24472,10 @@ AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --al
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_010_change_setaudio_dtt_exact
 
 
-// players_tracks_TEST_011_audio_only_dtt_exact
+*players_tracks_TEST_011_audio_only_dtt_exact*
 // note that need to chage test to have ['sf']=sd but not 'au'
 
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_011_audio_only_dtt_exact
 
 ----------------------------------------------------------------------
@@ -24148,7 +24487,7 @@ Generating XML reports...
 Generated XML report: test-dtt-audio/TEST-players_tracks_TEST_011_audio_only_dtt_exact.xml
 
 
-*players_tracks_TEST_012_setsubtitle_dtt_exact* NOTE: subtitle issue
+*players_tracks_TEST_012_setsubtitle_dtt_exact*
 
 o requires dtt scan done on DTG stream. If it's FSRed, test runs a scan.
 
@@ -24170,38 +24509,65 @@ Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: inserts subtitle track
 
     settingManager->setSubtitleLanguagePriority(subtitlePreference);
 
+NOTE: fails since subtitleid update issue. With temp fix to provide current
+subid in status, it passes
 
-But when calls /tracks, there is no selected subs. 0 means sub is off.
-
-Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: currently selected subtitle track {0}
-Feb 16 10:46:43 sky-llama-panel com.sky.as.player[13902]: Selected text track index: 0
-
-AssertionError: Expect one track selected, received []
-
-note: requires default subs set which means marksetupdone() path is done before.
-
-So question is why?
-
-o set default sub in the first-time setup:
-
-settingManager->setSubtitleLanguagePriority(subtitlePreference);
-
-see "about the issue when change subtitle:"
+Expected: {'ps': 'PLAYING', 'subtitleid': u'314'}
+Received: {'ps': u'PLAYING', 'subtitleid': u'1'}
 
 AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_012_setsubtitle_dtt_exact
 
+OK
+Generating XML reports...
+Generated XML report: test-dtt-audio/TEST-players_tracks_TEST_012_setsubtitle_dtt_exact.xml
+keitee@kit-ubuntu:/media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite$
+
 
 *players_tracks_TEST_013_subtitle_on_off_dtt_exact*
-
-// use DTG SD4
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+// use DTG SD4. NOTE: fail due to subtitleid when subtitle off
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_013_subtitle_on_off_dtt_exact
 
 
-// players_tracks_TEST_014_change_global_subtitle_dtt_exact
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+*players_tracks_TEST_014_change_global_subtitle_dtt_exact*
+
+o DTG SD4
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_014_change_global_subtitle_dtt_exact
+
+NOTE: with temp subtitleid fix, goes along but fails on:
+
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {English (DVB), eng, 375, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Gaelic (DVB), gla, 376, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Irish (DVB), gle, 377, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), wel, 378, 1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: TEMP: set subtitleid {378}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), cym, 379, 0}
+
+200 POST http://192.168.0.15:9005/as/players/setting/subtitlesLanguage {"subtitlesLanguage": "Welsh"} [1614177910.79]
+
+then expect the second Welsh but the first Welsh is selected
+
+/players/1/status = {u'atrack': u'0xFFFFFFFF', u'ps': u'PLAYING', u'vwid': u'1', u'media': u'LIVE', u'audioenabled': True, u'posutcms': 1614177915333, u'eid': u'7d2-f517', 
+  u'subtitleid': u'378', u'sid': u'M233a-90b-2908-107', u'lcn': u'', u'endposutc': 1614177915, u'startposutc': 1614177915, u'speed': 1, u'vtrack': u'0xFFFFFFFF', u'posutc': 1614177915, u'nownextversion': 1}
+Required Status = {'ps': 'PLAYING', 'subtitleid': u'379'}
+
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: updateTracks_: returned num of audios {1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts audio track {English (MPEG), eng, 374, 1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {English (DVB), eng, 375, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Gaelic (DVB), gla, 376, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Irish (DVB), gle, 377, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), wel, 378, 1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: TEMP: set subtitleid {378}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), cym, 379, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {French (DVB), fra, 380, 0}
+
+// *mr-status* NGDEV-178562_player_psr branch
+// players_1_status_TEST_030_dtt_psr_transition
+// AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+// python -u -m framework suite.xi6.dtt_dektec_suite.players_1_status_TEST_030_dtt_psr_transition
 
 
 #{============================================================================

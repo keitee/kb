@@ -57,7 +57,7 @@ namespace
     // return str;
     std::cout << str;
   }
-}
+} // namespace
 
 /*
 // ={=========================================================================
@@ -183,8 +183,9 @@ namespace cxx_time
         std::cout << "failed on gettimeofday\n";
 
       // show itimer value in seconds
-      print(" %6.2f %6.2f", timer.it_value.tv_sec + timer.it_value.tv_usec / 1000000.0,
-                timer.it_interval.tv_sec + timer.it_interval.tv_usec / 1000000.0);
+      print(" %6.2f %6.2f",
+            timer.it_value.tv_sec + timer.it_value.tv_usec / 1000000.0,
+            timer.it_interval.tv_sec + timer.it_interval.tv_usec / 1000000.0);
     }
 
     std::cout << std::endl;
@@ -198,7 +199,8 @@ TEST(CxxTime, os_set_timer_1)
 {
   using namespace cxx_time;
 
-  struct itimerval timer{};
+  struct itimerval timer
+  {};
 
   // number of signals(expiration) to catch before exiting
   int max_signals{};
@@ -353,7 +355,8 @@ TEST(CxxTime, os_set_timer_2)
 {
   using namespace cxx_time;
 
-  struct itimerval timer{};
+  struct itimerval timer
+  {};
 
   // number of signals(expiration) to catch before exiting
   int max_signals{};
@@ -393,8 +396,8 @@ TEST(CxxTime, os_set_timer_2)
   // each expiration of the timer, the timer will be reset to expire again at
   // the specified interval.
 
-  timer.it_value.tv_sec     = 2;      // 2 secs
-  timer.it_value.tv_usec    = 800000; // us. 800.000 ms. 0.8 sec
+  timer.it_value.tv_sec  = 2;      // 2 secs
+  timer.it_value.tv_usec = 800000; // us. 800.000 ms. 0.8 sec
 
   // NOTE: what if not set interval time?
   //
@@ -450,6 +453,17 @@ TEST(CxxTime, os_set_timer_2)
 /*
 // ={=========================================================================
 TODO: add tests for timerfd?
+
+the difference between:
+
+epollloop uses
+  if (0 != timerfd_settime(timerfd_, 0, &its, nullptr))
+otherwise, fails on tests.
+
+timer_queue uses:
+  if (0 != timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, nullptr))
+when use 0 instead, it hangs on one test.
+
 */
 
 // ={=========================================================================

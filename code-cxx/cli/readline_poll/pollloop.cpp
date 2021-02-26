@@ -1,8 +1,6 @@
-/* ={==========================================================================
+/* ={=========================================================================
 reference code:
 AppInfrastructure/Common/lib/source/PollLoop.cpp
-AppInfrastructure/InputHandler/test/source/EPollLoopTests.cpp
-AppInfrastructure/InputHandler/lib/source/EPollLoop.cpp
 
 TODO:
 not able to find real use of EPOLLDEFERRED in the reference code tree and may be

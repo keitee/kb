@@ -145,7 +145,7 @@ iterator insert( const_iterator pos, T&& value ); (since C++11) (until C++20)
 constexpr iterator insert( const_iterator pos, T&& value ); (since C++20)
 
 return value
-1-2) Iterator pointing to the inserted value
+1-2) Iterator pointing to the "inserted value"
 
 */
 
@@ -1191,6 +1191,42 @@ TEST(CxxCollInsert, on_map)
 
     EXPECT_THAT(coll == coll_1, true);
   }
+}
+
+/*
+// ={=========================================================================
+cxx-set cxx-insert
+set sorts out when gets inserted. emplace returns iterator
+
+std::set<int> coll{2, 3, 4, 5, 6, 7, 8};
+
+EXPECT_THAT(it, coll.begin());
+
+causes compile errors. WHY?
+
+std::set<Key,Compare,Allocator>::emplace
+
+Return value
+Returns a pair consisting of an iterator to the inserted element, or the
+already-existing element if no insertion happened, and a bool denoting whether
+the insertion took place (true if insertion happened, false if it did not).
+
+std::multiset<Key,Compare,Allocator>::emplace
+
+Return value
+Returns an iterator to the inserted element.
+
+set::emplace() do not return iterator when multiset does
+*/
+
+TEST(CxxCollInsert, on_set_return_value_from_emplace)
+{
+  std::multiset<int> coll{2, 3, 4, 5, 6, 7, 8};
+
+  // insert 1 and expect it goes to begin() since it's lowest
+  auto it = coll.emplace(1);
+
+  EXPECT_THAT(it, coll.begin());
 }
 
 /*
@@ -2510,7 +2546,7 @@ TEST(StlQueue, check_priority_queue)
 // ={=========================================================================
 // cxx-set
 
-TEST(CxxSet, check_insert_and_emplace)
+TEST(CxxSet, insert_and_emplace)
 {
   std::set<int> coll1{};
 
@@ -2528,7 +2564,7 @@ TEST(CxxSet, check_insert_and_emplace)
 }
 
 // ={=========================================================================
-TEST(CxxSet, check_order)
+TEST(CxxSet, sorted)
 {
   {
     // cxx-less <

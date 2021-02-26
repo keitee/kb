@@ -1,17 +1,53 @@
 #include "epollloop.h"
 #include "slog.h"
 
+#include <condition_variable>
 #include <iostream>
+#include <mutex>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
-// #include <sys/syscall.h> /* For SYS_xxx definitions */
-#include <condition_variable>
-#include <mutex>
 #include <sys/timerfd.h>
 #include <unistd.h>
 
-/* ={==========================================================================
+/*
+1. std::recursive_mutex m_lock;
+
+  3.3.3 Recursive locking *cxx-mutex-recursive*
+
+  By using a recursive_mutex, this behavior is no problem. This mutex allows
+  multiple locks `by the same thread` and releases the lock when the last
+  corresponding unlock() call is called
+
+Whie epoll thread runs, it access to internal maps, m_handlers for example, and
+the reference use a recursive lock on start/stopTimer which are public
+interfaces. 
+
+installTimer_() is used by public interfaces so no need to use recursive either.
+
+add/removeDescriptor_() also are used by public so no need to use it as well
+
+So not need to use recursive lock here. Is recursive lock expensive
+than usual mutex or any beneficial?
+
+Use std::mutex instead.
+
+2. the reference and example which use it
+InputHandler/lib/source/EPollLoop.h
+InputHandler/lib/source/EPollLoop.cpp
+InputHandler/test/source/EPollLoopTests.cpp
+
+InputHandler/lib/include/InputHandler.h
+
+3. Compare to TimerQueue, use timerfd for managing timers and simplifies
+implementation.
+
+4. Since uses timerfd for each timer, may have accurate functor run in time.
+
 */
+
+/* ={=========================================================================
+*/
+
 EPollLoop::EPollLoop(const std::string &name, int priority)
     : m_name(name)
     , m_priority(priority)
@@ -41,8 +77,9 @@ EPollLoop::~EPollLoop()
   cleanupTimers_();
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 */
+
 void EPollLoop::run_()
 {
   // set the name of the thread within the limit
@@ -58,6 +95,11 @@ void EPollLoop::run_()
   pthread_setname_np(pthread_self(), name_.c_str());
 
   // set priority
+  //
+  // struct sched_param {
+  //     int sched_priority;     // Scheduling priority
+  // };
+
   if (m_priority > 0)
   {
     struct sched_param param_
@@ -97,7 +139,7 @@ void EPollLoop::run_()
       const auto tag_   = events_[i].data.u64;
       const auto flags_ = events_[i].events;
 
-      // process eventfd
+      // process death eventfd
       if (tag_ == 0)
       {
         uint64_t noneed_{};
@@ -114,11 +156,12 @@ void EPollLoop::run_()
       // process the rest
       else
       {
-        std::lock_guard<std::recursive_mutex> lock(m_lock);
+        // std::lock_guard<std::recursive_mutex> lock(m_lock);
+        std::lock_guard<std::mutex> lock(m_lock);
 
         auto it = m_handlers.find(tag_);
 
-        // process eventfd from executeInPollloop()
+        // process eventfd from executeInPollloop()/addDescriotor()
         if (m_handlers.end() != it)
         {
           // convert epoll flags
@@ -132,8 +175,9 @@ void EPollLoop::run_()
             events_ |= Writeable;
 
           // call the handler which is lambda in executeInPollLoop()
-          const auto fd_ = it->second.fd;
+          const auto fd_   = it->second.fd;
           const auto call_ = it->second.handler;
+
           if (call_)
             call_(fd_, events_);
         }
@@ -195,8 +239,9 @@ void EPollLoop::run_()
   } // while
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 */
+
 bool EPollLoop::start()
 {
   if (m_thread.joinable())
@@ -262,11 +307,11 @@ bool EPollLoop::start()
   return true;
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 Like void PollLoop::stop(), stop() supports that it can be called multiple times
 but here uses joinable() check first instead of using if checks.
-
 */
+
 void EPollLoop::stop()
 {
   // epoll loop do not run and no epoll thread to stop.
@@ -318,7 +363,7 @@ void EPollLoop::stop()
   cleanupTimers_();
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 start a single shot timer that will call the given handler
 note that "timeout" is in nano and conversion is done when pass milliseconds.
 */
@@ -339,7 +384,8 @@ bool EPollLoop::startSingleShotTimer(const std::chrono::nanoseconds &timeout,
     return false;
   }
 
-  struct itimerspec spec_{};
+  struct itimerspec spec_
+  {};
 
   // since it's single shot, set initial value only.
   spec_.it_value.tv_sec =
@@ -384,13 +430,13 @@ bool EPollLoop::startSingleShotTimer(const std::chrono::nanoseconds &timeout,
   return true;
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 add a periodic timer to the poll but not start it
 */
 
 int64_t EPollLoop::addTimer(const std::chrono::nanoseconds &initial,
-                         const std::chrono::nanoseconds &interval,
-                         const TimerHandler &handler)
+                            const std::chrono::nanoseconds &interval,
+                            const TimerHandler &handler)
 {
   if (interval.count() < 0)
   {
@@ -416,7 +462,10 @@ int64_t EPollLoop::addTimer(const std::chrono::nanoseconds &initial,
   //   }
   // };
 
-  struct itimerspec spec_{};
+  // clang-format-off
+  struct itimerspec spec_
+  {};
+  // clang-format-on
 
   spec_.it_value.tv_sec =
     std::chrono::duration_cast<std::chrono::seconds>(initial).count();
@@ -449,14 +498,15 @@ int64_t EPollLoop::addTimer(const std::chrono::nanoseconds &initial,
   return id;
 }
 
-/* ={==========================================================================
-start a periodic timer to the poll but not start it
+/* ={=========================================================================
+start a periodic timer
 */
 
 bool EPollLoop::startTimer(int64_t id)
 {
-  // TODO:
-  std::lock_guard<std::recursive_mutex> lock(m_lock);
+  // the reference
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
 
   auto it = m_timers.find(id);
 
@@ -478,14 +528,15 @@ bool EPollLoop::startTimer(int64_t id)
   return true;
 }
 
-/* ={==========================================================================
+/* ={=========================================================================
 stop a periodic timer
 */
 
 bool EPollLoop::stopTimer(int64_t id)
 {
-  // TODO:
-  std::lock_guard<std::recursive_mutex> lock(m_lock);
+  // the reference
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
 
   auto it = m_timers.find(id);
 
@@ -497,8 +548,11 @@ bool EPollLoop::stopTimer(int64_t id)
 
   auto fd_ = it->second.fd;
 
+  // clang-format-off
   // clear the timer's values to disarm the timer
-  const struct itimerspec clear{}; //  = { { 0, 0L }, { 0, 0L } };
+  const struct itimerspec clear
+  {}; //  = { { 0, 0L }, { 0, 0L } };
+  // clang-format-on
 
   // set timer and start it
   if (0 != timerfd_settime(fd_, 0, &clear, nullptr))
@@ -510,9 +564,64 @@ bool EPollLoop::stopTimer(int64_t id)
   return true;
 }
 
-/* ={==========================================================================
-run a functor epoll loop
+/* ={=========================================================================
+remove a periodic timer
 */
+
+bool EPollLoop::removeTimer(int64_t id)
+{
+  // the reference
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
+
+  // unlike start/stopTimer, it uses epoll. check it here before removing it
+  // from m_timers. the reference have this a later.
+  if (m_epollfd < 0)
+  {
+    LOG_MSG("epoll {%s} is not running", m_name.c_str());
+    return -1;
+  }
+
+  auto it = m_timers.find(id);
+
+  if (m_timers.end() == it)
+  {
+    LOG_MSG("failed to find timer %d in epoll {%s}", id, m_name.c_str());
+    return false;
+  }
+
+  // not likely since removeTimer() is for periodic timer. the refernece
+  // if (it->second.singleShot)
+  // {
+  //   LOG_MSG("trying to remove a timer{%d} with single on in epoll {%s}", id, m_name.c_str());
+  //   return false;
+  // }
+
+  const int fd_ = it->second.fd;
+
+  // remove it from handler map
+  m_timers.erase(it);
+
+  // remove it from epoll
+  if (epoll_ctl(m_epollfd, EPOLL_CTL_DEL, fd_, nullptr) < 0)
+  {
+    LOG_MSG("failed to delete a timer from epoll {%s}", m_name.c_str());
+    return false;
+  }
+
+  // anf finally close timerfd
+  if (close(fd_) < 0)
+  {
+    LOG_MSG("failed to close timerfd in poll {%s}", m_name.c_str());
+  }
+
+  return true;
+}
+
+/* ={=========================================================================
+run a functor epoll loop and waits till the handler is called and returns
+*/
+
 bool EPollLoop::executeInPollloop(const Executor &func)
 {
   // NOTE: use 1 init value and by doing this, "func" will be run without
@@ -544,8 +653,8 @@ bool EPollLoop::executeInPollloop(const Executor &func)
     cond_.notify_all();
   };
 
-  auto id_ = addDescriptor_(eventfd_, EPollLoop::Readable, call);
-  if ( id_ < 0)
+  auto id_ = addDescriptor(eventfd_, EPollLoop::Readable, call);
+  if (id_ < 0)
   {
     LOG_MSG("failed to add eventfd for epoll {%s}", m_name.c_str());
     close(eventfd_);
@@ -558,13 +667,15 @@ bool EPollLoop::executeInPollloop(const Executor &func)
 
   while (!done_)
   {
-    if (std::cv_status::timeout == cond_.wait_for(wait_, std::chrono::seconds(1)))
+    if (std::cv_status::timeout ==
+        cond_.wait_for(wait_, std::chrono::seconds(1)))
     {
-      LOG_MSG("timed out waiting for handler to be run by the poll {%s}", m_name.c_str());
+      LOG_MSG("timed out waiting for handler to be run by the poll {%s}",
+              m_name.c_str());
     }
   }
 
-  removeDescriptor_(id_);
+  removeDescriptor(id_);
 
   if (close(eventfd_) < 0)
   {
@@ -578,10 +689,16 @@ bool EPollLoop::executeInPollloop(const Executor &func)
 returns the epoll thread id
   @returns thread id
 */
+
 std::thread::id EPollLoop::threadId() const
 {
   return m_thread.get_id();
 }
+
+/* ={=========================================================================
+returns true if the epoll thread is running
+  @returns thread id
+*/
 
 bool EPollLoop::running() const
 {
@@ -594,9 +711,9 @@ install the timerfd into the epoll
 */
 
 int64_t EPollLoop::installTimer_(int fd,
-                              const struct itimerspec &timeout,
-                              const TimerHandler &handler,
-                              bool single)
+                                 const struct itimerspec &timeout,
+                                 const TimerHandler &handler,
+                                 bool single)
 {
   if (m_epollfd < 0)
   {
@@ -609,7 +726,8 @@ int64_t EPollLoop::installTimer_(int fd,
   {};
   event_.events = EPOLLIN;
 
-  std::lock_guard<std::recursive_mutex> lock(m_lock);
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
 
   // generate a tag and save it to event
   int64_t tag_    = m_tag_counter++;
@@ -662,7 +780,8 @@ adds a handler for a given file descriptor
   @return a tag(id) to be used when to remove the handler. -1 on failure.
 */
 
-int64_t EPollLoop::addDescriptor_(int fd, unsigned events, const Handler &handler)
+int64_t
+EPollLoop::addDescriptor(int fd, unsigned events, const Handler &handler)
 {
   if (m_epollfd < 0)
   {
@@ -670,8 +789,10 @@ int64_t EPollLoop::addDescriptor_(int fd, unsigned events, const Handler &handle
     return -1;
   }
 
-  // create a event for epoll 
+  // clang-format-off
+  // create a event for epoll
   struct epoll_event event_{};
+  // clang-format-on
 
   event_.events = 0;
 
@@ -681,9 +802,10 @@ int64_t EPollLoop::addDescriptor_(int fd, unsigned events, const Handler &handle
   if (events & EPollLoop::Writeable)
     event_.events |= EPOLLOUT;
 
-  std::lock_guard<std::recursive_mutex> lock(m_lock);
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
 
-  auto tag_ = m_tag_counter++;
+  auto tag_       = m_tag_counter++;
   event_.data.u64 = tag_;
 
   if (epoll_ctl(m_epollfd, EPOLL_CTL_ADD, fd, &event_) < 0)
@@ -694,8 +816,8 @@ int64_t EPollLoop::addDescriptor_(int fd, unsigned events, const Handler &handle
 
   // add a handler
   HandlerEntry handler_{};
-  handler_.fd = fd;
-  handler_.events = events;
+  handler_.fd      = fd;
+  handler_.events  = events;
   handler_.handler = handler;
 
   m_handlers.emplace(tag_, handler_);
@@ -708,7 +830,7 @@ removes a handler for a given tag(id)
   @return true if handler is uninstalled. -1 on failure.
 */
 
-bool EPollLoop::removeDescriptor_(const int64_t tag)
+bool EPollLoop::removeDescriptor(const int64_t tag)
 {
   if (m_epollfd < 0)
   {
@@ -716,7 +838,8 @@ bool EPollLoop::removeDescriptor_(const int64_t tag)
     return -1;
   }
 
-  std::lock_guard<std::recursive_mutex> lock(m_lock);
+  // std::lock_guard<std::recursive_mutex> lock(m_lock);
+  std::lock_guard<std::mutex> lock(m_lock);
 
   auto it = m_handlers.find(tag);
 

@@ -60805,7 +60805,7 @@ all         :  Kong Yize: 44.77
 ={============================================================================
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
-{cxx-ratio}
+*cxx-ratio*
 
 CLR-5.6 Compile-Time Fractional Arithmetic with Class ratio<>
 
@@ -60826,7 +60826,7 @@ namespace cxx_code
    *  @brief Provides compile-time rational arithmetic.
    *
    *  This class template represents any finite rational number with a
-   *  numerator and denominator representable by compile-time constants of
+   *  `numerator` and `denominator` representable by compile-time constants of
    *  type intmax_t. The ratio is simplified when instantiated.
    *
    *  For example:
@@ -60851,25 +60851,39 @@ namespace cxx_code
 
   typedef ratio<1,                1000000000> nano;
   typedef ratio<1,                   1000000> micro;
-  typedef ratio<1,                      1000> milli;
+  `typedef ratio<1,                      1000> milli;`
 
 } // namespace
 
-TEST(Ratio, Ratio)
+TEST(CxxTime, ratio)
 {
-  using FiveThirds = std::ratio<5,3>;
+  // typedef std::ratio<5, 3> 5/3, FiveThirds;
+  using FiveThirds = std::ratio<5, 3>;
 
-  // Numerator and denominator
+  // Numerator and denominator. 5/3
   EXPECT_THAT(FiveThirds::num, 5);
   EXPECT_THAT(FiveThirds::den, 3);
 
-  // Numerator and denominator
+  // Numerator and denominator, 10**9
   EXPECT_THAT(std::nano::num, 1);
   EXPECT_THAT(std::nano::den, 1000000000LL);
+
+  // 10**6
+  EXPECT_THAT(std::micro::num, 1);
+  EXPECT_THAT(std::micro::den, 1000000LL);
+
+  // 10**3
+  EXPECT_THAT(std::milli::num, 1);
+  EXPECT_THAT(std::milli::den, 1000LL);
+
+  // std::chrono::hours since den is 1 by default
+  std::ratio<3600> hour;
+  EXPECT_THAT(hour.num, 3600);
+  EXPECT_THAT(hour.den, 1);
 }
 
 
-{cxx-time}
+*cxx-duration*
 
 CLR-5.7 Clocks and Timers
 
@@ -60884,7 +60898,7 @@ namespace cxx_code
   typedef duration<int64_t, micro> 	    microseconds;
 
   /// milliseconds
-  typedef duration<int64_t, milli> 	    milliseconds;
+  typedef duration<int64_t, `milli`> 	    milliseconds;
 
   /// seconds
   typedef duration<int64_t> 		    seconds;
@@ -60915,7 +60929,6 @@ namespace cxx_code
     template<typename _Clock, typename _Dur = typename _Clock::duration>
       struct time_point;
   }
-
 } // namespace
 
 
@@ -60947,46 +60960,74 @@ o A timepoint is defined as combination of a duration and a beginning of time
   point."
 
 
-A duration is a combination of a value representing `the number of ticks` and a
-`fraction` representing the unit `in seconds` 
+/*
+cxx-time Arithmetic Duration Operations
+
+You can compute with durations in the expected way (see Table 5.21):
+
+o You can process the sum, difference, product, or quotient of two durations.
+o You can add or subtract ticks or other durations.
+o You can compare two durations.
+
+The important point here is that the unit type of two durations involved in
+such an operation might be different.
+
+Table 5.21. Arithmetic Operations of durations
+
+
+A duration is a combination of a value representing `the number of ticks` and
+a `fraction` representing the unit `in seconds` 
 
 o the first template argument defines `the type of the ticks`
 
 o the optional second template argument defines `the unit type in seconds.` 
 
-// `20 ticks` and one time unit is 1 sec. 20 x 1
-std::chrono::duration<int> twentySeconds(20);
+                     epoch of a clock
+                     |                  timepoint
+                     | <-   duration -> |
+*/
 
-// `0.5 tick` and one time unit is 60 secs. 0.5 x 60 = 30
-std::chrono::duration<double,std::ratio<60>> halfAMinute(0.5);
+TEST(CxxTime, duration)
+{
+  {
+    // "int" type of ticks and 1 second unit since duration type has default
+    // unit as second
+    std::chrono::duration<int> twentySeconds(20);
+    EXPECT_THAT(twentySeconds.count(), 20);
 
-// `1 tick` and one time unit is 1/1000 sec
-std::chrono::duration<long,std::ratio<1,1000>> oneMillisecond(1);
+    std::chrono::duration<double, std::ratio<60>> halfAMinute(0.5);
+    EXPECT_THAT(halfAMinute.count(), 0.5);
 
-For more convenience, the C++ standard library provides the following type
-  definitions. With them, you can easily specify typical time periods:
+    // "int" type of tick and the unit is 3600 seconds which is a hour
+    std::chrono::duration<int, std::ratio<3600>> aDay(24);
+    EXPECT_THAT(aDay.count(), 24);
 
-std::chrono::seconds twentySeconds(20);
-std::chrono::hours aDay(24);
-std::chrono::milliseconds oneMillisecond(1);
+    // typedef duration<int64_t, std::milli> 	    milliseconds;
+    std::chrono::duration<int64_t, std::milli> oneMillisecond(1);
+    EXPECT_THAT(oneMillisecond.count(), 1);
+  }
 
+  // For more convenience, the C++ standard library provides the following
+  // type definitions. With them, you can easily specify typical time periods:
 
-Table 5.22. Other Operations and Types of durations
+  {
+    std::chrono::seconds twentySeconds(20);
+    EXPECT_THAT(twentySeconds.count(), 20);
 
-d.count()             Returns ticks of the duration d
-duration_cast<D>(d)   Returns duration d explicitly converted into type D
-duration::rep         Yields the type of the ticks
+    // error: no matching function for call to ‘std::chrono::duration<long int, std::ratio<60> >::duration(double)’
+    // since std::chrono::minutes is defined: 
+    // typedef duration<int64_t, ratio<60>>   minutes;
+    //
+    // std::chrono::minutes halfAMinute(0.5);
+    // EXPECT_THAT(halfAMinute.count(), 0.5);
 
+    std::chrono::hours aDay(24);
+    EXPECT_THAT(aDay.count(), 24);
 
-<cxx-time-duration-cast>
-As we have seen, implicit conversions to a more precise unit type are always
-possible. However, conversions to a coarser unit type are not, because you
-might lose information.
-
-std::chrono::seconds sec(55);
-std::chrono::minutes m1 = sec;                          // ERROR
-std::chrono::minutes m2 =
-std::chrono::duration_cast<std::chrono::minutes>(sec);  // OK
+    std::chrono::milliseconds oneMillisecond(1);
+    EXPECT_THAT(oneMillisecond.count(), 1);
+  }
+}
 
 
 *cxx-time-duration-cast*
@@ -61209,14 +61250,17 @@ with timepoints.
 Class time_point provides the corresponding interface, parametrized by a
 clock:
 
-namespace std {
-  namespace chrono {
-    template <typename Clock,
-             typename Duration = typename Clock::duration>
-               class time_point;
+namespace cxx_code // #include <chrono>
+{
+  namespace chrono
+  {
+    template<typename _Rep, typename _Period = ratio<1>>
+      struct duration;
+
+    template<typename _Clock, typename _Dur = typename _Clock::duration>
+      struct time_point;
   }
 }
-
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
 {
@@ -64981,7 +65025,7 @@ call find_entry() are blocked too.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock cxx-recursive-lock
 
-3.3.3 Recursive locking
+3.3.3 Recursive locking *cxx-mutex-recursive*
 
 Most of the time, if you think you want a recursive mutex, you probably need to
 change your design instead.

@@ -7110,6 +7110,7 @@ TEST(CxxTime, check_sleep_for)
 }
 
 // ={========================================================================
+// cxx-time
 TEST(CxxTime, ratio)
 {
   // typedef std::ratio<5, 3> 5/3, FiveThirds;
@@ -7131,14 +7132,15 @@ TEST(CxxTime, ratio)
   EXPECT_THAT(std::milli::num, 1);
   EXPECT_THAT(std::milli::den, 1000LL);
 
-  std::ratio<100> rn;
-  EXPECT_THAT(rn.num, 100);
-  EXPECT_THAT(rn.den, 1);
+  // std::chrono::hours since den is 1 by default
+  std::ratio<3600> hour;
+  EXPECT_THAT(hour.num, 3600);
+  EXPECT_THAT(hour.den, 1);
 }
 
 /*
 ={=========================================================================
-Arithmetic Duration Operations
+cxx-time Arithmetic Duration Operations
 
 You can compute with durations in the expected way (see Table 5.21):
 
@@ -7150,25 +7152,72 @@ The important point here is that the unit type of two durations involved in
 such an operation might be different.
 
 Table 5.21. Arithmetic Operations of durations
+
+
+A duration is a combination of a value representing `the number of ticks` and
+a `fraction` representing the unit `in seconds` 
+
+o the first template argument defines `the type of the ticks`
+
+o the optional second template argument defines `the unit type in seconds.` 
+
+                     epoch of a clock
+                     |                  timepoint
+                     | <-   duration -> |
 */
 
-TEST(CxxTime, duration_count)
+TEST(CxxTime, duration)
 {
-  std::chrono::seconds twentySeconds(20);
-  EXPECT_THAT(twentySeconds.count(), 20);
+  {
+    // "int" type of ticks and 1 second unit since duration type has default
+    // unit as second
+    std::chrono::duration<int> twentySeconds(20);
+    EXPECT_THAT(twentySeconds.count(), 20);
 
-  std::chrono::hours aDay(24);
-  EXPECT_THAT(aDay.count(), 24);
+    std::chrono::duration<double, std::ratio<60>> halfAMinute(0.5);
+    EXPECT_THAT(halfAMinute.count(), 0.5);
 
-  std::chrono::milliseconds oneMillisecond(1);
-  EXPECT_THAT(oneMillisecond.count(), 1);
+    // "int" type of tick and the unit is 3600 seconds which is a hour
+    std::chrono::duration<int, std::ratio<3600>> aDay(24);
+    EXPECT_THAT(aDay.count(), 24);
+
+    // typedef duration<int64_t, std::milli> 	    milliseconds;
+    std::chrono::duration<int64_t, std::milli> oneMillisecond(1);
+    EXPECT_THAT(oneMillisecond.count(), 1);
+  }
+
+  // For more convenience, the C++ standard library provides the following
+  // type definitions. With them, you can easily specify typical time periods:
+
+  {
+    std::chrono::seconds twentySeconds(20);
+    EXPECT_THAT(twentySeconds.count(), 20);
+
+    // error: no matching function for call to ‘std::chrono::duration<long int, std::ratio<60> >::duration(double)’
+    // since std::chrono::minutes is defined: 
+    // typedef duration<int64_t, ratio<60>>   minutes;
+    //
+    // std::chrono::minutes halfAMinute(0.5);
+    // EXPECT_THAT(halfAMinute.count(), 0.5);
+
+    std::chrono::hours aDay(24);
+    EXPECT_THAT(aDay.count(), 24);
+
+    std::chrono::milliseconds oneMillisecond(1);
+    EXPECT_THAT(oneMillisecond.count(), 1);
+  }
 }
 
 /*
 ={=========================================================================
+cxx-time 5.7.2 Durations
+
 You can also convert durations into durations of different units, as long
-as there is an implicit type conversion. Thus, you can convert hours into
-seconds but not the other way around. For example:
+as there is an implicit type conversion. 
+
+As we have seen, implicit conversions to a more precise unit type are always
+possible. However, conversions to a coarser unit type are not, because you
+might lose information.
 
 Table 5.22. Other Operations and Types of durations
 
@@ -7223,15 +7272,81 @@ TEST(CxxTime, duration_conversion_1)
   }
 }
 
+/*
 // ={=========================================================================
-// *cxx-time-duration-cast*
-//
-// A typical example is code that segments a duration into different units. For
-// example, the following code segments a duration of milliseconds into the
-// corresponding hours, minutes, seconds, and milliseconds
-//
-// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
-//      02::00::55::42
+Thus, you can convert hours into seconds but not the other way around. 
+
+error: conversion from ‘std::chrono::seconds {aka std::chrono::duration<long int>}’ 
+to non-scalar type ‘std::chrono::minutes {aka std::chrono::duration<long int, std::ratio<60> >}’ requested
+*/
+
+TEST(CxxTime, duration_conversion_2)
+{
+  // compile error
+  // {
+  //   std::chrono::seconds timeout{55};
+  //   std::chrono::minutes m = timeout;
+  // }
+
+  // so use duration_cast
+  {
+    std::chrono::seconds timeout{55};
+    std::chrono::minutes m = std::chrono::duration_cast<std::chrono::minutes>(timeout);
+  }
+}
+
+namespace cxx_time
+{
+  // to down
+  std::string function_1(const std::chrono::nanoseconds &timeout)
+  {
+    std::stringstream ss{};
+
+    ss << timeout.count();
+
+    return ss.str();
+  }
+
+  // to up
+  std::string function_2(const std::chrono::seconds &timeout)
+  {
+    std::stringstream ss{};
+
+    ss << timeout.count();
+
+    return ss.str();
+  }
+} // namespace cxx_time
+
+// ={=========================================================================
+TEST(CxxTime, duration_conversion_3)
+{
+  using namespace cxx_time;
+
+  EXPECT_THAT(function_1(std::chrono::milliseconds(1)), "1000000");
+
+  // error: invalid initialization of reference of type
+  // ‘const seconds& {aka const std::chrono::duration<long int>&}’
+  // from expression of type
+  // ‘std::chrono::duration<long int, std::ratio<1, 1000> >’
+  //
+  //    std::cout << "count : " << function_2(std::chrono::milliseconds(1))
+
+  // std::cout << "count : " << function_2(std::chrono::milliseconds(1))
+  //           << std::endl;
+}
+
+/*
+// ={=========================================================================
+*cxx-time-duration-cast*
+
+A typical example is code that segments a duration into different units. For
+example, the following code segments a duration of milliseconds into the
+corresponding hours, minutes, seconds, and milliseconds
+
+raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+     02::00::55::42
+*/
 
 namespace cxx_time
 {
@@ -7291,88 +7406,58 @@ TEST(CxxTime, duration_cast_1)
 }
 
 // ={=========================================================================
-// As we have seen, implicit conversions to a more precise unit type are always
-// possible. However, conversions to a coarser unit type are not, because you
-// might lose information.
-//
-// For example, when converting an integral value of 42,010 milliseconds into
-// seconds, the resulting integral value, 42, means that the precision of having
-// a duration of 10 milliseconds over 42 seconds gets lost. But you can still
-// explicitly force such a conversion with a duration_cast. For example:
-//
-// std::chrono::seconds sec(55);
-//
-// std::chrono::minutes m1 = sec; // ERROR
-//
-// std::chrono::minutes m2 =
-//    std::chrono::duration_cast<std::chrono::minutes>(sec); // OK
-
-// TEST(CxxTime, check_duration_cast_2)
-// {
-//   using namespace cxx_time;
-
-//   std::chrono::milliseconds ms{7255042};
-
-//   // convert ms to hours
-//   std::chrono::hours hh{};
-
-//   // error: no match for ‘operator=’ (operand types are ‘std::chrono::hours
-//   // {aka std::chrono::duration<long int, std::ratio<3600> >}’ and
-//   // ‘std::chrono::milliseconds {aka std::chrono::duration<long int, std::ratio<1, 1000> >}’)
-//   //    hh = ms;
-
-//   hh = ms;
-
-//   EXPECT_THAT(hh.count(), 2);
-// }
-
-// ={=========================================================================
 // cxx-time-crono-clock
 
-// the following function prints the properties of a clock
-// C represents clock
-template <typename C>
-void print_clock_data(ostringstream &os)
+namespace cxx_time
 {
-  using namespace std;
+  // the following function prints the properties of a clock
+  // C represents clock
+  template <typename C>
+    void print_clock_data(ostringstream &os)
+    {
+      using namespace std;
 
-  os << "- precision: ";
+      os << "- precision: ";
 
-  // clock::period
-  // Yields the type of the unit type (equivalent to clock::duration::period)
+      // clock::period
+      // Yields the type of the unit type (equivalent to clock::duration::period)
 
-  typedef typename C::period P;
+      typedef typename C::period P;
 
-  // /usr/include/c++/4.9/ratio
-  // typedef ratio<                     1000, 1> kilo;
+      // /usr/include/c++/4.9/ratio
+      // typedef ratio<                     1000, 1> kilo;
 
-  if (ratio_less_equal<P, std::milli>::value)
-  {
-    // This class template alias generates a ratio type that is the
-    // multiplication of the ratio types R1 and R2.
-    //
-    // The resulting type is the same as if ratio_multiply was defined as:
-    //
-    // template <typename R1, typename R2>
-    // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den
-    // >;
+      if (ratio_less_equal<P, std::milli>::value)
+      {
+        // This class template alias generates a ratio type that is the
+        // multiplication of the ratio types R1 and R2.
+        //
+        // The resulting type is the same as if ratio_multiply was defined as:
+        //
+        // template <typename R1, typename R2>
+        // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den
+        // >;
 
-    typedef typename ratio_multiply<P, std::kilo>::type TT;
-    os << fixed << double(TT::num) / TT::den << " milliseconds" << endl;
-  }
-  else
-  {
-    os << fixed << double(P::num) / P::den << " seconds" << endl;
-  }
+        typedef typename ratio_multiply<P, std::kilo>::type TT;
+        os << fixed << double(TT::num) / TT::den << " milliseconds" << endl;
+      }
+      else
+      {
+        os << fixed << double(P::num) / P::den << " seconds" << endl;
+      }
 
-  // clock::is_steady
-  // Yields true if the clock is steady
+      // clock::is_steady
+      // Yields true if the clock is steady
 
-  os << "- is ready: " << boolalpha << C::is_steady << endl;
+      os << "- is ready: " << boolalpha << C::is_steady << endl;
+    }
 }
 
-TEST(CxxTime, check_various_clock)
+// ={=========================================================================
+TEST(CxxTime, shows_various_clock)
 {
+  using namespace cxx_time;
+
   ostringstream os;
 
   os << "system_clock: " << endl;
@@ -7442,7 +7527,7 @@ TEST(CxxTime, steady_clock)
 
 /*
 // ={=========================================================================
-cxx-time-timepoint
+cxx-time-timepoint 5.7.3 Clocks and Timepoints
 
 o A timepoint represents a specific point in time by associating a positive or
   negative duration to a given clock.
@@ -7472,35 +7557,79 @@ max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
 
 */
 
-std::string as_string(const std::chrono::system_clock::time_point &tp)
+namespace cxx_time
 {
-  // static convenience function
-  // Note also that this convenience function probably will work only for
-  // system_clocks, the only clocks that provide an interface for conversions
-  // to and from time_t.
+  // converts a timepoint of the system clock into the corresponding calendar
+  // time
 
-  std::time_t time = std::chrono::system_clock::to_time_t(tp);
+  std::string as_string(const std::chrono::system_clock::time_point &tp)
+  {
+    // Note also that this static convenience function probably will work only
+    // for "system_clocks", the only clocks that provide an interface for
+    // conversions to and from time_t.
 
-  // std::string ts = std::ctime(&time);
-  // to get UTC:
-  std::string ts = std::asctime(gmtime(&time));
+    std::time_t time = std::chrono::system_clock::to_time_t(tp);
 
-  // remove trailing newline
-  ts.resize(ts.size() - 1);
+    // Note that ctime() takes the local time zone into account
+    // std::string ts = std::ctime(&time);
 
-  return ts;
+    // to get UTC:
+    std::string ts = std::asctime(gmtime(&time));
+
+    // remove trailing newline
+    ts.resize(ts.size() - 1);
+
+    return ts;
+  }
 }
 
+/*
 // ={=========================================================================
-TEST(CxxTime, timepoint)
-{
-  {
-    // print the epoch of this system clock
 
+namespace cxx_code // #include <chrono>
+{
+  namespace chrono
+  {
+    template<typename _Rep, typename _Period = ratio<1>>
+      struct duration;
+
+    template<typename _Clock, typename _Dur = typename _Clock::duration>
+      struct time_point;
+  }
+}
+
+
+Four specific timepoints play a special role:
+
+1. The epoch, which the default constructor of class time_point yields for
+each clock.
+
+2. The current time, which the static member function now() of each clock
+yields
+
+3. The minimum timepoint, which the static member function min() of class
+time_point yields for each clock.
+
+4. The maximum timepoint, which the static member function max() of class
+time_point yields for each clock.
+
+*/
+
+TEST(CxxTime, timepoint_1)
+{
+  using namespace cxx_time;
+
+  {
+    // std::chrono::system_clock::time_point tp;
+    //
+    // clock::time_point, Yields the timepoint type of the clock so this 
     // is equivalent to:
+    //
     // std::chrono::time_point<std::chrono::system_clock> tp
+    //
     // Thus, the default constructor, which yields the epoch, creates a timepoint,
 
+    // print the epoch of this system clock
     std::chrono::system_clock::time_point tp;
     cout << "epoch: " << as_string(tp) << endl;
 
@@ -7515,13 +7644,15 @@ TEST(CxxTime, timepoint)
   }
 }
 
+/*
 // ={=========================================================================
-// now in duration: 1599840788414732866
-// now in seconds : 1599840788
-// now : 1599840923
-// now : 1599840923
+now in duration: 1599840788414732866
+now in seconds : 1599840788
+now : 1599840923
+now : 1599840923
+*/
 
-TEST(CxxTime, timepoint_now)
+TEST(CxxTime, timepoint_2)
 {
   // tp.time_since_epoch()
   // Returns the duration between the epoch and timepoint tp
@@ -7547,24 +7678,35 @@ TEST(CxxTime, timepoint_now)
   std::cout << "now : " << std::time(0) << std::endl;
 }
 
+/*
 // ={=========================================================================
-TEST(CxxTime, timepoint_arithmetic)
+cxx-time util/chrono2.cpp
+allow adjusting timepoints by using timepoint arithmetic.
+
+tp +- duration returns a new timepoint of tp with duration d added. so cannot
+compare with duration.
+
+*/
+
+TEST(CxxTime, timepoint_arithmetic_1)
 {
+  using namespace cxx_time;
+
   std::ostringstream os{};
 
-  // one day as seconds
-  typedef chrono::duration<int, ratio<3600 * 24>> Days;
-
+  // get the epoch
   chrono::time_point<chrono::system_clock> tp;
 
-  // allow adjusting timepoints by using timepoint arithmetic.
+  // one day as seconds. 1 hour is 3600 seconds 
+  typedef chrono::duration<int, ratio<3600 * 24>> Days;
 
-  // add 1 day, 23 hours, and 55 minutes to the epoch
+  // add 1 day, 23 hours, and 55 minutes to the epoch.
   tp += Days(1) + chrono::hours(23) + chrono::minutes(55);
   os << "later : " << as_string(tp) << endl;
 
-  // diff in minutes
+  // diff in minutes between the epoch and tp
   auto diff = tp - chrono::system_clock::time_point();
+
   os << "diff : " << chrono::duration_cast<chrono::minutes>(diff).count()
      << " minutes" << endl;
 
@@ -7591,45 +7733,82 @@ TEST(CxxTime, timepoint_arithmetic)
   EXPECT_THAT(os.str(), expected);
 }
 
-namespace cxx_time
-{
-  // to down
-  std::string function_1(const std::chrono::nanoseconds &timeout)
-  {
-    std::stringstream ss{};
-
-    ss << timeout.count();
-
-    return ss.str();
-  }
-
-  // to up
-  std::string function_2(const std::chrono::seconds &timeout)
-  {
-    std::stringstream ss{};
-
-    ss << timeout.count();
-
-    return ss.str();
-  }
-} // namespace cxx_time
-
+/*
 // ={=========================================================================
-TEST(CxxTime, timepoint_conversion)
+timepoint comparison fails when string output is the same
+
+time_1: Fri Feb 26 09:04:45 2021
+time_2: Fri Feb 26 09:04:45 2021
+
+/home/keitee/git/kb/code-cxx/cxx/test_cxx_1.cpp:7755: Failure
+Value of: result
+Expected: is equal to true
+  Actual: false (of type bool)
+[  FAILED  ] CxxTime.timepoint_arithmetic_2 (5001 ms)
+*/
+
+TEST(CxxTime, timepoint_arithmetic_2)
 {
   using namespace cxx_time;
 
-  EXPECT_THAT(function_1(std::chrono::milliseconds(1)), "1000000");
+  // get the now timepoint
+  auto time_1 = std::chrono::system_clock::now();
+  
+  time_1 += std::chrono::seconds{5};
 
-  // error: invalid initialization of reference of type
-  // ‘const seconds& {aka const std::chrono::duration<long int>&}’
-  // from expression of type
-  // ‘std::chrono::duration<long int, std::ratio<1, 1000> >’
-  //
-  //    std::cout << "count : " << function_2(std::chrono::milliseconds(1))
+  std::this_thread::sleep_for(std::chrono::seconds{5});
 
-  // std::cout << "count : " << function_2(std::chrono::milliseconds(1))
-  //           << std::endl;
+  auto time_2 = std::chrono::system_clock::now();
+
+  std::cout << "time_1: " << as_string(time_1) << std::endl;
+  std::cout << "time_2: " << as_string(time_2) << std::endl;
+
+  auto result = time_1 == time_2 ? true : false;
+
+  EXPECT_THAT(result, true);
+}
+
+/*
+// ={=========================================================================
+error: no match for ‘operator<’ (operand types are
+‘std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> > >’ and
+‘std::chrono::duration<long int>’)
+
+makes no sense to compare timepoint with duration as well.
+
+TEST(CxxTime, timepoint_arithmetic_3)
+{
+  using namespace cxx_time;
+
+  // get the now timepoint
+  auto time_1 = std::chrono::system_clock::now();
+  
+  time_1 < std::chrono::seconds{5};
+}
+
+*/
+
+namespace cxx_time
+{
+  std::string to_timepoint_1(const std::chrono::milliseconds &timeout)
+  {
+    std::stringstream ss{};
+
+    ss << timeout.count();
+
+    return ss.str();
+  }
+}
+
+TEST(CxxTime, timepoint_arithmetic_4)
+{
+  using namespace cxx_time;
+
+  // get the now timepoint
+  auto time_1 = std::chrono::system_clock::now();
+  
+  // : no matching function for call to ‘std::__cxx11::basic_string<char>::basic_string(std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> > >&)’
+  std::string to_timepoint_1(time_1);
 }
 
 // 12/04/18
@@ -12893,7 +13072,6 @@ TEST(CxxStream, read_std_input_1)
 /*
 ={=========================================================================
 how to handle arguments from main(int argc, char *argv[])
-
 */
 
 TEST(CxxStream, read_std_input_2)
@@ -12930,9 +13108,9 @@ TEST(CxxStream, read_std_input_2)
 }
 
 // ={=========================================================================
-// how can get a whole line?
+// how can get a whole line? cxx-getline
 
-TEST(CxxStream, std_getline)
+TEST(CxxStream, get_whole_line)
 {
   {
     int i{};
@@ -13300,6 +13478,7 @@ TEST(CxxStream, manipulators_1)
        << endl;
 }
 
+// ={=========================================================================
 TEST(CxxStream, manipulators_2)
 {
   std::ostringstream os{};
@@ -13343,6 +13522,10 @@ TEST(CxxStream, check_manipulators_float)
 }
 
 /*
+Compared with the mechanism of C, a major advantage of the file stream classes
+for file access is the automatic management of files. The files are
+automatically opened at construction time and closed at destruction time.
+
 15.9.1 File Stream Classes
 
 The following program first opens the file charset.out, writes the current
@@ -13373,8 +13556,22 @@ Table 15.33. Flags for Opening Files
 
 */
 
+/*
 // ={=========================================================================
-TEST(CxxStream, fstream_1)
+The following program first opens the file charset.out, writes the current
+character set — all characters for the values between 32 and 255 — into this
+file, and outputs its contents: 
+
+io/fstream1.cpp
+
+so three files are make and all should be the same:
+
+$ diff3 charset_1.out charset_2.out charset_3.out
+$
+
+*/
+
+TEST(CxxStream, file_stream_1)
 {
   {
     std::ofstream file("charset_1.out");
@@ -13399,7 +13596,7 @@ TEST(CxxStream, fstream_1)
 }
 
 // ={=========================================================================
-TEST(CxxStream, fstream_2)
+TEST(CxxStream, file_stream_2)
 {
   {
     std::ofstream file("charset_2.out");
@@ -13422,7 +13619,7 @@ TEST(CxxStream, fstream_2)
 }
 
 // ={=========================================================================
-TEST(CxxStream, fstream_3)
+TEST(CxxStream, file_stream_3)
 {
   // Instead of copying the file contents character by character, you could also
   // output the whole contents in one statement by passing a pointer to the

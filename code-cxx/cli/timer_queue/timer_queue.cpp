@@ -1,12 +1,12 @@
-#include <unistd.h>
 #include <fcntl.h>
+#include <list>
 #include <poll.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
-#include <list>
+#include <unistd.h>
 
-#include "timer_queue.h"
 #include "slog.h"
+#include "timer_queue.h"
 
 /*
 
@@ -89,10 +89,34 @@ create the object using eventfd(), and then call fork() to create related
 processes that inherit file descriptors referring to the object. For further
 details, see the eventfd(2) manual page.
 
+*/
 
-* The eventfd is used to signal to end the poll loop thread at shutdown time.
+/*
 
-* remove() can be called from the context of a timer handler, however if
+Not sure where this code come from and used in btaudio code.
+
+Utility object that can be used to register a callback function to execute in
+the future
+
+Multiple callbacks can be registered via this object, internally it runs a
+thread with a "single timerfd" that wakes up at the correct time and then
+calls any handlers registered.
+
+All callbacks are processed in the same thread, so obviously one timer handler
+can block all the others, clients should bear this in mind.
+
+It is safe to called the add() or remote() APIs from within a callback
+handler.  Added timers will be processed once all callbacks have been handled
+in a cycle, whereas removed timers will be added to a queue and removed from
+the loop once the current callback has finished execution. In addition it is
+guaranteed that the callback for a particular timer will never be called once
+the remove() method on the timer in question returns.
+
+o The eventfd is used to signal to end the poll loop thread at shutdown time.
+
+o support that "remove() can be called from the context of a timer handler"
+
+  remove() can be called from the context of a timer handler, however if
   you want to cancel a repeating timer then the recomeneded way is to just
   return false in the handler.
 
@@ -105,10 +129,50 @@ details, see the eventfd(2) manual page.
 
   for both cases, no need to call remove().
 
+  NOTE is a good idea? if use a simple lock between remove() and thread, then
+  while a thread runs all expired timers, not able to add/remove timer.
+
+  guess that to ease that point, allows that which makes this complicated:
+
+  removing a timer gets a bit complicated because TimerQueue::remove() is
+  allowed to be called from a timer callback from beging removed or the
+  another thread.
+
+  use "callback_running_" to indicate that thread is processing callbacks.
+  NOT ABLE TO MAKE SENCE from remove() and drop it off.
+
+o use single interface, add(), for single shot and peridic timer.
+
+o use "prioriry queue" of timers.
+
+  why say priority queue? since it uses std::multiset and use compare
+  predicate which sorts out timer entries in "expiry time order".
+
+o use "poll()"
+
+o the head, that is the earliest expiry of queue at that time which can be
+  updated when add() is called or while processing timers in the thread.
+  updateTimerfd_() is a function to set the head. 
+
+  This head is used to set timerfd to kick off a timer. When expired, thread
+  wakes up and see if there are already expired timers in the queue. Since
+  queue is ordered by expiry time, add() can be called with times between now
+  and time of the head. 
+
+  When the head gets expired, it figures out expired timers in the queue and
+  timers that's not removed among them, and then run their functor and
+  reschedule it if it's periodic timer by updating expiry time and put it back
+  to the queue. Do it for all expired timers
+
+  Then clean up removed tiemrs and set the head of the queue again which will
+  set next timerfd to expire.
+
+  This is one cycle of timerfd use/run.
+
 */
 
 TimerQueue::TimerQueue()
-  : callback_running_(false)
+    : callback_running_(false)
     , callback_tag_(-1)
     , tag_counter_(1)
 {
@@ -143,14 +207,14 @@ TimerQueue::~TimerQueue()
     LOG_MSG("failed to close eventfd");
 }
 
-
 /* 
-={=============================================================================
+={============================================================================
 add new timer to the timer queue
 */
 
-int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
-    , std::function<bool()> const &func)
+int64_t TimerQueue::add(std::chrono::milliseconds const &timeout,
+                        bool oneshot,
+                        std::function<bool()> const &func)
 {
   // check the timer thread is running
   if (!t_.joinable())
@@ -168,35 +232,33 @@ int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
 
   // create the entry
   TimerEntry entry;
-  entry.tag = tag;
+  entry.tag     = tag;
   entry.oneshot = oneshot;
-  entry.func = func;
+  entry.func    = func;
   entry.timeout = timeout;
+
+  // set expiry time
   entry.expiry = calcAbsTime_(now, timeout);
 
   // hold the lock and push the timer into the priority queue
   std::lock_guard<std::mutex> lock(m_);
 
-  // why say priority queue? since it uses std::multiset and use compare
-  // predicate. that is sorted coll and the closer to the current time comes
-  // first.
   auto it = tqueue_.emplace(entry);
 
-  // if the new timer was added to the head of the queue then update the
-  // timerfd.
+  // insert to multiset may change the order of elements. if the new timer was
+  // added to the head of the queue then start a timerfd with that time.
+
   if (it == tqueue_.begin())
     updateTimerfd_();
 
   return tag;
 }
 
-
 /* 
-={=============================================================================
+={============================================================================
 remove the given timer from the queue
-
-@return true if the timer was found and was removed from the queue, otherwise
-false.
+  @return true if the timer was found and was removed from the queue, otherwise
+  false.
 */
 
 bool TimerQueue::remove(int64_t tag)
@@ -216,30 +278,21 @@ bool TimerQueue::remove(int64_t tag)
     return false;
   }
 
-  // removing a timer gets a bit complicated because TimerQueue::remove() is
-  // allowed:
-  //
-  // to be called from a timer callback from the timer being removed or another
-  // one
-
   if (callback_running_)
   {
     // now it's running callback so add it to the remove set so that it can be
     // removed after callback finishes.
     removed_.insert(tag);
 
-    // ??? This is necessary since callback is called without lock and the
-    // removed set will be processed in the thread.
-    //
     // the next special case is if the timer callback currently being called is
-    // the one we are removing. that is "callback_tag_ == tag" and then are from
-    // different thread.
+    // the one we are removing. that is "callback_tag_ == tag"
     //
     // if this is called from the timer thread then will deadlock waiting on the
     // condifitonal variable. in such situations it is safe just to add the
     // timer to the removed set.
 
-    // this is when called from another
+    // this is when called from another thread and called from the callback
+    // IS IT POSSIBLE CASE?
     if ((callback_tag_ == tag) && (std::this_thread::get_id() != t_.get_id()))
     {
       // wait till the callback completes since callback_tag_ is set to -1 when
@@ -259,13 +312,13 @@ bool TimerQueue::remove(int64_t tag)
   else
   {
     // not currently runs any callbacks so can just remove it
+    // NOTE: call doRemove_() without lock.
     return doRemove_(tag);
   }
 }
 
-
 /* 
-={=============================================================================
+={============================================================================
 stops the poll loop thread and cancels all timers
 */
 void TimerQueue::stop()
@@ -276,7 +329,8 @@ void TimerQueue::stop()
   if (t_.joinable())
   {
     uint64_t doesnt_matter{1};
-    if (sizeof(uint64_t) != TEMP_FAILURE_RETRY(write(eventfd_, &doesnt_matter, sizeof(uint64_t))))
+    if (sizeof(uint64_t) !=
+        TEMP_FAILURE_RETRY(write(eventfd_, &doesnt_matter, sizeof(uint64_t))))
     {
       LOG_MSG("failed to write to eventfd");
     }
@@ -292,16 +346,15 @@ void TimerQueue::stop()
   tqueue_.clear();
 }
 
-
 /* 
--{-----------------------------------------------------------------------------
+-{----------------------------------------------------------------------------
 thread that runs the timer pool loop
 */
 
 void TimerQueue::timerThread_()
 {
   pthread_setname_np(pthread_self(), "TimerQueue");
-  
+
   if (timerfd_ < 0)
   {
     LOG_MSG("no timerfd available");
@@ -318,17 +371,17 @@ void TimerQueue::timerThread_()
   {
     struct pollfd fds[2];
 
-    fds[0].fd = eventfd_;
-    fds[0].events = POLLIN;
+    fds[0].fd      = eventfd_;
+    fds[0].events  = POLLIN;
     fds[0].revents = 0;
 
-    fds[1].fd = timerfd_;
-    fds[1].events = POLLIN;
+    fds[1].fd      = timerfd_;
+    fds[1].events  = POLLIN;
     fds[1].revents = 0;
 
-    // note that not handling when ret == 0 since 
+    // note that not handling when ret == 0 since
     // poll() returns number of ready file descriptors, 0 on timeout, or -1 on
-    // error 
+    // error
 
     int ret = TEMP_FAILURE_RETRY(poll(fds, 2, -1));
     if (ret < 0)
@@ -343,13 +396,13 @@ void TimerQueue::timerThread_()
         // check for any error conditions
         if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))
         {
-          LOG_MSG("received error events on eventfd (0x%04x)",
-              fds[0].revents);
+          LOG_MSG("received error events on eventfd (0x%04x)", fds[0].revents);
         }
 
         // clear value on eventfd
         uint64_t ignore;
-        if (TEMP_FAILURE_RETRY(sizeof(uint64_t) != read(eventfd_, &ignore, sizeof(uint64_t))))
+        if (TEMP_FAILURE_RETRY(sizeof(uint64_t) !=
+                               read(eventfd_, &ignore, sizeof(uint64_t))))
         {
           LOG_MSG("failed to read from eventfd");
         }
@@ -363,13 +416,13 @@ void TimerQueue::timerThread_()
         // check for any error conditions
         if (fds[1].revents & (POLLERR | POLLHUP | POLLNVAL))
         {
-          LOG_MSG("received error events on timerfd (0x%04x)",
-              fds[1].revents);
+          LOG_MSG("received error events on timerfd (0x%04x)", fds[1].revents);
         }
 
         // clear value on timerfd
         uint64_t ignore;
-        if (TEMP_FAILURE_RETRY(sizeof(uint64_t) != read(timerfd_, &ignore, sizeof(uint64_t))))
+        if (TEMP_FAILURE_RETRY(sizeof(uint64_t) !=
+                               read(timerfd_, &ignore, sizeof(uint64_t))))
         {
           LOG_MSG("failed to read from timerfd");
         }
@@ -405,20 +458,18 @@ void TimerQueue::timerThread_()
           }
 
           callback_tag_ = entry.tag;
+
+          // {
+          // run callback and *do not hold the lock*.
           lock.unlock();
 
-          // run callback and *do not hold the lock*. that's in line with what
-          // remove() say:
-          //
-          // to be called from a timer callback from the timer being removed or
-          // another one
-          //
           // if callback returns true and not oneshot then reschedule it
-
           bool reschedule = entry.func && entry.func() && !entry.oneshot;
 
-          // clear the callback we're in
           lock.lock();
+          // }
+
+          // clear the callback we're in
           callback_tag_ = -1;
 
           // signal condition that remove() may be waiting on
@@ -452,25 +503,26 @@ void TimerQueue::timerThread_()
 }
 
 /* 
--{-----------------------------------------------------------------------------
+-{----------------------------------------------------------------------------
 calculate new timespec time based on now timespec and ms offset
 */
 
-struct timespec TimerQueue::calcAbsTime_(struct timespec const &base,
-    std::chrono::milliseconds const &offset) const
+struct timespec
+TimerQueue::calcAbsTime_(struct timespec const &base,
+                         std::chrono::milliseconds const &offset) const
 {
-  #define NSECS_PER_SEC   1000000000L
-  #define NSECS_PER_MSEC  1000000L
+#define NSECS_PER_SEC 1000000000L
+#define NSECS_PER_MSEC 1000000L
 
   struct timespec ts;
 
-  ts.tv_sec = base.tv_sec
-    + std::chrono::duration_cast<std::chrono::seconds>(offset).count();
+  ts.tv_sec = base.tv_sec +
+              std::chrono::duration_cast<std::chrono::seconds>(offset).count();
 
   // (offset % std::chrono::seconds(1)).count() makes remaining ms and convert
   // it to ns.
-  ts.tv_nsec = base.tv_nsec
-    + ((offset % std::chrono::seconds(1)).count() * NSECS_PER_MSEC);
+  ts.tv_nsec = base.tv_nsec +
+               ((offset % std::chrono::seconds(1)).count() * NSECS_PER_MSEC);
 
   if (ts.tv_nsec > NSECS_PER_SEC)
   {
@@ -482,7 +534,7 @@ struct timespec TimerQueue::calcAbsTime_(struct timespec const &base,
 }
 
 /* 
--{-----------------------------------------------------------------------------
+-{----------------------------------------------------------------------------
 write the item on the head of the `expiry queue` into the timerfd for the next
 wake-up time. that is set timerfd with the next timer to run.
 
@@ -524,14 +576,15 @@ has nanoseconds instead of microseconds.
  
 */
 
-void TimerQueue::updateTimerfd_() const 
-{ 
-  struct itimerspec its{};
+void TimerQueue::updateTimerfd_() const
+{
+  struct itimerspec its
+  {};
 
   if (tqueue_.empty())
   {
     // will disable the timerfd
-    its.it_value.tv_sec = 0;
+    its.it_value.tv_sec  = 0;
     its.it_value.tv_nsec = 0;
   }
   else
@@ -540,20 +593,15 @@ void TimerQueue::updateTimerfd_() const
     its.it_value = tqueue_.begin()->expiry;
   }
 
-  // NOTE: should use "flag" TFD_TIMER_ABSTIME, than using value
-  // if (0 != timerfd_settime(timerfd_, 0, &its, NULL))
-  //
-  // since see this use somewhere but here when use it, test run hangs.
-
-  if (0 != timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, NULL))
+  if (0 != timerfd_settime(timerfd_, 0, &its, nullptr))
+  // if (0 != timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, nullptr))
   {
     LOG_MSG("failed to set timerfd value");
   }
 }
 
-
 /* 
--{-----------------------------------------------------------------------------
+-{----------------------------------------------------------------------------
 removes the time with tag from the queue.
 note that it must be called with the lock held.
 */
@@ -564,7 +612,7 @@ bool TimerQueue::doRemove_(int64_t tag)
   {
     if (it->tag == tag)
     {
-      bool requires_update = (it == tqueue_.begin()); 
+      bool requires_update = (it == tqueue_.begin());
 
       // see the order of q handling. use begin() and erase() later but not the
       // other way round.
@@ -572,7 +620,7 @@ bool TimerQueue::doRemove_(int64_t tag)
 
       // if we remove the timer from the head then need to update the expiry of
       // the timerfd with the new head.
-      if(requires_update)
+      if (requires_update)
         updateTimerfd_();
 
       return true;
@@ -582,5 +630,3 @@ bool TimerQueue::doRemove_(int64_t tag)
   LOG_MSG("failed to find timer %lld to remove", tag);
   return false;
 }
-
-

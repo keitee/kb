@@ -1,8 +1,6 @@
 #pragma once
 
 #include <atomic>
-// #include <list>
-// #include <stdint.h>
 #include <chrono>
 #include <functional>
 #include <map>
@@ -23,8 +21,8 @@ private:
   std::atomic<int64_t> m_tag_counter{};
   std::thread m_thread{};
 
-  // TODO:
-  std::recursive_mutex m_lock;
+  // std::recursive_mutex m_lock;
+  std::mutex m_lock;
 
 public:
   explicit EPollLoop(const std::string &name, int priority = -1);
@@ -44,6 +42,7 @@ private:
   using TimerHandler = std::function<void(int64_t)>;
   using Handler      = std::function<void(int, unsigned)>;
 
+  // use by both single and periodic timer
   struct TimerEntry
   {
     int fd{};
@@ -74,10 +73,6 @@ private:
 
   std::map<int64_t, HandlerEntry> m_handlers;
 
-  // add and remove a handler
-  int64_t addDescriptor_(int fd, unsigned events, const Handler &handler);
-  bool removeDescriptor_(const int64_t tag);
-
 public:
   bool start();
   void stop();
@@ -88,13 +83,19 @@ public:
 
   // periodic timer
   int64_t addTimer(const std::chrono::nanoseconds &initial,
-                const std::chrono::nanoseconds &interval,
-                const TimerHandler &handler);
+                   const std::chrono::nanoseconds &interval,
+                   const TimerHandler &handler);
 
   bool startTimer(int64_t id);
   bool stopTimer(int64_t id);
+  bool removeTimer(int64_t id);
 
   bool executeInPollloop(const Executor &);
+
+  // add and remove a handler. note that these are public and also used in
+  // executeInPollloop()
+  int64_t addDescriptor(int fd, unsigned events, const Handler &handler);
+  bool removeDescriptor(const int64_t tag);
 
   std::thread::id threadId() const;
   bool running() const;

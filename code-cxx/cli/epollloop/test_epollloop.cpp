@@ -145,11 +145,11 @@ TEST_F(EPollLoopTest, periodic_timer_run)
   const std::chrono::milliseconds testPeriod{300};
 
   auto id = eloop.addTimer(period,
-                 period,
-                 std::bind(&EPollLoopTest::onTimerCallback,
-                           this,
-                           3301, // eventid
-                           std::placeholders::_1));
+                           period,
+                           std::bind(&EPollLoopTest::onTimerCallback,
+                                     this,
+                                     3301, // eventid
+                                     std::placeholders::_1));
 
   // id should not be < 0 since reutrn -1 when fails
   ASSERT_GT(id, 0);
@@ -168,18 +168,19 @@ TEST_F(EPollLoopTest, periodic_timer_run)
   //     (testPeriod.count() / period.count()), 5LL);
 
   ASSERT_NEAR(static_cast<long long>(m_timer_events.size()),
-    (testPeriod.count() / period.count()), 1LL);
+              (testPeriod.count() / period.count()),
+              1LL);
 
   // start from the second event
-  auto event = m_timer_events.cbegin() +1;
+  auto event = m_timer_events.cbegin() + 1;
 
   for (; event != m_timer_events.cend(); ++event)
   {
     // eventid
     ASSERT_THAT(event->first, 3301);
 
-    auto previousTime = (event-1)->second;
-    auto diff = getTimeDiff(event->second, previousTime);
+    auto previousTime = (event - 1)->second;
+    auto diff         = getTimeDiff(event->second, previousTime);
 
     // expects that the difference between events is near to the timer interval,
     // 20.
@@ -200,11 +201,11 @@ TEST_F(EPollLoopTest, periodic_timer_cancel)
   const std::chrono::milliseconds period{50};
 
   auto id = eloop.addTimer(period,
-                 period,
-                 std::bind(&EPollLoopTest::onTimerCallback,
-                           this,
-                           3302, // eventid
-                           std::placeholders::_1));
+                           period,
+                           std::bind(&EPollLoopTest::onTimerCallback,
+                                     this,
+                                     3302, // eventid
+                                     std::placeholders::_1));
 
   // id should not be < 0 since reutrn -1 when fails
   ASSERT_GT(id, 0);
@@ -295,12 +296,12 @@ TEST_F(EPollLoopTest, periodic_timer_with_initial_time)
   EXPECT_THAT(getTimeDiff(m_timer_events[0].second, start), 200);
 
   // start from the second event
-  auto event = m_timer_events.cbegin() +1;
+  auto event = m_timer_events.cbegin() + 1;
 
   for (; event != m_timer_events.cend(); ++event)
   {
-    auto previousTime = (event-1)->second;
-    auto diff = getTimeDiff(event->second, previousTime);
+    auto previousTime = (event - 1)->second;
+    auto diff         = getTimeDiff(event->second, previousTime);
 
     // expects that the difference between events is near to the timer interval,
     // NEAR 33.

@@ -1,15 +1,15 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
-#include "timer_queue.h"
 #include "slog.h"
+#include "timer_queue.h"
 
 using namespace testing;
 
@@ -73,53 +73,65 @@ namespace
 
   class Callback
   {
-    public:
-      Callback(std::condition_variable &cv)
+  public:
+    Callback(std::condition_variable &cv)
         : cv_(cv)
-      {}
+    {}
 
-      bool CallbackSingle()
-      {
-        std::lock_guard<std::mutex> lock(m_);
-        cv_.notify_one();
+    bool CallbackSingle()
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      cv_.notify_one();
 
-        return true;
-      }
+      return true;
+    }
 
-    private:
-      std::mutex m_;
-      std::condition_variable &cv_;
+  private:
+    std::mutex m_;
+    std::condition_variable &cv_;
   };
-}
+} // namespace
 
+/*
 // ={=========================================================================
-// regardless of return value of handler, oneshot runs only one time.
+"regardless of return value of handler, oneshot runs only one time." is not true
+since:
+          bool reschedule = entry.func && entry.func() && !entry.oneshot;
+
+the return gets evaluated first.
+
+single and return true from callback
+*/
 
 TEST(TimerQueue, runOneshotTimerWithTrue)
 {
   TimerQueue tq;
 
   // have to use std::chrono and otherwise error.
-  tq.add(std::chrono::milliseconds(1000), true,
-      std::bind(callback_return, true));
+  tq.add(std::chrono::milliseconds(1000),
+         true, // single
+         std::bind(callback_return, true));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 }
 
 // ={=========================================================================
+// single and return false from callback
 TEST(TimerQueue, runOneshotTimerWithFalse)
 {
   TimerQueue tq;
 
   // have to use std::chrono and otherwise error.
-  tq.add(std::chrono::milliseconds(1000), true,
-      std::bind(callback_return, false));
+  tq.add(std::chrono::milliseconds(1000),
+         true, // single
+         std::bind(callback_return, false));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(4000));
 }
 
-
 // ={=========================================================================
+// it hangs when use in timer_queue.cpp
+//  if (0 != timerfd_settime(timerfd_, 0, &its, nullptr))
 TEST(TimerQueue, runSingleTimer)
 {
   TimerQueue tq;
@@ -128,8 +140,9 @@ TEST(TimerQueue, runSingleTimer)
   std::unique_lock<std::mutex> lock(m);
 
   // have to use std::chrono and otherwise error.
-  tq.add(std::chrono::milliseconds(2000), true,
-      std::bind(callback_single, std::ref(m), std::ref(cv)));
+  tq.add(std::chrono::milliseconds(2000),
+         true, // single
+         std::bind(callback_single, std::ref(m), std::ref(cv)));
 
   cv.wait(lock);
 }
@@ -145,8 +158,9 @@ TEST(TimerQueue, runSingleTimerOnMemberFunction)
   Callback co(cv);
 
   // have to use std::chrono and otherwise error.
-  tq.add(std::chrono::milliseconds(2000), true,
-      std::bind(&Callback::CallbackSingle, &co));
+  tq.add(std::chrono::milliseconds(2000),
+         true,
+         std::bind(&Callback::CallbackSingle, &co));
 
   cv.wait(lock);
 }
@@ -161,8 +175,9 @@ TEST(TimerQueue, runSingleTimerButRemoveBeforeRunning)
   counter = 0;
 
   // have to use std::chrono and otherwise error.
-  auto tag = tq.add(std::chrono::milliseconds(20000), true,
-      std::bind(callback_simple, std::ref(delay)));
+  auto tag = tq.add(std::chrono::milliseconds(20000),
+                    true,
+                    std::bind(callback_simple, std::ref(delay)));
 
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
@@ -184,8 +199,9 @@ TEST(TimerQueue, runRepeatTimer)
   counter = 0;
 
   // have to use std::chrono and otherwise error.
-  tq.add(std::chrono::milliseconds(2000), false,
-      std::bind(callback_repeat, std::ref(m), std::ref(cv), 10));
+  tq.add(std::chrono::milliseconds(2000),
+         false, // not single
+         std::bind(callback_repeat, std::ref(m), std::ref(cv), 10));
 
   cv.wait(lock);
 
@@ -206,8 +222,9 @@ TEST(TimerQueue, makesManyTimersAndExit)
   for (int i = 0; i < 20; ++i)
   {
     // have to use std::chrono and otherwise error. oneshot
-    tq.add(std::chrono::milliseconds(20000), true,
-        std::bind(callback_simple, std::ref(delay)));
+    tq.add(std::chrono::milliseconds(20000),
+           true, // single
+           std::bind(callback_simple, std::ref(delay)));
   }
 
   // do not wait for them to end
