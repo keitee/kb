@@ -64,12 +64,12 @@ char *strerror(int err)
   if (s != 0)
     printf("error: pthread_once");
 
-  buf = pthread_getspecific(strerrorKey);
+  buf = (char *)pthread_getspecific(strerrorKey);
   if (buf == NULL) { 
     // If first call from this thread, allocate
     // buffer for thread, and save its location */
 
-    buf = malloc(MAX_ERROR_LEN);
+    buf = (char *)malloc(MAX_ERROR_LEN);
     if (buf == NULL)
       printf("error: malloc");
 

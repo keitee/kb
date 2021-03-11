@@ -1421,8 +1421,21 @@ TEST(CConThread, check_thread_local)
   t4.join();
 }
 
+/*
 // ={=========================================================================
-// cxx-async
+cxx-async
+
+no need to use *cxx-thread-join*
+
+`std::async` start an asynchronous task for which you don't need the result
+right away. Rather than giving you back a std::thread object to wait on,
+`std::async returns a std::future object`, which will eventually `hold` the
+return value of the function. 
+
+When you need the value, you just call get() on the future, and the thread
+blocks until the future is ready and then returns the value. 
+
+*/
 
 namespace cxx_async
 {
@@ -1452,7 +1465,7 @@ namespace cxx_async
 } // namespace cxx_async
 
 // ={=========================================================================
-TEST(CConAsync, check_member_function)
+TEST(CConAsync, use_member_function)
 {
   using namespace cxx_async;
 
@@ -2426,8 +2439,7 @@ TEST(CConMutex, unique_lock)
     {
       // EXPECT_THAT(lock.try_lock(), false);
       EXPECT_THAT(lock.try_lock(), true);
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::cout << "exception 1: " << e.what() << std::endl;
     }
@@ -2437,8 +2449,7 @@ TEST(CConMutex, unique_lock)
     try
     {
       EXPECT_THAT(lock.try_lock(), true);
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::cout << "exception 2: " << e.what() << std::endl;
     }
@@ -2446,8 +2457,7 @@ TEST(CConMutex, unique_lock)
     try
     {
       lock.lock();
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::cout << "exception 3: " << e.what() << std::endl;
     }
@@ -2474,8 +2484,7 @@ TEST(CConMutex, unique_lock)
     {
       // EXPECT_THAT(lock.try_lock(), true);
       lock.try_lock();
-    }
-    catch(exception &e)
+    } catch (exception &e)
     {
       std::cout << "spin exception 1: " << e.what() << std::endl;
     }
@@ -2484,20 +2493,20 @@ TEST(CConMutex, unique_lock)
 
     // try
     // {
-      // EXPECT_THAT(lock.try_lock(), true);
+    // EXPECT_THAT(lock.try_lock(), true);
     // }
     // catch(exception &e)
     // {
-      // std::cout << "exception 2: " << e.what() << std::endl;
+    // std::cout << "exception 2: " << e.what() << std::endl;
     // }
 
     // try
     // {
-      // lock.lock();
+    // lock.lock();
     // }
     // catch(exception &e)
     // {
-      // std::cout << "exception 3: " << e.what() << std::endl;
+    // std::cout << "exception 3: " << e.what() << std::endl;
     // }
 
     // try
@@ -4826,6 +4835,212 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
   tslt.add_or_update_mapping("four", 400);
 
   cout << "searched value : " << tslt.value_for("three") << endl;
+}
+
+// ={=========================================================================
+// cxx-atomic
+TEST(CConAtomic, check_lock_free_types)
+{
+  // atomic_flag do not have is_lock_free() since it's the only type that
+  // lock free is guranteeded.
+  {
+    std::atomic_flag flag{ATOMIC_FLAG_INIT};
+
+    // flag.is_lock_free();
+  }
+
+  // bool type?
+  {
+    std::atomic<bool> flag{};
+
+    auto free = flag.is_lock_free();
+
+    EXPECT_THAT(free, true);
+  }
+
+  // int?
+  {
+    std::atomic<int> flag{};
+
+    auto free = flag.is_lock_free();
+
+    EXPECT_THAT(free, true);
+  }
+
+  // long?
+  {
+    std::atomic<long> flag{};
+
+    auto free = flag.is_lock_free();
+
+    EXPECT_THAT(free, true);
+  }
+}
+
+namespace cxx_atomic
+{
+  // Listing 5.1 Implementation of a spinlock mutex using std::atomic_flag
+  // note that there is no try_lock() in the listing 5.1
+  class SpinLock
+  {
+  private:
+    std::atomic_flag lock_;
+
+  public:
+    SpinLock()
+        : lock_(ATOMIC_FLAG_INIT)
+    {}
+
+    void lock()
+    {
+      while (lock_.test_and_set(std::memory_order_acquire))
+        ;
+    }
+
+    void unlock() { lock_.clear(std::memory_order_release); }
+
+    bool try_lock() { return lock_.test_and_set(std::memory_order_acquire); }
+  };
+
+  // use SpinLock
+
+  SpinLock spin_lock{};
+
+  std::string print_use_spin_lock(std::string const &s)
+  {
+    // both works
+    std::lock_guard<SpinLock> l(spin_lock);
+    // std::unique_lock<SpinLock> l(spin_lock);
+
+    std::string result{};
+
+    size_t i{};
+
+    std::string name =
+      (std::string::npos != s.find("first")) ? "first" : "second";
+
+    for (i = 0; i < s.size(); ++i)
+    {
+      // std::cout << "spinlock thread sleeps for 1 sec\n";
+      std::cout << "name: " << name << " sleeps for 1 sec\n";
+      this_thread::sleep_for(chrono::seconds(1));
+    }
+
+    result = name + " waited for " + to_string(i * 20) + "ms and " + s;
+
+    std::cout << result << "\n";
+
+    return result;
+  }
+} // namespace cxx_atomic
+
+/*
+// ={=========================================================================
+cxx-atomic-flag
+
+The limited feature set makes std::atomic_flag ideally suited to use as a
+spin-lock mutex. Initially the flag is clear and the mutex is unlocked.
+To lock the mutex, loop on test_and_set() until the old value is false,
+indicating that this thread set the value to true. Unlocking the mutex
+is simply a matter of clearing the flag. Such an implementation is shown
+in the following listing.
+
+bool test_and_set()
+
+Atomically sets the flag and check whether or not it was set. returns true of
+the flag was set at the point of the call, flase if the flag was clear. This
+is an atomic "read-modify-write" operation for the memory location comprising
+*this.
+
+// /7/bits/atomic_base.h
+{
+#define ATOMIC_FLAG_INIT { 0 }
+
+  /// atomic_flag
+  struct atomic_flag : public __atomic_flag_base
+  {
+    test_and_set(memory_order __m = memory_order_seq_cst) noexcept
+    {
+      return __atomic_test_and_set (&_M_i, __m);
+    }
+
+    _GLIBCXX_ALWAYS_INLINE bool
+    test_and_set(memory_order __m = memory_order_seq_cst) volatile noexcept
+    {
+      return __atomic_test_and_set (&_M_i, __m);
+    }
+  }
+}
+
+// /7/atomic
+{
+  inline bool
+  atomic_flag_test_and_set(atomic_flag* __a) noexcept
+  { return atomic_flag_test_and_set_explicit(__a, memory_order_seq_cst); }
+
+  inline bool
+  atomic_flag_test_and_set(volatile atomic_flag* __a) noexcept
+  { return atomic_flag_test_and_set_explicit(__a, memory_order_seq_cst); }
+}
+
+*/
+
+// ={=========================================================================
+TEST(CConAtomic, atomic_flag_and_spin_lock_1)
+{
+  using namespace cxx_atomic;
+
+  {
+    auto f1 = std::async(std::launch::async,
+                         print_use_spin_lock,
+                         "Hello from a first thread");
+
+    auto f2 = std::async(std::launch::async,
+                         print_use_spin_lock,
+                         "Hello from a second thread");
+
+    EXPECT_THAT(f1.get(),
+                "first waited for 500ms and Hello from a first thread");
+    EXPECT_THAT(f2.get(),
+                "second waited for 520ms and Hello from a second thread");
+  }
+}
+
+/*
+std::mutex::try_lock
+
+bool try_lock(); (since C++11)
+
+Tries to lock the mutex. Returns immediately. On successful lock acquisition
+returns true, otherwise returns false.
+
+*/
+
+// ={=========================================================================
+TEST(CConAtomic, atomic_flag_and_spin_lock_2)
+{
+  using namespace cxx_atomic;
+
+  {
+    auto f1 = std::async(std::launch::async,
+                         print_use_spin_lock,
+                         "Hello from a first thread");
+
+    auto f2 = std::async(std::launch::async, []() {
+      for (int i = 0; i < 20; ++i)
+      {
+        if (spin_lock.try_lock())
+          std::cout << "second: try_lock returns true and got a lock"
+                    << std::endl;
+        else
+          std::cout << "second: try_lock returns false and didn't get a lock"
+                    << std::endl;
+      }
+    });
+
+    EXPECT_THAT(f1.get(),
+                "first waited for 500ms and Hello from a first thread");
+  }
 }
 
 /* ={=========================================================================

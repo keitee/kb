@@ -237,8 +237,8 @@ add_executable(bridge_client4 "bridge_client2.cpp"
   "bridge_abs.cpp"
   "bridge_con.cpp")
 
-# aout
-add_executable(aout "aout.cpp") 
+# test_aout
+add_executable(test_aout "test_aout.cpp") 
 
 # test_core_guideline.cpp
 add_executable(test_core "test_core_guideline.cpp")

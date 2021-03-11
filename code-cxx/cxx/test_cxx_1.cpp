@@ -5733,13 +5733,14 @@ TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
   cout << "}" << endl;
 }
 
+/*
 // ={=========================================================================
 // cxx-copy-control
 // use ifdef since this test causes compile error
 
-#if 0
 namespace cxx_copy_control
 {
+  // have copy controls but they are private
   class CopyControlBase1
   {
   private:
@@ -5753,12 +5754,14 @@ namespace cxx_copy_control
     CopyControlBase1(const CopyControlBase1 &base)
     {
       (void)base;
+
       cout << "copy-ctor: base" << endl;
     } // @11
 
     CopyControlBase1 &operator=(const CopyControlBase1 &base)
     {
       (void)base;
+
       cout << "copy-assign: base" << endl;
       return *this;
     }
@@ -5780,7 +5783,9 @@ namespace cxx_copy_control
     ~CopyControlBase2() = default;
 
   public:
+    // copy ctor
     CopyControlBase2(const CopyControlBase2 &base) = delete;
+    // copy assign
     CopyControlBase2 &operator=(const CopyControlBase2 &base) = delete;
   };
 
@@ -5791,7 +5796,8 @@ namespace cxx_copy_control
   };
 } // namespace cxx_copy_control
 
-TEST(CxxCopyControl, PrivateAndDelete)
+// ={======================================================================
+TEST(CxxCopyControl, see_errors_when_copy_is_not_allowed_1)
 {
   using namespace cxx_copy_control;
 
@@ -5847,7 +5853,7 @@ TEST(CxxCopyControl, PrivateAndDelete)
     Derived2 b3(b1);
   }
 }
-#endif
+*/
 
 // ={=========================================================================
 // cxx-enum
@@ -6149,7 +6155,7 @@ TEST(CxxEnum, ScopeAndType)
   // EXPECT_EQ(100, scoped.checkFlags(200));
 }
 
-// ={=========================================================================
+// ={========================================================================
 // cxx-rvo
 
 namespace cxx_rvo
@@ -6163,6 +6169,10 @@ namespace cxx_rvo
       cout << "c'tor" << endl;
     }
     ~Snitch() { cout << "d'tor" << endl; }
+
+    // what if prevents copies?
+    // Snitch(const Snitch &) = delete;
+    // Snitch &operator=(Snitch &) = delete;
 
     Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
     Snitch(Snitch &&) { cout << "move c'tor" << endl; }
@@ -6212,7 +6222,205 @@ namespace cxx_rvo
 // d'tor
 // [       OK ] CxxRVO.check_single_construction (0 ms)
 
-TEST(CxxRVO, check_single_construction)
+/*
+// ={========================================================================
+cxx-rvo
+
+Return Value Optimization (RVO), Named RVO (NRVO) and Copy-Elision are in
+C++ since C++98. In this post I will explain what these concepts mean and
+how they help improve runtime performance.
+
+
+Return Value Optimization
+
+RVO basically means the compiler is allowed `to avoid creating temporary`
+objects `for return values`, even if they have side effects.
+
+When cxx-rvo is on by default
+
+[ RUN      ] CxxRVO.check_single_construction
+in ExampleRVO:
+c'tor
+d'tor
+[       OK ] CxxRVO.check_single_construction (0 ms)
+
+As *cxx-return-cxx-move* shows, it uses *cxx-move* context in return but
+that's not even needed since *cxx-rvo* do not use move context at all and
+cxx-rvo is default.
+
+When cxx-rvo OFF:
+
+$ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
+c'tor
+move c'tor
+d'tor
+move c'tor
+d'tor
+d'tor
+
+// rvo off works
+g++ -std=c++11 -fno-elide-constructors ../rvo.cpp
+
+// rvo off works
+g++ -std=c++14 -fno-elide-constructors ../rvo.cpp
+
+// rvo off not works and means rvo is a must?
+g++ -std=c++17 -fno-elide-constructors ../rvo.cpp
+
+
+Without RVO the compiler creates `3 Snitch objects instead of 1`:
+
+Snitch ExampleRVO() {
+  return Snitch();
+}
+
+{
+  Snitch snitch = ExampleRVO();
+}
+
+o A temporary object inside ExampleRVO() (when printing c'tor);
+
+o A temporary object for "the returned object" inside main() (when printing the
+  first move c'tor);
+
+o The named object snitch (when printing the second move c'tor).
+
+
+When RVO on (`without -fno-elide-constructors`) which means rvo is on, the
+compiler refrained from calling code `despite it having a clear side
+effect` (being printing to console in ctor). 
+
+
+use move ctor:
+
+int main()
+{
+  using namespace cxx_rvo;
+
+  std::cout << "main before" << std::endl;
+  Snitch snitch = ExampleRVO();
+  std::cout << "main after " << std::endl;
+}
+
+$ g++ -std=c++14 -fno-elide-constructors ../rvo.cpp
+
+main before
+in ExampleRVO:
+c'tor
+move c'tor
+d'tor
+move c'tor
+d'tor
+main after
+d'tor
+
+$ g++ -std=c++14 ../rvo.cpp
+
+main before
+in ExampleRVO:
+c'tor
+main after
+d'tor
+
+
+use move assign ctor:
+
+int main()
+{
+  using namespace cxx_rvo;
+
+  std::cout << "main before" << std::endl;
+  Snitch snitch(10);
+  snitch = ExampleRVO();
+  std::cout << "main after " << std::endl;
+}
+ 
+$ g++ -std=c++14 -fno-elide-constructors ../rvo.cpp
+
+main before
+c'tor
+in ExampleRVO:
+c'tor
+move c'tor            //
+d'tor                 //
+move assignment
+d'tor
+main after
+d'tor
+
+$ g++ -std=c++14 ../rvo.cpp
+
+main before
+c'tor
+in ExampleRVO:
+c'tor
+move assignment
+d'tor
+main after
+d'tor
+
+So RVO is on, seems not use copy ctor and copy ssign. Can do this?
+
+Snitch(const Snitch &) = delete;
+Snitch &operator=(Snitch &) = delete;
+
+Then got errors
+
+../rvo.cpp: In function ‘cxx_rvo::Snitch cxx_rvo::ExampleRVO()’:
+../rvo.cpp:48:22: error: use of deleted function ‘cxx_rvo::Snitch::Snitch(const cxx_rvo::Snitch&)’
+     return Snitch(100);
+                      ^
+../rvo.cpp:18:5: note: declared here
+     Snitch(const Snitch &) = delete;
+     ^~~~~~
+../rvo.cpp: In function ‘int main()’:
+../rvo.cpp:57:30: error: use of deleted function ‘cxx_rvo::Snitch::Snitch(const cxx_rvo::Snitch&)’
+   Snitch snitch = ExampleRVO();
+                              ^
+../rvo.cpp:18:5: note: declared here
+     Snitch(const Snitch &) = delete;
+     ^~~~~~
+
+When comments out move operations, compiler not make move controls since there
+are copy controls. However, this affects RVO as suggested here?
+
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#p9-dont-waste-time-or-space
+
+P.9: Don’t waste time or space
+
+Yes, this is a caricature, but we have seen every individual mistake in
+production code, and worse. Note that the layout of X guarantees that at least
+6 bytes (and most likely more) are wasted. The spurious definition of copy
+operations disables move semantics so that the return operation is slow
+(please note that the Return Value Optimization, RVO, is not guaranteed here). 
+
+when runs is on gcc
+
+g++ -std=c++14 ../rvo.cpp
+
+main before
+in ExampleRVO:
+c'tor
+main after
+d'tor
+
+g++ -std=c++14 -fno-elide-constructors ../rvo.cpp
+
+main before
+in ExampleRVO:
+c'tor
+copy c'tor
+d'tor
+copy c'tor
+d'tor
+main after
+d'tor
+
+copy control is used instead when RVO if off but RVO works.
+
+*/
+
+TEST(CxxRVO, single_construction)
 {
   using namespace cxx_rvo;
 
@@ -7800,6 +8008,7 @@ namespace cxx_time
   }
 }
 
+/* disable since compile error
 TEST(CxxTime, timepoint_arithmetic_4)
 {
   using namespace cxx_time;
@@ -7810,6 +8019,7 @@ TEST(CxxTime, timepoint_arithmetic_4)
   // : no matching function for call to ‘std::__cxx11::basic_string<char>::basic_string(std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::duration<long int, std::ratio<1, 1000000000> > >&)’
   std::string to_timepoint_1(time_1);
 }
+*/
 
 // 12/04/18
 // Tuesday 12/04/18 02PM
@@ -18917,8 +19127,38 @@ TEST(CxxAuto, auto_const)
   // }
 }
 
+/*
 // ={=========================================================================
-// cxx-except
+cxx-except
+
+#include <bits/exception.h>
+
+class exception
+{
+  public:
+    exception() _GLIBCXX_USE_NOEXCEPT { }
+    virtual ~exception() _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_USE_NOEXCEPT;
+
+    // Returns a C-style character string describing the general cause
+    // of the current error.
+    virtual const char*
+      what() const _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_USE_NOEXCEPT;
+};
+
+#include <stdexcept>
+
+class runtime_error : public exception
+{
+  // (1)
+  runtime_error( const std::string& what_arg );
+  // (2)
+  runtime_error( const char* what_arg ); // (since C++11)
+  // (3)
+  runtime_error( const runtime_error& other ); // (until C++11)
+  runtime_error( const runtime_error& other ) noexcept; // (since C++11)
+};
+
+*/
 
 namespace cxx_except
 {
@@ -18940,7 +19180,7 @@ namespace cxx_except
 } // namespace cxx_except
 
 // ={=========================================================================
-TEST(CxxException, drived_from_exception)
+TEST(cxx_except, catch_them)
 {
   using namespace cxx_except;
 
@@ -18949,7 +19189,6 @@ TEST(CxxException, drived_from_exception)
     throw myex;
   } catch (std::exception &e)
   {
-    // ? why not error here?
     EXPECT_THAT(e.what(), "my exception happened");
   }
 
@@ -18963,6 +19202,30 @@ TEST(CxxException, drived_from_exception)
     EXPECT_THAT(os.str(), "my exception happened");
   }
 
+  // can derive from std::runtime_error
+  //
+  // EXPECT_THAT(e.what(), "this is runtime error");
+  //
+  // sometimes fails to compile so
+  //
+  // :19212: Failure
+  // Value of: e.what()
+  // Expected: is equal to 0x564103a2ad44 pointing to "this is runtime error"
+  //   Actual: 0x564105c1d938 pointing to "this is runtime error" (of type char const*)
+  //
+  // use as:
+  //
+  // EXPECT_THAT(std::string(e.what()), "this is runtime error");
+
+  try
+  {
+    throw Error("this is runtime error");
+  } catch (std::exception &e)
+  {
+    EXPECT_THAT(std::string(e.what()), "this is runtime error");
+  }
+
+  // catch all
   try
   {
     throw myex;
@@ -18973,6 +19236,7 @@ TEST(CxxException, drived_from_exception)
     EXPECT_THAT(os.str(), "my exception happened");
   }
 
+  // swallow
   try
   {
     throw myex;
@@ -18981,23 +19245,8 @@ TEST(CxxException, drived_from_exception)
 }
 
 // ={=========================================================================
-// see can driver from std::runtime_error
-TEST(CxxException, drived_from_stdexcept)
-{
-  using namespace cxx_except;
-
-  try
-  {
-    throw Error("this is runtime error");
-  } catch (std::exception &e)
-  {
-    EXPECT_THAT(std::string(e.what()), "this is runtime error");
-  }
-}
-
-// ={=========================================================================
 //  see what happends when catch it but ignore it
-TEST(CxxException, see_when_do_catch)
+TEST(cxx_except, swallow_exception)
 {
   using namespace cxx_except;
 
@@ -19008,14 +19257,35 @@ TEST(CxxException, see_when_do_catch)
   {}
 }
 
+/*
 // ={=========================================================================
-//  see what happends when do not catch
-// [ RUN      ] CxxException.see_when_do_not_catch
-// unknown file: Failure
-// C++ exception with description "my exception happened" thrown in the test body.
-// [  FAILED  ] CxxException.see_when_do_not_catch (0 ms)
+see what happends when do not catch
 
-TEST(CxxException, DISABLED_see_when_do_not_catch)
+under gtest:
+
+[ RUN      ] CxxException.see_when_do_not_catch
+unknown file: Failure
+C++ exception with description "my exception happened" thrown in the test body.
+[  FAILED  ] CxxException.see_when_do_not_catch (0 ms)
+ 
+when use main and make aout, make a core and calltrace is:
+
+(gdb) bt
+#0  __GI_raise (sig=sig@entry=6) at ../sysdeps/unix/sysv/linux/raise.c:51
+#1  0x00007f1a23902921 in __GI_abort () at abort.c:79
+#2  0x00007f1a23f57957 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#3  0x00007f1a23f5dae6 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#4  0x00007f1a23f5db21 in std::terminate() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#5  0x00007f1a23f5dd54 in __cxa_throw () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+#6  0x0000556769f42314 in to_roman_1[abi:cxx11](unsigned int) (value=1900) at /home/keitee/git/kb/code-cxx/cxx/test_aout.cpp:12
+#7  0x0000556769f42366 in main () at /home/keitee/git/kb/code-cxx/cxx/test_aout.cpp:18
+(gdb)
+
+*/
+
+// ={=========================================================================
+// TEST(cxx_except, see_when_do_not_catch)
+TEST(cxx_except, DISABLED_see_when_do_not_catch)
 {
   using namespace cxx_except;
 
@@ -19024,12 +19294,6 @@ TEST(CxxException, DISABLED_see_when_do_not_catch)
 
 namespace cxx_except
 {
-  class Foo
-  {
-  public:
-    ~Foo() {}
-  };
-
   class FooNoAbort
   {
   public:
@@ -19039,21 +19303,21 @@ namespace cxx_except
     }
   };
 
-  // class FooAbort
-  // {
-  // public:
-  //
-  //   // complile warning
-  //   // warning: throw will always call terminate() [-Wterminate]
-  //   //        throw std::runtime_error("noexcept(true) so expects abort");
-  //   //                                                                  ^
-  //   // note: in C++11 destructors default to noexcept
-  //
-  //   ~FooAbort() noexcept(true)
-  //   {
-  //     throw std::runtime_error("noexcept(true) so expects abort");
-  //   }
-  // };
+   class FooAbort
+   {
+   public:
+  
+     // complile warning
+     // warning: throw will always call terminate() [-Wterminate]
+     //        throw std::runtime_error("noexcept(true) so expects abort");
+     //                                                                  ^
+     // note: in C++11 destructors default to noexcept
+  
+     ~FooAbort() noexcept(true)
+     {
+       throw std::runtime_error("noexcept(true) so expects abort");
+     }
+   };
 } // namespace cxx_except
 
 /*
@@ -19061,9 +19325,9 @@ namespace cxx_except
 
 CLR 3.1.7 Keyword noexcept
 
-Here, inside noexcept(...), you can specify a boolean condition under which no
-exception gets thrown: Specifying noexcept without condition is a short form of
-specifying `noexcept(true)` which means exception is not allowed
+Here, inside noexcept(...), you can specify a boolean condition under which
+no exception gets thrown: Specifying noexcept without condition is a short
+form of specifying `noexcept(true)` which means exception is not allowed
 
 ~TemplateDispatcher()
 {}
@@ -19075,19 +19339,12 @@ is same as:
 
 */
 
-TEST(CxxException, noexcept_condition_1)
+// ={=========================================================================
+TEST(cxx_except, DISABLED_noexcept_condition_1)
 {
   using namespace cxx_except;
 
-  {
-    int value{1};
-
-    Foo foo;
-
-    EXPECT_THAT(value, 1);
-  }
-
-  // FooNoAbort dtor is allowed to throw so no abort happens
+  // FooNoAbort dtor is allowed to throw so no abort() happens
   {
     int value{1};
 
@@ -19096,43 +19353,64 @@ TEST(CxxException, noexcept_condition_1)
       FooNoAbort foo;
     } catch (std::exception &e)
     {
-      // fails since what() returns "const char*"
-      // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
-
       EXPECT_THAT(std::string(e.what()), "noexcept(false) so expects no abort");
     }
 
     EXPECT_THAT(value, 1);
   }
+
+  // "noexcept(true)" but throw so violates promise. abort() happens.
+  {
+    {
+      int value{1};
+
+      try
+      {
+        FooAbort foo;
+      } catch (exception &e)
+      {
+        std::cout << e.what() << std::endl;
+      }
+
+      EXPECT_THAT(value, 1);
+    }
+  }
 }
 
+/*
 // ={=========================================================================
-// "noexcept(true)" but throw so violates promise. abort happens.
-//
-// [ RUN      ] Exception.Noexcept
-// terminate called after throwing an instance of 'std::runtime_error'
-//   what():  noexcept(true) so expects abort
-// Aborted
-//
-// DISABLED but still compile it. so comment out
-// TEST(CxxException, DISABLED_noexcept_condition_2)
-// {
-//   using namespace cxx_except;
+[ RUN      ] cxx_except.get_detail
+vector::_M_range_check: __n (which is 10) >= this->size() (which is 3)
+St12out_of_range
+[       OK ] cxx_except.get_detail (1 ms)
 
-//   {
-//     int value{1};
+*/
 
-//     try
-//     {
-//       FooAbort foo;
-//     } catch (exception &e)
-//     {
-//       std::cout << e.what() << std::endl;
-//     }
+TEST(cxx_except, get_detail)
+{
+  // to see exception details
+  {
+    std::vector<int> coll{1, 2, 3};
 
-//     EXPECT_THAT(value, 1);
-//   }
-// }
+    EXPECT_THAT(coll.empty(), false);
+
+    EXPECT_THAT(coll.at(0), 1);
+    EXPECT_THAT(coll.at(2), 3);
+
+    try
+    {
+      coll.at(10);
+    } catch (exception &e)
+    {
+      std::cout << e.what() << std::endl;
+      std::cout << typeid(e).name() << std::endl;
+
+      // do not work
+      // #include <cxxabi.h>
+      // std::cout << __cxa_current_exception_type()->name() << std::endl;
+    }
+  }
+}
 
 // ={=========================================================================
 // cxx-printf

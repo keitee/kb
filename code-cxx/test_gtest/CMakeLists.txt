@@ -63,8 +63,8 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 # include_directories(SYSTEM ${GTEST_DIR}/include)
 
-add_compile_options("-ggdb3")
-# add_compile_options("-g;-E")
+# to use Gmock::Notification
+add_compile_options("-DGTEST_HAS_PTHREAD=1;-ggdb3")
 
 # cmake help
 #

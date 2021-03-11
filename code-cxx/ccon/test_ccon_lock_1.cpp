@@ -4,8 +4,17 @@
 #include <thread>
 
 /*
+two apps to see differences between two as to locking to find out more about
+on this comment from spinlock.
+
+a mutex is overkill. It has he same API as std::mutex so can be swapped out
+since it implements the C++ BasicLockable and Lockable requirements.
+
+-rwxr-xr-x 1 keitee keitee 655K Feb 28 10:38 test_ccon_lock_2*
+-rwxr-xr-x 1 keitee keitee 654K Feb 28 10:38 test_ccon_lock_1*
 
 to check CPU usage
+
 ps -p 10258 -o %cpu,%mem,cmd
 
 test_ccon_lock_2 shows no usage:
@@ -15,7 +24,8 @@ $ watch -n 1 ps -p `pgrep test_ccon_lock` -o %cpu,%mem,cmd
  0.0  0.0 ./test_ccon_lock_2
 
 
-no difference between two as to tool-strace
+no difference between two as to tool-strace since both seems to show that they
+both uses futex.
 
 sudo strace -p `pgrep test_ccon_lock`
 strace: Process 29720 attached
@@ -40,12 +50,6 @@ futex(0x5642aeec7098, FUTEX_WAKE_PRIVATE, 2147483647) = 0
 write(1, "waited for 520ms and Hello from "..., 48) = 48
 exit_group(0)                           = ?
 
-
-the summary from the comment of the code:
-
-a mutex is overkill. It has he same API as std::mutex so can be swapped out
-since it implements the C++ BasicLockable and Lockable requirements.
-
 */
 
 using namespace std;
@@ -61,7 +65,7 @@ namespace
 
   public:
     SpinLock()
-        : lock_(ATOMIC_FLAG_INIT)
+        : lock_{ATOMIC_FLAG_INIT}
     {}
 
     void lock()
@@ -89,15 +93,16 @@ namespace
 
     std::string result{};
 
-    std::string name;
-
-    name = (std::string::npos != s.find("first")) ? "first" : "second";
+    std::string name =
+      (std::string::npos != s.find("first")) ? "first" : "second";
 
     for (i = 0; i < s.size(); ++i)
     {
       std::cout << "name: " << name << " sleeps for 1 sec\n";
 
+      // this can make two threads switching? no
       std::this_thread::yield();
+
       this_thread::sleep_for(chrono::seconds(1));
     }
 
@@ -120,13 +125,8 @@ int main(int argc, char **argv)
                          print_use_spin_lock,
                          "Hello from a second thread");
 
-    // s.size is 25. 25 x 20 ms = 500
-    // s.size is 25. 25 x 1 sec = 25
-    // EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
+    // waits for two threads to end
     std::cout << f1.get() << "\n";
-
-    // s.size is 26. 26 x 20 = 525
-    // EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
     std::cout << f2.get() << "\n";
   }
 

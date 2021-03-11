@@ -15,8 +15,11 @@ namespace cxx_rvo
     }
     ~Snitch() { cout << "d'tor" << endl; }
 
+    // what if prevents copies?
+    // Snitch(const Snitch &) = delete;
+    // Snitch &operator=(Snitch &) = delete;
+
     Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
-    Snitch(Snitch &&) { cout << "move c'tor" << endl; }
 
     Snitch &operator=(const Snitch &)
     {
@@ -24,11 +27,15 @@ namespace cxx_rvo
       return *this;
     }
 
+    /*
+    Snitch(Snitch &&) { cout << "move c'tor" << endl; }
+
     Snitch &operator=(Snitch &&)
     {
       cout << "move assignment" << endl;
       return *this;
     }
+    */
 
     int getValue() const { return value_; }
 
@@ -51,3 +58,13 @@ int main()
   Snitch snitch = ExampleRVO();
   std::cout << "main after " << std::endl;
 }
+
+// int main()
+// {
+//   using namespace cxx_rvo;
+
+//   std::cout << "main before" << std::endl;
+//   Snitch snitch(10);
+//   snitch = ExampleRVO();
+//   std::cout << "main after " << std::endl;
+// }

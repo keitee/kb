@@ -2102,6 +2102,7 @@ TEST(StringConversion, string_to_number_functions)
 
 /*
 // ={=========================================================================
+string-conversion
 long max    : 9223372036854775807
 long min    : -9223372036854775808
 */
@@ -2152,7 +2153,7 @@ TEST(StringConversion, string_to_number_max)
 
 /*
 // ={=========================================================================
-cxx-stringstream cxx-string-convert
+string-conversion cxx-stringstream cxx-string-convert
 handles "type" automatically
 */
 

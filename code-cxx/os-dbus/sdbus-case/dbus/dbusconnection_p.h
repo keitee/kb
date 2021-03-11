@@ -29,6 +29,10 @@ public:
   DBusConnectionPrivate(const EventLoop &eventloop, sd_bus *bus);
   ~DBusConnectionPrivate();
 
+  // to prevent copies
+  DBusConnectionPrivate(const DBusConnectionPrivate &) = delete;
+  DBusConnectionPrivate &operator=(const DBusConnectionPrivate &) = delete;
+
   bool callWithCallback(DBusMessage &&message,
                         const std::function<void(DBusMessage &&)> &callback,
                         int msTimeout);

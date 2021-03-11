@@ -25,26 +25,134 @@ using namespace testing;
 P: Philosophy
 ={=========================================================================
 P.9: Don't waste time or space
-https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md#Rp-waste
+
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#p9-dont-waste-time-or-space
+
+Reason This is C++.
+
+Note Time and space that you spend well to achieve a goal (e.g., speed of
+development, resource safety, or simplification of testing) is not wasted.
+“Another benefit of striving for efficiency is that the process forces you
+to understand the problem in more depth.” - Alex StepanovExample, bad
+
+struct X {
+    char ch;
+    int i;
+    string s;
+    char ch2;
+
+    X& operator=(const X& a);
+    X(const X&);
+};
+
+X waste(const char* p)
+{
+    if (!p) throw Nullptr_error{};
+    int n = strlen(p);
+    auto buf = new char[n];
+    if (!buf) throw Allocation_error{};
+    for (int i = 0; i < n; ++i) buf[i] = p[i];
+    // ... manipulate buffer ...
+    X x;
+    x.ch = 'a';
+    x.s = string(n);    // give x.s space for *p
+    for (gsl::index i = 0; i < x.s.size(); ++i) x.s[i] = buf[i];  // copy buf into x.s
+    delete[] buf;
+    return x;
+}
+
+void driver()
+{
+    X x = waste("Typical argument");
+    // ...
+}
+
+Yes, this is a caricature, but we have seen every individual mistake in
+production code, and worse. Note that the layout of X guarantees that at
+least 6 bytes (and most likely more) are wasted. The spurious definition of
+copy operations disables move semantics so that the return operation is
+slow (please note that the Return Value Optimization, RVO, is not
+guaranteed here). The use of new and delete for buf is redundant; if we
+really needed a local string, we should use a local string. There are
+several more performance bugs and gratuitous complication.
+
+Example, bad
+
+void lower(zstring s)
+{
+    for (int i = 0; i < strlen(s); ++i) s[i] = tolower(s[i]);
+}
+
+This is actually an example from production code. We can see that in our
+condition we have i < strlen(s). This expression will be evaluated on every
+iteration of the loop, which means that strlen must walk through string
+every loop to discover its length. While the string contents are changing,
+it’s assumed that toLower will not affect the length of the string, so it’s
+better to cache the length outside the loop and not incur that cost each
+iteration.
+
 
 https://devblogs.microsoft.com/cppblog/new-safety-rules-in-c-core-check/?fbclid=IwAR2HJjPz8nTUnjEJyHHXyblk1m6b91tO60G863Z65OqB9nJ07AWL7IF_CrM#expensive-copy-with-the-auto-keyword
 
 Expensive copy with the auto keyword
 
-Here, the type of password resolves to std::string, even though the return type
-of getPassword() is a const-reference to a string. The resulting behavior is
-that the contents of PasswordManager::password get copied into the local
-variable password.
+class PasswordManager 
+{ 
+    std::string password; 
+public: 
+    const std::string& getPassword() const { return password; }  
+}; 
 
-This difference in behavior between assigning a reference and a pointer to a
-variable marked auto is non-obvious, resulting in potentially unwanted and
-unexpected copying.
+void stealPassword(const PasswordManager& pm) 
+{
+  // the type of `password` resolves to `std::string`. Copy occurs.
+  auto password = pm.getPassword(); 
+}
+
+Here, the type of password resolves to std::string, even though the return
+type of getPassword() is a const-reference to a string. The resulting
+behavior is that the contents of PasswordManager::password get copied into
+the local variable password in strealPassword().
+
+Compare this with a function returning a pointer: 
+
+class PasswordManager {
+    std::string password;
+public:
+    const std::string* getPassword() const { return &password; }
+};
+
+void stealPassword(const PasswordManager& pm) 
+{
+  // the type of `password` resolves to `const std::string*`. No copy occurs.
+  auto password = pm.getPassword(); 
+}
+
+This difference in behavior between assigning a reference and a pointer to
+a variable marked auto is non-obvious, resulting in potentially unwanted
+and unexpected copying.
+
+NOTE:
+don't get this. returning reference of private member seems not right as to
+encapsulation but code works. it's not returning a reference of local
+variable of a function as in 
+
+https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#f43-never-directly-or-indirectly-return-a-pointer-or-a-reference-to-a-local-object
+
+and not able to create case where object gets freed while holding up
+reference from its private member since reference must be set when gets created.
+
+    scr is created
+    auto &screen = scr.set_move_1(5);
+
+not able to make "screen" reference live longer.
+
 
 https://docs.microsoft.com/en-us/cpp/code-quality/c26820?view=vs-2019
 
 This check covers non-obvious and easy-to-miss behavior when assigning a
-reference to a variable marked auto. The type of the auto variable is resolved
-to a value rather than a reference, and an implicit copy is made.
+reference to a variable marked auto. The type of the auto variable is
+resolved to a value rather than a reference, and an implicit copy is made.
 
 */
 
@@ -114,29 +222,38 @@ namespace cxx_reference
   };
 } // namespace cxx_reference
 
-TEST(CxxCoreP, 9_dont_waste)
+TEST(CxxCoreP, 9_dont_waste_1)
 {
   using namespace cxx_reference;
 
-  // set_move_1() returns reference and use "auto &"
+  // set_move_1() returns reference and use "auto &" and changes "src"
+
   {
     Screen scr{};
 
     auto &screen = scr.set_move_1(5);
+
     screen.set_set(10);
+
     EXPECT_THAT(scr.print(), "move 5, set 10");
   }
 
   // set_move_1() returns reference and use "auto". *cxx-auto*
+  // "screen" is a copy and not changed.
+
   {
     Screen scr{};
 
     auto screen = scr.set_move_1(5);
+
+    // screen is a copy
     screen.set_set(10);
+    screen.set_move_1(10);
+
     EXPECT_THAT(scr.print(), "move 5, set 0");
   }
 
-  // return string reference of private member
+  // return string reference of private member and changes "foo"
   {
     Foo foo;
 
@@ -147,7 +264,7 @@ TEST(CxxCoreP, 9_dont_waste)
     EXPECT_THAT(foo.print(), "get_name_1");
   }
 
-  // return string reference of private member
+  // ditto
   {
     Foo foo;
 
@@ -158,11 +275,11 @@ TEST(CxxCoreP, 9_dont_waste)
     EXPECT_THAT(foo.print(), "get_name_1");
   }
 
-  // return string copy of private member
+  // make a copy
   {
     Foo foo;
 
-    // *cxx-auto* NOTE WHY??
+    // *cxx-auto* makes a copy and "foo" not changed NOTE WHY??
     auto ret = foo.get_name_1();
 
     ret.assign("get_name_1");

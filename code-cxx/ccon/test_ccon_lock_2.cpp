@@ -26,6 +26,10 @@ namespace
     {
       std::cout << "name: " << name << " sleeps for 1 sec\n";
 
+      // this can make two threads switching? no
+      //
+      // std::this_thread::yield();
+      //
       // The exact behavior of this function depends on the implementation,
       // in particular on the mechanics of the OS scheduler in use and the
       // state of the system. For example, a first-in-first-out realtime
@@ -36,7 +40,6 @@ namespace
       //
       // NOTE: in this experiment, no effect.
 
-      std::this_thread::yield();
       this_thread::sleep_for(chrono::seconds(1));
     }
 
@@ -58,13 +61,8 @@ int main(int argc, char **argv)
                          print_use_lock_guard,
                          "Hello from a second thread");
 
-    // s.size is 25. 25 x 20 ms = 500
-    // s.size is 25. 25 x 1 sec = 25
-    // EXPECT_THAT(f1.get(), "waited for 500ms and Hello from a first thread");
+    // waits for two threads to end
     std::cout << f1.get() << "\n";
-
-    // s.size is 26. 26 x 20 = 525
-    // EXPECT_THAT(f2.get(), "waited for 520ms and Hello from a second thread");
     std::cout << f2.get() << "\n";
   }
 

@@ -19,27 +19,68 @@
 using namespace std;
 using namespace testing;
 
-/*
-*/
-
-TEST(CxxPad, pad_1)
+namespace cxx_rvo
 {
-  std::vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for (auto it = coll2.begin(); it != coll2.end(); /* no */)
+  // Note: All methods have side effects
+  struct Snitch
   {
-    // if see even values, remove it
-    if (!(*it % 2))
+    Snitch(int value)
+        : value_(value)
     {
-      cout << "it : " << *it << endl;
-      it = coll2.erase(it);
+      cout << "c'tor" << endl;
     }
-    else
-      ++it;
+    ~Snitch() { cout << "d'tor" << endl; }
+
+    Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
+
+    Snitch &operator=(const Snitch &)
+    {
+      cout << "copy assignment" << endl;
+      return *this;
+    }
+
+    /*
+    Snitch(Snitch &&) { cout << "move c'tor" << endl; }
+
+    Snitch &operator=(Snitch &&)
+    {
+      cout << "move assignment" << endl;
+      return *this;
+    }
+    */
+
+    int getValue() const { return value_; }
+
+  private:
+    int value_{0};
+  };
+
+  Snitch ExampleRVO()
+  {
+    std::cout << "in ExampleRVO: " << std::endl;
+    return Snitch(100);
   }
 
-  EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
+  std::vector<Snitch> ReturnVector()
+  {
+    // vector<Snitch> ivec(1000000000, 1);
+    // vector(n, elem); creates n elements
+    std::vector<Snitch> coll(10, Snitch(200));
+    cout << "in ReturnVector: size of vector: " << coll.size() << endl;
+    return coll;
+  }
+
+  Snitch createSnitch() { return Snitch(200); }
+
+  void foo(Snitch s) { cout << "snitch value is: " << s.getValue() << endl; }
+
+} // namespace cxx_rvo
+
+TEST(CxxRVO, single_construction)
+{
+  using namespace cxx_rvo;
+
+  Snitch snitch = ExampleRVO();
 }
 
 // ={=========================================================================

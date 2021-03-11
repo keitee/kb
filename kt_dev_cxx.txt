@@ -219,8 +219,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-coll-cxx-list-forward-list
 
 *kt_dev_cxx_0000* cxx-coll-associative
-*kt_dev_cxx_0000* cxx-coll-cxx-set cxx-multiset
-*kt_dev_cxx_0000* cxx-coll-cxx-map cxx-multimap cxx-size-t
+*kt_dev_cxx_0000* cxx-coll-set cxx-set cxx-multiset
+*kt_dev_cxx_0000* cxx-coll-map cxx-map cxx-multimap cxx-size-t
 *kt_dev_cxx_0000* cxx-coll-unordered
 *kt_dev_cxx_0000* cxx-container-print-elements
 
@@ -16371,7 +16371,10 @@ DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
 }
 
 
-<cxx-rvalue-is-temporary> *cxx-move* *cxx-temporary* implicit move sementics
+*cxx-rvalue-is-temporary* *cxx-move* *cxx-temporary* *cxx-return* 
+
+implicit move sementics
+
 Looking at the list of rvalue and lvalue expressions, lvalue has `persitent`
 state, whereas rvalue are either literals or `temporary objects` created in
 the course of evaluating expressions.
@@ -16400,7 +16403,9 @@ which the reference refers.
     StrVec coll2;
     EXPECT_THAT(coll2.size(), 0);
 
-    // will use cxx-copy-assign or cxx-move-assign? Use cxx-move
+    // Use cxx-copy-assign or cxx-move-assign? Use cxx-move if they are
+    // available
+
     coll2 = returnVector();
 
     EXPECT_THAT(coll2.size(), 3);
@@ -16408,11 +16413,11 @@ which the reference refers.
 }
 
 When class has both a move and copy ctor, how does the library know what to
-use? Use *cxx-function-matching* since copy ctor takes const StrVec& and move
+use?  Use *cxx-function-matching* since copy ctor takes const StrVec& and move
 only takes StrVec&&.
 
 
-<cxx-std-move>
+*cxx-std-move*
 
 return rvalue reference to its given object.
 
@@ -16485,7 +16490,7 @@ default initialized object` and other classes may behave differently.
 See *cxx-ex-hasptr-exmaple* for the problem when moved-from state is wrong.
 
 
-{cxx-move-controls}
+*cxx-move-controls*
 See `no const` on parameter and `noexcept` since `do not allocate` any new
 memory and take over the memory from its argument. 
 
@@ -16496,15 +16501,15 @@ StrVec(StrVec&&) noexcept;            // move ctor
 StrVec &operator=(StrVec&&) noexcept; // move assign
 
 
-{cxx-move-synthesized} *cxx-copy-control*
+*cxx-move-control-when* *cxx-copy-control*
 If class do not define copy ctor and assign then compiler `always make` these
 operations; either memberwise or deleted.
 
 cxx-move operations are different. The compiler make move operations `only if` a
 class does `not` define any copy ctor and assign and `only if` all non-static
 members can be move constructed and assigned because if a class doesn't have a
-move operation, `the corresponding copy operation is used` in place of move via
-function matching. 
+move operation, `the copy operation is used` in place of move via function
+matching. 
 
 *cxx-remember*
 o if class has own copy ctor and assign then move `will not be synthesized`
@@ -16512,57 +16517,56 @@ o if class has own copy ctor and assign then move `will not be synthesized`
 o if class has copy ctors cxx-deleted then move will not be synthesized. this is
   from experience but not from text
 
-
-note:
-This means that having cxx-copy-controls ONLY can effectively turn off *cxx-rvo*
+This means that having ONLY cxx-copy-controls effectively turn off *cxx-rvo*
 since move controls will not be made. RCGL P9
 
-*cxx-remember*
-"class that define move operations `must` also define own copy operations." 
+o "class that define move operations `must` also define own copy operations." 
 
-If class defines either move ctor and/or move assign but not defined copy
-controls, the copy controls will de defined `cxx-deleted`. 
+o If class defines either move ctor and/or move assign but not defined copy
+  controls, the copy controls will de defined `cxx-deleted`. 
 
 
-{cxx-move-conditions}
+*cxx-move-when*
 
 o *cxx-noexcept* on move
 
-The library containers provide guarantees as to what they do if an exception
-happens; vector guarantees that if an exception happens when call push_back, the
-vector itself will be left unchanged.
+The library containers provide guarantees as to what they do if an
+exception happens; vector guarantees that if an exception happens when call
+push_back, the vector itself will be left unchanged.
 
-Imagine that push_back in StrVec causes reallocation as vector, uses move ctor
-but exceptions happens in the middle of moving. There would be a problem.
+Imagine that push_back in StrVec causes reallocation as vector, uses move
+ctor but exceptions happens in the middle of moving. There would be a
+problem.
 
 However, if used copy ctor, not a problem when exception happens since the
-original copy still remains. Like, exception safe condition in using dynamic
-resources.
+original copy still remains. Like, exception safe condition in using
+dynamic resources.
 
-To avoid this potential problem, vector must use a copy ctor instead move during
-reallocation unless it knows that element's type move ctor cannot throw an
-exception. How to tell the library that move ctor is safe to use? Do so by using
-explicitly `noexcept` keyword on move ctor and assign.
+To avoid this potential problem, vector must use a copy ctor instead move
+during reallocation unless it knows that element's type move ctor cannot
+throw an exception. How to tell the library that move ctor is safe to use?
+Do so by using explicitly `noexcept` keyword on move ctor and assign.
 
 
 o cxx-copy is bigger than cxx-move 
 
 Using the copy controls in place of move controls is safe and will meet the
-requirement of move controls since objects is moved by copying operations. In
-other words, copy controls are more of necessary to work properly, move controls
-are more of `performance choice` so if there are no move operations, copy
-controls will be used instead.
+requirement of move controls since objects is moved by copying operations.
 
-note: 
+In other words, copy controls are more of necessary to work properly, move
+controls are more of `performance choice` so if there are no move
+operations, copy controls will be used instead.
+
 If a class has no move operations, copy operations will be used even if
 attempt to use move by calling std::move().
 
 // Foo define copy but no move operations
 Foo z(std::move(x));       // copy ctor
 
-Here copy initialization happens but std::move returns rvalue, Foo&&, but no
-move ctor. So can convert a Foo&& to const Foo&, copy ctor is viable and it is
-called since *cxx-reference-binding* "can bind rvalue to const lvalue reference"
+Here copy initialization happens but std::move returns rvalue, Foo&&, but
+no move ctor. So can convert a Foo&& to const Foo&, copy ctor is viable and
+it is called since *cxx-reference-binding* "can bind rvalue to const lvalue
+reference"
 
 
 {cxx-move-overload} *cxx-overload*
@@ -18644,16 +18648,17 @@ will make them if not defined.
 
 Two ways: `delete-keyword` and `private-access-control`.
 
-<cxx-copy-delete> *cxx-11*
+*cxx-copy-delete* *cxx-11*
 Signal to the compiler `not to define` these members and lead to compile error
 when try to use it. Or syn version will be `deleted` when compiler cannot make
 it.
 
 struct NoCopy {
   NoCopy() = default;
+  ~NoCopy() = default;
+
   NoCopy(const NoCopy&) = delete;                 // NO copy-ctor 
   NoCopy& operator=(const NoCopy&) = delete;      // NO copy-assign
-  ~NoCopy() = default;
   ...
 };
 
@@ -18664,7 +18669,6 @@ The compiler will not let us define variables or create temporaries of that
 type.
 
 
-<cxx-copy-private-before-cxx-11>
 To prevent copies before C++11:
 
 class PrivateCopy {
@@ -18692,8 +18696,10 @@ The either way will see errors:
 
 
 <ex>
+
 namespace cxx_copy_control
 {
+  // have copy controls but they are private
   class CopyControlBase1
   {
   private:
@@ -18707,12 +18713,14 @@ namespace cxx_copy_control
     CopyControlBase1(const CopyControlBase1 &base)
     {
       (void)base;
+
       cout << "copy-ctor: base" << endl;
     } // @11
 
     CopyControlBase1 &operator=(const CopyControlBase1 &base)
     {
       (void)base;
+
       cout << "copy-assign: base" << endl;
       return *this;
     }
@@ -18734,7 +18742,9 @@ namespace cxx_copy_control
     ~CopyControlBase2() = default;
 
   public:
+    // copy ctor
     CopyControlBase2(const CopyControlBase2 &base) = delete;
+    // copy assign
     CopyControlBase2 &operator=(const CopyControlBase2 &base) = delete;
   };
 
@@ -18745,7 +18755,7 @@ namespace cxx_copy_control
   };
 } // namespace cxx_copy_control
 
-TEST(CxxCopyControl, UsePrivateAndDelete)
+TEST(CxxCopyControl, see_errors_when_copy_is_not_allowed_1)
 {
   using namespace cxx_copy_control;
 
@@ -18831,14 +18841,15 @@ $ ./comp.sh use-prevent-copy.cpp
 /home/kit/work/use-prevent-copy.cpp:22: undefined reference to 
   `Base::Base(Base const&)' collect2: ld returned 1 exit status
 
+To sum ways before cxx-11:
 
-To prevent access from derived classes or user, make copy control private and
-cause compile error.
+o To prevent access from derived classes or user, make copy control private and
+  cause compile error.
 
-To prevent access from friend or members, so declare copy controls but not
-define. By doing this, can cause 'link' errors when there are attempts to use.
-Because when used, compiler will try to link but no definition. The example is
-ios_base, basic_ios, and sentry of STL implementation.
+o To prevent access from friend or members, so declare copy controls but not
+  define. By doing this, can cause link errors when there are attempts to use.
+  Because when used, compiler will try to link but no definition. The example is
+  ios_base, basic_ios, and sentry of STL implementation.
 
 
 <boost-noncopyable>
@@ -21417,9 +21428,9 @@ TEST(CxxRVO, check_when_rvo_off)
 }
 
 
-Return Value Optimization (RVO), Named RVO (NRVO) and Copy-Elision are in C++
-since C++98. In this post I will explain what these concepts mean and how they
-help improve runtime performance.
+Return Value Optimization (RVO), Named RVO (NRVO) and Copy-Elision are in
+C++ since C++98. In this post I will explain what these concepts mean and
+how they help improve runtime performance.
 
 
 Return Value Optimization
@@ -21447,7 +21458,7 @@ As *cxx-return-cxx-move* shows, it uses *cxx-move* context in return but that's
 not even needed since *cxx-rvo* do not use move context at all and cxx-rvo is
 default.
 
-elide: to not pronounce a particular sound in a word:
+  "elide: to not pronounce a particular sound in a word"
 
 
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
@@ -21459,17 +21470,17 @@ d'tor
 d'tor
 
 *cxx-side-effect*
-In the first run (`without -fno-elide-constructors`) which means rvo is on, the
-compiler refrained from calling code `despite it having a clear side effect` 
-(being printing to console in ctor). 
+When RVO on (`without -fno-elide-constructors`) which means rvo is on, the
+compiler refrained from calling code `despite it having a clear side
+effect` (being printing to console in ctor). 
 
 
-<rvo-is-default>
+*rvo-is-default*
 This is also the default behavior, meaning practically all C++ programs
 utilize RVO.
 
 
-Without RVO the compiler creates 3 Snitch objects instead of 1:
+Without RVO the compiler creates `3 Snitch objects instead of 1`:
 
 Snitch ExampleRVO() {
   return Snitch();
@@ -21485,10 +21496,10 @@ o The named object snitch (when printing the second move c'tor).
 
 Performance
 
-The neat thing about RVO is that `it makes returning objects free.` It works via
-allocating memory for the to-be-returned object `in the caller’s stack frame.`
-The returning function then uses that memory as if it was in its own frame
-without the programmer knowing / caring.
+The neat thing about RVO is that `it makes returning objects free.` It
+works via allocating memory for the to-be-returned object `in the caller’s
+stack frame.` The returning function then uses that memory as if it was in
+its own frame without the programmer knowing / caring.
 
 In C++98 days this was significant:
 
@@ -21964,7 +21975,7 @@ arguments should be used `only where` the name of the function gives a strong
 hint that the reference argument is modified.
 
 
-{cxx-return-no-reference-to-internals}
+*cxx-return-reference-to-internals*
 
 CCG F.43: Never (directly or indirectly) return a pointer or a reference to a
 local object
@@ -42713,6 +42724,21 @@ namespace cxx_code
     vector<_Tp, _Alloc>::
     operator=(const vector<_Tp, _Alloc>& __x)
 
+    vector<_Tp, _Alloc>::
+    emplace_back(_Args&&... __args)
+    {
+      if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
+      {
+        _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+            std::forward<_Args>(__args)...);
+        ++this->_M_impl._M_finish;
+      }
+      else
+        _M_realloc_insert(end(), std::forward<_Args>(__args)...);
+#if __cplusplus > 201402L
+      return back();
+#endif
+    }
 
     // /usr/include/c++/4.7.2/bits/stl_vector.h
 
@@ -42860,6 +42886,36 @@ namespace cxx_code
           --this->_M_impl._M_finish;
           _Alloc_traits::destroy(this->_M_impl, this->_M_impl._M_finish);
         }
+
+      // [23.2.4.3] modifiers
+      /**
+       *  @brief  Add data to the end of the %vector.
+       *  @param  __x  Data to be added.
+       *
+       *  This is a typical stack operation.  The function creates an
+       *  element at the end of the %vector and assigns the given data
+       *  to it.  Due to the nature of a %vector this operation can be
+       *  done in constant time if the %vector has preallocated space
+       *  available.
+       */
+      void
+        push_back(const value_type& __x)
+        {
+          if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
+          {
+            _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+                __x);
+            ++this->_M_impl._M_finish;
+          }
+          else
+            _M_realloc_insert(end(), __x);
+        }
+
+#if __cplusplus >= 201103L
+      void
+        push_back(value_type&& __x)
+        { emplace_back(std::move(__x)); }
+#endif
 
       // *cxx-operator-[]*
       // element access
@@ -44989,7 +45045,7 @@ lowercase word "unternehmen" note: The signature of operator() must be const.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-coll-cxx-set cxx-multiset
+*kt_dev_cxx_0000* cxx-coll-set cxx-set cxx-multiset
 
 namespace cxx_code
 {
@@ -49394,13 +49450,13 @@ o Another problem of lambdas is that they can’t have an internal state held
   encapsulate an internal state
 
 
-// {cxx-predicate}
-// A predicate is a special kind of auxiliary function. Predicates return a
-// `boolean`' and are often used to specify a sorting or a search criterion.
-// Depending on their purpose, predicates are 'unary' or 'binary'.
+*cxx-predicate*
+A predicate is a special kind of auxiliary function. Predicates return a
+`boolean`' and are often used to specify a sorting or a search criterion.
+Depending on their purpose, `predicates are unary or binary.`
 
 
-{cxx-lambda}
+*cxx-lambda* *cxx-trailing-return*
 
 [capture list] (parameter list) -> return type { body }
 
@@ -65768,7 +65824,7 @@ don’t choose shared data for communication because of “efficiency” without
 thought and preferably not without measurement.
 
     
-{cxx-future-and-cxx-promise}
+*cxx-future* *cxx-promise*
 `communication between tasks` is handled by a future/promise pair. A task
 `puts` its result into a promise, and a task that needs the result `retrieves`
 the result from the corresponding future:
@@ -67902,11 +67958,11 @@ HealCalcFunc  <--- SlowHealthLoser
 					 |- ...
 
 
-={============================================================================
+={==========================================================================
 *kt_dev_ref_002* sites
 
 http://eli.thegreenplace.net/
 
 
-={============================================================================
-Copyright: see |ktkb|  vim:tw=80:ts=3:ft=help:norl:
+={==========================================================================
+vim:tw=75:ts=3:ft=help:norl:

@@ -1,12 +1,9 @@
 #pragma once
 
-// #include <atomic>
 #include <chrono>
 #include <functional>
-// #include <map>
 #include <mutex>
 #include <string>
-// #include <sys/timerfd.h>
 #include <condition_variable>
 #include <thread>
 
@@ -48,6 +45,20 @@ public:
         TimerType type,
         TimerThreadPriority priority,
         Executor f);
+
+  Timer(const std::chrono::milliseconds &timeout, Executor f);
+
+  template <typename F, typename... Args>
+    Timer(const std::chrono::milliseconds &timeout, TimerType type, TimerThreadPriority priority, F f, Args&&... args)
+    {
+      start_(timeout, type, priority, std::bind(f, args...));
+    }
+
+  template <typename F, typename... Args>
+    Timer(const std::chrono::milliseconds &timeout, F f, Args&&... args)
+    {
+      start_(timeout, TimerType::SingleShot, TimerThreadPriority::Default, std::bind(f, args...));
+    }
 
   // copy and move ctor
   Timer(const Timer &) = delete;

@@ -336,6 +336,11 @@ TEST_F(EPollLoopTest, execute_in_pollloop)
 }
 
 // ={=========================================================================
+// TODO: add test for addDescriptor() and can use timerfd() to create fd and
+// pass it to addDescriptor() and wait for handler called back.
+// EPollLoop::addDescriptor(int fd, unsigned events, const Handler &handler)
+
+// ={=========================================================================
 int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);

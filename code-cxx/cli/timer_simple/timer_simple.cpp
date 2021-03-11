@@ -1,11 +1,7 @@
 #include "timer_simple.h"
 #include "slog.h"
 
-// #include <iostream>
 #include <mutex>
-// #include <sys/epoll.h>
-// #include <sys/eventfd.h>
-// #include <sys/timerfd.h>
 #include <unistd.h>
 
 /*
@@ -29,6 +25,11 @@ Timer::Timer(const std::chrono::milliseconds &timeout,
              Executor f)
 {
   start_(timeout, type, priority, f);
+}
+
+Timer::Timer(const std::chrono::milliseconds &timeout, Executor f)
+{
+  start_(timeout, TimerType::SingleShot, TimerThreadPriority::Default, f);
 }
 
 Timer::~Timer()

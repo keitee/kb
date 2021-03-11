@@ -321,6 +321,10 @@ DBusConnection::DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&priv)
     : m_private(std::move(priv))
 {}
 
+/*
+NOTE Do not need these since compiler would make one which is memberwise and
+this is find since shared pointer is find when copied.
+
 DBusConnection::DBusConnection(const DBusConnection &rhs)
     : m_private(rhs.m_private)
 {}
@@ -328,6 +332,7 @@ DBusConnection::DBusConnection(const DBusConnection &rhs)
 DBusConnection::DBusConnection(DBusConnection &&rhs)
     : m_private(std::move(rhs.m_private))
 {}
+*/
 
 DBusConnection DBusConnection::systemBus(const EventLoop &eventloop)
 {

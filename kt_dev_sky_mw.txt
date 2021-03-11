@@ -1113,7 +1113,6 @@ rbt post --tracking-branch=origin/develop --repository=asplayer \
 rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-171253_AS_RDK_DTT_implement_psr_in_player_status
 
-rbt post --tracking-branch=develop -r 1387 --branch=NGDEV-171253_AS_RDK_DTT_implement_psr_in_player_status
 
 rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=LLDEV-2189_AS_DEV_RDK_unexpected_PENDING_status
@@ -1123,6 +1122,9 @@ rbt post --tracking-branch=origin/develop --repository=asplayer \
 --username=kyoupark --password=tegI3301 --branch=NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
 git branch NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
 git push origin NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack
+
+rbt post --tracking-branch=NGDEV-178745_SubtitlesIdInPlayerStatus --repository=asplayer \
+--username=kyoupark --password=tegI3301 --branch=NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack_on_new
 
 
 AS-DEV-RDK_DTT_/players/status_can_not_be_stopped
@@ -1205,7 +1207,9 @@ rbt post --tracking-branch=origin/develop -r 1330 --branch=LLDEV-2775_UK_endpoin
 rbt post --tracking-branch=origin/develop -r 1352 --branch=NGDEV-175983_AS-DEV-RDK_DTT_/system/updates_servicegenres_is_missing
 rbt post --tracking-branch=develop -r 1351 --branch=NGDEV-174877_AS_RDK_DTT_WP26.8
 rbt post --tracking-branch=develop -r 1353 --branch=NGDEV-174877_AS_RDK_DTT_WP26.8
+rbt post --tracking-branch=develop -r 1407 --branch=NGDEV-171253_AS_RDK_DTT_implement_psr_in_player_status
 
+rbt post --tracking-branch=develop -r 1420 --branch=NGDEV-155156_AS_DEV_RDK_implement_vtrack_and_atrack_on_new
 
 -S,--squash-history
 Force the review request to be created without history, even if the server supports it. Uploaded diffs will be squashed together.
@@ -1458,7 +1462,7 @@ void bindMethods( AS_WORKER::UrlMap *map )
   watchliveExecutor
     = new AS_PLAYER::WatchLiveExecutorFactory();
 
-  *as-map*
+  *as-map-register*
 
   // `AS_WORKER::UrlMap::RegisterUrl`(method, urlBuf, factory, paramValidator);
   map->RegisterUrl( 
@@ -1596,114 +1600,134 @@ Exec()
         m_webServer, httpRequestHandle, httpMethod, *uri, 
         m_webServer->GetRequestResponseLogger() );
 
-  AS_WORKER::Uri *uri = new AS_WORKER::Uri( httpRequestStringPath );
+  m_webServer->m_mainThreadQueue->Recv( &event, &httpConnection, &payloadsize );
 
-  // get domain from input uri and find matching entry using domain and uri. 
-  // that enntry is UrlRegData and return newly created exectutor from
-  // factory.
-
-  AS_WORKER::Executor *executor 
-    = `map->CreateExecutor`( httpMethod, env, uri, &validator /* out */ )
-    {
-      AS_WORKER::Executor *UrlMap::CreateExecutor
-      (int method, AS_WORKER::Environment *env, AS_WORKER::Uri *uri, AS_WORKER::ParamValidator **validator ) const
-      {
-        // search through `vector of apis` mapped to `domain`
-
-        // skyxione asproxy[454]: KT-PRN: loop found 
-        // {/9001/as/players/1/action/watchstream} 
-        // {/9001/as/players/<vwid>/action/watchstream} 
-        // {3}
-
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
-        // {/9002/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
-        // {/9003/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9004/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9005/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9006/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9007/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9008/as/players/<vwid>/action/watchstream}
-        // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9009/as/players/<vwid>/action/watchstream}
-
-        itUrlMap = m_registeredUrlMap.find( apiDomain );
-
-        AS::vector<UrlRegData>::const_iterator matchingUrlRegData;
-
-        // use "string parse"
-        //
-        // To store path and path type. eg: if url is 9001/as/schedule/<date>/<sid> no of path is 5.
-        //  m_pathVar[0] will be <false, 9001>
-        //  m_pathVar[1] will be <false, as>
-        //  m_pathVar[2] will be <false, schedule>
-        //  m_pathVar[3] will be <`true`, <date> > since path is variable and param type is path param
-        //  m_pathVar[4] will be <`true`, <sid> > since path is variable and param type is path param
-        //
-        // will be `true` for any "<???>" in url
-        //
-        // AS::vector<AS::pair<bool, AS::string> > m_pathVar;
-        //
-        // note: after all, CompareRegUri() do not consider "<xxx>" token 
-        // in comparision to decide if it has found a match and compare the rest.
-        // so can distinguish two:
-        //
-        // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchlive}
-        // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchstream}
-
-        if ( method == (*itUrlRegData).method && uri->CompareRegUri( *(itUrlRegData->uri), matchedPathDepth ) )
-          matchingUrlRegData = itUrlRegData;
-        
-        exec = matchingUrlRegData->factory->CreateExecutor( env, uri );
-        exec->BindThreadParams( matchingUrlRegData->params );
-      }
-    }
-
-  if ( executor == NULL )
   {
-    M:AS_WEB_SERVER_MainThread.cpp F:Exec L:188 > No registered url found for: /9005/as/players/1/action/watchlive
-    No registered url found for: /9005/as/players/1/action/watchlive
+    case MG_EV_HTTP_REQUEST:
 
-    AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
-  }
+      AS_WORKER::Uri *uri = new AS_WORKER::Uri( httpRequestStringPath );
 
-  *as-map-validator-check*
-  validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
+      *as-map*
+      AS_WORKER::UrlMap *map = m_webServer->GetUrlMap();
 
-  if ( validator == NULL || (validationErrorCode == 200) )
-  {
-    // if validation is okay, run it on thread
-    // Run executor in worker thread
-    else if ( executor->GetThreadParams() == NULL )
-    {
-      m_workerQueue->Send( event, &executor, sizeof(executor) )
-      {
-        int ASWorkerThread::Exec()
+      // get domain from input uri and find matching entry using `domain` and `uri` 
+      // that enntry is UrlRegData and return newly created exectutor from
+      // factory.
+
+      AS_WORKER::Executor *executor 
+        = `map->CreateExecutor`( httpMethod, env, uri, &validator /* out */ )
         {
-          executor->RunExec( "WORKER" )
+          AS_WORKER::Executor *UrlMap::CreateExecutor
+            (int method, AS_WORKER::Environment *env, AS_WORKER::Uri *uri, AS_WORKER::ParamValidator **validator ) const
+            {
+              // search through `vector of apis` mapped to `domain`
+
+              // skyxione asproxy[454]: KT-PRN: loop found 
+              // {/9001/as/players/1/action/watchstream} 
+              // {/9001/as/players/<vwid>/action/watchstream} 
+              // {3}
+
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
+              // {/9002/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} 
+              // {/9003/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9004/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9005/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9006/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9007/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9008/as/players/<vwid>/action/watchstream}
+              // skyxione asproxy[454]: KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9009/as/players/<vwid>/action/watchstream}
+
+              itUrlMap = m_registeredUrlMap.find( apiDomain );
+              // when found
+              {
+                AS::vector<UrlRegData>::const_iterator matchingUrlRegData;
+
+                // use "string parse"
+                //
+                // To store path and path type. eg: if url is 9001/as/schedule/<date>/<sid> no of path is 5.
+                //  m_pathVar[0] will be <false, 9001>
+                //  m_pathVar[1] will be <false, as>
+                //  m_pathVar[2] will be <false, schedule>
+                //  m_pathVar[3] will be <`true`, <date> > since path is variable and param type is path param
+                //  m_pathVar[4] will be <`true`, <sid> > since path is variable and param type is path param
+                //
+                // will be `true` for any "<???>" in url
+                //
+                // AS::vector<AS::pair<bool, AS::string> > m_pathVar;
+                //
+                // note: after all, CompareRegUri() do not consider "<xxx>" token 
+                // in comparision to decide if it has found a match and compare the rest.
+                // so can distinguish two:
+                //
+                // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchlive}
+                // KT-PRN: loop {/9001/as/players/1/action/watchstream} {/9001/as/players/<vwid>/action/watchstream}
+
+                if ( method == (*itUrlRegData).method && uri->CompareRegUri( *(itUrlRegData->uri), matchedPathDepth ) )
+                  matchingUrlRegData = itUrlRegData;
+
+                exec = matchingUrlRegData->factory->CreateExecutor( env, uri );
+                exec->BindThreadParams( matchingUrlRegData->params );
+
+                return exec;
+              }
+
+              *as-map-bad-request*
+              // Check if the BAD_REQUEST URI is registered.
+              // const char BAD_REQUEST[] = "Bad Request";
+              itUrlMap = m_registeredUrlMap.find( BAD_REQUEST );
+              {
+              }
+            }
+        }
+
+      if ( executor == NULL )
+      {
+        *as-error*
+        // M:AS_WEB_SERVER_MainThread.cpp F:Exec L:188 > No registered url found for: /9005/as/players/1/action/watchlive
+        // No registered url found for: /9005/as/players/1/action/watchlive
+        // AS_LOG_ERROR( "No registered url found for: %s", uri->GetPath().c_str() );
+      }
+
+      *as-map-validator-check*
+        validationErrorCode = validator->Validate( *uri, postBody, jsonBody );
+
+      if ( validator == NULL || (validationErrorCode == 200) )
+      {
+        // if validation is okay, run it on thread
+        // Run executor in worker thread
+        else if ( executor->GetThreadParams() == NULL )
+        {
+          m_workerQueue->Send( event, &executor, sizeof(executor) )
           {
-            // after all, run real Executor::Exec();
-            ret = Exec();
+            int ASWorkerThread::Exec()
+            {
+              executor->RunExec( "WORKER" )
+              {
+                // after all, run real Executor::Exec();
+                ret = Exec();
+              }
+            }
           }
         }
+        else
+        {
+          *as-map-threaded*
+            // Threaded case, `run executor in AS_WORKER thread`, then send to collector 
+            // to garbage collect including uri & environment & thread 
+            // when thread terminates.
+
+            // Create thread using supplied params
+            (void) (new AS_DMS::Thread( executor, executor->GetThreadParams()->GetName() ));
+
+          m_webServer->m_Collector->Send( executor );
+        }
       }
-    }
-    else
-    {
-      *as-map-threaded*
-      // Threaded case, `run executor in AS_WORKER thread`, then send to collector 
-      // to garbage collect including uri & environment & thread 
-      // when thread terminates.
-
-      // Create thread using supplied params
-      (void) (new AS_DMS::Thread( executor, executor->GetThreadParams()->GetName() ));
-
-      m_webServer->m_Collector->Send( executor );
-    }
-  }
-  else
-  {
-    env->WriteResult( validationErrorCode, jsonBody );
-  }
+      else
+      {
+        env->WriteResult( validationErrorCode, jsonBody );
+      }
+  } // event end
 }
 
 
@@ -11969,7 +11993,7 @@ echo "/opt/persistent/%e-%s.core.%p" >/proc/sys/kernel/core_pattern
 Copy them to the host
 
 scp -P 10022 root@192.168.0.12:/opt/persistent/*core* .
-scp -P 10022 root@192.168.0.12:/opt/persistent/asrdkplayer*core* .
+scp -P 10022 root@192.168.0.15:/opt/persistent/asrdkplayer*core* .
 
 Run gdb-multiarch
 
@@ -12567,7 +12591,8 @@ Generated on Wed Oct 07  15:40:31 UTC 2020
 scp -r -P 10022 ./SKXI11ADS_000150.13.2s0_PROD_sdy_4GBUK_PROLOVP.bin root@192.168.0.22:/tmp/data
 FlashApp /tmp/data/SKXI11ADS_000150.13.2s0_PROD_sdy_4GBUK_PROLOVP.bin
 
-// CAD3 IT driver 2.1
+
+// CAD3 IT driver 2.1. root@192.168.0.16
 // https://pv-jen015.uk2.scp.bskyb.com/job/RDK_FULL_STACK_skyxione-it/314/
 // scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin root@192.168.0.17:/tmp/data
 // FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.19.0.0.0_20210127200207sdy.bin
@@ -12577,9 +12602,20 @@ FlashApp /tmp/data/SKXI11ANS_000150.20.2s0_VBN_sdy_4GBIT_PROLOVP.bin
 
 scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin root@192.168.0.16:/tmp/data
 FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin
-
 ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.16 ''\'''\''FlashApp' \
 '/tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy.bin'\'''\'''
+
+imagename:SKXI11ANS_VBN_SKXI11AIS_000150.23.4.0.0_20210224185835sdy
+YOCTO_VERSION=morty
+SDK_VERSION=3.0.0
+OEM_VERSION=3.0.0
+BRANCH=SKXI11AIS_000150.23.4.0.0
+VERSION=000150.23.4.0
+SPIN=0
+JENKINS_JOB=RDK_FULL_STACK_skyxione-it
+JENKINS_BUILD_NUMBER=368
+BUILD_TIME="2021-02-24 18:58:35"
+Generated on Wed Feb 24  18:58:35 UTC 2021
 
 ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.16 reboot
 
@@ -12593,17 +12629,61 @@ ssh -o StrictHostKeyChecking=no -p 10022 root@192.168.0.26 ''\'''\''FlashApp' '/
 // X3 from SI. current
 scp -r -P 10022 ./SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin root@192.168.0.14:/tmp/data
 FlashApp /tmp/data SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin
-SKTL11AEI_000160.20.2s0_VBN_sdy_UK_PROTOVP.bin 
+
+// 2102 sprint for mr 8.1.13
+scp -r -P 10022 ./SKTL11AEI_VBN_2102_sprint_20210304141037sdy__PROTOVP.bin root@192.168.0.15:/tmp/data
+FlashApp /tmp/data SKTL11AEI_VBN_2102_sprint_20210304141037sdy__PROTOVP.bin
 
 // from CI
-scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210224171558sdy.bin root@192.168.0.15:/tmp/data
-FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210224171558sdy.bin
+scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210225171822sdy.bin root@192.168.0.15:/tmp/data
+FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000170.23.4.0.0_20210225171822sdy.bin
 
 // own build
 scp -r -P 10022 ./SKTL11AEI_VBN_SKTL11AEI_000160.18.2.0.0_20210119200347sdy.bin root@192.168.0.14:/tmp/data
 FlashApp /tmp/data SKTL11AEI_VBN_SKTL11AEI_000160.18.2.0.0_20210119200347sdy.bin
 
 
+// IT 3.1
+
+root@skyxione:~# cat /version.txt
+imagename:SKXI11ANS_VBN_2009_sprint_20201028091953sdy_4GB
+YOCTO_VERSION=morty
+SDK_VERSION=1.1.8
+BRANCH=2009_sprint
+VERSION=000150.3.6.0
+SPIN=0
+JENKINS_JOB=SKYXIONE-Yocto-Build
+JENKINS_BUILD_NUMBER=0
+BUILD_TIME="2020-10-28 09:19:53"
+Generated on Wed Oct 28  09:19:53 UTC 2020
+
+root@skyxione:~# cat /version.txt
+imagename:SKXI11ANS_000150.25s0_VBN_sdy_4GBIT_REFLOVP
+YOCTO_VERSION=morty
+SDK_VERSION=3.1.0
+OEM_VERSION=3.1.0
+BRANCH=SKXI11AIS_000150.25.0.0.0
+VERSION=000150.25.0.0
+SPIN=0
+JENKINS_JOB=SKYXIONE-Yocto-DSpin-Release
+JENKINS_BUILD_NUMBER=697
+BUILD_TIME="2021-03-03 14:29:58"
+Generated on Wed Mar 03  14:29:58 UTC 2021
+
+
+eth0:0    Link encap:Ethernet  HWaddr 90:02:18:FF:CD:D0
+          inet addr:192.168.0.18  Bcast:192.168.0.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          Interrupt:27
+
+scp -r -P 10022 ./SKXI11ANS_000150.25s0_VBN_sdy_4GBIT_REFLOVP.bin root@192.168.0.18:/tmp/data
+FlashApp /tmp/data/SKXI11ANS_000150.25s0_VBN_sdy_4GBIT_REFLOVP.bin
+
+scp -r -P 10022 ./SKXI11ANS_VBN_SKXI11AIS_000150.25.0.0.0_20210302221506sdy.bin root@192.168.0.18:/tmp/data
+FlashApp /tmp/data/SKXI11ANS_VBN_SKXI11AIS_000150.25.0.0.0_20210302221506sdy.bin
+
+curl -d "sky-italia" http://127.0.0.1:50050/authService/setPartnerId
+curl http://127.0.0.1:50050/authService/getDeviceId
 
 2. Copy the <image-name>.bin to USB.
 
@@ -13249,13 +13329,13 @@ index 753d592..56864a8 100644
 @@ -20,7 +20,7 @@ EXTRA_OECMAKE = " \
 
 
+*rdk-build*
  # Add region and platform specific flags
 -EXTRA_OECMAKE_append_skyxione-de = " -DENABLE_VGCDRM=ON -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE"
 +EXTRA_OECMAKE_append_skyxione-de = " -DENABLE_VGCDRM=ON -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=${EPG_VARIANT}"
  EXTRA_OECMAKE_append_skyxione-uk = " -DENABLE_VGCDRM=OFF -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK"
  EXTRA_OECMAKE_append_skyxione-it = " -DENABLE_VGCDRM=OFF -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-IT"
  EXTRA_OECMAKE_append_skyxione-us = " -DENABLE_VGCDRM=OFF -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK"
-
 
     NGDEV-155524 - Update BB file to deliver AS DRM for RDK
         Reason for change: new SKY AS release
@@ -14072,6 +14152,7 @@ const std::shared_ptr<AS_MAIN::`ProxyUrlMap`> mUrlMap;
 
 void ServicesManager::createBuiltinExecutors()
 {
+   *as-map-bad-request*
    // BAD REQUEST (fallback)
    // 143:AS_ERROR: Expect 404/104, received 404/{u'errorCode': 101, u'developerMessage': u'An URL which did not translate into an AS call was received. The URL was POST 9005/as/players/1/action/watchlive?sid=920', u'userMessage': u'Invalid URL'}
 	AS_WEB_SERVER::BadReqExecutorFactory *badreqExecutor = new AS_WEB_SERVER::BadReqExecutorFactory();
@@ -15990,6 +16071,18 @@ cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGIO
 cmake -DENABLE_DTT=ON -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK ..
 cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=LLAMA -DTARGET_REGION=SKY-UK -DTARGET_ENDPOINT=REFLAB ..
 
+// LLAMA (NAGRA ON)
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=LLAMA -DTARGET_REGION=SKY-UK -DTARGET_ENDPOINT=REFLAB ..
+
+// JSPP
+cmake -DENABLE_JSPP=ON -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-UK -DTARGET_ENDPOINT=REFLAB ..
+
+// DE is only for XI1 (DTT OFF)
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-DE -DTARGET_ENDPOINT=REFLAB ..
+
+// IT
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 -DENABLE_VGCDRM=OFF -DTARGET_PLATFORM=XI1 -DTARGET_REGION=SKY-IT -DTARGET_ENDPOINT=REFLAB ..
+
 cat /lib/systemd/system/sky-asplayer.service
 
 # Copyright © 2020 Sky UK. All rights reserved.
@@ -16785,8 +16878,8 @@ enum PlayerSessionBlockedReason {
     eBlockedReason_PlayerError,
     eBlockedReason_NothingToRecord,
     eBlockedReason_ServiceError,
-    eBlockedReason_ServicePinLocked,
-    eBlockedReason_ServiceBlocked,      // NOTE: 6, TECHNICAL FAULT
+    eBlockedReason_ServicePinLocked,    // 5, *dtt-parental-control*
+    eBlockedReason_ServiceBlocked,      // 6, TECHNICAL FAULT
 
     // Andrew Bennett:house_with_garden:  09:43
     // there are DTT tech faults and CAK tech faults.
@@ -16804,7 +16897,7 @@ enum PlayerSessionBlockedReason {
 
     eBlockedReason_TunerLowOrNoSignal,    // 15, NO SIGNAL
     eBlockedReason_InsufficientOutputProtection,
-    eBlockedReason_DecoderUnableToDecode, // 15, NO SIGNAL
+    eBlockedReason_DecoderUnableToDecode, // 17, NO SIGNAL
 
     eBlockedReason_DecoderCodecNotSupported,
     eBlockedReason_RecorderNoSpaceLeft,
@@ -17052,7 +17145,7 @@ http://192.168.0.12:9005/as/services/scan/action/start?scantype=OFTA
 
 
 http://192.168.0.14:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL 
-curl -v -X POST "http://193.168.0.15:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL" -d ""
+curl -v -X POST "http://192.168.0.15:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL" -d ""
 
 method call time=1585663775.024915 sender=:1.158 -> destination=com.sky.as.player serial=992 path=/com/sky/as/service; interface=com.sky.as.Service1; member=Request
    uint32 2
@@ -17171,7 +17264,7 @@ string:""
 
 *as-dtt-scan-commit*
 
-curl -v -X POST http://192.168.0.12:9005/as/services/scan/action/commit -data ""
+curl -v -X POST http://192.168.0.15:9005/as/services/scan/action/commit -data ""
 POST http://192.168.0.12:9005/as/services/scan/action/commit
 
 dbus-send --system --type=method_call --print-reply --dest=com.sky.as.player \
@@ -17850,7 +17943,7 @@ string:''
 }
 
 
-*as-dtt-service-list* *as-mr*
+*as-dtt-service-list* *as-mr-debug*
 
 iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
@@ -18828,23 +18921,31 @@ void `ASPlayerSession::SetSubtitlesComponentTrack`(const ASRequest &request)
 
   `else if ( m_status.m_ps != Player::State::Idle )`
   {
-    // when different from the current sub
-
-    if ( subtitlesId != oldTextTrackIndex )
+    auto subtitlesItr = queryParams.find( "subtitleid" );
+    if ( subtitlesItr != queryParams.end() )
     {
-      // NOTE that unlike audio, subtitle has on/off. so even if set subtitle
-      // here, subtitle will not be displayed if subtitle is off? AAMP case
+      // when different from the current sub
 
-      `m_playerInterface->setTextTrack( subtitlesId );`
+      if ( subtitlesId != oldTextTrackIndex )
+      {
+        // NOTE that unlike audio, subtitle has on/off. so even if set subtitle
+        // here, subtitle will not be displayed if subtitle is off? AAMP case
 
-      // Update or add entry to m_overrideHistoryMap
-      PlayerSettingsStorage::getInstance()->
-        SetSubtitlesOverride( m_sid, m_status.m_currentAvailableSubtitleLanguages[subtitlesId].trackIsoCode );
+        `m_playerInterface->setTextTrack( subtitlesId );`
 
-      // same as SetSubtitlesOverride() but update or add isSubtitlesEnabled
-      // field in the overridemap
-      PlayerSettingsStorage::getInstance()->
-        SetSubtitlesEnabledOverride( m_sid, "true" );
+          // Update or add entry to m_overrideHistoryMap
+          PlayerSettingsStorage::getInstance()->
+          SetSubtitlesOverride( m_sid, m_status.m_currentAvailableSubtitleLanguages[subtitlesId].trackIsoCode );
+
+        // same as SetSubtitlesOverride() but update or add isSubtitlesEnabled
+        // field in the overridemap
+        PlayerSettingsStorage::getInstance()->
+          SetSubtitlesEnabledOverride( m_sid, "true" );
+      }
+    }
+    else
+    {
+      // disable subs
     }
   }
 }
@@ -18852,18 +18953,7 @@ void `ASPlayerSession::SetSubtitlesComponentTrack`(const ASRequest &request)
 
 *dtt-subs-setting* *player-setting-language*
 
-// from data file asplayer/player/LanguageMap_UK.dat
-
-PlayerLanguage playerLanguage[] =
-{
-#if defined(SKY_AS_EE_UK)
-#include "LanguageMap_UK.dat"
-#elif defined(SKY_AS_EE_IT)
-#include "LanguageMap_IT.dat"
-#elif defined(SKY_AS_EE_DE)
-#include "LanguageMap_DE.dat"
-#endif
-};
+From *players_tracks_TEST_014_change_global_subtitle_dtt_exact*
 
 curl -X GET http://192.168.0.15:9005/as/players/languages
 {
@@ -18909,6 +18999,16 @@ curl -X GET http://192.168.0.15:9005/as/players/languages
    }
 }
 
+// on DE 
+curl -X GET http://192.168.0.15:9005/as/players/languages
+{
+   "audiolanguages" : {
+      "options" : [ "Deutsch", "Englisch", "Französisch", "Türkisch" ]
+   },
+   "subtitlelanguages" : {
+      "options" : [ "Deutsch", "Englisch", "Französisch", "Türkisch" ]
+   }
+}
 
 Player Subtitle Tracks: [
   {u'subtitleid': u'401', u'selected': True, u'isocode': u'eng', u'name': u'English'}, 
@@ -18918,10 +19018,61 @@ Player Subtitle Tracks: [
   {u'subtitleid': u'405', u'isocode': u'cym', u'name': u'Welsh'}, 
   {u'subtitleid': u'406', u'isocode': u'fra', u'name': u'French'}]
 
-the problem is that dat file only has "cym" and "wel" is not found so maps to
-"Other"
+
+// from data file asplayer/player/LanguageMap_UK.dat
+
+struct PlayerLanguage
+{
+    const char *iso639String;                   ///< iso639 language code string
+    const char *name;                           ///< Language name
+    bool isSelectableAsDefaultAudio;            ///< Is the language selectable as audio language
+    bool isSelectableAsDefaultSubtitles;        ///< Is the language selectable as subtitles language
+};
+
+PlayerLanguage playerLanguage[] =
+{
+#if defined(SKY_AS_EE_UK)
+#include "LanguageMap_UK.dat"
+#elif defined(SKY_AS_EE_IT)
+#include "LanguageMap_IT.dat"
+#elif defined(SKY_AS_EE_DE)
+#include "LanguageMap_DE.dat"
+#endif
+};
+
+the problem is that dat file only has "cym" but "wel" in the list is not found
+so maps to "Other"
 
 { "cym",        "Welsh",            true,       true },
+
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: updateTracks_: returned num of audios {1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts audio track {English (MPEG), eng, 374, 1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {English (DVB), eng, 375, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Gaelic (DVB), gla, 376, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Irish (DVB), gle, 377, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), wel, 378, 1}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: TEMP: set subtitleid {378}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), cym, 379, 0}
+Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {French (DVB), fra, 380, 0}
+
+
+when changes dat file to have "wel" entry.
+
+Mar 09 14:34:19 sky-llama-panel com.sky.as.player[25990]: SetMRSetting: subtitlesLanguage {cym, }
+
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: getAvailableTracks: returned num of subs {7}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {English (DVB), eng, 293, 0}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {Gaelic (DVB), gla, 294, 0}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {Irish (DVB), gle, 295, 0}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {Welsh (DVB), wel, 296, 1}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {Welsh (DVB), cym, 297, 0}
+Mar 09 14:34:20 sky-llama-panel com.sky.as.player[25990]: inserts subtitle track {French (DVB), fra, 298, 0}
+
+but still error:
+
+AS_ERROR: AMSTimeoutException('ws://192.168.0.15:9005/as/players/1/status'): 
+Expected: {'ps': 'PLAYING', 'subtitleid': u'297'}
+Received: {'ps': u'PLAYING', 'subtitleid': u'296'}
 
 
 curl -X GET http://192.168.0.14:9005/as/players/setting/subtitlesLanguage
@@ -19301,6 +19452,20 @@ curl -X GET http://192.168.0.15:9005/as/players/1/tracks
 no sub is selected
 
 
+curl -X POST "http://192.168.0.15:9005/as/services/scan/action/start?scantype=DTT-FULL&channeltype=ALL" -d ""
+curl -X POST http://192.168.0.15:9005/as/services/scan/action/commit -data ""
+curl -X GET http://192.168.0.15:9005/as/services/0/0 > dtt_list.out
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-251 --data ""
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M233a-90b-2908-250 --data ""
+curl -X POST http://192.168.0.15:9005/as/players/setting/subtitlesLanguage --data '{"subtitlesLanguage": "Welsh"}'
+curl -X POST http://192.168.0.15:9005/as/players/setting/subtitles --data '{"subtitles": "on"}'
+curl -X GET http://192.168.0.15:9005/as/players/1/tracks
+curl -X POST http://192.168.0.15:9005/as/players/1/action/setsubtitles?subtitleid=102 --data ""
+curl -X POST http://192.168.0.15:9005/as/players/1/action/setsubtitles?subtitleid --data ""
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M13e-1-d49-570 --data ""
+
+
 *as-player-aamp*
 
 	/**
@@ -19363,8 +19528,9 @@ NOTE: whenever reboot a machine, need to make and install again to insert dta
 module.
 
 cd /home/keitee/Downloads/dektec/LinuxSDK_v2020.08.0/LinuxSDK/Drivers/Dta/Source/Linux
-make
-make install
+sudo make clean
+sudo make
+sudo make install
 
 // now see dta is inserted
 sudo lsmod | grep Dta
@@ -19470,6 +19636,9 @@ Row 0001 {
 
 AutoStreamer Manual action - start {'tv_channels': 8, 'expected_tracks': {'DTG SD4': {'audiotracks': [{'isocode': 'eng'}], 'subtitletracks': [{'isocode': 'eng'}, {'isocode': 'gle'}, {'isocode': 'wel'}, {'isocode': 'cym'}, {'isocode': 'gla'}, {'isocode': 'fra'}]}, 'DTG SD3': {'audiotracks': [{'isocode': 'eng'}], 'subtitletracks': []}, 'DTG SD2': {'audiotracks': [{'isocode': 'qaa'}, {'isocode': 'und'}], 'subtitletracks': [{'isocode': 'wel'}, {'isocode': 'und'}]}, 'DTG SD1': {'audiotracks': [{'isocode': 'eng'}, {'isocode': 'gle'}, {'isocode': 'cym'}, {'isocode': 'gla'}, {'isocode': 'fra'}], 'subtitletracks': []}}, 
   'file_name': 'UK_T2_LS_TS1_12.00.ts', 'radio_channels': 1, 'stop': 'AMS_DTT_TS7_STOP', 'start': 'AMS_DTT_TS7_START'}
+
+
+DtPlay /home/keitee/Downloads/HD_Linear/HD_LinearServices_12.00/Audio_Description_Test_Stream_10.00.ts  -mB 8 -mC QAM64 -t 2115 -l 0 -r 40214645  -mf 514  -n 1 -mG 1/32 -mc 2/3
 
 // TS2
 DtPlay /home/keitee/Downloads/HD_Linear/HD_LinearServices_12.00/UK_T2_LS_TS2_12.00.ts  -mB 8 -mC QAM64 -t 2115 -l 0 -r 40214645  -mf 514  -n 1 -mG 1/32 -mc 2/3
@@ -19661,6 +19830,91 @@ reported on both. (edited)
 
 
 Jan Pedersen, this status happens when changing audio tracks as well.
+
+
+*dtt-audio-track-selection-update*
+
+To avoid polling to report the currently selected subtitle track on
+/player/status, mr provides new api:
+
+    auto tag = statusHelper.getTrackSelectionChangedMs();
+
+On this status there is added
+
+inline int64 getTrackListChangedMs() const {
+inline int64 getTrackSelectionChangedMs() const {
+
+Consider the returned value as a transaction number of the List and the
+  trackSelection If any of these has change get the new list/selection. This
+  way we can avoid you polling the list.
+
+Where is it convenient for you to call this API is specific to your code But I
+would suggest calling it where you are calling getSessionStatus on the player
+
+
+// first channel
+Mar 05 06:55:46 sky-llama-panel com.sky.as.player[4520]: requested url /as/players/1/action/watchlive
+
+Mar 05 06:55:47 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {0}
+Mar 05 06:55:47 sky-llama-panel com.sky.as.player[4520]: >>> updateStatus_: subtitle track has changed {}
+
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {English (DVB), eng, 51, 1}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Gaelic (DVB), gla, 52, 0}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Irish (DVB), gle, 53, 0}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Welsh (DVB), wel, 54, 0}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Welsh (DVB), cym, 55, 0}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {French (DVB), fra, 56, 0}
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: < getAvailableTracks
+Mar 05 06:55:49 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {51}
+
+// notofied after selecting sub
+
+Mar 05 06:55:51 sky-llama-panel com.sky.as.player[4520]: succeeded to set subtitle track {52}
+
+Mar 05 06:55:51 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {52}
+Mar 05 06:55:51 sky-llama-panel com.sky.as.player[4520]: >>> updateStatus_: subtitle track has changed {52}
+Mar 05 06:55:51 sky-llama-panel com.sky.as.player[4520]: mrplayer status update sid{M233a-90b-2908-2a6}, ps{PLAYING}
+
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {English (DVB), eng, 51, 0}
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Gaelic (DVB), gla, 52, 1}
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Irish (DVB), gle, 53, 0}
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Welsh (DVB), wel, 54, 0}
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Welsh (DVB), cym, 55, 0}
+Mar 05 06:55:52 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {French (DVB), fra, 56, 0}
+
+
+Mar 05 06:56:13 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {51}
+Mar 05 06:56:13 sky-llama-panel com.sky.as.player[4520]: Selected text track index: 51
+
+// change channel
+Mar 05 06:56:14 sky-llama-panel com.sky.as.player[4520]: requested url /as/players/1/action/watchlive
+
+Mar 05 06:56:16 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {0}
+Mar 05 06:56:16 sky-llama-panel com.sky.as.player[4520]: >>> updateStatus_: subtitle track has changed {}
+
+// get notified without selecting sub
+
+Mar 05 06:56:18 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {62}
+Mar 05 06:56:18 sky-llama-panel com.sky.as.player[4520]: >>> updateStatus_: subtitle track has changed {62}
+
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: getAvailableTracks: returned num of subs {0}
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Welsh (DVB), wel, 61, 0}
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: inserts subtitle track {Undetermined (DVB), und, 62, 1}
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: < getAvailableTracks
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: currently selected subtitle track {62}
+Mar 05 06:56:19 sky-llama-panel com.sky.as.player[4520]: Selected text track index: 62
+
+
+So sub changed tag get set to 0 on every tune. Is it going to be an issue
+sometimes not get it when tuned by default as shown in the first tune? This is
+covered in onPlaying_ EAF to get sub id when gets playing state.
+
+However, this make it keep calling getTextId() when subtitle off. Can have
+check on subtitle setting so that can call it only when subs on. Still, it do
+not cover "as/players/1/action/setsubtitles?subtitleid" which disable subs
+without changing global setting. So the best is to get it from for all cases. 
+
+getTrackSelectionChangedMs();
 
 
 *mw-rdk-dtt-audio-description*
@@ -19961,9 +20215,88 @@ current impl. use ID3 tag to get ca rating and put it on player/status
 mr calls:
 
 PlayerRpcHelper
-    bool setContentRestrictions(const char * iPlayerId, const FutarqueContentRating & iContentRestrictions) FJAP_THROW(FutarqueRpcException);
+ bool setContentRestrictions(const char * iPlayerId, const FutarqueContentRating & iContentRestrictions) FJAP_THROW(FutarqueRpcException);
     bool getContentRestrictions(const char * iPlayerId, FutarqueContentRating & oContentRestrictions) FJAP_THROW(FutarqueRpcException);
     bool disableContentRestrictionsUntil(const char * iPlayerId, int iGrace, int iTime, bool iEventChange) FJAP_THROW(FutarqueRpcException);
+
+  bool setContentRestrictions(const char * iPlayerId, const FutarqueContentRating & iContentRestrictions) FJAP_THROW(FutarqueRpcException);
+
+  class FUTARQUE_API(BASIC) FutarqueContentRating
+
+Needs setting API at boots
+
+// clear stream. 658MHz_cielo.ts
+DtPlay /home/keitee/Downloads/658MHz_cielo.ts -mC QAM64 -t 2115 -l 0 -r 26000000 -mf 658 -mt DVBT -mc 2/3 -mG 1/16 -n 1
+
+{
+  "1": {
+    "now": {
+      "sy": "St.9 Ep.8 - Commenti, testimonianze e interviste a persone coinvolte nelle indagini su persone scomparse: veri casi, a volte brillantemente risolti, a volte rimasti avvolti nel mistero.",
+        "d": 3900,
+        "st": 1553526300,
+        "r": "14",                  // <<<<
+        "t": "Scomparsi",
+        "eid": "EM217c-7918-1-4219"
+    },
+      "next": {
+        "sy": "St.2 Ep.16 - Scopriamo il lavoro degli agenti che lavorano al confine statunitense e nei porti del Paese. Gli uomini tentano di fermare il contrabbando e l'arrivo di viaggiatori illegali.",
+        "st": 1553530200,
+        "t": "Airport Security USA - 1^TV",
+        "d": 1980,
+        "eid": "EM217c-7918-1-4212"
+      }
+  }
+}
+
+curl -v -X GET http://192.168.0.15:9005/as/services/0/0 > dtt_list.out
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M217c-7918-2-329 --data ""
+curl -X POST http://192.168.0.15:9005/as/players/1/action/stop --data ""
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M217c-7918-2-42d --data ""
+		{
+			"c" : "5801",
+			"dvbtriplet" : "8572.31000.2",
+			"servicetypes" : 
+			[
+				"DTT"
+			],
+			"sf" : "sd",
+			"sid" : "M217c-7918-2-42d",
+			"t" : "cielo",
+			"xsg" : 8
+		},
+
+curl -X POST http://192.168.0.15:9005/as/players/1/action/watchlive?sid=M217c-7918-1-42c --data ""
+
+		{
+			"c" : "5800",
+			"dvbtriplet" : "8572.31000.1",
+			"servicetypes" : 
+			[
+				"DTT"
+			],
+			"sf" : "sd",
+			"sid" : "M217c-7918-1-42c",
+			"t" : "NOVE",
+			"xsg" : 8
+		},
+
+when set 4:
+
+Mar 09 16:52:14 sky-llama-panel com.sky.as.player[1585]: mrplayer status BLOCKED (eCsDecoderSinkMissingVideoFrames, 17) status
+Mar 09 16:52:15 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:16 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:17 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:18 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:19 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:20 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+Mar 09 16:52:21 sky-llama-panel com.sky.as.player[1585]: mrplayer status BLOCKED (eCsDecoderSinkMissingVideoFrames, 17) status
+Mar 09 16:52:22 sky-llama-panel com.sky.as.player[1585]: mrplayer status PLAYING (eCsAllIsWell) status
+
+
+// 
+// DtPlay /home/keitee/Downloads/DTT_Parental_rating/205-5MHz_DTT_parental_rating_5-6-7-8-9-10.ts -mB 7 -mC QAM64 -t 2115 -l 0 -r 23751295 -mf 514  -n 1 -mG 1/32 -mc 3/4
+DtPlay /home/keitee/Downloads/DTT_Parental_rating/205-5MHz_DTT_parental_rating_5-6-7-8-9-10.ts -mC QAM64 -t 2115 -l 0 -r 26000000 -mf 658 -mt DVBT -mc 2/3 -mG 1/16 -n 1
 
 
 ={============================================================================
@@ -24460,8 +24793,8 @@ Get the services list
 *dtt-audio*
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=105813922
 
-AMS_TEST_SUITE='--host 192.168.0.14 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
-python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_007_change_setaudio_dtt
+scp -P 10022 root@192.168.0.15:/opt/asp.log .
+scp -P 10022 root@192.168.0.15:/opt/logs/mediarite.log .
 
 
 *players_tracks_TEST_010_change_setaudio_dtt_exact* NOTE: mr audio track issue
@@ -24471,11 +24804,17 @@ o DTG SD1 which has 5 audios.
 AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_010_change_setaudio_dtt_exact
 
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio-final_1 --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_010_change_setaudio_dtt_exact
+
 
 *players_tracks_TEST_011_audio_only_dtt_exact*
 // note that need to chage test to have ['sf']=sd but not 'au'
 
 AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_011_audio_only_dtt_exact
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio-final_1 --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_011_audio_only_dtt_exact
 
 ----------------------------------------------------------------------
@@ -24518,23 +24857,35 @@ Received: {'ps': u'PLAYING', 'subtitleid': u'1'}
 AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_012_setsubtitle_dtt_exact
 
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio-final_1 --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_012_setsubtitle_dtt_exact
+
 OK
 Generating XML reports...
 Generated XML report: test-dtt-audio/TEST-players_tracks_TEST_012_setsubtitle_dtt_exact.xml
 keitee@kit-ubuntu:/media/keitee/ssd2/test/mwintegrationtestsuits/AMSTestSuite$
 
+NOTE: pass on new design
+
 
 *players_tracks_TEST_013_subtitle_on_off_dtt_exact*
+
 // use DTG SD4. NOTE: fail due to subtitleid when subtitle off
+
 AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_013_subtitle_on_off_dtt_exact
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio-final_1 --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_013_subtitle_on_off_dtt_exact
+
+NOTE: pass on new design
 
 
 *players_tracks_TEST_014_change_global_subtitle_dtt_exact*
 
 o DTG SD4
 
-AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio-final_1 --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
 python -u -m framework suite.xi6.dtt_dektec_suite.players_tracks_TEST_014_change_global_subtitle_dtt_exact
 
 NOTE: with temp subtitleid fix, goes along but fails on:
@@ -24564,10 +24915,12 @@ Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: TEMP: set subtitleid {
 Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {Welsh (DVB), cym, 379, 0}
 Feb 24 14:45:11 sky-llama-panel com.sky.as.player[32037]: inserts subtitle track {French (DVB), fra, 380, 0}
 
+
 // *mr-status* NGDEV-178562_player_psr branch
 // players_1_status_TEST_030_dtt_psr_transition
-// AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
-// python -u -m framework suite.xi6.dtt_dektec_suite.players_1_status_TEST_030_dtt_psr_transition
+
+AMS_TEST_SUITE='--host 192.168.0.15 --port 9005 --xml-output test-dtt-audio --all --platform llp --disable-drm-check --disable-preboot-check --frontend streamer' \
+python -u -m framework suite.xi6.dtt_dektec_suite.players_1_status_TEST_030_dtt_psr_transition
 
 
 #{============================================================================

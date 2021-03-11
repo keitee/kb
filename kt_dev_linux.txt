@@ -13,6 +13,7 @@
 
 |kt_linux_bash_000| sh-reference
 *kt_linux_bash_005* sh-shebang tool-env
+*kt_linux_bash_005* sh-debug
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 *kt_linux_bash_019* sh-pipeline-case-problem
@@ -672,7 +673,33 @@ env ${LD_PRELOAD} nickelmediad \
 
 
 ={============================================================================
-*kt_linux_bash_005* sh-shell
+*kt_linux_bash_005* sh-debug
+
+https://events.static.linuxfound.org/sites/events/files/slides/lce-2015-strace-bash-en.pdf
+
+2.4 And now let’s trace bash
+
+In order to observe an interactive shell, we start two terminals. In the
+first window, we output the PID of the shell, which we’re going to monitor
+now
+
+$ echo $$
+12345
+
+and in the second window we start strace to attach to the first shell
+andmonitor all called programs (with or without option-v, depending on
+whether the process environment and long numerous arguments are
+important or not):
+
+$ strace -f -e execve -p 12345
+$ strace -f -e execve -p 12345 -v
+
+Below in the examples, first the shell input and command output is shown,
+then followed by the associated output of strace.
+
+
+={============================================================================
+*kt_linux_bash_005* sh-quote
 
 2 Definitions
 
@@ -718,9 +745,9 @@ o Escape Character
 o Single Quotes
   to `inhibit all` interpretation of a sequence of characters.
 
-  Enclosing `characters` in single quotes (‘'’) preserves the literal value of
-  each character within the quotes. A single quote `may not occur between
-  single quotes`, even when preceded by a backslash. 
+  Enclosing `characters` in single quotes (‘'’) preserves the literal value
+  of each character within the quotes. A single quote `may not occur
+  between single quotes`, even when preceded by a backslash. 
 
   <ex>
   Quote all inside the single quote.
@@ -732,9 +759,9 @@ o Single Quotes
 o Double Quotes
   to suppress `most` of the interpretation of a sequence of characters.
 
-  Enclosing characters in double quotes (‘"’) preserves the literal value of
-  all characters within the quotes, with the exception of ‘$’, ‘`’, ‘\’, and,
-  when history expansion is enabled, ‘!’. 
+  Enclosing characters in double quotes (‘"’) preserves the literal value
+  of all characters within the quotes, with the exception of ‘$’, ‘`’, ‘\’,
+  and, when history expansion is enabled, ‘!’. 
 
   The characters ‘$’ and ‘`’ retain their special meaning within double quotes
   (see Shell Expansions). 
@@ -3360,7 +3387,7 @@ $ xxx.sh 1    // $# is 1
 pipeline.
 
 
-$
+$   *sh-pid*
 ($$) Expands to the `process ID` of the shell. In a () subshell, it expands to
 the process ID of the invoking shell, not the subshell.
 
@@ -4949,30 +4976,35 @@ $ ls -al a.out
 -rwxr-xr-x 1 kyoupark ccusers 4948 Jan 16 19:30 a.out
 
 
-{sh-type}
+*sh-type* *sh-alias*
 type [-aftpP] name [name ...]
 
-    With no options, indicate how each name would be interpreted if used as a
-    command name.  
+    With no options, indicate how each name would be interpreted if used as
+    a command name.  
     
     If the -t option is used, type prints a string which is one of alias,
     keyword, function, builtin, or file if name is an alias, shell reserved
-    word, function, builtin, or disk file, respectively.  If the name is not
-    found, then nothing is  printed,  and  an  exit  status  of  false is
-    returned.   If  the  -p option is used, type either returns the name of
-    the disk file that would be executed if name were specified as a command
-    name, or nothing if ``type -t name'' would not return file.  The -P option
-    forces a PATH search for each name, even if ``type -t name'' would not
-    return file.  If a command is hashed, -p and -P print the hashed value,
-    not  neces‐ sarily  the  file  that appears first in PATH.  If the -a
-    option is used, type prints all of the places that contain an executable
-    named name.  This includes aliases and functions, if and only if the -p
-    option is not also used.  The table of hashed commands is not consulted
-    when using -a.  The -f option suppresses shell function lookup, as with
-    the command  builtin.   type returns true if all of the arguments are
-    found, false if any are not found.
+    word, function, builtin, or disk file, respectively.  If the name is
+    not found, then nothing is  printed,  and  an  exit  status  of  false
+    is returned.   If  the  -p option is used, type either returns the name
+    of the disk file that would be executed if name were specified as a
+    command name, or nothing if ``type -t name'' would not return file.
+    The -P option forces a PATH search for each name, even if ``type -t
+    name'' would not return file.  If a command is hashed, -p and -P print
+    the hashed value, not  neces‐ sarily  the  file  that appears first in
+    PATH.  
 
-kyoupark@st-castor-03:~/STB_SW_o$ type sl
+    If the -a option is used, type prints all of the places that contain an
+    executable named name. This includes aliases and functions, if and only
+    if the -p option is not also used. The table of hashed commands is not
+    consulted when using -a. 
+
+    The -f option suppresses shell function lookup, as with the command
+    builtin. type returns true if all of the arguments are found, false if
+    any are not found.
+
+
+$ type sl
 sl is aliased to `echo $SHLVL'
 
 
@@ -6466,12 +6498,6 @@ root@kit-debian:~/rpmbuild/BUILD/sstrip# ls /bin/sh
 /bin/sh
 root@kit-debian:~/rpmbuild/BUILD/sstrip# ls -al /bin/sh
 lrwxrwxrwx 1 root root 4 Nov  8  2014 /bin/sh -> dash
-
-
-={============================================================================
-*kt_linux_bash_100* sh-alias
-
-alias which='alias | /usr/bin/which --tty-only --read-alias --show-dot --show-tilde'
 
 
 ={============================================================================
@@ -8695,7 +8721,8 @@ $ pidof getty
 2974 2973 2972 2971 2970 2969
 
 
-{pgrep}
+*tool-pgrep*
+
        pgrep, pkill - look up or signal processes based on name and other
        attributes
 
@@ -8743,6 +8770,14 @@ $ pgrep linearsourced
 
 $ pgrep -l linearsourced
 1079 /opt/zinc-trunk/bin/linearsourced
+
+<ex>
+pgrep uses "pattern" 
+
+$ pgrep ccon_lock_2     // shows no match
+$ pgrep ccon_lock       // shows match
+9836
+$
 
 
 ={============================================================================

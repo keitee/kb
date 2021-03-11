@@ -1282,7 +1282,7 @@ TEST(CxxCollErase, on_map)
 //  capacity(): 4
 
 // ={=========================================================================
-TEST(CxxVector, check_capacity)
+TEST(cxx_vector, check_capacity)
 {
   // create empty vector for strings
   vector<string> sentence;
@@ -1349,7 +1349,7 @@ namespace cxx_vector
 } // namespace cxx_vector
 
 // ={=========================================================================
-TEST(CxxVector, ctors)
+TEST(cxx_vector, ctors)
 {
   using namespace cxx_vector;
 
@@ -1439,7 +1439,7 @@ void resize( size_type count, const value_type& value );
 
 */
 
-TEST(CxxVector, resize)
+TEST(cxx_vector, resize)
 {
   {
     std::vector<int> coll{};
@@ -1494,7 +1494,7 @@ i: 3, coll size: 1
 */
 
 // ={=========================================================================
-TEST(CxxVector, check_ctor_variable)
+TEST(cxx_vector, check_ctor_variable)
 {
   for (int i = 1; i < 10; i++)
   {
@@ -1542,7 +1542,7 @@ namespace cxx_vector
 } // namespace cxx_vector
 
 // ={=========================================================================
-TEST(CxxVector, check_assign)
+TEST(cxx_vector, check_assign)
 {
   using namespace cxx_vector;
 
@@ -1596,7 +1596,8 @@ TEST(CxxVector, check_assign)
 }
 
 // ={=========================================================================
-TEST(CxxVector, check_push_and_pop)
+
+TEST(cxx_vector, check_push_and_pop)
 {
   std::vector<int> coll;
 
@@ -3009,7 +3010,7 @@ TEST(CxxMap, fetch_return_reference)
 
 // ={=========================================================================
 // *cxx-map-find
-TEST(CxxMap, find)
+TEST(cxx_map, find)
 {
   {
     std::map<float, float>
@@ -3407,9 +3408,21 @@ TEST(CxxMap, map_Copy)
   }
 }
 
-// ={=========================================================================
-TEST(CxxMapMulti, equal_range_1)
+// ={========================================================================
+TEST(cxx_map_multi, equal_range_1)
 {
+  // same key and multiple values
+  {
+    std::multimap<std::string, std::string> authors{
+      {"Barth, John", "Sot-Weed Factor"},
+      {"Barth, John", "Lost in the Funhouse"},
+      {"Barth, John", "A way to success"}};
+
+    auto entries = authors.count("Barth, John");
+
+    EXPECT_THAT(entries, 3);
+  }
+
   // when found, returns iterator to the first item.
   {
     std::multimap<std::string, std::string> authors{
